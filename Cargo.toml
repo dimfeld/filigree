@@ -1,0 +1,19 @@
+[package]
+name = "gearbox"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "4.4.11"
+convert_case = "0.6.0"
+error-stack = "0.4.1"
+ignore = "0.4.21"
+liquid = "0.26.4"
+serde = { version = "1.0.193", features = ["derive"] }
+tempdir = "0.3.7"
+thiserror = "1.0.50"
+toml = "0.8.8"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
