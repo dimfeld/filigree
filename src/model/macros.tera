@@ -1,0 +1,11 @@
+{% macro permissions_check(user, team, permissions) %}
+  EXISTS (
+    SELECT 1
+    FROM permissions
+    WHERE
+    AND team_id = {{user}}
+    AND user_id = {{team}}
+    AND permission IN ('admin', {{permissions}})
+  )
+{% endmacro permissions_check %}
+

@@ -1,0 +1,16 @@
+INSERT INTO {{table}}
+(
+  {{ insertable_fields | map(attribute='sql_name') | join(sep=', ') }}
+)
+
+VALUES
+
+(
+
+{% for field in insertable_fields %}
+  ${{loop.index}}{% if not loop.last %},{% endif %}
+{% endfor %}
+)
+
+RETURNING
+  {{ selectable_fields | map(attribute='sql_full_name') | join(sep=', ') }}

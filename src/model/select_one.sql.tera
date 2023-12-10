@@ -1,0 +1,9 @@
+{% import "macros.tera" as macros %}
+SELECT
+  {{ selectable_fields | map(attribute='sql_full_name') | join(sep=', ') }}
+FROM
+  {{ table }}
+WHERE
+  id = $1
+  AND team = $2
+  AND {{ macros::permissions_check(user="$3", team="$2", permissions=read_permission) }}
