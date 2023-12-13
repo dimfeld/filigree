@@ -1,6 +1,9 @@
+{% set insertable_fields = fields | filter(attribute='updatable', value=true) %}
 INSERT INTO {{table}}
 (
-  {{ insertable_fields | map(attribute='sql_name') | join(sep=', ') }}
+  {{ insertable_fields
+    | map(attribute='sql_name')
+    | join(sep=', ') }}
 )
 
 VALUES
@@ -13,4 +16,4 @@ VALUES
 )
 
 RETURNING
-  {{ selectable_fields | map(attribute='sql_full_name') | join(sep=', ') }}
+  {{ fields | map(attribute='sql_full_name') | join(sep=', ') }}

@@ -1,0 +1,15 @@
+CREATE TABLE {{table}} (
+  {% for field in fields -%}
+    {{ field.sql_name }} {{ field.sql_type }}
+    {%- if field.unique %} unique {% endif -%}
+    {%- if not field.nullable %} not null {% endif -%}
+    {%- if field.default != '' %} default {{ field.default }} {% endif -%}
+    {%- if field.extra_sql_modifiers != '' %} {{ field.extra_sql_modifiers }} {% endif %}
+    ,
+  {%- endfor %}
+);
+
+{% for i in indexes %}
+{{ i }}
+{%- if not i is ending_with(';') %};{%- endif -%}
+{% endfor %}
