@@ -309,6 +309,22 @@ dependencies = [
  "serde",
  "serde_json",
  "tempdir",
+ "thiserror",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "filigree-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "convert_case",
+ "error-stack",
+ "ignore",
+ "serde",
+ "serde_json",
+ "tempdir",
  "tera",
  "thiserror",
  "toml",
