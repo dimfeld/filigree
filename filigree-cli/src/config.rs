@@ -11,9 +11,23 @@ pub struct State {
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    formatter: Formatters,
+    formatter: Option<Formatters>,
+    /// The SQL dialect to use. Defaults to postgresql
+    #[serde(default = "default_sql_dialect")]
     sql_dialect: SqlDialect,
     models: Vec<Model>,
+    /// Where to place generated files.
+    /// Defaults to src/generated
+    #[serde(default = "default_generated_path")]
+    generated_path: PathBuf,
+}
+
+fn default_sql_dialect() -> SqlDialect {
+    SqlDialect::Postgresql
+}
+
+fn default_generated_path() -> PathBuf {
+    "src/generated".into()
 }
 
 #[derive(Deserialize, Debug)]
