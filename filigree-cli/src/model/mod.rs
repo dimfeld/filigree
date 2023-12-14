@@ -44,8 +44,11 @@ impl Model {
             .all_fields()
             .map(|(fixed, field)| {
                 json!({
-                    "name": field.name,
+                    "sql_name": field.sql_field_name(),
                     "sql_full_name": field.qualified_sql_field_name(),
+                    "sql_type": field.typ.to_sql_type(dialect),
+                    "rust_name": field.rust_field_name(),
+                    "rust_type": field.rust_type.clone().unwrap_or_else(|| field.typ.to_rust_type().to_string()),
                     "default": field.default,
                     "nullable": field.nullable,
                     "unique": field.unique,
@@ -208,7 +211,7 @@ impl ModelField {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum SqlDialect {
     Postgresql,

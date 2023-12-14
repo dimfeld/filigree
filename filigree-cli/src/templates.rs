@@ -12,14 +12,14 @@ fn create_tera() -> Tera {
     let mut tera = Tera::default();
 
     tera.add_raw_templates(vec![
-        ("delete.sql.tera", include_str!("model/delete.sql.tera")),
-        ("insert.sql.tera", include_str!("model/insert.sql.tera")),
+        ("delete.sql.tera", include_str!("model/sql/delete.sql.tera")),
+        ("insert.sql.tera", include_str!("model/sql/insert.sql.tera")),
         (
             "select_one.sql.tera",
-            include_str!("model/select_one.sql.tera"),
+            include_str!("model/sql/select_one.sql.tera"),
         ),
-        ("update.sql.tera", include_str!("model/update.sql.tera")),
-        ("model_macros.tera", include_str!("model/model_macros.tera")),
+        ("update.sql.tera", include_str!("model/sql/update.sql.tera")),
+        ("sql_macros.tera", include_str!("model/sql/sql_macros.tera")),
     ])
     .expect("Could not add templates");
 
@@ -76,9 +76,11 @@ mod test {
     use super::*;
 
     mod sql_string {
-        use super::*;
-        use serde_json::json;
         use std::collections::HashMap;
+
+        use serde_json::json;
+
+        use super::*;
 
         fn call(val: impl Into<serde_json::Value>) -> String {
             sql_string_filter(&val.into(), &HashMap::default())

@@ -1,4 +1,4 @@
-{% import "model_macros.tera" as macros %}
+{% import "sql_macros.tera" as macros %}
 SELECT
   {{ fields
     | filter(attribute = field_filter_attribute, value = true)

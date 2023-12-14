@@ -1,4 +1,4 @@
-{% import "model_macros.tera" as macros %}
+{% import "sql_macros.tera" as macros %}
 WITH permissions AS (
   {{ macros::permissions_lookup(actor_ids="$3", team="$2", owner_perm=owner_permission, user_perm=user_permission) }}
 )
