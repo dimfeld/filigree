@@ -2,6 +2,8 @@ mod base_models;
 mod generate_endpoints;
 mod generate_sql;
 
+use std::borrow::Cow;
+
 use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -27,22 +29,19 @@ pub struct Model {
     // TODO ability to define extra operations that update specific things and require specific
     // permissions.
 }
-
 impl Model {
-    pub fn create_context(&self, dialect: SqlDialect) -> tera::Context {
+    pub fn create_template_context(&self, dialect: SqlDialect) -> tera::Context {
         let mut context = tera::Context::new();
         context.insert("table", &self.table());
         context.insert("indexes", &self.indexes);
 
+        context.insert("global", &self.global);
         context.insert("owner_permission", &format!("{}::owner", self.id_prefix));
         context.insert("read_permission", &format!("{}::read", self.name));
         context.insert("write_permission", &format!("{}::write", self.id_prefix));
 
         let fields = self
-            .standard_fields()
-            .iter()
-            .map(|(fixed, field)| (*fixed, field))
-            .chain(self.fields.iter().map(|field| (false, field)))
+            .all_fields()
             .map(|(fixed, field)| {
                 json!({
                     "name": field.name,
@@ -72,83 +71,80 @@ impl Model {
         format!("{}Id", self.id_prefix.to_case(Case::Camel))
     }
 
+    pub fn all_fields(&self) -> impl Iterator<Item = (bool, Cow<ModelField>)> {
+        self.standard_fields()
+            .map(|field| (true, Cow::Owned(field)))
+            .chain(
+                self.fields
+                    .iter()
+                    .map(|field| (false, Cow::Borrowed(field))),
+            )
+    }
+
     /// The fields that apply to every object
-    fn standard_fields(&self) -> Vec<(bool, ModelField)> {
+    fn standard_fields(&self) -> impl Iterator<Item = ModelField> {
         let team_field = if self.global {
             None
         } else {
-            Some((
-                true,
-                ModelField {
-                    name: "team_id".to_string(),
-                    typ: SqlType::Uuid,
-                    rust_type: Some("TeamId".to_string()),
-                    nullable: false,
-                    unique: false,
-                    indexed: false,
-                    extra_sql_modifiers: "primary key".to_string(),
-                    user_access: Access::Read,
-                    owner_access: Access::Read,
-                    default: String::new(),
-                },
-            ))
+            Some(ModelField {
+                name: "team_id".to_string(),
+                typ: SqlType::Uuid,
+                rust_type: Some("TeamId".to_string()),
+                nullable: false,
+                unique: false,
+                indexed: false,
+                extra_sql_modifiers: "primary key".to_string(),
+                user_access: Access::Read,
+                owner_access: Access::Read,
+                default: String::new(),
+            })
         };
 
         [
-            Some((
-                true,
-                ModelField {
-                    name: "id".to_string(),
-                    typ: SqlType::Uuid,
-                    rust_type: Some(self.object_id_type()),
-                    nullable: false,
-                    unique: false,
-                    indexed: false,
-                    extra_sql_modifiers: "primary key".to_string(),
-                    user_access: Access::Read,
-                    owner_access: Access::Read,
-                    default: String::new(),
-                },
-            )),
+            Some(ModelField {
+                name: "id".to_string(),
+                typ: SqlType::Uuid,
+                rust_type: Some(self.object_id_type()),
+                nullable: false,
+                unique: false,
+                indexed: false,
+                extra_sql_modifiers: "primary key".to_string(),
+                user_access: Access::Read,
+                owner_access: Access::Read,
+                default: String::new(),
+            }),
             team_field,
-            Some((
-                true,
-                ModelField {
-                    name: "updated_at".to_string(),
-                    typ: SqlType::Timestamp,
-                    rust_type: None,
-                    nullable: false,
-                    unique: false,
-                    indexed: false,
-                    extra_sql_modifiers: String::new(),
-                    user_access: Access::Read,
-                    owner_access: Access::Read,
-                    default: "now()".to_string(),
-                },
-            )),
-            Some((
-                true,
-                ModelField {
-                    name: "created_at".to_string(),
-                    typ: SqlType::Timestamp,
-                    rust_type: None,
-                    nullable: false,
-                    unique: false,
-                    indexed: false,
-                    extra_sql_modifiers: String::new(),
-                    user_access: Access::Read,
-                    owner_access: Access::Read,
-                    default: "now()".to_string(),
-                },
-            )),
+            Some(ModelField {
+                name: "updated_at".to_string(),
+                typ: SqlType::Timestamp,
+                rust_type: None,
+                nullable: false,
+                unique: false,
+                indexed: false,
+                extra_sql_modifiers: String::new(),
+                user_access: Access::Read,
+                owner_access: Access::Read,
+                default: "now()".to_string(),
+            }),
+            Some(ModelField {
+                name: "created_at".to_string(),
+                typ: SqlType::Timestamp,
+                rust_type: None,
+                nullable: false,
+                unique: false,
+                indexed: false,
+                extra_sql_modifiers: String::new(),
+                user_access: Access::Read,
+                owner_access: Access::Read,
+                default: "now()".to_string(),
+            }),
         ]
         .into_iter()
         .flatten()
-        .collect()
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelField {
     /// The name of the field
     pub name: String,
@@ -219,7 +215,7 @@ pub enum SqlDialect {
     SQLite,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum SqlType {
     Text,
@@ -266,7 +262,7 @@ impl SqlType {
 }
 
 /// Define how callers to the API can access this field
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum Access {
     /// No access
