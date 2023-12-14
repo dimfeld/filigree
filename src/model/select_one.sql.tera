@@ -1,13 +1,13 @@
-{% import "macros.tera" as macros %}
+{% import "model_macros.tera" as macros %}
 SELECT
--- TODO Use blocks and inheritance for these queries and the public versions
   {{ fields
+    | filter(attribute = field_filter_attribute, value = true)
     | map(attribute='sql_full_name')
-    | join(sep=', ') }}
+    | join(sep=',\n') }},
 FROM
   {{ table }}
 WHERE
   id = $1
   AND team = $2
-  AND {{ macros::permissions_check(user="$3", team="$2", permissions=read_permission) }}
+  AND {{ macros::permissions_check(actor_ids="$3", team="$2", permissions=[owner_permission, read_permission]) }}
 

@@ -9,6 +9,10 @@ CREATE TABLE {{table}} (
   {%- endfor %}
 );
 
+{% for field in fields | filter(attribute="indexed", value=true) %}
+  CREATE INDEX {{table}}_{{field.sql_name}} ON {{table}} ({{field.sql_name}});
+{% endfor %}
+
 {% for i in indexes %}
 {{ i }}
 {%- if not i is ending_with(';') %};{%- endif -%}

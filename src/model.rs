@@ -15,26 +15,34 @@ pub struct Model {
     /// If true, generate API endpoints for this model.
     pub endpoints: bool,
 
+    /// If true, this model does not have a team_id.
+    /// This mostly applies to the team object itself but may be useful for other things.
+    #[serde(default)]
+    pub global: bool,
+
     /// SQL to create indexes on the field
     #[serde(default)]
     pub indexes: Vec<String>,
+    // TODO ability to define extra permissions
+    // TODO ability to define extra operations that update specific things and require specific
+    // permissions.
 }
 
 impl Model {
-    pub fn create_context(&self, model_index: usize, dialect: SqlDialect) -> tera::Context {
+    pub fn create_context(&self, dialect: SqlDialect) -> tera::Context {
         let mut context = tera::Context::new();
         context.insert("table", &self.table());
         context.insert("indexes", &self.indexes);
 
+        context.insert("owner_permission", &format!("{}::owner", self.id_prefix));
+        context.insert("read_permission", &format!("{}::read", self.name));
+        context.insert("write_permission", &format!("{}::write", self.id_prefix));
+
         let fields = self
-            .fields
+            .standard_fields()
             .iter()
-            .map(|field| (false, field))
-            .chain(
-                self.fixed_fields(model_index)
-                    .iter()
-                    .map(|field| (true, field)),
-            )
+            .map(|(fixed, field)| (*fixed, field))
+            .chain(self.fields.iter().map(|field| (false, field)))
             .map(|(fixed, field)| {
                 json!({
                     "name": field.name,
@@ -43,13 +51,16 @@ impl Model {
                     "nullable": field.nullable,
                     "unique": field.unique,
                     "extra_sql_modifiers": field.extra_sql_modifiers,
-                    "public_read": field.public.can_read(),
-                    "public_write": field.public.can_write(),
+                    "user_read": field.user_access.can_read(),
+                    "user_write": !fixed && field.user_access.can_write(),
+                    "owner_read": field.owner_access.can_read() || field.user_access.can_read(),
+                    "owner_write": !fixed && (field.owner_access.can_write() || field.user_access.can_write()),
                     "updatable": !fixed,
                 })
             })
             .collect::<Vec<_>>();
 
+        context.insert("fields", &fields);
         context
     }
 
@@ -57,39 +68,83 @@ impl Model {
         self.name.to_case(Case::Snake)
     }
 
-    fn fixed_fields(&self, model_index: usize) -> Vec<ModelField> {
-        vec![
-            ModelField {
-                name: "id".to_string(),
-                typ: SqlType::Uuid,
-                rust_type: Some(format!("ObjectId<{model_index}>")),
-                nullable: false,
-                unique: false,
-                extra_sql_modifiers: "primary key".to_string(),
-                public: Access::Read,
-                default: "uuid_gen_v7()".to_string(),
-            },
-            ModelField {
-                name: "updated_at".to_string(),
-                typ: SqlType::Timestamp,
-                rust_type: None,
-                nullable: false,
-                unique: false,
-                extra_sql_modifiers: String::new(),
-                public: Access::Read,
-                default: "now()".to_string(),
-            },
-            ModelField {
-                name: "created_at".to_string(),
-                typ: SqlType::Timestamp,
-                rust_type: None,
-                nullable: false,
-                unique: false,
-                extra_sql_modifiers: String::new(),
-                public: Access::Read,
-                default: "now()".to_string(),
-            },
+    pub fn object_id_type(&self) -> String {
+        format!("{}Id", self.id_prefix.to_case(Case::Camel))
+    }
+
+    /// The fields that apply to every object
+    fn standard_fields(&self) -> Vec<(bool, ModelField)> {
+        let team_field = if self.global {
+            None
+        } else {
+            Some((
+                true,
+                ModelField {
+                    name: "team_id".to_string(),
+                    typ: SqlType::Uuid,
+                    rust_type: Some("TeamId".to_string()),
+                    nullable: false,
+                    unique: false,
+                    indexed: false,
+                    extra_sql_modifiers: "primary key".to_string(),
+                    user_access: Access::Read,
+                    owner_access: Access::Read,
+                    default: String::new(),
+                },
+            ))
+        };
+
+        [
+            Some((
+                true,
+                ModelField {
+                    name: "id".to_string(),
+                    typ: SqlType::Uuid,
+                    rust_type: Some(self.object_id_type()),
+                    nullable: false,
+                    unique: false,
+                    indexed: false,
+                    extra_sql_modifiers: "primary key".to_string(),
+                    user_access: Access::Read,
+                    owner_access: Access::Read,
+                    default: String::new(),
+                },
+            )),
+            team_field,
+            Some((
+                true,
+                ModelField {
+                    name: "updated_at".to_string(),
+                    typ: SqlType::Timestamp,
+                    rust_type: None,
+                    nullable: false,
+                    unique: false,
+                    indexed: false,
+                    extra_sql_modifiers: String::new(),
+                    user_access: Access::Read,
+                    owner_access: Access::Read,
+                    default: "now()".to_string(),
+                },
+            )),
+            Some((
+                true,
+                ModelField {
+                    name: "created_at".to_string(),
+                    typ: SqlType::Timestamp,
+                    rust_type: None,
+                    nullable: false,
+                    unique: false,
+                    indexed: false,
+                    extra_sql_modifiers: String::new(),
+                    user_access: Access::Read,
+                    owner_access: Access::Read,
+                    default: "now()".to_string(),
+                },
+            )),
         ]
+        .into_iter()
+        .flatten()
+        .collect()
     }
 }
 
@@ -115,11 +170,22 @@ pub struct ModelField {
 
     /// Define how callers to the API can access this field
     #[serde(default)]
-    pub public: Access,
+    pub user_access: Access,
+
+    /// Define how owners on this object can access the field
+    /// Allthough this defaults to [Access::None], it is effectively always
+    /// at least as permissive as [user_access].
+    #[serde(default)]
+    pub owner_access: Access,
 
     /// The default value of this field, as a SQL expression
     #[serde(default)]
     pub default: String,
+
+    /// If true, create an index on this field.
+    /// More exotic index types can be specified using [Model#indexes].
+    #[serde(default)]
+    pub indexed: bool,
 }
 
 impl ModelField {

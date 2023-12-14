@@ -1,7 +1,6 @@
-{% set insertable_fields = fields | filter(attribute='updatable', value=true) %}
 INSERT INTO {{table}}
 (
-  {{ insertable_fields
+  {{ fields
     | map(attribute='sql_name')
     | join(sep=', ') }}
 )
@@ -10,10 +9,8 @@ VALUES
 
 (
 
-{% for field in insertable_fields %}
+{% for field in fields | filter(attribute='updatable', value=true) %}
   ${{loop.index}}{% if not loop.last %},{% endif %}
 {% endfor %}
 )
 
-RETURNING
-  {{ fields | map(attribute='sql_full_name') | join(sep=', ') }}
