@@ -1,13 +1,14 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use config::Config;
-use error_stack::{Report, ResultExt};
+use error_stack::Report;
+use rayon::prelude::*;
 use thiserror::Error;
 
-use crate::config::FullConfig;
+use crate::{config::FullConfig, model::generator::ModelGenerator};
 
 pub mod config;
+mod format;
 pub mod model;
 pub mod templates;
 
@@ -28,6 +29,8 @@ pub enum Error {
     WriteFile,
     #[error("Failed to render template")]
     Render,
+    #[error("Failed to run code formatter")]
+    Formatter,
 }
 
 pub fn main() -> Result<(), Report<Error>> {
@@ -37,6 +40,27 @@ pub fn main() -> Result<(), Report<Error>> {
     let config = FullConfig::from_dir(&config_path)?;
 
     println!("config: {:?}", config);
+
+    let FullConfig { config, models } = config;
+
+    let mut up_migrations = Vec::with_capacity(models.len());
+    let mut down_migrations = Vec::with_capacity(models.len());
+
+    let generators = models
+        .into_iter()
+        .map(|model| ModelGenerator::new(&config, model))
+        .collect::<Vec<_>>();
+
+    generators
+        .par_iter()
+        .try_for_each(|gen| gen.write_sql_queries())?;
+
+    for generator in generators {
+        up_migrations.push(generator.render_up_migration()?.1);
+        down_migrations.push(generator.render_down_migration()?.1);
+    }
+
+    // TODO Write the migrations
 
     Ok(())
 }

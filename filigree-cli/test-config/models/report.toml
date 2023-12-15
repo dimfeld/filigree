@@ -1,0 +1,19 @@
+name = "Report"
+id_prefix = "rep"
+endpoints = true
+
+[[fields]]
+name = "title"
+type = "text"
+
+
+[[fields]]
+name = "description"
+type = "text"
+nullable = true
+
+[[fields]]
+name = "ui"
+type = "json"
+rust_type = "crate::ReportUi"
+user_access = "Read"

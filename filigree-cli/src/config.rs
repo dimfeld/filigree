@@ -9,27 +9,23 @@ use crate::{
     Error,
 };
 
-pub struct State {
-    base_dir: PathBuf,
-    config: Config,
-}
-
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    formatter: Option<Formatters>,
+    #[serde(default)]
+    pub formatter: Formatters,
     /// The SQL dialect to use. Defaults to postgresql
     #[serde(default = "Config::default_sql_dialect")]
-    sql_dialect: SqlDialect,
+    pub sql_dialect: SqlDialect,
 
     /// Where to place generated files.
     /// Defaults to src/generated
     #[serde(default = "Config::default_generated_path")]
-    generated_path: PathBuf,
+    pub generated_path: PathBuf,
 
     /// Where the place the SQL migrations
     /// Defaults to `migrations`
     #[serde(default = "Config::default_migrations_path")]
-    migrations_path: PathBuf,
+    pub migrations_path: PathBuf,
 }
 
 impl Config {
@@ -50,7 +46,7 @@ impl Config {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub struct Formatters {
     /// The formatter to use for Rust code. Defaults to rustfmt.
     pub rust: Option<String>,
@@ -60,8 +56,8 @@ pub struct Formatters {
 
 #[derive(Debug)]
 pub struct FullConfig {
-    config: Config,
-    models: Vec<Model>,
+    pub config: Config,
+    pub models: Vec<Model>,
 }
 
 impl FullConfig {

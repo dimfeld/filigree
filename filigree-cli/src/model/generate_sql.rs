@@ -1,30 +1,34 @@
 use error_stack::Report;
+use rayon::prelude::*;
 
-use super::ModelGenerator;
+use super::generator::ModelGenerator;
 use crate::Error;
 
+type GenResult = Result<(&'static str, Vec<u8>), Report<Error>>;
+
 impl<'a> ModelGenerator<'a> {
-    pub fn generate_up_migration(&self) -> Result<String, tera::Error> {
-        self.tera.render("migrate_up.sql.tera", &self.context)
+    pub fn render_up_migration(&self) -> GenResult {
+        self.render("migrate_up.sql.tera")
     }
 
-    pub fn generate_down_migration(&self) -> Result<String, tera::Error> {
-        self.tera.render("migrate_down.sql.tera", &self.context)
+    pub fn render_down_migration(&self) -> GenResult {
+        self.render("migrate_down.sql.tera")
     }
 
-    pub fn write_select_one_query(&self) -> Result<(), Report<Error>> {
-        self.render_to_file("select_one.sql.tera", "select_one.sql")
-    }
+    pub fn write_sql_queries(&self) -> Result<(), Report<Error>> {
+        let files = [
+            "select_one.sql.tera",
+            "insert.sql.tera",
+            "update.sql.tera",
+            "delete.sql.tera",
+        ];
 
-    pub fn write_insert_query(&self) -> Result<(), Report<Error>> {
-        self.render_to_file("insert.sql.tera", "insert.sql")
-    }
+        files.into_par_iter().try_for_each(|file| {
+            let (filename, output) = self.render(file)?;
+            self.write_to_file(filename, &output)?;
+            Ok::<_, Report<Error>>(())
+        })?;
 
-    pub fn write_update_query(&self) -> Result<(), Report<Error>> {
-        self.render_to_file("update.sql.tera", "update.sql")
-    }
-
-    pub fn write_delete_query(&self) -> Result<(), Report<Error>> {
-        self.render_to_file("delete.sql.tera", "delete.sql")
+        Ok(())
     }
 }
