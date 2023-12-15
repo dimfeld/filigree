@@ -1,36 +1,59 @@
 use std::{io::Write, process::Stdio};
 
 use error_stack::{Report, ResultExt};
+use serde::Deserialize;
 
 use crate::Error;
 
-pub fn run_formatter(formatter: &str, input: Vec<u8>) -> Result<Vec<u8>, Report<Error>> {
-    let mut format_process = std::process::Command::new(formatter)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .change_context(Error::Formatter)?;
+#[derive(Deserialize, Debug, Default)]
+pub struct Formatters {
+    /// The formatter to use for Rust code. Defaults to rustfmt.
+    pub rust: Option<String>,
+    /// The formatter to use for SQL files.
+    pub sql: Option<String>,
+}
 
-    let mut stdin = format_process.stdin.take().ok_or(Error::Formatter)?;
-    let writer_thread =
-        std::thread::spawn(move || stdin.write_all(&input).change_context(Error::Formatter));
+impl Formatters {
+    pub fn run_formatter(&self, filename: &str, input: Vec<u8>) -> Result<Vec<u8>, Report<Error>> {
+        let formatter = if filename.ends_with(".sql") {
+            self.sql.as_deref()
+        } else if filename.ends_with(".rs") {
+            self.rust.as_deref()
+        } else {
+            None
+        };
 
-    let result = format_process
-        .wait_with_output()
-        .change_context(Error::Formatter)?;
+        let Some(formatter) = formatter else {
+            return Ok(input);
+        };
 
-    writer_thread
-        .join()
-        .expect("format writer thread")
-        .change_context(Error::Formatter)?;
+        let mut format_process = std::process::Command::new(formatter)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .change_context(Error::Formatter)?;
 
-    let code = result.status.code().unwrap_or(0);
-    if !result.status.success() {
-        return Err(Error::Formatter)
-            .attach_printable(format!("Formatter {formatter} exited with code {code}"))
-            .attach_printable(String::from_utf8(result.stderr).unwrap_or_default());
+        let mut stdin = format_process.stdin.take().ok_or(Error::Formatter)?;
+        let writer_thread =
+            std::thread::spawn(move || stdin.write_all(&input).change_context(Error::Formatter));
+
+        let result = format_process
+            .wait_with_output()
+            .change_context(Error::Formatter)?;
+
+        writer_thread
+            .join()
+            .expect("format writer thread")
+            .change_context(Error::Formatter)?;
+
+        let code = result.status.code().unwrap_or(0);
+        if !result.status.success() {
+            return Err(Error::Formatter)
+                .attach_printable(format!("Formatter {formatter} exited with code {code}"))
+                .attach_printable(String::from_utf8(result.stderr).unwrap_or_default());
+        }
+
+        Ok(result.stdout)
     }
-
-    Ok(result.stdout)
 }

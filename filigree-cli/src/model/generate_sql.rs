@@ -2,18 +2,18 @@ use error_stack::Report;
 use rayon::prelude::*;
 
 use super::generator::ModelGenerator;
-use crate::Error;
+use crate::{Error, RenderedFile};
 
 impl<'a> ModelGenerator<'a> {
     pub fn render_up_migration(&self) -> Result<Vec<u8>, Report<Error>> {
-        self.render("migrate_up.sql.tera").map(|(_, v)| v)
+        self.render("migrate_up.sql.tera").map(|f| f.contents)
     }
 
     pub fn render_down_migration(&self) -> Result<Vec<u8>, Report<Error>> {
-        self.render("migrate_down.sql.tera").map(|(_, v)| v)
+        self.render("migrate_down.sql.tera").map(|f| f.contents)
     }
 
-    pub fn write_sql_queries(&self) -> Result<(), Report<Error>> {
+    pub fn render_sql_queries(&self) -> Result<Vec<RenderedFile>, Report<Error>> {
         let files = [
             "select_one.sql.tera",
             "insert.sql.tera",
@@ -21,12 +21,11 @@ impl<'a> ModelGenerator<'a> {
             "delete.sql.tera",
         ];
 
-        files.into_par_iter().try_for_each(|file| {
-            let (filename, output) = self.render(file)?;
-            self.write_to_file(filename, &output)?;
-            Ok::<_, Report<Error>>(())
-        })?;
+        let output = files
+            .into_par_iter()
+            .map(|file| self.render(file))
+            .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(())
+        Ok(output)
     }
 }

@@ -1,7 +1,10 @@
-use std::path::PathBuf;
+use std::{
+    io::{BufWriter, Write},
+    path::{Path, PathBuf},
+};
 
 use clap::Parser;
-use error_stack::Report;
+use error_stack::{Report, ResultExt};
 use model::Model;
 use rayon::prelude::*;
 use thiserror::Error;
@@ -12,6 +15,11 @@ pub mod config;
 mod format;
 pub mod model;
 pub mod templates;
+
+pub struct RenderedFile {
+    path: PathBuf,
+    contents: Vec<u8>,
+}
 
 #[derive(Parser)]
 pub struct Cli {
@@ -69,9 +77,10 @@ pub fn main() -> Result<(), Report<Error>> {
         .map(|model| ModelGenerator::new(&config, model))
         .collect::<Vec<_>>();
 
-    generators
+    let sql_files = generators
         .par_iter()
-        .try_for_each(|gen| gen.write_sql_queries())?;
+        .map(|gen| gen.render_sql_queries())
+        .collect::<Result<Vec<_>, _>>()?;
 
     let up_migrations = generators
         .iter()
@@ -83,7 +92,37 @@ pub fn main() -> Result<(), Report<Error>> {
         .map(|gen| gen.render_down_migration())
         .collect::<Result<Vec<_>, _>>()?;
 
-    // TODO Write the migrations
+    // TODO This works once but we don't want to do it every time.
+    let up_migration_path = config
+        .migrations_path
+        .join("00000000000000_filigree_init.up.sql");
+    write_vecs(&up_migration_path, &up_migrations, b"\n\n").change_context(Error::WriteFile)?;
+    let down_migration_path = config
+        .migrations_path
+        .join("00000000000000_filigree_init.down.sql");
+    write_vecs(&down_migration_path, &down_migrations, b"\n\n").change_context(Error::WriteFile)?;
 
+    let files = sql_files.into_iter().flatten().collect::<Vec<_>>();
+
+    files
+        .into_par_iter()
+        .try_for_each(|file| std::fs::write(&file.path, &file.contents))
+        .change_context(Error::WriteFile)?;
+
+    Ok(())
+}
+
+fn write_vecs(path: &Path, data: &[Vec<u8>], sep: &[u8]) -> Result<(), std::io::Error> {
+    let file = std::fs::File::create(path)?;
+    let mut writer = BufWriter::new(file);
+
+    for (i, item) in data.iter().enumerate() {
+        if i > 0 {
+            writer.write_all(sep)?;
+        }
+        writer.write_all(item)?;
+    }
+
+    writer.flush()?;
     Ok(())
 }

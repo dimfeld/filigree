@@ -1,11 +1,11 @@
-use std::ops::Deref;
+use std::{ops::Deref, path::PathBuf};
 
 use error_stack::{Report, ResultExt};
 use serde_json::json;
 use tera::Tera;
 
 use super::{Model, SqlDialect};
-use crate::{config::Config, format::run_formatter, templates::get_tera, Error};
+use crate::{config::Config, templates::get_tera, Error, RenderedFile};
 
 pub struct ModelGenerator<'a> {
     pub model: Model,
@@ -62,10 +62,7 @@ impl<'a> ModelGenerator<'a> {
         context
     }
 
-    pub(super) fn render<'f>(
-        &self,
-        template_name: &'f str,
-    ) -> Result<(&'f str, Vec<u8>), Report<Error>> {
+    pub(super) fn render<'f>(&self, template_name: &'f str) -> Result<RenderedFile, Report<Error>> {
         let output = self
             .tera
             .render(template_name, &self.context)
@@ -78,34 +75,17 @@ impl<'a> ModelGenerator<'a> {
             .strip_suffix(".tera")
             .expect("Template name did not end in .tera");
 
-        let formatter = if filename.ends_with(".sql") {
-            self.config.formatter.sql.as_ref()
-        } else if filename.ends_with(".rs") {
-            self.config.formatter.rust.as_ref()
-        } else {
-            None
-        };
-
-        let output = if let Some(formatter) = formatter {
-            run_formatter(formatter, output).change_context(Error::Formatter)?
-        } else {
-            output
-        };
-
-        Ok((filename, output))
-    }
-
-    pub(super) fn write_to_file(&self, filename: &str, output: &[u8]) -> Result<(), Report<Error>> {
-        let path = self
+        let output = self
             .config
-            .generated_path
-            .join(self.model.module_name())
-            .join(filename);
+            .formatter
+            .run_formatter(filename, output)
+            .change_context(Error::Formatter)?;
+        let path = PathBuf::from(self.model.module_name()).join(filename);
 
-        std::fs::write(&path, output)
-            .change_context(Error::WriteFile)
-            .attach_printable_lazy(|| path.display().to_string())?;
-        Ok(())
+        Ok(RenderedFile {
+            path,
+            contents: output,
+        })
     }
 }
 

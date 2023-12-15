@@ -5,6 +5,7 @@ use glob::glob;
 use serde::{de::DeserializeOwned, Deserialize};
 
 use crate::{
+    format::Formatters,
     model::{Model, SqlDialect},
     Error,
 };
@@ -44,14 +45,6 @@ impl Config {
     fn default_migrations_path() -> PathBuf {
         "migrations".into()
     }
-}
-
-#[derive(Deserialize, Debug, Default)]
-pub struct Formatters {
-    /// The formatter to use for Rust code. Defaults to rustfmt.
-    pub rust: Option<String>,
-    /// The formatter to use for SQL files.
-    pub sql: Option<String>,
 }
 
 #[derive(Debug)]
