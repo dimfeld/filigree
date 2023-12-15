@@ -16,6 +16,7 @@ impl<'a> ModelGenerator<'a> {
     pub fn render_sql_queries(&self) -> Result<Vec<RenderedFile>, Report<Error>> {
         let files = [
             "select_one.sql.tera",
+            "list.sql.tera",
             "insert.sql.tera",
             "update.sql.tera",
             "delete.sql.tera",

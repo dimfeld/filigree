@@ -6,10 +6,8 @@ SELECT
     | join(sep=',\n') }},
 FROM
   {{ table }}
+{% if not global %}
 WHERE
-  id = $1
-  {% if not global %}
-    AND team = $2
-  {% endif %}
-  AND {{ macros::permissions_check(actor_ids="$3", team="$2", permissions=[owner_permission, read_permission]) }}
+    team = $1
+{% endif %}
 

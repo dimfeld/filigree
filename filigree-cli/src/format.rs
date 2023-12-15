@@ -47,8 +47,8 @@ impl Formatters {
             .expect("format writer thread")
             .change_context(Error::Formatter)?;
 
-        let code = result.status.code().unwrap_or(0);
         if !result.status.success() {
+            let code = result.status.code().unwrap_or(0);
             return Err(Error::Formatter)
                 .attach_printable(format!("Formatter {formatter} exited with code {code}"))
                 .attach_printable(String::from_utf8(result.stderr).unwrap_or_default());
