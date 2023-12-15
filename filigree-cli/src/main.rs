@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use error_stack::Report;
+use model::Model;
 use rayon::prelude::*;
 use thiserror::Error;
 
@@ -33,16 +34,35 @@ pub enum Error {
     Formatter,
 }
 
+fn build_models(mut config_models: Vec<Model>) -> Vec<Model> {
+    let mut models = Model::create_default_models();
+    // See if any of the built-in models have been customized
+    for model in models.iter_mut() {
+        let same_model = config_models.iter().position(|m| m.name == model.name);
+        let Some(position) = same_model else {
+            continue;
+        };
+
+        let same_model = config_models.remove(position);
+        model.merge_from(same_model);
+    }
+
+    models.extend(config_models.into_iter());
+    models
+}
+
 pub fn main() -> Result<(), Report<Error>> {
     let args = Cli::parse();
 
     let config_path = args.config.unwrap_or_else(|| PathBuf::from("filigree"));
     let config = FullConfig::from_dir(&config_path)?;
 
-    let FullConfig { config, models } = config;
+    let FullConfig {
+        config,
+        models: config_models,
+    } = config;
 
-    let mut up_migrations = Vec::with_capacity(models.len());
-    let mut down_migrations = Vec::with_capacity(models.len());
+    let models = build_models(config_models);
 
     let generators = models
         .into_iter()
@@ -53,10 +73,15 @@ pub fn main() -> Result<(), Report<Error>> {
         .par_iter()
         .try_for_each(|gen| gen.write_sql_queries())?;
 
-    for generator in generators {
-        up_migrations.push(generator.render_up_migration()?);
-        down_migrations.push(generator.render_down_migration()?);
-    }
+    let up_migrations = generators
+        .iter()
+        .map(|gen| gen.render_up_migration())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let down_migrations = generators
+        .iter()
+        .map(|gen| gen.render_down_migration())
+        .collect::<Result<Vec<_>, _>>()?;
 
     // TODO Write the migrations
 

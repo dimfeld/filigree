@@ -24,7 +24,7 @@ impl Model {
             Model {
                 name: "User".to_string(),
                 plural: None,
-                id_prefix: "usr".to_string(),
+                id_prefix: Some("usr".to_string()),
                 endpoints: true,
                 global: false,
                 indexes: vec![],
@@ -51,7 +51,7 @@ impl Model {
             Model {
                 name: "Team".to_string(),
                 plural: None,
-                id_prefix: "tm".to_string(),
+                id_prefix: Some("tm".to_string()),
                 global: true,
                 endpoints: false,
                 indexes: vec![],
@@ -80,7 +80,7 @@ impl Model {
             Model {
                 name: "Role".to_string(),
                 plural: None,
-                id_prefix: "rl".to_string(),
+                id_prefix: Some("rol".to_string()),
                 global: false,
                 endpoints: true,
                 indexes: vec![],

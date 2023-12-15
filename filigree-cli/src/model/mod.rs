@@ -18,7 +18,8 @@ pub struct Model {
     #[serde(default)]
     pub plural: Option<String>,
     /// A prefix of a few characters for the ID of this type.
-    pub id_prefix: String,
+    /// Defaults to the first three characters of the name
+    pub id_prefix: Option<String>,
     pub fields: Vec<ModelField>,
     /// If true, generate API endpoints for this model.
     pub endpoints: bool,
@@ -37,7 +38,7 @@ pub struct Model {
     pub indexes: Vec<String>,
     // TODO ability to define extra permissions
     // TODO ability to define extra operations that update specific things and require specific
-    // permissions.
+    // permissions. Maybe this should just be defined in the normal code instead though...
 }
 
 impl Model {
@@ -49,8 +50,15 @@ impl Model {
         self.plural().to_case(Case::Snake)
     }
 
+    pub fn id_prefix(&self) -> Cow<str> {
+        self.id_prefix
+            .as_deref()
+            .map(Cow::from)
+            .unwrap_or_else(|| Cow::Owned(self.name.to_lowercase().chars().take(3).collect()))
+    }
+
     pub fn object_id_type(&self) -> String {
-        format!("{}Id", self.id_prefix.to_case(Case::Camel))
+        format!("{}Id", self.name.to_case(Case::Camel))
     }
 
     pub fn plural(&self) -> Cow<str> {
@@ -138,6 +146,48 @@ impl Model {
         ]
         .into_iter()
         .flatten()
+    }
+
+    /// The base models use this function to merge in fields added from the config.
+    /// Fields with the same name as an existing field in the base model will be replaced,
+    /// and other fields will be appended to the end.
+    /// Use caution when
+    pub(crate) fn merge_from(&mut self, mut other_model: Model) {
+        for field in self.fields.iter_mut() {
+            let existing = other_model.fields.iter().position(|f| f.name == field.name);
+            let Some(existing) = existing else {
+                continue;
+            };
+
+            let existing = other_model.fields.remove(existing);
+            *field = existing;
+        }
+
+        self.fields.extend(other_model.fields.into_iter());
+
+        if other_model.id_prefix.is_some() {
+            self.id_prefix = other_model.id_prefix;
+        }
+
+        self.endpoints = self.endpoints || other_model.endpoints;
+        match (
+            self.extra_create_table_sql.is_empty(),
+            other_model.extra_create_table_sql.is_empty(),
+        ) {
+            (true, false) => self.extra_create_table_sql = other_model.extra_create_table_sql,
+            (false, false) => {
+                self.extra_create_table_sql = format!(
+                    "{},\n{}",
+                    self.extra_create_table_sql, other_model.extra_create_table_sql
+                )
+            }
+            _ => {}
+        };
+
+        self.indexes.extend(other_model.indexes.into_iter());
+
+        // Don't merge `global`, `plural`, or `name` since these must not change
+        // for things to work properly.
     }
 }
 

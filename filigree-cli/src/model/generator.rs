@@ -30,9 +30,9 @@ impl<'a> ModelGenerator<'a> {
         context.insert("indexes", &model.indexes);
 
         context.insert("global", &model.global);
-        context.insert("owner_permission", &format!("{}::owner", model.id_prefix));
+        context.insert("owner_permission", &format!("{}::owner", model.name));
         context.insert("read_permission", &format!("{}::read", model.name));
-        context.insert("write_permission", &format!("{}::write", model.id_prefix));
+        context.insert("write_permission", &format!("{}::write", model.name));
         context.insert("extra_create_table_sql", &model.extra_create_table_sql);
         context.insert("sql_dialect", &dialect);
 
