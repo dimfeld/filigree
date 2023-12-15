@@ -12,6 +12,14 @@ fn create_tera() -> Tera {
     let mut tera = Tera::default();
 
     tera.add_raw_templates(vec![
+        (
+            "migrate_up.sql.tera",
+            include_str!("model/sql/migrate_up.sql.tera"),
+        ),
+        (
+            "migrate_down.sql.tera",
+            include_str!("model/sql/migrate_down.sql.tera"),
+        ),
         ("delete.sql.tera", include_str!("model/sql/delete.sql.tera")),
         ("insert.sql.tera", include_str!("model/sql/insert.sql.tera")),
         (

@@ -1,8 +1,6 @@
-use crate::config::State;
+use super::{Model, ModelGenerator};
 
-use super::Model;
-
-impl Model {
+impl<'a> ModelGenerator<'a> {
     pub fn generate_endpoints(&self) -> String {
         todo!()
     }
