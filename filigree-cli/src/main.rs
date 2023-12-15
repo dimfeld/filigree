@@ -39,8 +39,6 @@ pub fn main() -> Result<(), Report<Error>> {
     let config_path = args.config.unwrap_or_else(|| PathBuf::from("filigree"));
     let config = FullConfig::from_dir(&config_path)?;
 
-    println!("config: {:?}", config);
-
     let FullConfig { config, models } = config;
 
     let mut up_migrations = Vec::with_capacity(models.len());
@@ -56,8 +54,8 @@ pub fn main() -> Result<(), Report<Error>> {
         .try_for_each(|gen| gen.write_sql_queries())?;
 
     for generator in generators {
-        up_migrations.push(generator.render_up_migration()?.1);
-        down_migrations.push(generator.render_down_migration()?.1);
+        up_migrations.push(generator.render_up_migration()?);
+        down_migrations.push(generator.render_down_migration()?);
     }
 
     // TODO Write the migrations
