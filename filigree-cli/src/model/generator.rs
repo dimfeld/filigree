@@ -1,6 +1,7 @@
 use std::{ops::Deref, path::PathBuf};
 
 use error_stack::{Report, ResultExt};
+use rayon::prelude::*;
 use serde_json::json;
 use tera::Tera;
 
@@ -62,10 +63,14 @@ impl<'a> ModelGenerator<'a> {
         context
     }
 
-    pub(super) fn render<'f>(&self, template_name: &'f str) -> Result<RenderedFile, Report<Error>> {
+    pub(super) fn render_with_context(
+        &self,
+        template_name: &str,
+        context: &tera::Context,
+    ) -> Result<RenderedFile, Report<Error>> {
         let output = self
             .tera
-            .render(template_name, &self.context)
+            .render(template_name, context)
             .map_err(Error::Render)
             .attach_printable_lazy(|| format!("Model {}", self.model.name))
             .attach_printable_lazy(|| format!("Template {}", template_name))?
@@ -86,6 +91,42 @@ impl<'a> ModelGenerator<'a> {
             path,
             contents: output,
         })
+    }
+
+    pub(super) fn render<'f>(&self, template_name: &'f str) -> Result<RenderedFile, Report<Error>> {
+        self.render_with_context(template_name, &self.context)
+    }
+
+    pub fn render_up_migration(&self) -> Result<Vec<u8>, Report<Error>> {
+        self.render("migrate_up.sql.tera").map(|f| f.contents)
+    }
+
+    pub fn render_down_migration(&self) -> Result<Vec<u8>, Report<Error>> {
+        self.render("migrate_down.sql.tera").map(|f| f.contents)
+    }
+
+    pub fn render_model_directory(&self) -> Result<Vec<RenderedFile>, Report<Error>> {
+        let sql_files = [
+            "select_one.sql.tera",
+            "list.sql.tera",
+            "insert.sql.tera",
+            "update.sql.tera",
+            "delete.sql.tera",
+        ];
+
+        let sql_output = sql_files
+            .into_par_iter()
+            .map(|file| self.render(file))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let rust_types = self.render_types_file()?;
+
+        let output = sql_output
+            .into_iter()
+            .chain([rust_types])
+            .collect::<Vec<_>>();
+
+        Ok(output)
     }
 }
 

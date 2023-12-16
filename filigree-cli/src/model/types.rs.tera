@@ -1,0 +1,15 @@
+use serde::{Serialize, Deserialize};
+
+{% for struct in structs %}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct {{ struct.name }} {
+    {{ struct.fields }}
+}
+
+{% for alias in struct.aliases %}
+    pub type {{ alias }} = {{ struct.name }};
+{% endfor %}
+
+{% endfor %}
+

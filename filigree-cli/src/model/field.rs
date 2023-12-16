@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
 
@@ -54,6 +56,18 @@ impl ModelField {
         base_name.to_case(Case::Snake)
     }
 
+    pub fn rust_type(&self) -> Cow<str> {
+        let typ = self
+            .rust_type
+            .as_deref()
+            .unwrap_or_else(|| self.typ.to_rust_type());
+        if self.nullable {
+            format!("Option<{}>", typ).into()
+        } else {
+            typ.into()
+        }
+    }
+
     pub fn sql_field_name(&self) -> String {
         self.name.to_case(Case::Snake)
     }
@@ -61,7 +75,8 @@ impl ModelField {
     pub fn qualified_sql_field_name(&self) -> String {
         let field_name = self.sql_field_name();
         if let Some(rust_type) = &self.rust_type {
-            format!("{field_name}: {rust_type}")
+            // If the type is different from the default SQL type, specify it explicitly.
+            format!(r##"{field_name} as "{field_name}: {rust_type}""##)
         } else {
             field_name
         }

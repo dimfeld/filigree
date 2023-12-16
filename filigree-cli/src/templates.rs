@@ -29,6 +29,7 @@ fn create_tera() -> Tera {
         ),
         ("update.sql.tera", include_str!("model/sql/update.sql.tera")),
         ("sql_macros.tera", include_str!("model/sql/sql_macros.tera")),
+        ("types.rs.tera", include_str!("model/types.rs.tera")),
     ]);
 
     if let Err(e) = res {

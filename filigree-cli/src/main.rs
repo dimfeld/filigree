@@ -79,9 +79,9 @@ pub fn main() -> Result<(), Report<Error>> {
         .map(|model| ModelGenerator::new(&config, model))
         .collect::<Vec<_>>();
 
-    let sql_files = generators
+    let model_files = generators
         .par_iter()
-        .map(|gen| gen.render_sql_queries())
+        .map(|gen| gen.render_model_directory())
         .collect::<Result<Vec<_>, _>>()?;
 
     let up_migrations = generators
@@ -114,7 +114,7 @@ pub fn main() -> Result<(), Report<Error>> {
         .join("00000000000000_filigree_init.down.sql");
     write_vecs(&down_migration_path, &down_migrations, b"\n\n").change_context(Error::WriteFile)?;
 
-    let files = sql_files.into_iter().flatten().collect::<Vec<_>>();
+    let files = model_files.into_iter().flatten().collect::<Vec<_>>();
 
     let mut created_dirs = HashSet::new();
     for file in &files {
@@ -136,7 +136,7 @@ pub fn main() -> Result<(), Report<Error>> {
         .into_par_iter()
         .try_for_each(|file| {
             let path = config.generated_path.join(&file.path);
-            eprintln!("Writing file {}", path.display());
+            // eprintln!("Writing file {}", path.display());
             std::fs::write(&path, &file.contents)
                 .attach_printable_lazy(|| path.display().to_string())
         })

@@ -1,7 +1,7 @@
 mod base_models;
 pub mod field;
 mod generate_endpoints;
-mod generate_sql;
+mod generate_types;
 pub mod generator;
 
 use std::borrow::Cow;
@@ -58,7 +58,11 @@ impl Model {
     }
 
     pub fn object_id_type(&self) -> String {
-        format!("{}Id", self.name.to_case(Case::Camel))
+        format!("{}Id", self.name.to_case(Case::Pascal))
+    }
+
+    pub fn struct_name(&self) -> String {
+        self.name.to_case(Case::Pascal)
     }
 
     pub fn plural(&self) -> Cow<str> {

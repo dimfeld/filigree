@@ -3,7 +3,7 @@ SELECT
   {{ fields
     | filter(attribute='owner_read', value=true)
     | map(attribute='sql_full_name')
-    | join(sep=',\n') }},
+    | join(sep=', ') }}
 FROM
   {{ table }}
 WHERE
