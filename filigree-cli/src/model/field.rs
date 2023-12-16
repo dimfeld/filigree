@@ -25,7 +25,8 @@ pub struct ModelField {
     #[serde(default)]
     pub extra_sql_modifiers: String,
 
-    /// Define how callers to the API can access this field
+    /// Define how callers to the API can access this field. This is still gated on the user having
+    /// the relevant read or write permission.
     #[serde(default)]
     pub user_access: Access,
 
@@ -43,6 +44,8 @@ pub struct ModelField {
     #[serde(default)]
     pub indexed: bool,
 
+    /// A field in another model that this field references. This sets up a foreign
+    /// key in the SQL definition.
     pub references: Option<ModelFieldReference>,
 }
 

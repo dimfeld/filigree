@@ -18,10 +18,12 @@ impl Formatters {
         let formatter = if filename.ends_with(".sql") {
             self.sql.as_deref()
         } else if filename.ends_with(".rs") {
-            self.rust.as_deref()
+            self.rust.as_deref().or(Some("rustfmt"))
         } else {
             None
         };
+
+        let formatter = formatter.filter(|s| !s.is_empty());
 
         let Some(formatter) = formatter else {
             return Ok(input);

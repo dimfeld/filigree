@@ -108,11 +108,28 @@ pub fn main() -> Result<(), Report<Error>> {
     let up_migration_path = config
         .migrations_path
         .join("00000000000000_filigree_init.up.sql");
-    write_vecs(&up_migration_path, &up_migrations, b"\n\n").change_context(Error::WriteFile)?;
+    let (before_up, after_up) = ModelGenerator::fixed_up_migration_files();
+    write_vecs(
+        &up_migration_path,
+        before_up,
+        &up_migrations,
+        after_up,
+        b"\n\n",
+    )
+    .change_context(Error::WriteFile)?;
+
     let down_migration_path = config
         .migrations_path
         .join("00000000000000_filigree_init.down.sql");
-    write_vecs(&down_migration_path, &down_migrations, b"\n\n").change_context(Error::WriteFile)?;
+    let (before_down, after_down) = ModelGenerator::fixed_down_migration_files();
+    write_vecs(
+        &down_migration_path,
+        before_down,
+        &down_migrations,
+        after_down,
+        b"\n\n",
+    )
+    .change_context(Error::WriteFile)?;
 
     let files = model_files.into_iter().flatten().collect::<Vec<_>>();
 
@@ -120,7 +137,7 @@ pub fn main() -> Result<(), Report<Error>> {
     for file in &files {
         let parent = file.path.parent();
         if let Some(parent) = parent {
-            let dir = config.generated_path.join(parent);
+            let dir = config.models_path.join(parent);
             if !created_dirs.contains(&dir) {
                 std::fs::create_dir_all(&dir)
                     .change_context(Error::WriteFile)
@@ -135,7 +152,7 @@ pub fn main() -> Result<(), Report<Error>> {
     files
         .into_par_iter()
         .try_for_each(|file| {
-            let path = config.generated_path.join(&file.path);
+            let path = config.models_path.join(&file.path);
             // eprintln!("Writing file {}", path.display());
             std::fs::write(&path, &file.contents)
                 .attach_printable_lazy(|| path.display().to_string())
@@ -145,16 +162,25 @@ pub fn main() -> Result<(), Report<Error>> {
     Ok(())
 }
 
-fn write_vecs(path: &Path, data: &[Vec<u8>], sep: &[u8]) -> Result<(), std::io::Error> {
+fn write_vecs(
+    path: &Path,
+    before: String,
+    data: &[Vec<u8>],
+    after: String,
+    sep: &[u8],
+) -> Result<(), std::io::Error> {
     let file = std::fs::File::create(path)?;
     let mut writer = BufWriter::new(file);
 
-    for (i, item) in data.iter().enumerate() {
-        if i > 0 {
-            writer.write_all(sep)?;
-        }
+    writer.write_all(before.as_bytes())?;
+
+    for item in data.iter() {
+        writer.write_all(sep)?;
         writer.write_all(item)?;
     }
+
+    writer.write_all(sep)?;
+    writer.write_all(after.as_bytes())?;
 
     writer.flush()?;
     Ok(())

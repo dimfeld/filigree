@@ -18,10 +18,10 @@ pub struct Config {
     #[serde(default = "Config::default_sql_dialect")]
     pub sql_dialect: SqlDialect,
 
-    /// Where to place generated files.
-    /// Defaults to src/generated
-    #[serde(default = "Config::default_generated_path")]
-    pub generated_path: PathBuf,
+    /// Where to place generated model files.
+    /// Defaults to `src/models`
+    #[serde(default = "Config::default_models_path")]
+    pub models_path: PathBuf,
 
     /// Where the place the SQL migrations
     /// Defaults to `migrations`
@@ -38,8 +38,8 @@ impl Config {
         SqlDialect::Postgresql
     }
 
-    fn default_generated_path() -> PathBuf {
-        "src/generated".into()
+    fn default_models_path() -> PathBuf {
+        "src/models".into()
     }
 
     fn default_migrations_path() -> PathBuf {

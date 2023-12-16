@@ -1,31 +1,26 @@
-use std::{borrow::Cow, collections::HashMap, path::PathBuf};
+use std::{borrow::Cow, collections::HashMap};
 
-use error_stack::Report;
 use itertools::Itertools;
 use serde_json::json;
 
-use super::{
-    field::{Access, ModelField},
-    generator::ModelGenerator,
-};
-use crate::{Error, RenderedFile};
+use super::{field::ModelField, generator::ModelGenerator, Model};
 
 impl<'a> ModelGenerator<'a> {
-    pub fn render_types_file(&self) -> Result<RenderedFile, Report<Error>> {
-        let struct_base = self.model.struct_name();
+    pub(super) fn add_structs_to_rust_context(model: &Model, context: &mut tera::Context) {
+        let struct_base = model.struct_name();
         let struct_list = [
-            ("AllFields", self.construct_fields(|_| true)),
+            ("AllFields", Self::construct_fields(model, |_| true)),
             (
                 "UserView",
-                self.construct_fields(|f| f.user_access.can_read()),
+                Self::construct_fields(model, |f| f.user_access.can_read()),
             ),
             (
                 "OwnerView",
-                self.construct_fields(|f| f.owner_access.can_read()),
+                Self::construct_fields(model, |f| f.owner_access.can_read()),
             ),
             (
                 "WritePayload",
-                self.construct_fields(|f| f.owner_access.can_write()),
+                Self::construct_fields(model, |f| f.owner_access.can_write()),
             ),
         ];
 
@@ -41,6 +36,7 @@ impl<'a> ModelGenerator<'a> {
             .into_iter()
             .map(|(fields, suffixes)| {
                 let name = if suffixes.contains(&"AllFields") {
+                    // The AllFields struct should just have the base name
                     Cow::Borrowed(&struct_base)
                 } else {
                     Cow::Owned(format!(
@@ -66,15 +62,13 @@ impl<'a> ModelGenerator<'a> {
             })
             .collect::<Vec<_>>();
 
-        let mut context = tera::Context::new();
         context.insert("struct_base", &struct_base);
         context.insert("structs", &structs);
-
-        self.render_with_context("types.rs.tera", &context)
     }
 
-    fn construct_fields(&self, filter: impl Fn(&ModelField) -> bool) -> String {
-        self.all_fields()
+    fn construct_fields(model: &Model, filter: impl Fn(&ModelField) -> bool) -> String {
+        model
+            .all_fields()
             .filter(|(_, f)| filter(f))
             .map(|(_, f)| format!("pub {}: {},", f.rust_field_name(), f.rust_type()))
             .join("\n")

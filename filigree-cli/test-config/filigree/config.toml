@@ -1,6 +1,6 @@
-#formatter.sql = "pg_format"
+formatter.sql = "pg_format"
 
-# generated_path = "test-output/generated"
+# models_path = "test-output/models"
 # migrations_path = "test-output/migrations"
 
 

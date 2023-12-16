@@ -8,7 +8,7 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
         rust_type: None,
         nullable: false,
         unique: false,
-        user_access: Access::ReadWrite,
+        user_access: Access::Read,
         owner_access: Access::ReadWrite,
         default: String::new(),
         extra_sql_modifiers: String::new(),
@@ -33,16 +33,14 @@ impl Model {
                     simple_model_field("name", SqlType::Text),
                     ModelField {
                         unique: true,
-                        user_access: Access::Read,
                         ..simple_model_field("email", SqlType::Text)
                     },
                     ModelField {
+                        user_access: Access::None,
                         default: "false".into(),
                         ..simple_model_field("verified", SqlType::Boolean)
                     },
                     ModelField {
-                        user_access: Access::None,
-                        owner_access: Access::None,
                         default: "true".into(),
                         ..simple_model_field("active", SqlType::Boolean)
                     },
@@ -89,6 +87,7 @@ impl Model {
                     simple_model_field("name", SqlType::Text),
                     ModelField {
                         nullable: true,
+                        user_access: Access::Read,
                         ..simple_model_field("description", SqlType::Text)
                     },
                 ],

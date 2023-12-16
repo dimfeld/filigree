@@ -1,4 +1,4 @@
-use std::{ops::Deref, path::PathBuf};
+use std::{cell::OnceCell, ops::Deref, path::PathBuf};
 
 use error_stack::{Report, ResultExt};
 use rayon::prelude::*;
@@ -11,21 +11,25 @@ use crate::{config::Config, templates::get_tera, Error, RenderedFile};
 pub struct ModelGenerator<'a> {
     pub model: Model,
     pub config: &'a Config,
-    pub(super) context: tera::Context,
     pub(super) tera: &'a Tera,
+    sql_context: tera::Context,
+    rust_context: tera::Context,
 }
 
 impl<'a> ModelGenerator<'a> {
     pub fn new(config: &'a Config, model: Model) -> Self {
+        let sql_context = Self::create_sql_context(&model, config.sql_dialect);
+        let rust_context = Self::create_rust_context(&model);
         Self {
-            context: Self::create_template_context(&model, config.sql_dialect),
             config,
             model,
             tera: get_tera(),
+            sql_context,
+            rust_context,
         }
     }
 
-    fn create_template_context(model: &Model, dialect: SqlDialect) -> tera::Context {
+    fn create_sql_context(model: &Model, dialect: SqlDialect) -> tera::Context {
         let mut context = tera::Context::new();
         context.insert("table", &model.table());
         context.insert("indexes", &model.indexes);
@@ -63,7 +67,26 @@ impl<'a> ModelGenerator<'a> {
         context
     }
 
-    pub(super) fn render_with_context(
+    fn create_rust_context(model: &Model) -> tera::Context {
+        let mut context = tera::Context::new();
+
+        Self::add_structs_to_rust_context(model, &mut context);
+
+        let mut extra_modules = Vec::new();
+
+        if model.endpoints {
+            extra_modules.push(json!({
+                "name": "endpoints",
+                "pub_use": true,
+            }))
+        }
+
+        context.insert("extra_modules", &extra_modules);
+
+        context
+    }
+
+    pub(super) fn render(
         &self,
         template_name: &str,
         context: &tera::Context,
@@ -93,16 +116,39 @@ impl<'a> ModelGenerator<'a> {
         })
     }
 
-    pub(super) fn render<'f>(&self, template_name: &'f str) -> Result<RenderedFile, Report<Error>> {
-        self.render_with_context(template_name, &self.context)
+    pub fn fixed_up_migration_files() -> (String, String) {
+        let before_up = [include_str!("../../sql/delete_log.up.sql")].join("\n\n");
+
+        let after_up = [
+            include_str!("../../sql/user_info.up.sql"),
+            include_str!("../../sql/create_permissions.up.sql"),
+            include_str!("../../sql/create_object_permissions.up.sql"),
+        ]
+        .join("\n\n");
+
+        (before_up, after_up)
+    }
+
+    pub fn fixed_down_migration_files() -> (String, String) {
+        let before_down = [include_str!("../../sql/delete_log.down.sql")].join("\n\n");
+        let after_down = [
+            include_str!("../../sql/user_info.down.sql"),
+            include_str!("../../sql/create_permissions.down.sql"),
+            include_str!("../../sql/create_object_permissions.down.sql"),
+        ]
+        .join("\n\n");
+
+        (before_down, after_down)
     }
 
     pub fn render_up_migration(&self) -> Result<Vec<u8>, Report<Error>> {
-        self.render("migrate_up.sql.tera").map(|f| f.contents)
+        self.render("migrate_up.sql.tera", &self.sql_context)
+            .map(|f| f.contents)
     }
 
     pub fn render_down_migration(&self) -> Result<Vec<u8>, Report<Error>> {
-        self.render("migrate_down.sql.tera").map(|f| f.contents)
+        self.render("migrate_down.sql.tera", &self.sql_context)
+            .map(|f| f.contents)
     }
 
     pub fn render_model_directory(&self) -> Result<Vec<RenderedFile>, Report<Error>> {
@@ -112,19 +158,25 @@ impl<'a> ModelGenerator<'a> {
             "insert.sql.tera",
             "update.sql.tera",
             "delete.sql.tera",
-        ];
+        ]
+        .into_iter()
+        .map(|file| (file, &self.sql_context));
 
-        let sql_output = sql_files
+        let rust_files = [
+            Some("mod.rs.tera"),
+            Some("types.rs.tera"),
+            self.model.endpoints.then_some("endpoints.rs.tera"),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|file| (file, &self.rust_context));
+
+        let files = sql_files.chain(rust_files).collect::<Vec<_>>();
+
+        let output = files
             .into_par_iter()
-            .map(|file| self.render(file))
+            .map(|(file, context)| self.render(file, context))
             .collect::<Result<Vec<_>, _>>()?;
-
-        let rust_types = self.render_types_file()?;
-
-        let output = sql_output
-            .into_iter()
-            .chain([rust_types])
-            .collect::<Vec<_>>();
 
         Ok(output)
     }
