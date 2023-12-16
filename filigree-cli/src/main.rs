@@ -1,4 +1,6 @@
 use std::{
+    collections::HashSet,
+    error::Error as _,
     io::{BufWriter, Write},
     path::{Path, PathBuf},
 };
@@ -36,8 +38,8 @@ pub enum Error {
     ReadConfigFile,
     #[error("Failed to write file")]
     WriteFile,
-    #[error("Failed to render template")]
-    Render,
+    #[error("{0}{}", .0.source().map(|e| format!("\n{e}")).unwrap_or_default())]
+    Render(#[from] tera::Error),
     #[error("Failed to run code formatter")]
     Formatter,
 }
@@ -92,7 +94,17 @@ pub fn main() -> Result<(), Report<Error>> {
         .map(|gen| gen.render_down_migration())
         .collect::<Result<Vec<_>, _>>()?;
 
-    // TODO This works once but we don't want to do it every time.
+    std::fs::create_dir_all(&config.migrations_path)
+        .change_context(Error::WriteFile)
+        .attach_printable_lazy(|| {
+            format!(
+                "Unable to create migrations directory {}",
+                config.migrations_path.display()
+            )
+        })?;
+
+    // TODO This works once but we don't want to change the initial migration after it's been
+    // created.
     let up_migration_path = config
         .migrations_path
         .join("00000000000000_filigree_init.up.sql");
@@ -104,9 +116,30 @@ pub fn main() -> Result<(), Report<Error>> {
 
     let files = sql_files.into_iter().flatten().collect::<Vec<_>>();
 
+    let mut created_dirs = HashSet::new();
+    for file in &files {
+        let parent = file.path.parent();
+        if let Some(parent) = parent {
+            let dir = config.generated_path.join(parent);
+            if !created_dirs.contains(&dir) {
+                std::fs::create_dir_all(&dir)
+                    .change_context(Error::WriteFile)
+                    .attach_printable_lazy(|| {
+                        format!("Unable to create directory {}", parent.display())
+                    })?;
+                created_dirs.insert(dir);
+            }
+        }
+    }
+
     files
         .into_par_iter()
-        .try_for_each(|file| std::fs::write(&file.path, &file.contents))
+        .try_for_each(|file| {
+            let path = config.generated_path.join(&file.path);
+            eprintln!("Writing file {}", path.display());
+            std::fs::write(&path, &file.contents)
+                .attach_printable_lazy(|| path.display().to_string())
+        })
         .change_context(Error::WriteFile)?;
 
     Ok(())

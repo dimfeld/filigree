@@ -66,7 +66,7 @@ impl<'a> ModelGenerator<'a> {
         let output = self
             .tera
             .render(template_name, &self.context)
-            .change_context(Error::Render)
+            .map_err(Error::Render)
             .attach_printable_lazy(|| format!("Model {}", self.model.name))
             .attach_printable_lazy(|| format!("Template {}", template_name))?
             .into_bytes();

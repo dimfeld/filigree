@@ -8,7 +8,7 @@ CREATE TABLE {{table}} (
     {% if not loop.last and not extra_create_table_sql %},{% endif %}
   {%- endfor %}
 
-  {% extra_create_table_sql %}
+  {{ extra_create_table_sql }}
 );
 
 {% for field in fields | filter(attribute="indexed", value=true) %}

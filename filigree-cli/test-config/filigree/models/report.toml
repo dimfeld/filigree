@@ -16,4 +16,4 @@ nullable = true
 name = "ui"
 type = "json"
 rust_type = "crate::ReportUi"
-user_access = "Read"
+user_access = "read"

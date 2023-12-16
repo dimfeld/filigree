@@ -1,12 +1,12 @@
 {% macro permissions_check(actor_ids, team, permissions) %}
- {% set perms = ['admin'].concat(with=permissions) %}
+ {% set perms = ['admin'] | concat(with=permissions) %}
   EXISTS (
     SELECT 1
     FROM permissions
     WHERE
     team_id = {{team}}
     AND actor_id = ANY({{actor_ids}})
-    AND permission IN (perms.join(', '))
+    AND permission IN ({{perms | to_sql | join(sep=', ')}})
   )
 {% endmacro permissions_check %}
 

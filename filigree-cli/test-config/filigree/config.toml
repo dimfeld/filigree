@@ -1,0 +1,6 @@
+formatter.sql = "pg_format"
+
+# generated_path = "test-output/generated"
+# migrations_path = "test-output/migrations"
+
+

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, sync::OnceLock};
+use std::{borrow::Cow, collections::HashMap, error::Error, sync::OnceLock};
 
 use tera::{Tera, Value};
 
@@ -11,7 +11,7 @@ pub fn get_tera() -> &'static Tera {
 fn create_tera() -> Tera {
     let mut tera = Tera::default();
 
-    tera.add_raw_templates(vec![
+    let res = tera.add_raw_templates(vec![
         (
             "migrate_up.sql.tera",
             include_str!("model/sql/migrate_up.sql.tera"),
@@ -22,14 +22,22 @@ fn create_tera() -> Tera {
         ),
         ("delete.sql.tera", include_str!("model/sql/delete.sql.tera")),
         ("insert.sql.tera", include_str!("model/sql/insert.sql.tera")),
+        ("list.sql.tera", include_str!("model/sql/list.sql.tera")),
         (
             "select_one.sql.tera",
             include_str!("model/sql/select_one.sql.tera"),
         ),
         ("update.sql.tera", include_str!("model/sql/update.sql.tera")),
         ("sql_macros.tera", include_str!("model/sql/sql_macros.tera")),
-    ])
-    .expect("Could not add templates");
+    ]);
+
+    if let Err(e) = res {
+        eprintln!("{e}");
+        if let Some(source) = e.source() {
+            eprintln!("{source}");
+        }
+        panic!("Failed to add templates");
+    }
 
     tera.register_filter("to_sql", to_sql);
     tera.register_filter("sql_string", sql_string_filter);
