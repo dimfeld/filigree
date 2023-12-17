@@ -153,7 +153,7 @@ impl<'a> ModelGenerator<'a> {
 
     pub fn render_model_directory(&self) -> Result<Vec<RenderedFile>, Report<Error>> {
         let sql_files = [
-            "select_one.sql.tera",
+            "select_some.sql.tera",
             "list.sql.tera",
             "insert.sql.tera",
             "update.sql.tera",

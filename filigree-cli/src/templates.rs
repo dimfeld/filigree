@@ -24,8 +24,16 @@ fn create_tera() -> Tera {
         ("insert.sql.tera", include_str!("model/sql/insert.sql.tera")),
         ("list.sql.tera", include_str!("model/sql/list.sql.tera")),
         (
+            "select_base.sql.tera",
+            include_str!("model/sql/select_base.sql.tera"),
+        ),
+        (
             "select_one.sql.tera",
             include_str!("model/sql/select_one.sql.tera"),
+        ),
+        (
+            "select_some.sql.tera",
+            include_str!("model/sql/select_some.sql.tera"),
         ),
         ("update.sql.tera", include_str!("model/sql/update.sql.tera")),
         ("sql_macros.tera", include_str!("model/sql/sql_macros.tera")),

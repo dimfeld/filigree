@@ -1,0 +1,17 @@
+{% import "sql_macros.tera" as macros %}
+SELECT
+  {{ fields
+    | filter(attribute='owner_read', value=true)
+    | map(attribute='sql_full_name')
+    | join(sep=', ') }}
+FROM
+  {{ table }}
+WHERE
+id = {% block id_param %}$1{% endblock id_param %}
+  {% if not global %}
+    AND organization_id = $2
+  {% endif %}
+  AND {{ macros::permissions_check(actor_ids="$3", organization="$2", permissions=[owner_permission, read_permission]) }}
+
+
+

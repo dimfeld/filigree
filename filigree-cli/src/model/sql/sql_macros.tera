@@ -1,5 +1,5 @@
 {% macro permissions_check(actor_ids, organization, permissions) %}
- {% set perms = ['admin'] | concat(with=permissions) %}
+ {% set perms = ['org_admin'] | concat(with=permissions) %}
   EXISTS (
     SELECT 1
     FROM permissions
@@ -12,11 +12,11 @@
 
 {% macro permissions_lookup(actor_ids, organization, owner_perm, user_perm) %}
 SELECT
-  bool_or(permission in ('admin', {{owner_perm | to_sql}}) ) as is_owner,
-  bool_or(permission in ('admin', {{owner_perm | to_sql}}, {{user_perm | to_sql}}) ) as is_user
+  bool_or(permission in ('org_admin', {{owner_perm | to_sql}}) ) as is_owner,
+  bool_or(permission in ('org_admin', {{owner_perm | to_sql}}, {{user_perm | to_sql}}) ) as is_user
 FROM permissions
 WHERE
     organization_id = {{organization}}
     AND actor_id = ANY({{actor_ids}})
-    AND permission in ('admin', {{owner_perm | to_sql}}, {{user_perm | to_sql}} )
+    AND permission in ('org_admin', {{owner_perm | to_sql}}, {{user_perm | to_sql}} )
 {% endmacro permissions_lookup %}
