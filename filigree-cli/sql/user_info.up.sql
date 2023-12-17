@@ -1,23 +1,23 @@
 CREATE TABLE user_roles (
-  team_id uuid NOT NULL REFERENCES teams (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
+  organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   role_id uuid NOT NULL REFERENCES roles (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   created_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (team_id, user_id, role_id)
+  PRIMARY KEY (organization_id, user_id, role_id)
 );
 
--- A list of users and what teams they belong to. Users can potentially be in more than one team.
-CREATE TABLE team_members (
-  team_id uuid NOT NULL REFERENCES teams (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
+-- A list of users and what organizations they belong to. Users can potentially be in more than one organization.
+CREATE TABLE organization_members (
+  organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
-  PRIMARY KEY (team_id, user_id)
+  PRIMARY KEY (organization_id, user_id)
 );
 
 CREATE TABLE api_keys (
   api_key_id uuid PRIMARY KEY,
   prefix text NOT NULL,
   hash bytea NOT NULL,
-  team_id uuid NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
   user_id uuid REFERENCES users (id) ON DELETE SET NULL,
   inherits_user_permissions bool NOT NULL DEFAULT FALSE,
   description text,

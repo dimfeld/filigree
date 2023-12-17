@@ -1,6 +1,6 @@
 {% import "sql_macros.tera" as macros %}
 WITH permissions AS (
-  {{ macros::permissions_lookup(actor_ids="$3", team="$2", owner_perm=owner_permission, user_perm=write_permission) }}
+  {{ macros::permissions_lookup(actor_ids="$3", organization="$2", owner_perm=owner_permission, user_perm=write_permission) }}
 )
 UPDATE
   {{table}}
@@ -17,7 +17,7 @@ SET
 WHERE
   id = $1
   {% if not global %}
-    AND team = $2
+    AND organization_id = $2
   {% endif %}
   AND (permissions.is_owner OR permissions.is_user)
 

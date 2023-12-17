@@ -1,5 +1,5 @@
 CREATE TABLE delete_log (
-  team_id uuid NOT NULL,
+  organization_id uuid NOT NULL,
   object_id uuid NOT NULL,
   object_type text NOT NULL,
   data jsonb NOT NULL,

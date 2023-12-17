@@ -8,6 +8,6 @@ FROM
   {{ table }}
 {% if not global %}
 WHERE
-    team = $1
+    organization_id = $1
 {% endif %}
 

@@ -28,8 +28,8 @@ pub struct Model {
     #[serde(default)]
     pub extra_create_table_sql: String,
 
-    /// If true, this model does not have a team_id.
-    /// This mostly applies to the team object itself but may be useful for other things.
+    /// If true, this model does not have a organization_id.
+    /// This mostly applies to the organization object itself but may be useful for other things.
     #[serde(default)]
     pub global: bool,
 
@@ -84,13 +84,13 @@ impl Model {
 
     /// The fields that apply to every object
     fn standard_fields(&self) -> impl Iterator<Item = ModelField> {
-        let team_field = if self.global {
+        let org_field = if self.global {
             None
         } else {
             Some(ModelField {
-                name: "team_id".to_string(),
+                name: "organization_id".to_string(),
                 typ: SqlType::Uuid,
-                rust_type: Some("TeamId".to_string()),
+                rust_type: Some("OrganizationId".to_string()),
                 nullable: false,
                 unique: false,
                 indexed: true,
@@ -99,7 +99,7 @@ impl Model {
                 owner_access: Access::Read,
                 default: String::new(),
                 references: Some(ModelFieldReference::new(
-                    "teams",
+                    "organizations",
                     "id",
                     DeleteBehavior::Cascade,
                 )),
@@ -120,7 +120,7 @@ impl Model {
                 references: None,
                 default: String::new(),
             }),
-            team_field,
+            org_field,
             Some(ModelField {
                 name: "updated_at".to_string(),
                 typ: SqlType::Timestamp,

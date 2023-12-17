@@ -1,4 +1,4 @@
-use std::{cell::OnceCell, ops::Deref, path::PathBuf};
+use std::{ops::Deref, path::PathBuf};
 
 use error_stack::{Report, ResultExt};
 use rayon::prelude::*;

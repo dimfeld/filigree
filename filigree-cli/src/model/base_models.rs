@@ -18,7 +18,7 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
 }
 
 impl Model {
-    /// Return models for the user, team, etc.
+    /// Return models for the user, org, etc.
     pub fn create_default_models() -> Vec<Model> {
         vec![
             Model {
@@ -47,7 +47,7 @@ impl Model {
                 ],
             },
             Model {
-                name: "Team".to_string(),
+                name: "Organization".to_string(),
                 plural: None,
                 id_prefix: Some("tm".to_string()),
                 global: true,
