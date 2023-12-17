@@ -29,6 +29,7 @@ impl Model {
                 global: false,
                 indexes: vec![],
                 extra_create_table_sql: String::new(),
+                pagination: Default::default(),
                 fields: vec![
                     simple_model_field("name", SqlType::Text),
                     ModelField {
@@ -54,6 +55,7 @@ impl Model {
                 endpoints: false,
                 indexes: vec![],
                 extra_create_table_sql: String::new(),
+                pagination: Default::default(),
                 fields: vec![
                     simple_model_field("name", SqlType::Text),
                     ModelField {
@@ -83,6 +85,7 @@ impl Model {
                 endpoints: true,
                 indexes: vec![],
                 extra_create_table_sql: String::new(),
+                pagination: Default::default(),
                 fields: vec![
                     simple_model_field("name", SqlType::Text),
                     ModelField {

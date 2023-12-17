@@ -6,8 +6,11 @@ SELECT
     | join(sep=',') }},
 FROM
   {{ table }}
-{% if not global %}
 WHERE
+{% if not global %}
     organization_id = $1
+{% endif %}
+{% if not pagination.disable %}
+<pagination>
 {% endif %}
 

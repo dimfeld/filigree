@@ -12,24 +12,21 @@ pub struct ModelGenerator<'a> {
     pub model: Model,
     pub config: &'a Config,
     pub(super) tera: &'a Tera,
-    sql_context: tera::Context,
-    rust_context: tera::Context,
+    context: tera::Context,
 }
 
 impl<'a> ModelGenerator<'a> {
     pub fn new(config: &'a Config, model: Model) -> Self {
-        let sql_context = Self::create_sql_context(&model, config.sql_dialect);
-        let rust_context = Self::create_rust_context(&model);
+        let context = Self::create_template_context(&model, config.sql_dialect);
         Self {
             config,
             model,
             tera: get_tera(),
-            sql_context,
-            rust_context,
+            context,
         }
     }
 
-    fn create_sql_context(model: &Model, dialect: SqlDialect) -> tera::Context {
+    fn create_template_context(model: &Model, dialect: SqlDialect) -> tera::Context {
         let mut context = tera::Context::new();
         context.insert("table", &model.table());
         context.insert("indexes", &model.indexes);
@@ -40,6 +37,7 @@ impl<'a> ModelGenerator<'a> {
         context.insert("write_permission", &format!("{}::write", model.name));
         context.insert("extra_create_table_sql", &model.extra_create_table_sql);
         context.insert("sql_dialect", &dialect);
+        context.insert("pagination", &model.pagination);
 
         let fields = model
             .all_fields()
@@ -64,11 +62,6 @@ impl<'a> ModelGenerator<'a> {
             .collect::<Vec<_>>();
 
         context.insert("fields", &fields);
-        context
-    }
-
-    fn create_rust_context(model: &Model) -> tera::Context {
-        let mut context = tera::Context::new();
 
         Self::add_structs_to_rust_context(model, &mut context);
 
@@ -142,40 +135,31 @@ impl<'a> ModelGenerator<'a> {
     }
 
     pub fn render_up_migration(&self) -> Result<Vec<u8>, Report<Error>> {
-        self.render("migrate_up.sql.tera", &self.sql_context)
+        self.render("migrate_up.sql.tera", &self.context)
             .map(|f| f.contents)
     }
 
     pub fn render_down_migration(&self) -> Result<Vec<u8>, Report<Error>> {
-        self.render("migrate_down.sql.tera", &self.sql_context)
+        self.render("migrate_down.sql.tera", &self.context)
             .map(|f| f.contents)
     }
 
     pub fn render_model_directory(&self) -> Result<Vec<RenderedFile>, Report<Error>> {
-        let sql_files = [
-            "select_some.sql.tera",
-            "list.sql.tera",
-            "insert.sql.tera",
-            "update.sql.tera",
-            "delete.sql.tera",
-        ]
-        .into_iter()
-        .map(|file| (file, &self.sql_context));
-
-        let rust_files = [
+        let files = [
+            Some("select_some.sql.tera"),
+            Some("list.sql.tera"),
+            Some("insert.sql.tera"),
+            Some("update.sql.tera"),
+            Some("delete.sql.tera"),
             Some("mod.rs.tera"),
             Some("types.rs.tera"),
             self.model.endpoints.then_some("endpoints.rs.tera"),
-        ]
-        .into_iter()
-        .flatten()
-        .map(|file| (file, &self.rust_context));
-
-        let files = sql_files.chain(rust_files).collect::<Vec<_>>();
+        ];
 
         let output = files
             .into_par_iter()
-            .map(|(file, context)| self.render(file, context))
+            .flatten()
+            .map(|file| self.render(file, &self.context))
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(output)

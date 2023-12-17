@@ -24,6 +24,10 @@ pub struct Model {
     /// If true, generate API endpoints for this model.
     pub endpoints: bool,
 
+    /// Pagination options for this model, if not the default.
+    #[serde(default)]
+    pub pagination: Pagination,
+
     /// Extra SQL to place after the column definitions inside the `CREATE TABLE` statement.
     #[serde(default)]
     pub extra_create_table_sql: String,
@@ -193,6 +197,38 @@ impl Model {
         // Don't merge `global`, `plural`, or `name` since these must not change
         // for things to work properly.
     }
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct Pagination {
+    /// Disable pagination completely unless it's explicitly requested.
+    pub disable: bool,
+    #[serde(default = "default_per_page")]
+    pub default_per_page: u32,
+    #[serde(default = "default_max_per_page")]
+    pub max_per_page: u32,
+    /// Maximum number of pages possible to return.
+    /// Usually you won't want to set this
+    pub max_page: Option<u32>,
+}
+
+impl Default for Pagination {
+    fn default() -> Self {
+        Self {
+            disable: false,
+            default_per_page: default_per_page(),
+            max_per_page: default_max_per_page(),
+            max_page: None,
+        }
+    }
+}
+
+const fn default_per_page() -> u32 {
+    50
+}
+
+const fn default_max_per_page() -> u32 {
+    200
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
