@@ -22,7 +22,7 @@ pub struct Model {
     pub id_prefix: Option<String>,
     pub fields: Vec<ModelField>,
     /// If true, generate API endpoints for this model.
-    pub endpoints: bool,
+    pub endpoints: Endpoints,
 
     /// Pagination options for this model, if not the default.
     #[serde(default)]
@@ -177,7 +177,7 @@ impl Model {
             self.id_prefix = other_model.id_prefix;
         }
 
-        self.endpoints = self.endpoints || other_model.endpoints;
+        self.endpoints.merge_from(other_model.endpoints);
         match (
             self.extra_create_table_sql.is_empty(),
             other_model.extra_create_table_sql.is_empty(),
@@ -236,4 +236,72 @@ const fn default_max_per_page() -> u32 {
 pub enum SqlDialect {
     Postgresql,
     SQLite,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub enum Endpoints {
+    All(bool),
+    Only(PerEndpoint),
+}
+
+impl Endpoints {
+    pub fn per_endpoint(&self) -> PerEndpoint {
+        match self {
+            Endpoints::All(choice) => PerEndpoint::from(*choice),
+            Endpoints::Only(p) => p.clone(),
+        }
+    }
+
+    pub fn any_enabled(&self) -> bool {
+        match self {
+            Endpoints::All(choice) => *choice,
+            Endpoints::Only(p) => p.any_enabled(),
+        }
+    }
+
+    pub fn merge_from(&mut self, other: Endpoints) {
+        match (&self, other) {
+            (Endpoints::All(true), _) => {}
+            (_, Endpoints::All(false)) => {}
+            (Endpoints::All(false), b) => *self = b,
+            (Endpoints::Only(_), Endpoints::All(true)) => *self = Endpoints::All(true),
+            (Endpoints::Only(a), Endpoints::Only(b)) => {
+                *self = Endpoints::Only(PerEndpoint {
+                    get: a.get || b.get,
+                    list: a.list || b.list,
+                    create: a.create || b.create,
+                    update: a.update || b.update,
+                    delete: a.delete || b.delete,
+                })
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PerEndpoint {
+    pub get: bool,
+    pub list: bool,
+    pub create: bool,
+    pub update: bool,
+    pub delete: bool,
+}
+
+impl PerEndpoint {
+    pub fn any_enabled(&self) -> bool {
+        self.get || self.list || self.create || self.update || self.delete
+    }
+}
+
+impl From<bool> for PerEndpoint {
+    fn from(b: bool) -> Self {
+        Self {
+            get: b,
+            list: b,
+            create: b,
+            update: b,
+            delete: b,
+        }
+    }
 }

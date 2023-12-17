@@ -1,1 +1,41 @@
-// TODO
+use axum::{extract::{State, Path}, routing};
+
+{% if endpoints.get %}
+fn get(State(state): State<AppState>, Path(id): Path<{{ id_type }}>) -> Result<impl IntoResponse, Error> {
+    todo!()
+}
+{% endif %}
+
+{% if endpoints.list %}
+fn list(State(state): State<AppState>) -> Result<impl IntoResponse, Error> {
+    todo!()
+}
+{% endif %}
+
+{% if endpoints.create %}
+fn create(State(state): State<AppState>) -> Result<impl IntoResponse, Error> {
+    todo!()
+}
+{% endif %}
+
+{% if endpoints.update %}
+fn update(State(state): State<AppState>, Path(id): Path<{{ id_type }}>) -> Result<impl IntoResponse, Error> {
+    todo!()
+}
+{% endif %}
+
+{% if endpoints.delete %}
+fn delete(State(state): State<AppState>, Path(id): Path<{{ id_type }}>) -> Result<impl IntoResponse, Error> {
+    todo!()
+}
+{% endif %}
+
+pub fn create_routes() -> Router<AppState> {
+    Router::new()
+        {% if endpoints.list %}.route("/{{ url_path }}", routing::get(list)){% endif %}
+        {% if endpoints.get %}.route("/{{ url_path }}/:id", routing::get(get)){% endif %}
+        {% if endpoints.create %}.route("/{{ url_path }}", routing::post(create)){% endif %}
+        {% if endpoints.update %}.route("/{{ url_path }}/:id", routing::put(update)){% endif %}
+        {% if endpoints.delete %}.route("/{{ url_path }}/:id", routing::delete(delete)){% endif %}
+}
+

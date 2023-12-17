@@ -67,7 +67,10 @@ impl<'a> ModelGenerator<'a> {
 
         let mut extra_modules = Vec::new();
 
-        if model.endpoints {
+        context.insert("id_type", &model.object_id_type());
+        context.insert("url_path", &model.module_name());
+        context.insert("endpoints", &model.endpoints.per_endpoint());
+        if model.endpoints.any_enabled() {
             extra_modules.push(json!({
                 "name": "endpoints",
                 "pub_use": true,
@@ -153,7 +156,10 @@ impl<'a> ModelGenerator<'a> {
             Some("delete.sql.tera"),
             Some("mod.rs.tera"),
             Some("types.rs.tera"),
-            self.model.endpoints.then_some("endpoints.rs.tera"),
+            self.model
+                .endpoints
+                .any_enabled()
+                .then_some("endpoints.rs.tera"),
         ];
 
         let output = files
