@@ -8,6 +8,7 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
         rust_type: None,
         nullable: false,
         unique: false,
+        filterable: super::field::FilterableType::None,
         user_access: Access::Read,
         owner_access: Access::ReadWrite,
         default: String::new(),

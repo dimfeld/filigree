@@ -11,5 +11,18 @@ pub struct {{ struct.name }} {
     pub type {{ alias }} = {{ struct.name }};
 {% endfor %}
 
+{% if struct.name == user_view_struct and user_view_struct != owner_view_struct %}
+impl From<{{owner_view_struct}}> for {{user_view_struct}} {
+    fn from(owner: {{owner_view_struct}}) -> Self {
+        Self {
+            {% for field in fields | filter(attribute="user_read", value=true) -%}
+            {{field.rust_name}}: owner.{{field.rust_name}},
+            {%- endfor %}
+        }
+    }
+}
+{% endif %}
+
+
 {% endfor %}
 

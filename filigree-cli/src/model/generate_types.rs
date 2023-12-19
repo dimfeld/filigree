@@ -9,18 +9,30 @@ impl<'a> ModelGenerator<'a> {
     pub(super) fn add_structs_to_rust_context(model: &Model, context: &mut tera::Context) {
         let struct_base = model.struct_name();
         let struct_list = [
-            ("AllFields", Self::construct_fields(model, |_| true)),
+            (
+                "AllFields",
+                Self::struct_contents(model.all_fields().map(|f| f.1), |_| false),
+            ),
             (
                 "UserView",
-                Self::construct_fields(model, |f| f.user_access.can_read()),
+                Self::struct_contents(model.user_view_struct_fields(), |_| false),
             ),
             (
                 "OwnerView",
-                Self::construct_fields(model, |f| f.owner_access.can_read()),
+                Self::struct_contents(model.owner_view_struct_fields(), |_| false),
             ),
             (
-                "WritePayload",
-                Self::construct_fields(model, |f| f.owner_access.can_write()),
+                "CreatePayload",
+                Self::struct_contents(model.write_payload_struct_fields(), |_| false),
+            ),
+            (
+                "UpdatePayload",
+                Self::struct_contents(model.write_payload_struct_fields(), |f| {
+                    // Allow optional fields for those that the owner can write,
+                    // but the user can not, so that we can accept either form of
+                    // the field.
+                    f.owner_access.can_write() && !f.user_access.can_write()
+                }),
             ),
         ];
 
@@ -58,19 +70,41 @@ impl<'a> ModelGenerator<'a> {
                     "name": name,
                     "fields": fields,
                     "aliases": aliases,
+                    "is_user_view": suffixes.contains(&"UserView"),
+                    "is_owner_view": suffixes.contains(&"OwnerView"),
                 })
             })
             .collect::<Vec<_>>();
+
+        let user_view_struct = structs
+            .iter()
+            .find(|v| v["is_user_view"].as_bool().unwrap_or_default())
+            .unwrap();
+        let owner_view_struct = structs
+            .iter()
+            .find(|v| v["is_owner_view"].as_bool().unwrap_or_default())
+            .unwrap();
+        context.insert("user_view_struct", &user_view_struct["name"]);
+        context.insert("owner_view_struct", &owner_view_struct["name"]);
 
         context.insert("struct_base", &struct_base);
         context.insert("structs", &structs);
     }
 
-    fn construct_fields(model: &Model, filter: impl Fn(&ModelField) -> bool) -> String {
-        model
-            .all_fields()
-            .filter(|(_, f)| filter(f))
-            .map(|(_, f)| format!("pub {}: {},", f.rust_field_name(), f.rust_type()))
+    fn struct_contents<'b>(
+        fields: impl Iterator<Item = Cow<'b, ModelField>>,
+        force_optional: impl Fn(&ModelField) -> bool,
+    ) -> String {
+        fields
+            .map(|f| {
+                let typ = if force_optional(&f) {
+                    f.rust_type()
+                } else {
+                    format!("Option<{}>", f.base_rust_type()).into()
+                };
+
+                format!("pub {}: {},", f.rust_field_name(), typ)
+            })
             .join("\n")
     }
 }

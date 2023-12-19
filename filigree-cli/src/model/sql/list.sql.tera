@@ -1,4 +1,12 @@
 {% import "sql_macros.tera" as macros %}
+
+{% set has_filterable = false %}
+{% for field in fields %}
+  {% if field.filterable != 'none' %}
+    {% set has_filterable = true %}
+  {% endif %}
+{% endfor %}
+
 SELECT
   {{ fields
     | filter(attribute='owner_read', value=true)
@@ -8,11 +16,17 @@ FROM
   {{ table }}
 
 {% set p = 1 %}
-{% if not global %}
 WHERE
-    organization_id = ${{ p }}
+{% if not global %}
+    organization_id = ${{ p }} {% if has_filterable %}AND{% endif %}
 {% set p = p + 1 %}
 {% endif %}
+{% if has_filterable %}
+  <filters>
+{% endif %}
+
+{% if not pagination.disable %}
 LIMIT ${{ p }}
 OFFSET ${{ p + 1 }}
+{% endif %}
 

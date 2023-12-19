@@ -44,6 +44,10 @@ pub struct ModelField {
     #[serde(default)]
     pub indexed: bool,
 
+    /// If true, allow filtering on this field in the list endpoint's query string
+    #[serde(default)]
+    pub filterable: FilterableType,
+
     /// A field in another model that this field references. This sets up a foreign
     /// key in the SQL definition.
     pub references: Option<ModelFieldReference>,
@@ -59,15 +63,19 @@ impl ModelField {
         base_name.to_case(Case::Snake)
     }
 
-    pub fn rust_type(&self) -> Cow<str> {
-        let typ = self
-            .rust_type
+    /// The type of this field.
+    pub fn base_rust_type(&self) -> &str {
+        self.rust_type
             .as_deref()
-            .unwrap_or_else(|| self.typ.to_rust_type());
+            .unwrap_or_else(|| self.typ.to_rust_type())
+    }
+
+    /// The type of this field, wrapped in an Option if [nullable] is true.
+    pub fn rust_type(&self) -> Cow<str> {
         if self.nullable {
-            format!("Option<{}>", typ).into()
+            format!("Option<{}>", self.base_rust_type()).into()
         } else {
-            typ.into()
+            self.base_rust_type().into()
         }
     }
 
@@ -79,6 +87,7 @@ impl ModelField {
         let field_name = self.sql_field_name();
         if let Some(rust_type) = &self.rust_type {
             // If the type is different from the default SQL type, specify it explicitly.
+            // Don't add Option like self.rust_type() does because sqlx will do that itself.
             format!(r##"{field_name} as "{field_name}: {rust_type}""##)
         } else {
             field_name
@@ -191,4 +200,13 @@ impl Access {
     pub fn can_write(&self) -> bool {
         matches!(self, Self::Write | Self::ReadWrite)
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum FilterableType {
+    #[default]
+    None,
+    Exact,
+    Range,
 }

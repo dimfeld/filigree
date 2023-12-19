@@ -9,7 +9,9 @@ use std::borrow::Cow;
 use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
 
-use self::field::{Access, DeleteBehavior, ModelField, ModelFieldReference, SqlType};
+use self::field::{
+    Access, DeleteBehavior, FilterableType, ModelField, ModelFieldReference, SqlType,
+};
 
 #[derive(Deserialize, Debug)]
 pub struct Model {
@@ -86,6 +88,24 @@ impl Model {
             )
     }
 
+    pub fn user_view_struct_fields(&self) -> impl Iterator<Item = Cow<ModelField>> {
+        self.all_fields()
+            .map(|(_, f)| f)
+            .filter(|f| f.user_access.can_read())
+    }
+
+    pub fn owner_view_struct_fields(&self) -> impl Iterator<Item = Cow<ModelField>> {
+        self.all_fields()
+            .map(|(_, f)| f)
+            .filter(|f| f.owner_access.can_read())
+    }
+
+    pub fn write_payload_struct_fields(&self) -> impl Iterator<Item = Cow<ModelField>> {
+        self.all_fields()
+            .map(|(_, f)| f)
+            .filter(|f| f.owner_access.can_write())
+    }
+
     /// The fields that apply to every object
     fn standard_fields(&self) -> impl Iterator<Item = ModelField> {
         let org_field = if self.global {
@@ -98,6 +118,7 @@ impl Model {
                 nullable: false,
                 unique: false,
                 indexed: true,
+                filterable: FilterableType::None,
                 extra_sql_modifiers: String::new(),
                 user_access: Access::Read,
                 owner_access: Access::Read,
@@ -118,6 +139,7 @@ impl Model {
                 nullable: false,
                 unique: false,
                 indexed: false,
+                filterable: FilterableType::Exact,
                 extra_sql_modifiers: "primary key".to_string(),
                 user_access: Access::Read,
                 owner_access: Access::Read,
@@ -132,6 +154,7 @@ impl Model {
                 nullable: false,
                 unique: false,
                 indexed: false,
+                filterable: FilterableType::Range,
                 extra_sql_modifiers: String::new(),
                 user_access: Access::Read,
                 owner_access: Access::Read,
@@ -145,6 +168,7 @@ impl Model {
                 nullable: false,
                 unique: false,
                 indexed: false,
+                filterable: FilterableType::Range,
                 extra_sql_modifiers: String::new(),
                 user_access: Access::Read,
                 owner_access: Access::Read,

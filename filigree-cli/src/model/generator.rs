@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use serde_json::json;
 use tera::Tera;
 
-use super::{Model, SqlDialect};
+use super::Model;
 use crate::{config::Config, templates::get_tera, Error, RenderedFile};
 
 pub struct ModelGenerator<'a> {
@@ -17,7 +17,7 @@ pub struct ModelGenerator<'a> {
 
 impl<'a> ModelGenerator<'a> {
     pub fn new(config: &'a Config, model: Model) -> Self {
-        let context = Self::create_template_context(&model, config.sql_dialect);
+        let context = Self::create_template_context(&config, &model);
         Self {
             config,
             model,
@@ -26,8 +26,10 @@ impl<'a> ModelGenerator<'a> {
         }
     }
 
-    fn create_template_context(model: &Model, dialect: SqlDialect) -> tera::Context {
+    fn create_template_context(config: &Config, model: &Model) -> tera::Context {
         let mut context = tera::Context::new();
+        context.insert("dir", &config.models_path.join(model.module_name()));
+
         context.insert("table", &model.table());
         context.insert("indexes", &model.indexes);
 
@@ -36,7 +38,7 @@ impl<'a> ModelGenerator<'a> {
         context.insert("read_permission", &format!("{}::read", model.name));
         context.insert("write_permission", &format!("{}::write", model.name));
         context.insert("extra_create_table_sql", &model.extra_create_table_sql);
-        context.insert("sql_dialect", &dialect);
+        context.insert("sql_dialect", &config.sql_dialect);
         context.insert("pagination", &model.pagination);
 
         let fields = model
@@ -45,11 +47,13 @@ impl<'a> ModelGenerator<'a> {
                 json!({
                     "sql_name": field.sql_field_name(),
                     "sql_full_name": field.qualified_sql_field_name(),
-                    "sql_type": field.typ.to_sql_type(dialect),
+                    "sql_type": field.typ.to_sql_type(config.sql_dialect),
                     "rust_name": field.rust_field_name(),
-                    "rust_type": field.rust_type.clone().unwrap_or_else(|| field.typ.to_rust_type().to_string()),
+                    "base_rust_type": field.base_rust_type(),
+                    "rust_type": field.rust_type(),
                     "default": field.default,
                     "nullable": field.nullable,
+                    "filterable": field.filterable,
                     "unique": field.unique,
                     "extra_sql_modifiers": field.extra_sql_modifiers,
                     "user_read": field.user_access.can_read(),
