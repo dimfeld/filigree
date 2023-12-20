@@ -1,6 +1,5 @@
 use axum::{Json, extract::{State, Path, Query}, http::StatusCode, routing};
 use filigree::{auth::AuthInfo, sql::QueryBindings};
-use sqlx::{query_file, query_file_as};
 
 use super::queries;
 
@@ -20,7 +19,7 @@ async fn get(
     Path(id): Path<{{ id_type }}>
     ) -> Result<impl IntoResponse, Error> {
 
-    let object = queries::get_owner_view(&state.db, &auth, id).await?;
+    let object = queries::get(&state.db, &auth, id).await?;
 
     {% if user_view_struct != owner_view_struct %}
     let object = if auth.permissions.contains({{owner_permission}}) {
@@ -61,7 +60,7 @@ async fn list(
 {% endif %}
 
 {% if endpoints.create %}
-fn create(
+async fn create(
     State(state): State<AppState>,
     AuthInfo(auth): AuthInfo,
     Json(payload): Json<{{ struct_base }}CreatePayload>,
@@ -73,7 +72,7 @@ fn create(
 {% endif %}
 
 {% if endpoints.update %}
-fn update(
+async fn update(
     State(state): State<AppState>,
     AuthInfo(auth): AuthInfo,
     Json(payload): Json<{{ struct_base }}UpdatePayload>,
@@ -86,7 +85,7 @@ fn update(
 {% endif %}
 
 {% if endpoints.delete %}
-fn delete(
+async fn delete(
     State(state): State<AppState>,
     AuthInfo(auth): AuthInfo,
     Path(id): Path<{{ id_type }}>
@@ -98,8 +97,8 @@ fn delete(
 }
 {% endif %}
 
-pub fn create_routes() -> Router<AppState> {
-    Router::new()
+pub fn create_routes() -> axum::Router<AppState> {
+    axum::Router::new()
         {% if endpoints.list %}.route("/{{ url_path }}", routing::get(list)){% endif %}
         {% if endpoints.get %}.route("/{{ url_path }}/:id", routing::get(get)){% endif %}
         {% if endpoints.create %}.route("/{{ url_path }}", routing::post(create)){% endif %}

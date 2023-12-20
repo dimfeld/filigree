@@ -7,6 +7,7 @@ use std::{
 
 use clap::Parser;
 use error_stack::{Report, ResultExt};
+use itertools::Itertools;
 use model::Model;
 use rayon::prelude::*;
 use thiserror::Error;
@@ -80,6 +81,11 @@ pub fn main() -> Result<(), Report<Error>> {
     } = config;
 
     let models = build_models(config_models);
+
+    let module_names = models
+        .iter()
+        .map(|model| model.module_name())
+        .collect::<Vec<_>>();
 
     let generators = models
         .into_iter()
@@ -164,6 +170,15 @@ pub fn main() -> Result<(), Report<Error>> {
             std::fs::write(&path, &file.contents)
                 .attach_printable_lazy(|| path.display().to_string())
         })
+        .change_context(Error::WriteFile)?;
+
+    let model_mod = module_names
+        .iter()
+        .map(|m| format!("pub mod {m};\n"))
+        .join("");
+    let path = config.models_path.join("mod.rs");
+    std::fs::write(&path, model_mod)
+        .attach_printable_lazy(|| path.display().to_string())
         .change_context(Error::WriteFile)?;
 
     Ok(())

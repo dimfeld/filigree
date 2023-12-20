@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "filigree",
-  "filigree-cli"
+  "filigree-cli",
+  "test-app"
 ]
 resolver = "2"

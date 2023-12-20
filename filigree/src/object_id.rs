@@ -16,7 +16,7 @@ macro_rules! make_object_id {
             }
         }
 
-        pub type $typ = ObjectId<$prefix::$typ>;
+        pub type $typ = $crate::object_id::ObjectId<$prefix::$typ>;
     };
 }
 

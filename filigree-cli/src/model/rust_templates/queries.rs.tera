@@ -1,17 +1,24 @@
+use filigree::{
+    auth::AuthInfo,
+    sql::{BindingOperator, QueryBindings}
+};
 use serde::{Serialize, Deserialize};
+use sqlx::PgPool;
 
+use super::{{id_type}};
 use super::types::*;
 
-use crate::{Error, db::Db};
+use crate::Error;
 
-pub async fn get_owner_view(db: &Db, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}OwnerView, Error> {
+pub async fn get(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}OwnerView, Error> {
     let object = query_file_as!({{struct_base}}OwnerView, "{{dir}}/get.sql",
         id,
         auth.org_id,
         &auth.actor_ids
         )
-        .fetch_optional(&db)
-        .await?
+        .fetch_optional(db)
+        .await
+        .change_context(Error::Db)?
         .ok_or_else(Error::NotFound)?;
 
     Ok(object)
@@ -39,7 +46,7 @@ struct ListQuery {
 }
 
 impl ListQuery {
-    fn build_filters(&self) -> String {
+    fn build_where_clause(&self) -> String {
         {% set start_binding = 1 %}
         {% if not global %}
           {% set start_binding = start_binding + 1 %}
@@ -47,7 +54,7 @@ impl ListQuery {
         {% if not pagination.disable %}
           {% set start_binding = start_binding + 2 %}
         {% endif %}
-        let mut bindings = filigree::sql::QueryBindings::new({{ start_binding }});
+        let mut bindings = QueryBindings::new({{ start_binding }});
 
         {% for field in fields | filter(attribute="filterable", value="exact") %}
             if !self.{{field.rust_name}}.is_empty() {
@@ -67,7 +74,7 @@ impl ListQuery {
         bindings.to_string()
     }
 
-    fn bind_to_query(&self, mut query: sqlx::query::Builder) -> sqlx::query::Builder {
+    fn bind_to_query(&self, mut query: sqlx::query::Query) -> sqlx::query::Query {
         {% if not pagination.disable %}
             const MAX_PER_PAGE: u32 = {{ pagination.max_per_page }};
             const DEFAULT_PER_PAGE: u32 = {{ pagination.default_per_page }};
@@ -96,10 +103,10 @@ impl ListQuery {
     }
 }
 
-pub async fn list(db: &Db, auth: &AuthInfo, filters: &ListQuery) -> Result<Vec<{{ struct_base }}OwnerView>, Error> {
+pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQuery) -> Result<Vec<{{ struct_base }}OwnerView>, Error> {
     let q = include_str!("{{dir}}/list.sql");
     {% if has_filterable %}
-        let q = q.replace("<filters>", &qs.build_filters());
+        let q = q.replace("<filters>", &filters.build_where_clause());
         let mut query = sqlx::query_as::<_, {{struct_base}}OwnerView>(q.as_str());
     {% else %}
         let mut query = sqlx::query_as::<_, {{struct_base}}OwnerView>(q);
@@ -109,25 +116,24 @@ pub async fn list(db: &Db, auth: &AuthInfo, filters: &ListQuery) -> Result<Vec<{
     query = query.bind(auth.org_id);
     {% endif %}
 
-    query = qs.bind_to_query(query);
+    query = filters.bind_to_query(query);
 
     let results = query
-        .fetch_all(&state.db)
+        .fetch_all(db)
         .await
         .change_context(Error::Db)?;
 
     Ok(results)
 }
 
-pub async fn create(db: &Db, auth: &AuthInfo, object: &{{ struct_base}}CreatePayload) -> Result<{{struct_base}}OwnerView, Error> {
+pub async fn create(db: &PgPool, auth: &AuthInfo, object: &{{ struct_base}}CreatePayload) -> Result<{{struct_base}}OwnerView, Error> {
     let id = {{id_type}}::new();
     // do permissions check here
     todo!();
 
-    Ok(id);
 }
 
-pub async fn update(db: &Db, auth: &AuthInfo, id: {{id_type}}, payload: &{{ struct_base }}UpdatePayload) -> Result<(), Error> {
+pub async fn update(db: &PgPool, auth: &AuthInfo, id: {{id_type}}, payload: &{{ struct_base }}UpdatePayload) -> Result<(), Error> {
     query_file!("{{dir}}/update.sql",
         id,
         auth.org_id,
@@ -135,16 +141,19 @@ pub async fn update(db: &Db, auth: &AuthInfo, id: {{id_type}}, payload: &{{ stru
             &payload.{{field.rust_name}},
         {% endfor %}
         )
-        .execute(&state.db).await?;
-
-
+        .execute(db)
+        .await
+        .change_context(Error::Db)?;
+    Ok(())
 }
 
-pub async fn delete(db: &Db, auth: &AuthInfo, id: {{id_type}}) -> Result<(), Error> {
+pub async fn delete(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<(), Error> {
     query_file!("{{dir}}/delete.sql",
         id,
         auth.org_id,
         )
-        .execute(&state.db).await?;
+        .execute(db)
+        .await
+        .change_context(Error::Db)?;
     Ok(())
 }

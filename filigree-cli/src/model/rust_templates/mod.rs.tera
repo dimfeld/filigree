@@ -4,8 +4,6 @@ mod queries;
 {% if not mod.pub_use %}pub {% endif -%} mod {{mod.name}};
 {%- endfor %}
 
-use filigree::object_id::{ObjectIdPrefix, ObjectId};
-
 pub use types::*;
 {% for mod in extra_modules | filter(attribute="pub_use", value=true) -%}
 pub use {{mod.name}}::*;
