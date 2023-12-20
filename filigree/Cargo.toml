@@ -7,15 +7,26 @@ resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+argon2 = "0.5.2"
+async-trait = "0.1.74"
+axum = "0.7.2"
 base64 = "0.21.5"
 clap = "4.4.11"
 convert_case = "0.6.0"
 error-stack = "0.4.1"
+futures = "0.3.29"
+futures-util = "0.3.29"
 ignore = "0.4.21"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
+sha3 = "0.10.8"
+sqlx = "0.7.3"
 tempdir = "0.3.7"
 thiserror = "1.0.50"
+tokio = { version = "1.35.1", features = ["full"] }
+tower = "0.4.13"
+tower-http = { version = "0.5.0", features = ["catch-panic"] }
+tower-sessions = { version = "0.7.0", features = ["postgres-store"] }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 uuid = { version = "1.6.1", features = ["v7"] }

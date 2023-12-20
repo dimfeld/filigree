@@ -1,6 +1,6 @@
 use filigree::{
     auth::AuthInfo,
-    sql::{BindingOperator, QueryBindings}
+    sql::{BindingOperator, WhereBuilder}
 };
 use serde::{Serialize, Deserialize};
 use sqlx::PgPool;
@@ -54,7 +54,7 @@ impl ListQuery {
         {% if not pagination.disable %}
           {% set start_binding = start_binding + 2 %}
         {% endif %}
-        let mut bindings = QueryBindings::new({{ start_binding }});
+        let mut bindings = WhereBuilder::new({{ start_binding }});
 
         {% for field in fields | filter(attribute="filterable", value="exact") %}
             if !self.{{field.rust_name}}.is_empty() {

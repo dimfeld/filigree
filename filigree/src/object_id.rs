@@ -4,6 +4,8 @@ use base64::{display::Base64Display, engine::GeneralPurpose, Engine};
 use thiserror::Error;
 use uuid::Uuid;
 
+/// Create a new ObjectId type. This automatically implements the prefix structure and creates
+/// a type alias for the type.
 #[macro_export]
 macro_rules! make_object_id {
     ($typ:ident, $prefix:ident) => {
@@ -16,20 +18,26 @@ macro_rules! make_object_id {
             }
         }
 
+        /// The ObjectId type alias for this model.
         pub type $typ = $crate::object_id::ObjectId<$prefix::$typ>;
     };
 }
 
+/// An error related to parsing an ObjectId
 #[derive(Debug, Error)]
 pub enum ObjectIdError {
+    /// The prefix in the parsed ID did not match the expected prefix
     #[error("Invalid ID prefix, expected {0}")]
     InvalidPrefix(&'static str),
 
+    /// Some other parsing error, such as invalid base64
     #[error("Failed to decode object ID")]
     DecodeFailure,
 }
 
+/// An object that provides a the prefix for a serialized ObjectId.
 pub trait ObjectIdPrefix {
+    /// The short prefix for this ID type
     fn prefix() -> &'static str;
 }
 
@@ -40,26 +48,32 @@ pub trait ObjectIdPrefix {
 pub struct ObjectId<PREFIX: ObjectIdPrefix>(pub Uuid, PhantomData<PREFIX>);
 
 impl<PREFIX: ObjectIdPrefix> ObjectId<PREFIX> {
+    /// Create a new ObjectId with a timestamp of now
     pub fn new() -> Self {
         Self(uuid::Uuid::now_v7(), PhantomData::default())
     }
 
+    /// Create a new ObjectId from a UUID
     pub fn from_uuid(u: Uuid) -> Self {
         Self(u, PhantomData::default())
     }
 
+    /// Return the inner Uuid
     pub fn into_inner(self) -> Uuid {
         self.0
     }
 
+    /// Return a reference to the inner Uuid
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
     }
 
+    /// Return an ObjectId corresponding to the "all zeroes" UUID
     pub fn nil() -> Self {
         Self(Uuid::nil(), PhantomData::default())
     }
 
+    /// Writes the UUID portion of the object ID, without the prefix
     pub fn display_without_prefix(&self) -> Base64Display<GeneralPurpose> {
         base64::display::Base64Display::new(
             self.0.as_bytes(),
@@ -122,7 +136,7 @@ impl<PREFIX: ObjectIdPrefix> std::fmt::Display for ObjectId<PREFIX> {
     }
 }
 
-pub fn decode_suffix(s: &str) -> Result<Uuid, ObjectIdError> {
+fn decode_suffix(s: &str) -> Result<Uuid, ObjectIdError> {
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(s)
         .map_err(|_| ObjectIdError::DecodeFailure)?;
