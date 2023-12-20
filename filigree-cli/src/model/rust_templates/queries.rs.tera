@@ -1,0 +1,150 @@
+use serde::{Serialize, Deserialize};
+
+use super::types::*;
+
+use crate::{Error, db::Db};
+
+pub async fn get_owner_view(db: &Db, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}OwnerView, Error> {
+    let object = query_file_as!({{struct_base}}OwnerView, "{{dir}}/get.sql",
+        id,
+        auth.org_id,
+        &auth.actor_ids
+        )
+        .fetch_optional(&db)
+        .await?
+        .ok_or_else(Error::NotFound)?;
+
+    Ok(object)
+}
+
+{% set_global has_filterable = false %}
+
+#[derive(Serialize, Debug)]
+struct ListQuery {
+    {%if not pagination.disable %}
+    page: Option<u32>,
+    per_page: Option<u32>,
+    {% endif %}
+
+    {%- for field in fields | filter(attribute="filterable", value="exact") -%}
+        {% set_global has_filterable = true %}
+    #[serde(default)]
+    {{field.rust_name}}: Vec<{{field.base_rust_type}}>,
+    {%- endfor -%}
+    {%- for field in fields | filter(attribute="filterable", value="range") -%}
+        {% set_global has_filterable = true %}
+    {{field.rust_name}}_lte: Option<{{field.base_rust_type}}>,
+    {{field.rust_name}}_gte: Option<{{field.base_rust_type}}>,
+    {%- endfor -%}
+}
+
+impl ListQuery {
+    fn build_filters(&self) -> String {
+        {% set start_binding = 1 %}
+        {% if not global %}
+          {% set start_binding = start_binding + 1 %}
+        {% endif %}
+        {% if not pagination.disable %}
+          {% set start_binding = start_binding + 2 %}
+        {% endif %}
+        let mut bindings = filigree::sql::QueryBindings::new({{ start_binding }});
+
+        {% for field in fields | filter(attribute="filterable", value="exact") %}
+            if !self.{{field.rust_name}}.is_empty() {
+                bindings.add_vec("{{field.sql_name}}", &self.{{field.rust_name}});
+            }
+        {% endfor %}
+        {% for field in fields | filter(attribute="filterable", value="range") %}
+            if self.{{field.rust_name}}_lte.is_some() {
+                bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}_lte, BindingOperator::Lte);
+            }
+
+            if self.{{field.rust_name}}_gte.is_some() {
+                bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}_gte, BindingOperator::Gte);
+            }
+        {% endfor %}
+        
+        bindings.to_string()
+    }
+
+    fn bind_to_query(&self, mut query: sqlx::query::Builder) -> sqlx::query::Builder {
+        {% if not pagination.disable %}
+            const MAX_PER_PAGE: u32 = {{ pagination.max_per_page }};
+            const DEFAULT_PER_PAGE: u32 = {{ pagination.default_per_page }};
+            let per_page = self.per_page.unwrap_or(DEFAULT_PER_PAGE).min(MAX_PER_PAGE).max(1);
+            let offset = self.page.unwrap_or(0) * per_page;
+            query = query.bind(per_page).bind(offset);
+        {% endif %}
+
+        {% for field in fields | filter(attribute="filterable", value="exact") %}
+            if !self.{{field.rust_name}}.is_empty() {
+                query = query.bind(&self.{{field.rust_name}});
+            }
+        {% endfor %}
+        {% for field in fields | filter(attribute="filterable", value="range") %}
+            {% set_global has_filterable = true %}
+            if self.{{field.rust_name}}_lte.is_some() {
+                query = query.bind(&self.{{field.rust_name}}_lte);
+            }
+
+            if self.{{field.rust_name}}_gte.is_some() {
+                query = query.bind(&self.{{field.rust_name}}_gte);
+            }
+        {% endfor %}
+
+        query
+    }
+}
+
+pub async fn list(db: &Db, auth: &AuthInfo, filters: &ListQuery) -> Result<Vec<{{ struct_base }}OwnerView>, Error> {
+    let q = include_str!("{{dir}}/list.sql");
+    {% if has_filterable %}
+        let q = q.replace("<filters>", &qs.build_filters());
+        let mut query = sqlx::query_as::<_, {{struct_base}}OwnerView>(q.as_str());
+    {% else %}
+        let mut query = sqlx::query_as::<_, {{struct_base}}OwnerView>(q);
+    {% endif %}
+
+    {% if not global %}
+    query = query.bind(auth.org_id);
+    {% endif %}
+
+    query = qs.bind_to_query(query);
+
+    let results = query
+        .fetch_all(&state.db)
+        .await
+        .change_context(Error::Db)?;
+
+    Ok(results)
+}
+
+pub async fn create(db: &Db, auth: &AuthInfo, object: &{{ struct_base}}CreatePayload) -> Result<{{struct_base}}OwnerView, Error> {
+    let id = {{id_type}}::new();
+    // do permissions check here
+    todo!();
+
+    Ok(id);
+}
+
+pub async fn update(db: &Db, auth: &AuthInfo, id: {{id_type}}, payload: &{{ struct_base }}UpdatePayload) -> Result<(), Error> {
+    query_file!("{{dir}}/update.sql",
+        id,
+        auth.org_id,
+        {% for field in fields | filter(attribute="owner_write", value=true) %}
+            &payload.{{field.rust_name}},
+        {% endfor %}
+        )
+        .execute(&state.db).await?;
+
+
+}
+
+pub async fn delete(db: &Db, auth: &AuthInfo, id: {{id_type}}) -> Result<(), Error> {
+    query_file!("{{dir}}/delete.sql",
+        id,
+        auth.org_id,
+        )
+        .execute(&state.db).await?;
+    Ok(())
+}

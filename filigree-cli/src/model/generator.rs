@@ -72,7 +72,14 @@ impl<'a> ModelGenerator<'a> {
         let mut extra_modules = Vec::new();
 
         context.insert("id_type", &model.object_id_type());
-        context.insert("url_path", &model.module_name());
+        context.insert("id_prefix", &model.id_prefix());
+
+        let module_name = model.module_name();
+        context.insert(
+            "predefined_object_id",
+            &["role", "user", "organization"].contains(&module_name.as_str()),
+        );
+        context.insert("url_path", &module_name);
         context.insert("endpoints", &model.endpoints.per_endpoint());
         if model.endpoints.any_enabled() {
             extra_modules.push(json!({
@@ -160,6 +167,7 @@ impl<'a> ModelGenerator<'a> {
             Some("delete.sql.tera"),
             Some("mod.rs.tera"),
             Some("types.rs.tera"),
+            Some("queries.rs.tera"),
             self.model
                 .endpoints
                 .any_enabled()

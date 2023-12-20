@@ -2,6 +2,8 @@ use axum::{Json, extract::{State, Path, Query}, http::StatusCode, routing};
 use filigree::{auth::AuthInfo, sql::QueryBindings};
 use sqlx::{query_file, query_file_as};
 
+use super::queries;
+
 {% if not user_and_owner_views_same %}
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
@@ -12,118 +14,33 @@ pub enum UserOrOwnerView {
 {% endif %}
 
 {% if endpoints.get %}
-fn get(State(state): State<AppState>,
+async fn get(
+    State(state): State<AppState>,
     AuthInfo(auth): AuthInfo,
-    Path(id): Path<{{ id_type }}>) -> Result<impl IntoResponse, Error> {
+    Path(id): Path<{{ id_type }}>
+    ) -> Result<impl IntoResponse, Error> {
 
-    let object = query_file_as!({{struct_base}}OwnerView, "get.sql",
-        id,
-        auth.org_id,
-        &auth.actor_ids
-        )
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or_else(Error::NotFound)?;
+    let object = queries::get_owner_view(&state.db, &auth, id).await?;
+
+    {% if user_view_struct != owner_view_struct %}
+    let object = if auth.permissions.contains({{owner_permission}}) {
+        UserOrOwnerView::Owner(result)
+    } else {
+        UserOrOwnerView::User(result.into())
+    };
+    {% endif %}
 
     Ok(Json(object))
 }
 {% endif %}
 
 {% if endpoints.list %}
-
-{% set_global has_filterable = false %}
-
-#[derive(Serialize, Debug)]
-struct ListQuery {
-    {%if not pagination.disable %}
-    page: Option<u32>,
-    per_page: Option<u32>,
-    {% endif %}
-
-    {% for field in fields | filter(attribute="filterable", value="exact") %}
-        {% set_global has_filterable = true %}
-    #[serde(default)]
-    {{field.rust_name}}: Vec<{{field.base_rust_type}}>,
-    {% endfor %}
-    {% for field in fields | filter(attribute="filterable", value="range") %}
-        {% set_global has_filterable = true %}
-    {{field.rust_name}}_lte: Option<{{field.base_rust_type}}>,
-    {{field.rust_name}}_gte: Option<{{field.base_rust_type}}>,
-    {% endfor %}
-}
-
-fn list(
+async fn list(
     State(state): State<AppState>,
     AuthInfo(auth): AuthInfo,
-    Query(filters): Query<ListQueryFilters>,
+    Query(qs): Query<ListQueryFilters>,
     ) -> Result<impl IntoResponse, Error> {
-
-    {% set start_binding = 1 %}
-    {% if not global %}
-      {% set start_binding = start_binding + 1 %}
-    {% endif %}
-    {% if not pagination.disable %}
-      {% set start_binding = start_binding + 2 %}
-    {% endif %}
-
-    let q = include_str!("{{dir}}/list.sql");
-    {% if has_filterable %}
-        let mut bindings = filigree::sql::QueryBindings::new({{ start_binding }});
-
-        {% for field in fields | filter(attribute="filterable", value="exact") %}
-            if !filters.{{field.rust_name}}.is_empty() {
-                bindings.add_vec("{{field.sql_name}}", &filters.{{field.rust_name}});
-            }
-        {% endfor %}
-        {% for field in fields | filter(attribute="filterable", value="range") %}
-            if filters.{{field.rust_name}}_lte.is_some() {
-                bindings.add_option("{{field.sql_name}}", &filters.{{field.rust_name}}_lte, BindingOperator::Lte);
-            }
-
-            if filters.{{field.rust_name}}_gte.is_some() {
-                bindings.add_option("{{field.sql_name}}", &filters.{{field.rust_name}}_gte, BindingOperator::Gte);
-            }
-        {% endfor %}
-
-        let q = q.replace("<filters>", &bindings.to_string());
-        let mut query = sqlx::query_as::<_, {{struct_base}}OwnerView>(q.as_str());
-    {% else %}
-        let mut query = sqlx::query_as::<_, {{struct_base}}OwnerView>(q);
-    {% endif %}
-
-
-    {% if not global %}
-    query = query.bind(auth.org_id);
-    {% endif %}
-
-    {% if not pagination.disable %}
-        const MAX_PER_PAGE: u32 = {{ pagination.max_per_page }};
-        const DEFAULT_PER_PAGE: u32 = {{ pagination.default_per_page }};
-        let per_page = filters.per_page.unwrap_or(DEFAULT_PER_PAGE).min(MAX_PER_PAGE).max(1);
-        let offset = filters.page.unwrap_or(0) * per_page;
-        query = query.bind(per_page).bind(offset);
-    {% endif %}
-
-    {% for field in fields | filter(attribute="filterable", value="exact") %}
-        if !filters.{{field.rust_name}}.is_empty() {
-            query = query.bind(&filters.{{field.rust_name}});
-        }
-    {% endfor %}
-    {% for field in fields | filter(attribute="filterable", value="range") %}
-        {% set_global has_filterable = true %}
-        if filters.{{field.rust_name}}_lte.is_some() {
-            query = query.bind(&filters.{{field.rust_name}}_lte);
-        }
-
-        if filters.{{field.rust_name}}_gte.is_some() {
-            query = query.bind(&filters.{{field.rust_name}}_gte);
-        }
-    {% endfor %}
-
-    let results = query
-        .fetch_all(&state.db)
-        .await
-        .change_context(Error::Db)?;
+    let results = queries::list(&state.db, &auth, &qs).await?;
 
     {# In most cases, the user view is the same as the owner view #}
     {% if user_view_struct != owner_view_struct %}
@@ -149,42 +66,33 @@ fn create(
     AuthInfo(auth): AuthInfo,
     Json(payload): Json<{{ struct_base }}CreatePayload>,
     ) -> Result<impl IntoResponse, Error> {
-    // Do permissions check here
+    let result = queries::create(&state.db, &auth, &payload).await?;
 
-    let id = {{id_type}}::new();
-
-    // Run create object query here
+    Ok((StatusCode::CREATED, Json(result)));
 }
 {% endif %}
 
 {% if endpoints.update %}
-fn update(State(state): State<AppState>,
+fn update(
+    State(state): State<AppState>,
     AuthInfo(auth): AuthInfo,
     Json(payload): Json<{{ struct_base }}UpdatePayload>,
-    Path(id): Path<{{ id_type }}>) -> Result<impl IntoResponse, Error> {
+    Path(id): Path<{{ id_type }}>
+    ) -> Result<impl IntoResponse, Error> {
 
-    query_file!("{{dir}}/update.sql",
-        id,
-        auth.org_id,
-        {% for field in fields | filter(attribute="owner_write", value=true) %}
-            &payload.{{field.rust_name}},
-        {% endfor %}
-        )
-        .execute(&state.db).await?;
-
-    todo!()
+    queries::update(&state.db, &auth, id, &payload).await?;
+    Ok(StatusCode::OK);
 }
 {% endif %}
 
 {% if endpoints.delete %}
-fn delete(State(state): State<AppState>,
+fn delete(
+    State(state): State<AppState>,
     AuthInfo(auth): AuthInfo,
-    Path(id): Path<{{ id_type }}>) -> Result<impl IntoResponse, Error> {
-    query_file!("{{dir}}/delete.sql",
-        id,
-        auth.org_id,
-        )
-        .execute(&state.db).await?;
+    Path(id): Path<{{ id_type }}>
+    ) -> Result<impl IntoResponse, Error> {
+
+    queries::delete(&state.db, &auth, id).await?;
 
     Ok(StatusCode::OK);
 }

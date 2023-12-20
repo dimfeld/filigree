@@ -98,9 +98,9 @@ impl<'a> ModelGenerator<'a> {
         fields
             .map(|f| {
                 let typ = if force_optional(&f) {
-                    f.rust_type()
-                } else {
                     format!("Option<{}>", f.base_rust_type()).into()
+                } else {
+                    f.rust_type()
                 };
 
                 format!("pub {}: {},", f.rust_field_name(), typ)

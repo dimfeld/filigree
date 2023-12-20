@@ -49,6 +49,10 @@ fn create_tera() -> Tera {
             "types.rs.tera",
             include_str!("model/rust_templates/types.rs.tera"),
         ),
+        (
+            "queries.rs.tera",
+            include_str!("model/rust_templates/queries.rs.tera"),
+        ),
     ]);
 
     if let Err(e) = res {

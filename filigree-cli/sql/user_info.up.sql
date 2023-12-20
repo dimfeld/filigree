@@ -6,12 +6,24 @@ CREATE TABLE user_roles (
   PRIMARY KEY (organization_id, user_id, role_id)
 );
 
+CREATE TABLE user_sessions (
+  session_id uuid PRIMARY KEY,
+  hash bytea NOT NULL,
+  user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz
+);
+
 -- A list of users and what organizations they belong to. Users can potentially be in more than one organization.
 CREATE TABLE organization_members (
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
+  active boolean NOT NULL DEFAULT TRUE,
   PRIMARY KEY (organization_id, user_id)
 );
+
+CREATE INDEX ON user_sessions (user_id);
 
 CREATE TABLE api_keys (
   api_key_id uuid PRIMARY KEY,

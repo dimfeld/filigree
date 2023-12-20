@@ -28,6 +28,13 @@ pub struct Cli {
     /// Override the path to the configuration directory. By default this looks for ./filigree
     #[clap(short, long, value_name = "FILE")]
     config: Option<PathBuf>,
+
+    /// Force regenerating all templates, even those which would normally be generated
+    /// only once.
+    /// (Eventually these files and the always-regenerated files will be generated as separate
+    /// commands.)
+    #[clap(long)]
+    force: bool,
 }
 
 #[derive(Error, Debug)]

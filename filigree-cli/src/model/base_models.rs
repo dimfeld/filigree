@@ -42,10 +42,6 @@ impl Model {
                         default: "false".into(),
                         ..simple_model_field("verified", SqlType::Boolean)
                     },
-                    ModelField {
-                        default: "true".into(),
-                        ..simple_model_field("active", SqlType::Boolean)
-                    },
                 ],
             },
             Model {

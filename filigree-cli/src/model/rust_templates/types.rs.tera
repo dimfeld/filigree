@@ -1,3 +1,7 @@
+use super::{{id_type}};
+{%- if id_type != "OrganizationId" %}
+use super::super::organization::OrganizationId;
+{% endif -%}
 use serde::{Serialize, Deserialize};
 
 {% for struct in structs %}
