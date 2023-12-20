@@ -1,38 +1,43 @@
+use std::sync::Arc;
+
 use axum::{extract::Request, response::Response};
-use futures_util::future::BoxFuture;
-use sqlx::PgPool;
 use tower::{Layer, Service};
 
+use super::{lookup::AuthLookup, AuthInfo};
+
+/// A layer that inserts the auth lookup object into the request, for later
+/// use by the Authed extractor.
 #[derive(Clone)]
-struct AuthLayer {
-    // TODO replace with some struct that implements a trait for getting the user data
-    pool: PgPool,
+struct AuthLayer<INFO: AuthInfo> {
+    lookup: Arc<AuthLookup<INFO>>,
 }
 
-impl AuthLayer {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+impl<INFO: AuthInfo> AuthLayer<INFO> {
+    pub fn new(lookup: AuthLookup<INFO>) -> Self {
+        Self {
+            lookup: Arc::new(lookup),
+        }
     }
 }
 
-impl<S> Layer<S> for AuthLayer {
-    type Service = AuthService<S>;
+impl<S, INFO: AuthInfo> Layer<S> for AuthLayer<INFO> {
+    type Service = AuthService<S, INFO>;
 
     fn layer(&self, inner: S) -> Self::Service {
         AuthService {
-            pool: self.pool.clone(),
+            lookup: self.lookup.clone(),
             inner,
         }
     }
 }
 
 #[derive(Clone)]
-pub struct AuthService<S> {
-    pool: PgPool,
+pub struct AuthService<S, INFO: AuthInfo> {
+    lookup: Arc<AuthLookup<INFO>>,
     inner: S,
 }
 
-impl<S> Service<Request> for AuthService<S>
+impl<S, INFO: AuthInfo> Service<Request> for AuthService<S, INFO>
 where
     S: Service<Request, Response = Response> + Send + Clone + 'static,
     S::Response: 'static,
@@ -40,7 +45,7 @@ where
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+    type Future = S::Future;
 
     fn poll_ready(
         &mut self,
@@ -49,17 +54,8 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, request: Request) -> Self::Future {
-        let clone = self.inner.clone();
-        // See https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services
-        let mut inner = std::mem::replace(&mut self.inner, clone);
-
-        Box::pin(async move {
-            // TODO use tower-sessions for session cookie
-            // TODO do all the lookups
-
-            let response = inner.call(request).await?;
-            Ok(response)
-        })
+    fn call(&mut self, mut request: Request) -> Self::Future {
+        request.extensions_mut().insert(self.lookup.clone());
+        self.inner.call(request)
     }
 }

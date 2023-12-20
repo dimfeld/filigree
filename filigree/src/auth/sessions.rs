@@ -1,12 +1,13 @@
 use std::{fmt::Display, str::FromStr};
 
+use axum::{extract::Request, http::request::Parts};
 use error_stack::{Report, ResultExt};
 use sqlx::PgPool;
 use thiserror::Error;
-use tower_cookies::Cookie;
+use tower_cookies::{Cookie, Cookies};
 use uuid::Uuid;
 
-use super::{OrganizationId, UserId};
+use super::UserId;
 
 crate::make_object_id!(SessionId, sid);
 
@@ -49,7 +50,7 @@ pub enum ExpiryStyle {
 }
 
 impl ExpiryStyle {
-    pub fn expiry_time(&self) -> std::time::Duration {
+    pub fn expiry_duration(&self) -> std::time::Duration {
         match self {
             ExpiryStyle::FromCreation(duration) => *duration,
             ExpiryStyle::AfterIdle(duration) => *duration,
@@ -57,33 +58,26 @@ impl ExpiryStyle {
     }
 }
 
-pub struct SessionManager {
+pub struct SessionBackend {
     db: PgPool,
     cookies: SessionCookieBuilder,
     expiry_style: ExpiryStyle,
 }
 
 pub struct SessionKey {
-    session_id: SessionId,
-    user_id: UserId,
+    pub session_id: SessionId,
+    pub hash: Uuid,
 }
 
 impl SessionKey {
-    pub fn new(user_id: UserId) -> Self {
-        Self::new_from_id(SessionId::new(), user_id)
-    }
-
-    pub fn new_from_id(session_id: SessionId, user_id: UserId) -> Self {
-        Self {
-            session_id,
-            user_id,
-        }
+    pub fn new(session_id: SessionId, hash: Uuid) -> Self {
+        Self { session_id, hash }
     }
 }
 
 impl Display for SessionKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.session_id, self.user_id)
+        write!(f, "{}:{}", self.session_id, self.hash)
     }
 }
 
@@ -91,15 +85,15 @@ impl FromStr for SessionKey {
     type Err = SessionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (id, user_id) = s.split_once(':').ok_or_else(|| SessionError::NotFound)?;
+        let (id, hash) = s.split_once(':').ok_or(SessionError::NotFound)?;
         let id = SessionId::from_str(id).map_err(|_| SessionError::NotFound)?;
-        let user_id = UserId::from_str(user_id).map_err(|_| SessionError::NotFound)?;
+        let hash = Uuid::from_str(hash).map_err(|_| SessionError::NotFound)?;
 
-        Ok(Self::new_from_id(id, user_id))
+        Ok(Self::new(id, hash))
     }
 }
 
-impl SessionManager {
+impl SessionBackend {
     pub fn new(db: PgPool, cookies: SessionCookieBuilder, expiry_style: ExpiryStyle) -> Self {
         Self {
             db,
@@ -125,74 +119,119 @@ impl SessionManager {
     //     Ok(key)
     // }
 
-    pub async fn add_session(
+    pub async fn create_session(
         &self,
+        cookies: &Cookies,
         user_id: &UserId,
-        org_id: &OrganizationId,
-    ) -> Result<Cookie, Report<SessionError>> {
+    ) -> Result<(), Report<SessionError>> {
         let session_id = SessionId::new();
+        let hash = Uuid::new_v4();
 
         sqlx::query!(
-            "INSERT INTO user_sessions (id, user_id, organization_id, expires_at) VALUES ($1, $2, $3, now() + $4)",
+            "
+            INSERT INTO user_sessions (id, user_id, hash, expires_at) VALUES
+            ($1, $2, $3, now() + $4)",
             &session_id,
+            &hash,
             &user_id,
-            &org_id,
             self.expiry_style.expiry_time()
         )
         .execute(&self.db)
         .await
         .change_context(SessionError::Db)?;
 
-        Ok(self.cookies.create_cookie(
-            &SessionKey::new_from_id(session_id, *user_id),
-            self.expiry_style.expiry_time(),
-        ))
+        let cookie = self.cookies.create_cookie(
+            &SessionKey::new(session_id, hash),
+            self.expiry_style.expiry_duration(),
+        );
+
+        cookies.add(cookie);
+        Ok(())
     }
 
+    /// Update a session with the new expiry time. This usually is not called directly since it is
+    /// part of the query that retrieves the actual user as well.
     pub async fn touch_session(
         &self,
-        id: SessionId,
-        user_id: UserId,
-    ) -> Result<Option<Cookie>, SessionError> {
+        cookies: &Cookies,
+        key: &SessionKey,
+    ) -> Result<(), SessionError> {
         let ExpiryStyle::AfterIdle(duration) = self.expiry_style else {
-            return Ok(None);
+            return Ok(());
         };
 
         let updated = sqlx::query!(
             "UPDATE user_sessions
                 SET expires_at = now() + $1
-                WHERE id=$2 and user_id=$3
+                WHERE id=$2 and hash=$3
                 -- Prevent unnecessary updates
-                AND expires_at < now() + $1 - '1 minute",
+                AND (expires_at < now() + $1 - '1 minute')",
             duration,
-            id,
-            user_id
+            &key.id,
+            &key.hash
         )
         .execute(&self.db)
         .await
         .change_context(SessionError::Db)?;
 
         if updated > 0 {
-            Ok(Some(self.cookies.create_cookie(
-                &SessionKey::new_from_id(id, user_id),
-                duration,
-            )))
-        } else {
-            Ok(None)
+            cookies.add(self.cookies.create_cookie(&key, duration));
         }
+
+        Ok(())
     }
 
-    pub async fn delete_session(&self, id: &str) -> Result<(), Report<SessionError>> {
+    /// Delete all sessions for a user
+    pub async fn delete_for_user(&self, id: UserId) -> Result<(), Report<SessionError>> {
+        sqlx::query!("DELETE FROM user_sessions WHERE user_id = $1", id)
+            .execute(&self.db)
+            .await
+            .change_context(SessionError::Db)
+    }
+
+    /// Delete a session, as when logging out.
+    pub async fn delete_session(
+        &self,
+        cookies: &Cookies,
+        id: &str,
+    ) -> Result<(), Report<SessionError>> {
+        cookies.remove(Cookie::new("sid", ""));
+
         sqlx::query!("DELETE FROM user_sessions WHERE id = $1", id)
             .execute(&self.db)
             .await
             .change_context(SessionError::Db)
     }
 
+    /// Sweep the session table and remove any expired sessions.
     pub async fn delete_expired_sessions(&self) -> Result<(), Report<SessionError>> {
         sqlx::query!("DELETE FROM user_sessions WHERE expires_at < now()")
             .execute(&self.db)
             .await
             .change_context(SessionError::Db)
+    }
+}
+
+pub fn get_session_cookie(request: &Parts) -> Option<SessionKey> {
+    let cookies = request.extensions.get::<Cookies>()?;
+    let sid = cookies.get("sid")?;
+    SessionKey::from_str(sid.value()).ok()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn session_key() {
+        let sid = SessionId::new();
+        let hash = Uuid::new_v4();
+        let key = SessionKey::new(sid, hash);
+
+        let serialized = key.to_string();
+
+        let restored = SessionKey::from_str(&serialized).unwrap();
+        assert_eq!(restored.session_id, sid);
+        assert_eq!(restored.hash, hash);
     }
 }

@@ -1,12 +1,18 @@
 mod extractors;
+pub mod lookup;
 /// Authentication middleware
 pub mod middleware;
 mod sessions;
 
-use axum::response::IntoResponse;
-pub use extractors::*;
-use thiserror::Error;
+use std::sync::Arc;
 
+use axum::{http::StatusCode, response::IntoResponse};
+pub use extractors::*;
+use sqlx::{postgres::PgRow, FromRow};
+use thiserror::Error;
+use uuid::Uuid;
+
+use self::sessions::SessionId;
 use crate::{errors::HttpError, make_object_id};
 
 make_object_id!(UserId, usr);
@@ -14,32 +20,40 @@ make_object_id!(OrganizationId, org);
 make_object_id!(RoleId, rol);
 
 /// An error related to authentication
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum AuthError {
     /// The user is not logged in
     #[error("Not authenticated")]
     Unauthenticated,
+    #[error("Invalid API Key")]
+    InvalidApiKey,
     /// The user is known, but requires verification before they can do most operations
     #[error("User is not verified")]
     NotVerified,
     /// The user or organization is inactive
     #[error("User or org is disabled")]
     Disabled,
+    /// The database returned an error
+    #[error("Database error {0}")]
+    Db(#[from] Arc<sqlx::Error>),
 }
 
 impl HttpError for AuthError {
-    fn status_code(&self) -> axum::http::StatusCode {
+    fn status_code(&self) -> StatusCode {
         match self {
-            Self::Unauthenticated => axum::http::StatusCode::UNAUTHORIZED,
-            Self::NotVerified | Self::Disabled => axum::http::StatusCode::FORBIDDEN,
+            Self::InvalidApiKey | Self::Unauthenticated => StatusCode::UNAUTHORIZED,
+            Self::NotVerified | Self::Disabled => StatusCode::FORBIDDEN,
+            Self::Db(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
     fn error_kind(&self) -> &'static str {
         match self {
             Self::Unauthenticated => "unauthenticated",
+            Self::InvalidApiKey => "invalid_api_key",
             Self::NotVerified => "not_verified",
             Self::Disabled => "disabled",
+            Self::Db(_) => "db",
         }
     }
 }
@@ -83,7 +97,7 @@ impl IntoResponse for AuthError {
 // }
 
 /// An object containing information about the current user.
-pub trait AuthInfo: Clone + Send + Sync {
+pub trait AuthInfo: Clone + Send + Sync + Unpin + for<'db> FromRow<'db, PgRow> {
     /// Return Ok if the user is valid, or an [AuthError] if the user is not authenticated or
     /// authorized.
     fn check_valid(&self) -> Result<(), AuthError>;

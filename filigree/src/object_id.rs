@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, ops::Deref, str::FromStr};
 
 use base64::{display::Base64Display, engine::GeneralPurpose, Engine};
+use sqlx::{postgres::PgTypeInfo, Database};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -44,7 +45,7 @@ pub trait ObjectIdPrefix {
 /// A type that is internally stored as a UUID but externally as a
 /// more accessible string with a prefix indicating its type. This uses
 /// UUID v7 so that the output will be lexicographically sortable.
-#[derive(Copy, Clone, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Eq, Hash, PartialOrd, Ord)]
 pub struct ObjectId<PREFIX: ObjectIdPrefix>(pub Uuid, PhantomData<PREFIX>);
 
 impl<PREFIX: ObjectIdPrefix> ObjectId<PREFIX> {
@@ -209,6 +210,31 @@ impl<'de, PREFIX: ObjectIdPrefix> serde::Deserialize<'de> for ObjectId<PREFIX> {
         D: serde::Deserializer<'de>,
     {
         deserializer.deserialize_str(ObjectIdVisitor::default())
+    }
+}
+
+/// Store and retrieve in Postgres as a raw UUID
+impl<PREFIX: ObjectIdPrefix> sqlx::Type<sqlx::Postgres> for ObjectId<PREFIX> {
+    fn type_info() -> <sqlx::Postgres as Database>::TypeInfo {
+        PgTypeInfo::with_name("uuid")
+    }
+}
+
+impl<'q, PREFIX: ObjectIdPrefix> sqlx::Encode<'q, sqlx::Postgres> for ObjectId<PREFIX> {
+    fn encode_by_ref(
+        &self,
+        buf: &mut <sqlx::Postgres as sqlx::database::HasArguments<'q>>::ArgumentBuffer,
+    ) -> sqlx::encode::IsNull {
+        self.0.encode_by_ref(buf)
+    }
+}
+
+impl<'r, PREFIX: ObjectIdPrefix> sqlx::Decode<'r, sqlx::Postgres> for ObjectId<PREFIX> {
+    fn decode(
+        value: <sqlx::Postgres as sqlx::database::HasValueRef<'r>>::ValueRef,
+    ) -> Result<Self, sqlx::error::BoxDynError> {
+        let u = Uuid::decode(value)?;
+        Ok(Self(u, PhantomData::default()))
     }
 }
 

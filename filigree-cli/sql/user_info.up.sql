@@ -2,16 +2,14 @@ CREATE TABLE user_roles (
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   role_id uuid NOT NULL REFERENCES roles (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
-  created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (organization_id, user_id, role_id)
 );
 
 CREATE TABLE user_sessions (
   session_id uuid PRIMARY KEY,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  expires_at timestamptz
+  hash uuid NOT NULL,
+  expires_at timestamptz NOT NULL
 );
 
 -- A list of users and what organizations they belong to. Users can potentially be in more than one organization.
@@ -33,8 +31,7 @@ CREATE TABLE api_keys (
   inherits_user_permissions bool NOT NULL DEFAULT FALSE,
   description text,
   active boolean NOT NULL DEFAULT TRUE,
-  expires_at timestamptz,
-  created_at timestamptz NOT NULL DEFAULT now()
+  expires_at timestamptz
 );
 
 -- Methods for a user to log in.
