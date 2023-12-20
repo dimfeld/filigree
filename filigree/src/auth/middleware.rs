@@ -55,7 +55,7 @@ where
         let mut inner = std::mem::replace(&mut self.inner, clone);
 
         Box::pin(async move {
-            // TODO install tower-session and use for session cookie
+            // TODO use tower-sessions for session cookie
             // TODO do all the lookups
 
             let response = inner.call(request).await?;

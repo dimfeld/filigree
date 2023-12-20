@@ -640,6 +640,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tower",
+ "tower-cookies",
  "tower-http",
  "tower-sessions",
  "tracing",

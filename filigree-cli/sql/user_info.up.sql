@@ -8,7 +8,6 @@ CREATE TABLE user_roles (
 
 CREATE TABLE user_sessions (
   session_id uuid PRIMARY KEY,
-  hash bytea NOT NULL,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
   created_at timestamptz NOT NULL DEFAULT now(),

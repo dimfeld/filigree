@@ -1,6 +1,7 @@
 mod extractors;
 /// Authentication middleware
 pub mod middleware;
+mod sessions;
 
 use axum::response::IntoResponse;
 pub use extractors::*;
