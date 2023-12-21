@@ -107,6 +107,10 @@ fn create_tera() -> Tera {
             "model/queries.rs.tera",
             include_str!("model/rust_templates/queries.rs.tera"),
         ),
+        (
+            "model/main_mod.rs.tera",
+            include_str!("model/rust_templates/main_mod.rs.tera"),
+        ),
         // Auth templates
         (
             "auth/fetch_base.sql.tera",

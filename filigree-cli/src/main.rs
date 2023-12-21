@@ -7,7 +7,6 @@ use std::{
 
 use clap::Parser;
 use error_stack::{Report, ResultExt};
-use itertools::Itertools;
 use model::Model;
 use rayon::prelude::*;
 use thiserror::Error;
@@ -85,14 +84,13 @@ pub fn main() -> Result<(), Report<Error>> {
 
     let models = build_models(config_models);
 
-    let module_names = models
-        .iter()
-        .map(|model| model.module_name())
-        .collect::<Vec<_>>();
-
     let generators = models
         .into_iter()
         .map(|model| ModelGenerator::new(&config, &renderer, model))
+        .collect::<Vec<_>>();
+    let all_model_contexts = generators
+        .iter()
+        .map(|m| (m.model.name.clone(), m.context.clone().into_json()))
         .collect::<Vec<_>>();
 
     let model_files = generators
@@ -175,12 +173,23 @@ pub fn main() -> Result<(), Report<Error>> {
         })
         .change_context(Error::WriteFile)?;
 
-    let model_mod = module_names
-        .iter()
-        .map(|m| format!("pub mod {m};\n"))
-        .join("");
+    let mut model_mod_context = tera::Context::new();
+    model_mod_context.insert(
+        "models",
+        &all_model_contexts
+            .iter()
+            .map(|(_, v)| v)
+            .collect::<Vec<_>>(),
+    );
+
+    let model_mod = renderer.render(
+        &config.models_path,
+        "model",
+        "main_mod.rs.tera",
+        &model_mod_context,
+    )?;
     let path = config.models_path.join("mod.rs");
-    std::fs::write(&path, model_mod)
+    std::fs::write(&path, model_mod.contents)
         .attach_printable_lazy(|| path.display().to_string())
         .change_context(Error::WriteFile)?;
 

@@ -28,6 +28,7 @@ impl<'a> ModelGenerator<'a> {
     fn create_template_context(config: &Config, model: &Model) -> tera::Context {
         let mut context = tera::Context::new();
         context.insert("dir", &config.models_path.join(model.module_name()));
+        context.insert("module_name", &model.module_name());
 
         context.insert("table", &model.table());
         context.insert("indexes", &model.indexes);
@@ -79,6 +80,7 @@ impl<'a> ModelGenerator<'a> {
             &["role", "user", "organization"].contains(&module_name.as_str()),
         );
         context.insert("url_path", &module_name);
+        context.insert("has_any_endpoints", &model.endpoints.any_enabled());
         context.insert("endpoints", &model.endpoints.per_endpoint());
         if model.endpoints.any_enabled() {
             extra_modules.push(json!({

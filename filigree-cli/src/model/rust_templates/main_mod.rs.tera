@@ -1,0 +1,14 @@
+use axum::Router;
+
+use crate::AppState;
+
+{% for module in models -%}
+pub mod {{ module.module_name }};
+{%- endfor %}
+
+pub fn create_routes() -> Router<AppState> {
+    Router::new()
+        {% for module in models | filter(attribute="has_any_endpoints", value=true) %}
+            .merge({{ module.module_name }}::create_routes())
+        {% endfor %}
+}
