@@ -3,10 +3,7 @@ use std::sync::Arc;
 use axum::{extract::Request, response::Response};
 use tower::{Layer, Service};
 
-use super::{
-    lookup::{AuthLookup, AuthLookupOptions},
-    AuthInfo,
-};
+use super::{lookup::AuthLookup, AuthInfo, AuthQueries};
 
 /// A layer that inserts the auth lookup object into the request, for later
 /// use by the Authed extractor.
@@ -64,7 +61,9 @@ where
 }
 
 /// Create a new [AuthLayer] containing an [AuthLookup] built from the given options.
-pub fn auth_layer<INFO: AuthInfo>(lookup_options: AuthLookupOptions) -> AuthLayer<INFO> {
-    let lookup = Arc::new(AuthLookup::new(lookup_options));
+pub fn auth_layer<INFO: AuthInfo>(
+    queries: Box<dyn AuthQueries<AuthInfo = INFO>>,
+) -> AuthLayer<INFO> {
+    let lookup = Arc::new(AuthLookup::new(queries));
     AuthLayer::new(lookup)
 }

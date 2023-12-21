@@ -6,13 +6,14 @@ mod sessions;
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use axum::{http::StatusCode, response::IntoResponse};
 pub use extractors::*;
-use sqlx::{postgres::PgRow, FromRow};
+use sqlx::{postgres::PgRow, FromRow, PgConnection};
 use thiserror::Error;
 use uuid::Uuid;
 
-use self::sessions::SessionId;
+use self::sessions::{SessionId, SessionKey};
 use crate::{errors::HttpError, make_object_id};
 
 make_object_id!(UserId, usr);
@@ -25,6 +26,7 @@ pub enum AuthError {
     /// The user is not logged in
     #[error("Not authenticated")]
     Unauthenticated,
+    /// An API key was provided but it does not exist or is inactive
     #[error("Invalid API Key")]
     InvalidApiKey,
     /// The user is known, but requires verification before they can do most operations
@@ -95,6 +97,26 @@ impl IntoResponse for AuthError {
 //             .collect()
 //     }
 // }
+
+/// Queries to fetch relevant user information from the database given an API key or a session ID.
+#[async_trait]
+pub trait AuthQueries: Send + Sync {
+    /// The type returned by the queries
+    type AuthInfo: AuthInfo;
+
+    /// Fetch the AuthInfo from an API key. If you used the filigree CLI scaffolding,
+    /// this should be `include_str!("src/auth/fetch_api_key.sql")`
+    async fn get_user_by_api_key(
+        &self,
+        api_key: &str,
+    ) -> Result<Option<Self::AuthInfo>, sqlx::Error>;
+    /// Fetch the AuthInfo from a session key. If you used the filigree CLI scaffolding,
+    /// this should run `include_str!("src/auth/fetch_session.sql")`
+    async fn get_user_by_session_id(
+        &self,
+        session_key: &SessionKey,
+    ) -> Result<Option<Self::AuthInfo>, sqlx::Error>;
+}
 
 /// An object containing information about the current user.
 pub trait AuthInfo: Clone + Send + Sync + Unpin + for<'db> FromRow<'db, PgRow> {

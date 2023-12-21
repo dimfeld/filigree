@@ -5,59 +5,39 @@ use axum_extra::{
     headers::{authorization::Bearer, Authorization},
     TypedHeader,
 };
-use sqlx::PgPool;
 use tokio::sync::Mutex;
 
 use super::{
     sessions::{get_session_cookie, SessionKey},
-    AuthError, AuthInfo,
+    AuthError, AuthInfo, AuthQueries,
 };
-
-/// Options to create an [AuthLookup] object
-pub struct AuthLookupOptions {
-    /// The database pool
-    pub pool: PgPool,
-    /// The query to fetch the AuthInfo from a session. If you used the filigree CLI scaffolding,
-    /// this should be `include_str!("src/auth/fetch_session.sql")`
-    pub session_fetch_query: &'static str,
-    /// The query to fetch the AuthInfo from a session. If you used the filigree CLI scaffolding,
-    /// this should be `include_str!("src/auth/fetch_api_key.sql")`
-    pub api_key_fetch_query: &'static str,
-}
 
 /// Functionality to fetch authorization info from the database given session cookies and Bearer tokens
 pub struct AuthLookup<T: AuthInfo> {
     info: Mutex<Option<Result<T, AuthError>>>,
-    pool: PgPool,
-    session_fetch_query: &'static str,
-    api_key_fetch_query: &'static str,
+    queries: Box<dyn AuthQueries<AuthInfo = T>>,
 }
 
 impl<T: AuthInfo> AuthLookup<T> {
     /// Create a new AuthLookup
-    pub fn new(options: AuthLookupOptions) -> Self {
+    pub fn new(queries: Box<dyn AuthQueries<AuthInfo = T>>) -> Self {
         Self {
             info: Mutex::new(None),
-            pool: options.pool,
-            session_fetch_query: options.session_fetch_query,
-            api_key_fetch_query: options.api_key_fetch_query,
+            queries,
         }
     }
 
     async fn get_info_from_api_key(&self, key: &str) -> Result<T, AuthError> {
-        sqlx::query_as::<_, T>(self.api_key_fetch_query)
-            .bind(key)
-            .fetch_optional(&self.pool)
+        self.queries
+            .get_user_by_api_key(key)
             .await
             .map_err(|e| AuthError::Db(Arc::new(e)))?
             .ok_or(AuthError::InvalidApiKey)
     }
 
     async fn get_info_from_session(&self, key: &SessionKey) -> Result<T, AuthError> {
-        sqlx::query_as::<_, T>(self.session_fetch_query)
-            .bind(&key.session_id)
-            .bind(&key.hash)
-            .fetch_optional(&self.pool)
+        self.queries
+            .get_user_by_session_id(key)
             .await
             .map_err(|e| AuthError::Db(Arc::new(e)))?
             .ok_or(AuthError::Unauthenticated)
