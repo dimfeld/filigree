@@ -14,6 +14,7 @@ use thiserror::Error;
 
 use crate::{config::FullConfig, model::generator::ModelGenerator};
 
+mod auth;
 pub mod config;
 mod format;
 pub mod model;
@@ -80,6 +81,8 @@ pub fn main() -> Result<(), Report<Error>> {
         models: config_models,
     } = config;
 
+    let renderer = templates::Renderer::new(&config);
+
     let models = build_models(config_models);
 
     let module_names = models
@@ -89,7 +92,7 @@ pub fn main() -> Result<(), Report<Error>> {
 
     let generators = models
         .into_iter()
-        .map(|model| ModelGenerator::new(&config, model))
+        .map(|model| ModelGenerator::new(&config, &renderer, model))
         .collect::<Vec<_>>();
 
     let model_files = generators

@@ -1,2 +1,2 @@
-{% extends "select_base.sql.tera" %}
+{% extends "model/select_base.sql.tera" %}
 {% block id_param %}$1{% endblock id_param %}

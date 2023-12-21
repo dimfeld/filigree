@@ -3,25 +3,24 @@ use std::{ops::Deref, path::PathBuf};
 use error_stack::{Report, ResultExt};
 use rayon::prelude::*;
 use serde_json::json;
-use tera::Tera;
 
 use super::Model;
-use crate::{config::Config, templates::get_tera, Error, RenderedFile};
+use crate::{config::Config, templates::Renderer, Error, RenderedFile};
 
 pub struct ModelGenerator<'a> {
     pub model: Model,
+    pub(super) renderer: &'a Renderer<'a>,
     pub config: &'a Config,
-    pub(super) tera: &'a Tera,
-    context: tera::Context,
+    pub context: tera::Context,
 }
 
 impl<'a> ModelGenerator<'a> {
-    pub fn new(config: &'a Config, model: Model) -> Self {
+    pub fn new(config: &'a Config, renderer: &'a Renderer<'a>, model: Model) -> Self {
         let context = Self::create_template_context(&config, &model);
         Self {
             config,
             model,
-            tera: get_tera(),
+            renderer,
             context,
         }
     }
@@ -93,36 +92,6 @@ impl<'a> ModelGenerator<'a> {
         context
     }
 
-    pub(super) fn render(
-        &self,
-        template_name: &str,
-        context: &tera::Context,
-    ) -> Result<RenderedFile, Report<Error>> {
-        let output = self
-            .tera
-            .render(template_name, context)
-            .map_err(Error::Render)
-            .attach_printable_lazy(|| format!("Model {}", self.model.name))
-            .attach_printable_lazy(|| format!("Template {}", template_name))?
-            .into_bytes();
-
-        let filename = template_name
-            .strip_suffix(".tera")
-            .expect("Template name did not end in .tera");
-
-        let output = self
-            .config
-            .formatter
-            .run_formatter(filename, output)
-            .change_context(Error::Formatter)?;
-        let path = PathBuf::from(self.model.module_name()).join(filename);
-
-        Ok(RenderedFile {
-            path,
-            contents: output,
-        })
-    }
-
     pub fn fixed_up_migration_files() -> (String, String) {
         let before_up = [include_str!("../../sql/delete_log.up.sql")].join("\n\n");
 
@@ -146,6 +115,21 @@ impl<'a> ModelGenerator<'a> {
         .join("\n\n");
 
         (before_down, after_down)
+    }
+
+    pub fn render(
+        &self,
+        template_name: &str,
+        context: &tera::Context,
+    ) -> Result<RenderedFile, Report<Error>> {
+        self.renderer
+            .render(
+                &PathBuf::from(self.model.module_name()),
+                "model",
+                template_name,
+                context,
+            )
+            .attach_printable_lazy(|| format!("Model {}", self.model.name))
     }
 
     pub fn render_up_migration(&self) -> Result<Vec<u8>, Report<Error>> {

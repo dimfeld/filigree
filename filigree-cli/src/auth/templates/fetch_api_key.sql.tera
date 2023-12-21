@@ -1,0 +1,30 @@
+{% extends "auth/fetch_base.sql.tera" %}
+{% block base_lookup %}
+  SELECT
+    user_id,
+    organization_id,
+    api_key_id,
+    inherits_user_permissions
+  FROM api_keys
+  JOIN organization_members USING (user_id, organization_id)
+  WHERE api_key_id = $1
+    AND hash = $2
+    AND api_keys.active AND organization_members.active
+    AND (expires_at IS NULL OR expires_at > now())
+  LIMIT 1
+{% endblock base_lookup %}
+
+{% block actor_ids %}
+SELECT
+  CASE WHEN inherits_user_permissions
+    THEN user_id
+    ELSE api_key_id
+    END AS actor_id,
+  organization_id
+  FROM base_lookup
+UNION ALL
+SELECT role_id AS actor_id, organization_id FROM role_lookup
+  CROSS JOIN base_lookup
+  WHERE base_lookup.inherit_user_permissions
+
+{% endblock actor_ids %}

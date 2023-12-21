@@ -1,57 +1,124 @@
-use std::{borrow::Cow, collections::HashMap, error::Error, sync::OnceLock};
+use std::{borrow::Cow, collections::HashMap, error::Error as _, path::Path};
 
+use error_stack::{Report, ResultExt};
 use tera::{Tera, Value};
 
-static CELL: OnceLock<Tera> = OnceLock::new();
+use crate::{config::Config, Error, RenderedFile};
 
-pub fn get_tera() -> &'static Tera {
-    CELL.get_or_init(create_tera)
+pub struct Renderer<'a> {
+    tera: Tera,
+    config: &'a Config,
+}
+
+impl<'a> Renderer<'a> {
+    pub fn new(config: &'a Config) -> Self {
+        let tera = create_tera();
+        Self { tera, config }
+    }
+
+    pub fn render(
+        &self,
+        dir: &Path,
+        prefix: &str,
+        template_name: &str,
+        context: &tera::Context,
+    ) -> Result<RenderedFile, Report<Error>> {
+        let full_name = format!("{prefix}/{template_name}");
+        let output = self
+            .tera
+            .render(&full_name, context)
+            .map_err(Error::Render)
+            .attach_printable_lazy(|| format!("Template {}", full_name))?
+            .into_bytes();
+
+        let filename = template_name
+            .strip_suffix(".tera")
+            .expect("Template name did not end in .tera");
+
+        let output = self
+            .config
+            .formatter
+            .run_formatter(filename, output)
+            .change_context(Error::Formatter)?;
+        let path = dir.join(filename);
+
+        Ok(RenderedFile {
+            path,
+            contents: output,
+        })
+    }
 }
 
 fn create_tera() -> Tera {
     let mut tera = Tera::default();
 
     let res = tera.add_raw_templates(vec![
+        // Model templates
         (
-            "migrate_up.sql.tera",
+            "model/migrate_up.sql.tera",
             include_str!("model/sql/migrate_up.sql.tera"),
         ),
         (
-            "migrate_down.sql.tera",
+            "model/migrate_down.sql.tera",
             include_str!("model/sql/migrate_down.sql.tera"),
         ),
-        ("delete.sql.tera", include_str!("model/sql/delete.sql.tera")),
-        ("insert.sql.tera", include_str!("model/sql/insert.sql.tera")),
-        ("list.sql.tera", include_str!("model/sql/list.sql.tera")),
         (
-            "select_base.sql.tera",
+            "model/delete.sql.tera",
+            include_str!("model/sql/delete.sql.tera"),
+        ),
+        (
+            "model/insert.sql.tera",
+            include_str!("model/sql/insert.sql.tera"),
+        ),
+        (
+            "model/list.sql.tera",
+            include_str!("model/sql/list.sql.tera"),
+        ),
+        (
+            "model/select_base.sql.tera",
             include_str!("model/sql/select_base.sql.tera"),
         ),
         (
-            "select_one.sql.tera",
+            "model/select_one.sql.tera",
             include_str!("model/sql/select_one.sql.tera"),
         ),
         (
-            "select_some.sql.tera",
+            "model/select_some.sql.tera",
             include_str!("model/sql/select_some.sql.tera"),
         ),
-        ("update.sql.tera", include_str!("model/sql/update.sql.tera")),
+        (
+            "model/update.sql.tera",
+            include_str!("model/sql/update.sql.tera"),
+        ),
         ("sql_macros.tera", include_str!("model/sql/sql_macros.tera")),
         (
-            "mod.rs.tera",
+            "model/mod.rs.tera",
             include_str!("model/rust_templates/mod.rs.tera"),
         ),
         (
-            "endpoints.rs.tera",
+            "model/endpoints.rs.tera",
             include_str!("model/rust_templates/endpoints.rs.tera"),
         ),
         (
-            "types.rs.tera",
+            "model/types.rs.tera",
             include_str!("model/rust_templates/types.rs.tera"),
         ),
         (
-            "queries.rs.tera",
+            "model/queries.rs.tera",
             include_str!("model/rust_templates/queries.rs.tera"),
+        ),
+        // Auth templates
+        (
+            "auth/fetch_base.sql.tera",
+            include_str!("auth/templates/fetch_base.sql.tera"),
+        ),
+        (
+            "auth/fetch_api_key.sql.tera",
+            include_str!("auth/templates/fetch_api_key.sql.tera"),
+        ),
+        (
+            "auth/fetch_session.sql.tera",
+            include_str!("auth/templates/fetch_session.sql.tera"),
         ),
     ]);
 
