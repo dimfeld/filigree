@@ -6,7 +6,7 @@ CREATE TABLE user_roles (
 );
 
 CREATE TABLE user_sessions (
-  session_id uuid PRIMARY KEY,
+  id uuid PRIMARY KEY,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   hash uuid NOT NULL,
   expires_at timestamptz NOT NULL

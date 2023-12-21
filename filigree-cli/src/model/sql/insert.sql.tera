@@ -1,6 +1,11 @@
 INSERT INTO {{table}}
 (
+  id,
+  {% if not global %}
+  organization_id,
+  {% endif %}
   {{ fields
+    | filter(attribute='updatable', value=true)
     | map(attribute='sql_name')
     | join(sep=', ') }}
 )
@@ -8,9 +13,17 @@ INSERT INTO {{table}}
 VALUES
 
 (
+  $1
+  {% set p = 1 %}
+  {% if not global %}
+    {% set p = 2 %}
+    ,  $2
+  {% endif %}
 
-{% for field in fields | filter(attribute='updatable', value=true) %}
-  ${{loop.index}}{% if not loop.last %},{% endif %}
+{% for field in fields | filter(attribute='owner_write', value=true) %}
+  , ${{loop.index + p}}
 {% endfor %}
 )
+RETURNING
+{{ fields | filter(attribute="owner_read", value=true) | map(attribute='sql_name') | join(sep=', ') }}
 

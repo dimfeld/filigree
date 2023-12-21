@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ops::Deref, str::FromStr};
+use std::{marker::PhantomData, str::FromStr};
 
 use base64::{display::Base64Display, engine::GeneralPurpose, Engine};
 use sqlx::{postgres::PgTypeInfo, Database};
@@ -45,8 +45,14 @@ pub trait ObjectIdPrefix {
 /// A type that is internally stored as a UUID but externally as a
 /// more accessible string with a prefix indicating its type. This uses
 /// UUID v7 so that the output will be lexicographically sortable.
-#[derive(Clone, Copy, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Eq, Hash, PartialOrd, Ord)]
 pub struct ObjectId<PREFIX: ObjectIdPrefix>(pub Uuid, PhantomData<PREFIX>);
+
+impl<PREFIX: ObjectIdPrefix> Clone for ObjectId<PREFIX> {
+    fn clone(&self) -> Self {
+        Self(self.0, PhantomData::default())
+    }
+}
 
 impl<PREFIX: ObjectIdPrefix> ObjectId<PREFIX> {
     /// Create a new ObjectId with a timestamp of now
@@ -98,14 +104,6 @@ impl<PREFIX: ObjectIdPrefix> PartialEq for ObjectId<PREFIX> {
 impl<PREFIX: ObjectIdPrefix> PartialEq<Uuid> for ObjectId<PREFIX> {
     fn eq(&self, other: &Uuid) -> bool {
         &self.0 == other
-    }
-}
-
-impl<PREFIX: ObjectIdPrefix> Deref for ObjectId<PREFIX> {
-    type Target = Uuid;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 

@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::FromStr};
 
-use axum::{extract::Request, http::request::Parts};
+use axum::http::request::Parts;
 use error_stack::{Report, ResultExt};
 use sqlx::PgPool;
 use thiserror::Error;
@@ -31,7 +31,7 @@ impl SessionCookieBuilder {
     }
 
     /// Create a session cookie
-    pub fn create_cookie(&self, key: &SessionKey, expiry: std::time::Duration) -> Cookie {
+    pub fn create_cookie(&self, key: &SessionKey, expiry: std::time::Duration) -> Cookie<'static> {
         let cookie_contents = key.to_string();
         let expiry = tower_cookies::cookie::time::Duration::try_from(expiry).unwrap();
         Cookie::build(("sid", cookie_contents))
@@ -131,10 +131,10 @@ impl SessionBackend {
             "
             INSERT INTO user_sessions (id, user_id, hash, expires_at) VALUES
             ($1, $2, $3, now() + $4)",
-            &session_id,
+            session_id.as_uuid(),
             &hash,
-            &user_id,
-            self.expiry_style.expiry_time()
+            user_id.as_uuid(),
+            self.expiry_style.expiry_duration() as _
         )
         .execute(&self.db)
         .await
@@ -155,7 +155,7 @@ impl SessionBackend {
         &self,
         cookies: &Cookies,
         key: &SessionKey,
-    ) -> Result<(), SessionError> {
+    ) -> Result<(), Report<SessionError>> {
         let ExpiryStyle::AfterIdle(duration) = self.expiry_style else {
             return Ok(());
         };
@@ -165,16 +165,16 @@ impl SessionBackend {
                 SET expires_at = now() + $1
                 WHERE id=$2 and hash=$3
                 -- Prevent unnecessary updates
-                AND (expires_at < now() + $1 - '1 minute')",
-            duration,
-            &key.id,
+                AND (expires_at < now() + $1 - '1 minute'::interval)",
+            duration as _,
+            &key.session_id as _,
             &key.hash
         )
         .execute(&self.db)
         .await
         .change_context(SessionError::Db)?;
 
-        if updated > 0 {
+        if updated.rows_affected() > 0 {
             cookies.add(self.cookies.create_cookie(&key, duration));
         }
 
@@ -183,10 +183,11 @@ impl SessionBackend {
 
     /// Delete all sessions for a user
     pub async fn delete_for_user(&self, id: UserId) -> Result<(), Report<SessionError>> {
-        sqlx::query!("DELETE FROM user_sessions WHERE user_id = $1", id)
+        sqlx::query!("DELETE FROM user_sessions WHERE user_id = $1", id.as_uuid())
             .execute(&self.db)
             .await
-            .change_context(SessionError::Db)
+            .change_context(SessionError::Db)?;
+        Ok(())
     }
 
     /// Delete a session, as when logging out.
@@ -197,10 +198,11 @@ impl SessionBackend {
     ) -> Result<(), Report<SessionError>> {
         cookies.remove(Cookie::new("sid", ""));
 
-        sqlx::query!("DELETE FROM user_sessions WHERE id = $1", id)
+        sqlx::query!("DELETE FROM user_sessions WHERE id = $1", id as _)
             .execute(&self.db)
             .await
-            .change_context(SessionError::Db)
+            .change_context(SessionError::Db)?;
+        Ok(())
     }
 
     /// Sweep the session table and remove any expired sessions.
@@ -208,7 +210,8 @@ impl SessionBackend {
         sqlx::query!("DELETE FROM user_sessions WHERE expires_at < now()")
             .execute(&self.db)
             .await
-            .change_context(SessionError::Db)
+            .change_context(SessionError::Db)?;
+        Ok(())
     }
 }
 
@@ -226,7 +229,7 @@ mod test {
     fn session_key() {
         let sid = SessionId::new();
         let hash = Uuid::new_v4();
-        let key = SessionKey::new(sid, hash);
+        let key = SessionKey::new(sid.clone(), hash);
 
         let serialized = key.to_string();
 

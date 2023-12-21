@@ -12,8 +12,8 @@ use crate::Error;
 
 pub async fn get(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}OwnerView, Error> {
     let object = query_file_as!({{struct_base}}OwnerView, "{{dir}}/get.sql",
-        id,
-        auth.org_id,
+        id.as_uuid(),
+        auth.org_id.as_uuid(),
         &auth.actor_ids
         )
         .fetch_optional(db)
@@ -126,17 +126,26 @@ pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQuery) -> Result<V
     Ok(results)
 }
 
-pub async fn create(db: &PgPool, auth: &AuthInfo, object: &{{ struct_base}}CreatePayload) -> Result<{{struct_base}}OwnerView, Error> {
+pub async fn create(db: &PgPool, auth: &AuthInfo, object: &{{struct_base}}CreatePayload) -> Result<{{struct_base}}OwnerView, Error> {
     let id = {{id_type}}::new();
-    // do permissions check here
-    todo!();
+    let result = query_file_as!({{struct_base}}OwnerView, "{{dir}}/insert.sql",
+        id.as_uuid(),
+        auth.org_id.as_uuid(),
+        {% for field in fields | filter(attribute="owner_write", value=true) %}
+            &payload.{{field.rust_name}},
+        {% endfor %}
+        )
+        .fetch_one(db)
+        .await
+        .change_context(Error::Db)?;
 
+    Ok(result)
 }
 
 pub async fn update(db: &PgPool, auth: &AuthInfo, id: {{id_type}}, payload: &{{ struct_base }}UpdatePayload) -> Result<(), Error> {
     query_file!("{{dir}}/update.sql",
-        id,
-        auth.org_id,
+        id.as_uuid(),
+        auth.org_id.as_uuid(),
         {% for field in fields | filter(attribute="owner_write", value=true) %}
             &payload.{{field.rust_name}},
         {% endfor %}
@@ -149,8 +158,8 @@ pub async fn update(db: &PgPool, auth: &AuthInfo, id: {{id_type}}, payload: &{{ 
 
 pub async fn delete(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<(), Error> {
     query_file!("{{dir}}/delete.sql",
-        id,
-        auth.org_id,
+        id.as_uuid(),
+        auth.org_id.as_uuid()
         )
         .execute(db)
         .await

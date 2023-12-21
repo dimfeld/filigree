@@ -3,20 +3,22 @@ use std::sync::Arc;
 use axum::{extract::Request, response::Response};
 use tower::{Layer, Service};
 
-use super::{lookup::AuthLookup, AuthInfo};
+use super::{
+    lookup::{AuthLookup, AuthLookupOptions},
+    AuthInfo,
+};
 
 /// A layer that inserts the auth lookup object into the request, for later
 /// use by the Authed extractor.
 #[derive(Clone)]
-struct AuthLayer<INFO: AuthInfo> {
+pub struct AuthLayer<INFO: AuthInfo> {
     lookup: Arc<AuthLookup<INFO>>,
 }
 
 impl<INFO: AuthInfo> AuthLayer<INFO> {
-    pub fn new(lookup: AuthLookup<INFO>) -> Self {
-        Self {
-            lookup: Arc::new(lookup),
-        }
+    /// Create a new AuthLayer with the provided lookup object
+    pub fn new(lookup: Arc<AuthLookup<INFO>>) -> Self {
+        Self { lookup }
     }
 }
 
@@ -31,13 +33,14 @@ impl<S, INFO: AuthInfo> Layer<S> for AuthLayer<INFO> {
     }
 }
 
+/// A middleware service for fetching authorization info
 #[derive(Clone)]
 pub struct AuthService<S, INFO: AuthInfo> {
     lookup: Arc<AuthLookup<INFO>>,
     inner: S,
 }
 
-impl<S, INFO: AuthInfo> Service<Request> for AuthService<S, INFO>
+impl<S, INFO: AuthInfo + 'static> Service<Request> for AuthService<S, INFO>
 where
     S: Service<Request, Response = Response> + Send + Clone + 'static,
     S::Response: 'static,
@@ -58,4 +61,10 @@ where
         request.extensions_mut().insert(self.lookup.clone());
         self.inner.call(request)
     }
+}
+
+/// Create a new [AuthLayer] containing an [AuthLookup] built from the given options.
+pub fn auth_layer<INFO: AuthInfo>(lookup_options: AuthLookupOptions) -> AuthLayer<INFO> {
+    let lookup = Arc::new(AuthLookup::new(lookup_options));
+    AuthLayer::new(lookup)
 }

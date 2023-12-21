@@ -1,14 +1,10 @@
 use std::sync::Arc;
 
-use axum::{
-    extract::{FromRequestParts, Request},
-    http::{header::AUTHORIZATION, request::Parts},
-};
+use axum::{extract::FromRequestParts, http::request::Parts};
 use axum_extra::{
     headers::{authorization::Bearer, Authorization},
     TypedHeader,
 };
-use error_stack::Report;
 use sqlx::PgPool;
 use tokio::sync::Mutex;
 
@@ -17,7 +13,7 @@ use super::{
     AuthError, AuthInfo,
 };
 
-/// Options to create an AuthLookup object
+/// Options to create an [AuthLookup] object
 pub struct AuthLookupOptions {
     /// The database pool
     pub pool: PgPool,
@@ -29,6 +25,7 @@ pub struct AuthLookupOptions {
     pub api_key_fetch_query: &'static str,
 }
 
+/// Functionality to fetch authorization info from the database given session cookies and Bearer tokens
 pub struct AuthLookup<T: AuthInfo> {
     info: Mutex<Option<Result<T, AuthError>>>,
     pool: PgPool,
@@ -37,6 +34,7 @@ pub struct AuthLookup<T: AuthInfo> {
 }
 
 impl<T: AuthInfo> AuthLookup<T> {
+    /// Create a new AuthLookup
     pub fn new(options: AuthLookupOptions) -> Self {
         Self {
             info: Mutex::new(None),
@@ -56,7 +54,7 @@ impl<T: AuthInfo> AuthLookup<T> {
     }
 
     async fn get_info_from_session(&self, key: &SessionKey) -> Result<T, AuthError> {
-        sqlx::query_as::<_, T>(self.api_key_fetch_query)
+        sqlx::query_as::<_, T>(self.session_fetch_query)
             .bind(&key.session_id)
             .bind(&key.hash)
             .fetch_optional(&self.pool)
@@ -87,6 +85,7 @@ impl<T: AuthInfo> AuthLookup<T> {
         Err(AuthError::Unauthenticated)
     }
 
+    /// Return the authorization info, fetching it if it hasn't yet been fetched for this request.
     pub async fn get_auth_info<S: Send + Sync>(
         &self,
         request: &mut Parts,
@@ -99,7 +98,6 @@ impl<T: AuthInfo> AuthLookup<T> {
 
         let fetched = self.fetch_auth_info(request, state).await;
         *info = Some(fetched.clone());
-        drop(info);
 
         fetched
     }

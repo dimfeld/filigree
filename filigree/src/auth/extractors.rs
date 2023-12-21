@@ -19,6 +19,7 @@ where
         let auth = parts
             .extensions
             .get::<Arc<AuthLookup<T>>>()
+            .cloned()
             .ok_or(AuthError::Unauthenticated)?;
 
         let auth_info = auth.get_auth_info(parts, state).await?;
