@@ -46,14 +46,10 @@ impl<T: AuthInfo> AuthLookup<T> {
             .ok_or(AuthError::Unauthenticated)
     }
 
-    async fn fetch_auth_info<S: Send + Sync>(
-        &self,
-        request: &mut Parts,
-        _state: &S,
-    ) -> Result<T, AuthError> {
+    async fn fetch_auth_info(&self, request: &mut Parts) -> Result<T, AuthError> {
         // Look for API key
         let bearer: Option<TypedHeader<Authorization<Bearer>>> =
-            TypedHeader::from_request_parts(request, _state).await.ok();
+            TypedHeader::from_request_parts(request, &()).await.ok();
 
         if let Some(bearer) = bearer {
             let raw_key = bearer.0.token();
@@ -70,17 +66,13 @@ impl<T: AuthInfo> AuthLookup<T> {
     }
 
     /// Return the authorization info, fetching it if it hasn't yet been fetched for this request.
-    pub async fn get_auth_info<S: Send + Sync>(
-        &self,
-        request: &mut Parts,
-        state: &S,
-    ) -> Result<T, AuthError> {
+    pub async fn get_auth_info(&self, request: &mut Parts) -> Result<T, AuthError> {
         let mut info = self.info.lock().await;
         if let Some(info) = info.as_ref() {
             return info.clone();
         }
 
-        let fetched = self.fetch_auth_info(request, state).await;
+        let fetched = self.fetch_auth_info(request).await;
         *info = Some(fetched.clone());
 
         fetched

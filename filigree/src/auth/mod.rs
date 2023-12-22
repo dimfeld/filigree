@@ -1,5 +1,6 @@
 /// Functions for working with API keys
 pub mod api_key;
+mod check_middleware;
 mod extractors;
 pub mod lookup;
 /// Authentication middleware
@@ -8,10 +9,11 @@ pub mod middleware;
 pub mod password;
 mod sessions;
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use async_trait::async_trait;
 use axum::{http::StatusCode, response::IntoResponse};
+pub use check_middleware::*;
 pub use extractors::*;
 use sqlx::{postgres::PgRow, FromRow};
 use thiserror::Error;
@@ -48,13 +50,20 @@ pub enum AuthError {
     /// Occurs when the API key is in the wrong format.
     #[error("API key format does not match")]
     ApiKeyFormat,
+    #[error("Missing permission {0}")]
+    MissingPermission(Cow<'static, str>),
+    #[error("Auth error: {0}")]
+    FailedPredicate(Cow<'static, str>),
 }
 
 impl HttpError for AuthError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::InvalidApiKey | Self::Unauthenticated => StatusCode::UNAUTHORIZED,
-            Self::NotVerified | Self::Disabled => StatusCode::FORBIDDEN,
+            Self::NotVerified
+            | Self::Disabled
+            | Self::MissingPermission(_)
+            | Self::FailedPredicate(_) => StatusCode::FORBIDDEN,
             Self::ApiKeyFormat => StatusCode::BAD_REQUEST,
             Self::Db(_) | Self::PasswordHasherError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -69,6 +78,8 @@ impl HttpError for AuthError {
             Self::Db(_) => "db",
             Self::ApiKeyFormat => "invalid_api_key",
             Self::PasswordHasherError(_) => "password_hash_internal",
+            Self::MissingPermission(_) => "missing_permission",
+            Self::FailedPredicate(_) => "failed_authz_condition",
         }
     }
 }
@@ -133,12 +144,12 @@ pub trait AuthQueries: Send + Sync {
 }
 
 /// An object containing information about the current user.
-pub trait AuthInfo: Clone + Send + Sync + Unpin + for<'db> FromRow<'db, PgRow> {
+pub trait AuthInfo: 'static + Clone + Send + Sync + Unpin + for<'db> FromRow<'db, PgRow> {
     /// Return Ok if the user is valid, or an [AuthError] if the user is not authenticated or
     /// authorized.
     fn check_valid(&self) -> Result<(), AuthError>;
     /// Check if the user, or any of its associated objects (roles, etc.) has a specific permission.
-    fn has_permission(permission: &str) -> bool;
+    fn has_permission(&self, permission: &str) -> bool;
 }
 
 // TODO require permission middleware layer
