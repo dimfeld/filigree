@@ -40,6 +40,10 @@ impl<'a> ModelGenerator<'a> {
         context.insert("extra_create_table_sql", &model.extra_create_table_sql);
         context.insert("sql_dialect", &config.sql_dialect);
         context.insert("pagination", &model.pagination);
+        context.insert(
+            "auth_scope",
+            &model.auth_scope.unwrap_or(config.default_auth_scope),
+        );
 
         let fields = model
             .all_fields()
@@ -137,7 +141,8 @@ impl<'a> ModelGenerator<'a> {
     pub fn render_model_directory(&self) -> Result<Vec<RenderedFile>, Report<Error>> {
         let files = [
             "mod.rs.tera",
-            "generated/select_some.sql.tera",
+            "generated/select_one.sql.tera",
+            "generated/select_one_all_fields.sql.tera",
             "generated/list.sql.tera",
             "generated/insert.sql.tera",
             "generated/update.sql.tera",

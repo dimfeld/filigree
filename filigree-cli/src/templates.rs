@@ -83,8 +83,8 @@ fn create_tera() -> Tera {
             include_str!("model/sql/select_one.sql.tera"),
         ),
         (
-            "model/generated/select_some.sql.tera",
-            include_str!("model/sql/select_some.sql.tera"),
+            "model/generated/select_one_all_fields.sql.tera",
+            include_str!("model/sql/select_one_all_fields.sql.tera"),
         ),
         (
             "model/generated/update.sql.tera",

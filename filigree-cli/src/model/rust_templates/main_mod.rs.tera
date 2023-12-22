@@ -9,6 +9,6 @@ use crate::AppState;
 pub fn create_routes() -> Router<AppState> {
     Router::new()
         {% for module in models | filter(attribute="has_any_endpoints", value=true) %}
-            .merge({{ module.module_name }}::create_routes())
+            .merge({{ module.module_name }}::endpoints::create_routes())
         {% endfor %}
 }

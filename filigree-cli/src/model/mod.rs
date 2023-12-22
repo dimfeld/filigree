@@ -38,6 +38,10 @@ pub struct Model {
     #[serde(default)]
     pub global: bool,
 
+    /// Set how permissions are tracked on this model. If omitted, it will use [Config#default_auth_scope]
+    #[serde(default)]
+    pub auth_scope: Option<ModelAuthScope>,
+
     /// SQL to create indexes on the field
     #[serde(default)]
     pub indexes: Vec<String>,
@@ -327,4 +331,20 @@ impl From<bool> for PerEndpoint {
             delete: b,
         }
     }
+}
+
+/// The scope at which at an object's permissions are tracked
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelAuthScope {
+    /// There is a single set of owner/editor/viewer permissions that applies to all objects of this model.
+    Model,
+    // TODO projects not implemented yet
+    // /// Object permissions are inherited from the user's permissions on the project that
+    // /// contains the object.
+    // Project,
+    // TODO implement this soon
+    // /// Permissions on existing objects are set per-object.
+    // /// Creators of an object get owner permission by default.
+    // Object,
 }

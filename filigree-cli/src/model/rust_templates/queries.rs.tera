@@ -1,5 +1,5 @@
 use filigree::{
-    auth::AuthInfo,
+    auth::{AuthInfo, ObjectPermission},
     sql::{BindingOperator, WhereBuilder}
 };
 use serde::{Serialize, Deserialize};
@@ -10,8 +10,10 @@ use super::types::*;
 
 use crate::Error;
 
-pub async fn get(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}OwnerView, Error> {
-    let object = query_file_as!({{struct_base}}OwnerView, "{{dir}}/get.sql",
+/// Get an object and all its fields. This can be useful for internal operations when the object
+/// should not be returned to the user.
+pub async fn get_with_all_fields(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}, Error> {
+    let object = query_file_as!({{struct_base}}, "{{dir}}/select_one_all_fields.sql",
         id.as_uuid(),
         auth.org_id.as_uuid(),
         &auth.actor_ids
@@ -22,7 +24,25 @@ pub async fn get(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ str
         .ok_or_else(Error::NotFound)?;
 
     Ok(object)
+
 }
+
+/// Get an object and coerce it to the owner or user view depending on the user's permissions.
+pub async fn get(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}FilteredView, Error> {
+    let object = query_file_as!({{struct_base}}OwnerView, "{{dir}}/select_one.sql",
+        id.as_uuid(),
+        auth.org_id.as_uuid(),
+        &auth.actor_ids
+        )
+        .map({{struct_base}}FilteredView::from_item)
+        .fetch_optional(db)
+        .await
+        .change_context(Error::Db)?
+        .ok_or_else(Error::NotFound)?;
+
+    Ok(object)
+}
+
 
 {% set_global has_filterable = false %}
 
@@ -103,7 +123,7 @@ impl ListQuery {
     }
 }
 
-pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQuery) -> Result<Vec<{{ struct_base }}OwnerView>, Error> {
+pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQuery) -> Result<Vec<{{ struct_base }}FilteredView>, Error> {
     let q = include_str!("{{dir}}/list.sql");
     {% if has_filterable %}
         let q = q.replace("<filters>", &filters.build_where_clause());
@@ -120,6 +140,7 @@ pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQuery) -> Result<V
 
     let results = query
         .fetch_all(db)
+        .map({{struct_base}}FilteredView::from_item)
         .await
         .change_context(Error::Db)?;
 

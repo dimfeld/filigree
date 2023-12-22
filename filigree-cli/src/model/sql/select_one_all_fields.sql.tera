@@ -1,0 +1,7 @@
+{% extends "model/generated/select_base.sql.tera" %}
+{% block select_fields %}
+  {{ fields
+    | map(attribute='sql_full_name')
+    | join(sep=', ') }}
+{% endblock select_fields %}
+

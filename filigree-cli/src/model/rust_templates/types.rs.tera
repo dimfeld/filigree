@@ -2,6 +2,7 @@ use super::{{id_type}};
 {%- if id_type != "OrganizationId" %}
 use crate::models::organization::OrganizationId;
 {% endif -%}
+use filigree::auth::ObjectPermission;
 use serde::{Serialize, Deserialize};
 
 {% for struct in structs %}
@@ -9,6 +10,7 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct {{ struct.name }} {
     {{ struct.fields }}
+    _permission: ObjectPermission,
 }
 
 {% for alias in struct.aliases %}
@@ -54,18 +56,21 @@ impl From<{{struct_base}}> for {{user_view_struct}} {
 {% endif %}
 
 
-{% if not user_and_owner_views_same %}
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
 pub enum {{struct_base}}FilteredView {
-    AllFields({{struct_base}}),
     User({{struct_base}}UserView),
     Owner({{struct_base}}OwnerView),
 }
 
-impl From<{{struct_base}}> for {{struct_base}}FilteredView {
-    fn from(data: {{struct_base}}) -> Self {
-        Self::AllFields(view)
+impl {{struct_base}}FilteredView {
+    pub fn from_item(item: impl Into<{{struct_base}}OwnerView>) -> Self {
+        let item = item.into();
+        if item._permission == ObjectPermission::Owner {
+            Self::Owner(item)
+        } else {
+            Self::User(item.into())
+        }
     }
 }
 
@@ -80,5 +85,4 @@ impl From<{{struct_base}}OwnerView> for {{struct_base}}FilteredView {
         Self::Owner(view.into())
     }
 }
-{% endif %}
 

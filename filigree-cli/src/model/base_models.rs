@@ -27,6 +27,7 @@ impl Model {
                 plural: None,
                 id_prefix: Some("usr".to_string()),
                 endpoints: crate::model::Endpoints::All(true),
+                auth_scope: Some(crate::model::ModelAuthScope::Model),
                 global: false,
                 indexes: vec![],
                 extra_create_table_sql: String::new(),
@@ -51,6 +52,7 @@ impl Model {
                 global: true,
                 endpoints: crate::model::Endpoints::All(false),
                 indexes: vec![],
+                auth_scope: Some(crate::model::ModelAuthScope::Model),
                 extra_create_table_sql: String::new(),
                 pagination: Default::default(),
                 fields: vec![
@@ -81,6 +83,7 @@ impl Model {
                 global: false,
                 endpoints: crate::model::Endpoints::All(true),
                 indexes: vec![],
+                auth_scope: Some(crate::model::ModelAuthScope::Model),
                 extra_create_table_sql: String::new(),
                 pagination: Default::default(),
                 fields: vec![

@@ -1,5 +1,7 @@
 formatter.sql = "pg_format"
 
+default_auth_scope = "model"
+
 # models_path = "test-output/models"
 # migrations_path = "test-output/migrations"
 

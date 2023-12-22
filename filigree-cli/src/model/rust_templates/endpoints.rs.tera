@@ -3,7 +3,7 @@ use filigree::sql::QueryBindings;
 
 use crate::auth::AuthInfo;
 
-use super::queries;
+use super::{queries, types::*, {{id_type}} };
 
 async fn get(
     State(state): State<AppState>,
@@ -12,15 +12,6 @@ async fn get(
     ) -> Result<impl IntoResponse, Error> {
 
     let object = queries::get(&state.db, &auth, id).await?;
-
-    {% if user_view_struct != owner_view_struct %}
-    let object = if auth.permissions.contains({{owner_permission}}) {
-        {{struct_base}}FilteredView::Owner(result)
-    } else {
-        {{struct_base}}FilteredView::User(result.into())
-    };
-    {% endif %}
-
     Ok(Json(object))
 }
 
@@ -30,21 +21,6 @@ async fn list(
     Query(qs): Query<ListQueryFilters>,
     ) -> Result<impl IntoResponse, Error> {
     let results = queries::list(&state.db, &auth, &qs).await?;
-
-    {# In most cases, the user view is the same as the owner view #}
-    {% if user_view_struct != owner_view_struct %}
-        // If it is not an owner, switch to the user view
-        let results = results.into_iter()
-            .map(|result| {
-                if auth.permissions.contains({{owner_permission}}) {
-                    {{struct_base}}FilteredView::Owner(result)
-                } else {
-                    {{struct_base}}FilteredView::User(result.into())
-                }
-            })
-            .collect::<Vec<_>>();
-    {% endif %}
-
     Ok(Json(results))
 }
 

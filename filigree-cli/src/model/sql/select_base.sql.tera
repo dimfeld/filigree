@@ -1,9 +1,11 @@
 {% import "sql_macros.tera" as macros %}
 SELECT
+  {% block select_fields %}
   {{ fields
     | filter(attribute='owner_read', value=true)
     | map(attribute='sql_full_name')
     | join(sep=', ') }}
+  {% endblock select_fields %}
 FROM
   {{ table }}
 WHERE

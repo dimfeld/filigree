@@ -6,7 +6,7 @@ use serde::{de::DeserializeOwned, Deserialize};
 
 use crate::{
     format::Formatters,
-    model::{Model, SqlDialect},
+    model::{Model, ModelAuthScope, SqlDialect},
     Error,
 };
 
@@ -27,6 +27,13 @@ pub struct Config {
     /// Defaults to `migrations`
     #[serde(default = "Config::default_migrations_path")]
     pub migrations_path: PathBuf,
+
+    /// The auth scope for models that don't specify a different one.
+    pub default_auth_scope: ModelAuthScope,
+    // TODO This is coming later
+    // /// Set to true to enable project-based object organization
+    // #[serde(default)]
+    // pub use_projects: bool,
 }
 
 impl Config {

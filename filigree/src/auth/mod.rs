@@ -16,6 +16,7 @@ use async_trait::async_trait;
 use axum::{http::StatusCode, response::IntoResponse};
 pub use check_middleware::*;
 pub use extractors::*;
+use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgRow, FromRow};
 use thiserror::Error;
 use uuid::Uuid;
@@ -121,4 +122,25 @@ pub trait AuthInfo: 'static + Clone + Send + Sync + Unpin + for<'db> FromRow<'db
     fn check_valid(&self) -> Result<(), AuthError>;
     /// Check if the user, or any of its associated objects (roles, etc.) has a specific permission.
     fn has_permission(&self, permission: &str) -> bool;
+
+    /// Check that the user has a permission, and return an error if they do not.
+    fn require_permission(&self, permission: &'static str) -> Result<(), AuthError> {
+        if self.has_permission(permission) {
+            Ok(())
+        } else {
+            Err(AuthError::MissingPermission(permission.into()))
+        }
+    }
+}
+
+/// The permission level of an object
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, sqlx::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ObjectPermission {
+    /// The object is read-only
+    Read,
+    /// The object can be written
+    Write,
+    /// The user has ownership-level permissions
+    Owner,
 }
