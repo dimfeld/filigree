@@ -93,38 +93,6 @@ impl IntoResponse for AuthError {
     }
 }
 
-// pub struct AuthUser {
-//     pub id: UserId,
-//     pub active: bool,
-//     pub verified: bool,
-// }
-
-// pub struct AuthRole {
-//     pub id: RoleId,
-// }
-
-// pub struct AuthOrganization {
-//     pub id: OrganizationId,
-//     pub active: bool,
-// }
-
-// pub struct AuthInfo {
-//     pub user: AuthUser,
-//     pub organization: AuthOrganization,
-//     pub roles: Vec<AuthRole>,
-//     pub all_permissions: Vec<String>,
-// }
-
-// impl AuthInfo {
-//     pub fn actor_ids(&self) -> Vec<&Uuid> {
-//         self.roles
-//             .iter()
-//             .map(|role| role.id.as_uuid())
-//             .chain(std::iter::once(self.user.id.as_uuid()))
-//             .collect()
-//     }
-// }
-
 /// Queries to fetch relevant user information from the database given an API key or a session ID.
 #[async_trait]
 pub trait AuthQueries: Send + Sync {
@@ -154,6 +122,3 @@ pub trait AuthInfo: 'static + Clone + Send + Sync + Unpin + for<'db> FromRow<'db
     /// Check if the user, or any of its associated objects (roles, etc.) has a specific permission.
     fn has_permission(&self, permission: &str) -> bool;
 }
-
-// TODO require permission middleware layer
-// TODO predicate middleware layer
