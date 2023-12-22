@@ -1,7 +1,11 @@
+/// Functions for working with API keys
+pub mod api_key;
 mod extractors;
 pub mod lookup;
 /// Authentication middleware
 pub mod middleware;
+/// Functions for generating and verifying password hashes
+pub mod password;
 mod sessions;
 
 use std::sync::Arc;
@@ -9,11 +13,11 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use axum::{http::StatusCode, response::IntoResponse};
 pub use extractors::*;
-use sqlx::{postgres::PgRow, FromRow, PgConnection};
+use sqlx::{postgres::PgRow, FromRow};
 use thiserror::Error;
 use uuid::Uuid;
 
-use self::sessions::{SessionId, SessionKey};
+use self::sessions::SessionKey;
 use crate::{errors::HttpError, make_object_id};
 
 make_object_id!(UserId, usr);
@@ -38,6 +42,12 @@ pub enum AuthError {
     /// The database returned an error
     #[error("Database error {0}")]
     Db(#[from] Arc<sqlx::Error>),
+    /// Internal error hashing a password
+    #[error("Error hashing password")]
+    PasswordHasherError(String),
+    /// Occurs when the API key is in the wrong format.
+    #[error("API key format does not match")]
+    ApiKeyFormat,
 }
 
 impl HttpError for AuthError {
@@ -45,7 +55,8 @@ impl HttpError for AuthError {
         match self {
             Self::InvalidApiKey | Self::Unauthenticated => StatusCode::UNAUTHORIZED,
             Self::NotVerified | Self::Disabled => StatusCode::FORBIDDEN,
-            Self::Db(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::ApiKeyFormat => StatusCode::BAD_REQUEST,
+            Self::Db(_) | Self::PasswordHasherError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -56,6 +67,8 @@ impl HttpError for AuthError {
             Self::NotVerified => "not_verified",
             Self::Disabled => "disabled",
             Self::Db(_) => "db",
+            Self::ApiKeyFormat => "invalid_api_key",
+            Self::PasswordHasherError(_) => "password_hash_internal",
         }
     }
 }
@@ -108,7 +121,8 @@ pub trait AuthQueries: Send + Sync {
     /// this should be `include_str!("src/auth/fetch_api_key.sql")`
     async fn get_user_by_api_key(
         &self,
-        api_key: &str,
+        api_key: Uuid,
+        key_hash: Vec<u8>,
     ) -> Result<Option<Self::AuthInfo>, sqlx::Error>;
     /// Fetch the AuthInfo from a session key. If you used the filigree CLI scaffolding,
     /// this should run `include_str!("src/auth/fetch_session.sql")`

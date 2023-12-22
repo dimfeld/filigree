@@ -18,10 +18,16 @@ permissions AS (
   FROM permissions
   JOIN actor_ids USING (actor_id, organization_id)
 )
-SELECT user_id,
-  organization_id,
-  (SELECT ARRAY_AGG(role_id) FROM role_lookup) AS roles,
-  permissions
-FROM base_lookup
-JOIN role_lookup USING (user_id, organization_id)
-JOIN permissions USING (permissions)
+SELECT
+  bl.user_id AS "user_id: UserId",
+  bl.organization_id AS "organization_id: OrganizationId",
+  bl.active,
+  bl.verified,
+  COALESCE(
+    (SELECT ARRAY_AGG(role_id) FILTER WHERE role_id IS NOT NULL FROM role_lookup),
+    ARRAY[]::uuid[]
+  ) AS "roles: Vec<RoleId>",
+  COALESCE(permissions, ARRAY[]::text[]) AS "permissions: Vec<Permission>",
+FROM base_lookup bl
+LEFT JOIN role_lookup USING (user_id, organization_id)
+LEFT JOIN permissions USING (permissions)

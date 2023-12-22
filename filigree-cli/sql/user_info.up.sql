@@ -24,7 +24,6 @@ CREATE INDEX ON user_sessions (user_id);
 
 CREATE TABLE api_keys (
   api_key_id uuid PRIMARY KEY,
-  prefix text NOT NULL,
   hash bytea NOT NULL,
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
   user_id uuid REFERENCES users (id) ON DELETE SET NULL,

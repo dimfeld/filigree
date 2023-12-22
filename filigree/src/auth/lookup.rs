@@ -6,6 +6,7 @@ use axum_extra::{
     TypedHeader,
 };
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 use super::{
     sessions::{get_session_cookie, SessionKey},
@@ -15,6 +16,8 @@ use super::{
 /// Functionality to fetch authorization info from the database given session cookies and Bearer tokens
 pub struct AuthLookup<T: AuthInfo> {
     info: Mutex<Option<Result<T, AuthError>>>,
+    // Erase the type so that we don't have to reference it everywhere such as
+    // in the Authed extractor, which can become inconvenient.
     queries: Box<dyn AuthQueries<AuthInfo = T>>,
 }
 
@@ -27,9 +30,9 @@ impl<T: AuthInfo> AuthLookup<T> {
         }
     }
 
-    async fn get_info_from_api_key(&self, key: &str) -> Result<T, AuthError> {
+    async fn get_info_from_api_key(&self, key: Uuid, hash: Vec<u8>) -> Result<T, AuthError> {
         self.queries
-            .get_user_by_api_key(key)
+            .get_user_by_api_key(key, hash)
             .await
             .map_err(|e| AuthError::Db(Arc::new(e)))?
             .ok_or(AuthError::InvalidApiKey)
@@ -53,8 +56,9 @@ impl<T: AuthInfo> AuthLookup<T> {
             TypedHeader::from_request_parts(request, _state).await.ok();
 
         if let Some(bearer) = bearer {
-            let key = bearer.0.token();
-            return self.get_info_from_api_key(key).await;
+            let raw_key = bearer.0.token();
+            let (key_id, hash) = super::api_key::decode_key(raw_key)?;
+            return self.get_info_from_api_key(key_id, hash).await;
         }
 
         let session_key = get_session_cookie(request);

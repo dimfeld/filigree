@@ -1,13 +1,15 @@
 {% extends "auth/fetch_base.sql.tera" %}
 {% block base_lookup %}
   SELECT
-    user_id, users.organization_id, true as use_user_permissions
+    user_id,
+    users.organization_id,
+    om.active,
+    users.verified
   FROM user_sessions sess
   JOIN users ON user_sessions.user_id = users.id
   JOIN organization_members om ON users.user_id = om.user_id AND users.organization_id = om.organization_id
   WHERE sess.id = $1
     AND sess.hash = $2
     AND expires_at > now()
-    AND om.active
   LIMIT 1
 {% endblock base_lookup %}
