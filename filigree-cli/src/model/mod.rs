@@ -1,6 +1,5 @@
 mod base_models;
 pub mod field;
-mod generate_endpoints;
 mod generate_types;
 pub mod generator;
 

@@ -5,16 +5,6 @@ use crate::auth::AuthInfo;
 
 use super::queries;
 
-{% if not user_and_owner_views_same %}
-#[derive(Serialize, Debug)]
-#[serde(untagged)]
-pub enum UserOrOwnerView {
-    User({{struct_base}}UserView),
-    Owner({{struct_base}}OwnerView),
-}
-{% endif %}
-
-{% if endpoints.get %}
 async fn get(
     State(state): State<AppState>,
     AuthInfo(auth): AuthInfo,
@@ -25,17 +15,15 @@ async fn get(
 
     {% if user_view_struct != owner_view_struct %}
     let object = if auth.permissions.contains({{owner_permission}}) {
-        UserOrOwnerView::Owner(result)
+        {{struct_base}}FilteredView::Owner(result)
     } else {
-        UserOrOwnerView::User(result.into())
+        {{struct_base}}FilteredView::User(result.into())
     };
     {% endif %}
 
     Ok(Json(object))
 }
-{% endif %}
 
-{% if endpoints.list %}
 async fn list(
     State(state): State<AppState>,
     AuthInfo(auth): AuthInfo,
@@ -49,9 +37,9 @@ async fn list(
         let results = results.into_iter()
             .map(|result| {
                 if auth.permissions.contains({{owner_permission}}) {
-                    UserOrOwnerView::Owner(result)
+                    {{struct_base}}FilteredView::Owner(result)
                 } else {
-                    UserOrOwnerView::User(result.into())
+                    {{struct_base}}FilteredView::User(result.into())
                 }
             })
             .collect::<Vec<_>>();
@@ -59,9 +47,7 @@ async fn list(
 
     Ok(Json(results))
 }
-{% endif %}
 
-{% if endpoints.create %}
 async fn create(
     State(state): State<AppState>,
     AuthInfo(auth): AuthInfo,
@@ -71,9 +57,7 @@ async fn create(
 
     Ok((StatusCode::CREATED, Json(result)));
 }
-{% endif %}
 
-{% if endpoints.update %}
 async fn update(
     State(state): State<AppState>,
     AuthInfo(auth): AuthInfo,
@@ -84,9 +68,7 @@ async fn update(
     queries::update(&state.db, &auth, id, &payload).await?;
     Ok(StatusCode::OK);
 }
-{% endif %}
 
-{% if endpoints.delete %}
 async fn delete(
     State(state): State<AppState>,
     AuthInfo(auth): AuthInfo,
@@ -97,7 +79,6 @@ async fn delete(
 
     Ok(StatusCode::OK);
 }
-{% endif %}
 
 pub fn create_routes() -> axum::Router<AppState> {
     axum::Router::new()

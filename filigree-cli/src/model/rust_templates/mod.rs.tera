@@ -1,13 +1,8 @@
-mod types;
-mod queries;
-{% for mod in extra_modules -%}
-{% if not mod.pub_use %}pub {% endif -%} mod {{mod.name}};
-{%- endfor %}
+mod generated;
+pub use generated::queries;
+pub use generated::types::*;
 
-pub use types::*;
-{% for mod in extra_modules | filter(attribute="pub_use", value=true) -%}
-pub use {{mod.name}}::*;
-{%- endfor %}
+pub mod endpoints;
 
 {% if predefined_object_id  %}
 pub type {{id_type}} = filigree::auth::{{id_type}};

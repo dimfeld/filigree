@@ -1,6 +1,6 @@
 use super::{{id_type}};
 {%- if id_type != "OrganizationId" %}
-use super::super::organization::OrganizationId;
+use crate::models::organization::OrganizationId;
 {% endif -%}
 use serde::{Serialize, Deserialize};
 
@@ -15,7 +15,9 @@ pub struct {{ struct.name }} {
     pub type {{ alias }} = {{ struct.name }};
 {% endfor %}
 
-{% if struct.name == user_view_struct and user_view_struct != owner_view_struct %}
+{% endfor %}
+
+{% if user_view_struct != owner_view_struct %}
 impl From<{{owner_view_struct}}> for {{user_view_struct}} {
     fn from(owner: {{owner_view_struct}}) -> Self {
         Self {
@@ -27,6 +29,56 @@ impl From<{{owner_view_struct}}> for {{user_view_struct}} {
 }
 {% endif %}
 
+{% if owner_view_struct != struct_base %}
+impl From<{{struct_base}}> for {{owner_view_struct}} {
+    fn from(data: {{struct_base}}) -> Self {
+        Self {
+            {% for field in fields | filter(attribute="owner_read", value=true) -%}
+            {{field.rust_name}}: data.{{field.rust_name}},
+            {%- endfor %}
+        }
+    }
+}
+{% endif %}
 
-{% endfor %}
+{% if user_view_struct != struct_base %}
+impl From<{{struct_base}}> for {{user_view_struct}} {
+    fn from(data: {{struct_base}}) -> Self {
+        Self {
+            {% for field in fields | filter(attribute="user_read", value=true) -%}
+            {{field.rust_name}}: data.{{field.rust_name}},
+            {%- endfor %}
+        }
+    }
+}
+{% endif %}
+
+
+{% if not user_and_owner_views_same %}
+#[derive(Serialize, Debug)]
+#[serde(untagged)]
+pub enum {{struct_base}}FilteredView {
+    AllFields({{struct_base}}),
+    User({{struct_base}}UserView),
+    Owner({{struct_base}}OwnerView),
+}
+
+impl From<{{struct_base}}> for {{struct_base}}FilteredView {
+    fn from(data: {{struct_base}}) -> Self {
+        Self::AllFields(view)
+    }
+}
+
+impl From<{{struct_base}}UserView> for {{struct_base}}FilteredView {
+    fn from(data: {{struct_base}}UserView) -> Self {
+        Self::User(view.into())
+    }
+}
+
+impl From<{{struct_base}}OwnerView> for {{struct_base}}FilteredView {
+    fn from(data: {{struct_base}}OwnerView) -> Self {
+        Self::Owner(view.into())
+    }
+}
+{% endif %}
 

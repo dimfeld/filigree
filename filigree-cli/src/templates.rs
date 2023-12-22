@@ -63,31 +63,31 @@ fn create_tera() -> Tera {
             include_str!("model/sql/migrate_down.sql.tera"),
         ),
         (
-            "model/delete.sql.tera",
+            "model/generated/delete.sql.tera",
             include_str!("model/sql/delete.sql.tera"),
         ),
         (
-            "model/insert.sql.tera",
+            "model/generated/insert.sql.tera",
             include_str!("model/sql/insert.sql.tera"),
         ),
         (
-            "model/list.sql.tera",
+            "model/generated/list.sql.tera",
             include_str!("model/sql/list.sql.tera"),
         ),
         (
-            "model/select_base.sql.tera",
+            "model/generated/select_base.sql.tera",
             include_str!("model/sql/select_base.sql.tera"),
         ),
         (
-            "model/select_one.sql.tera",
+            "model/generated/select_one.sql.tera",
             include_str!("model/sql/select_one.sql.tera"),
         ),
         (
-            "model/select_some.sql.tera",
+            "model/generated/select_some.sql.tera",
             include_str!("model/sql/select_some.sql.tera"),
         ),
         (
-            "model/update.sql.tera",
+            "model/generated/update.sql.tera",
             include_str!("model/sql/update.sql.tera"),
         ),
         ("sql_macros.tera", include_str!("model/sql/sql_macros.tera")),
@@ -100,12 +100,16 @@ fn create_tera() -> Tera {
             include_str!("model/rust_templates/endpoints.rs.tera"),
         ),
         (
-            "model/types.rs.tera",
+            "model/generated/types.rs.tera",
             include_str!("model/rust_templates/types.rs.tera"),
         ),
         (
-            "model/queries.rs.tera",
+            "model/generated/queries.rs.tera",
             include_str!("model/rust_templates/queries.rs.tera"),
+        ),
+        (
+            "model/generated/mod.rs.tera",
+            include_str!("model/rust_templates/generated_mod.rs.tera"),
         ),
         (
             "model/main_mod.rs.tera",

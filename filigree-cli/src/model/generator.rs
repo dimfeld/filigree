@@ -69,8 +69,6 @@ impl<'a> ModelGenerator<'a> {
 
         Self::add_structs_to_rust_context(model, &mut context);
 
-        let mut extra_modules = Vec::new();
-
         context.insert("id_type", &model.object_id_type());
         context.insert("id_prefix", &model.id_prefix());
 
@@ -82,14 +80,6 @@ impl<'a> ModelGenerator<'a> {
         context.insert("url_path", &module_name);
         context.insert("has_any_endpoints", &model.endpoints.any_enabled());
         context.insert("endpoints", &model.endpoints.per_endpoint());
-        if model.endpoints.any_enabled() {
-            extra_modules.push(json!({
-                "name": "endpoints",
-                "pub_use": true,
-            }))
-        }
-
-        context.insert("extra_modules", &extra_modules);
 
         context
     }
@@ -146,23 +136,20 @@ impl<'a> ModelGenerator<'a> {
 
     pub fn render_model_directory(&self) -> Result<Vec<RenderedFile>, Report<Error>> {
         let files = [
-            Some("select_some.sql.tera"),
-            Some("list.sql.tera"),
-            Some("insert.sql.tera"),
-            Some("update.sql.tera"),
-            Some("delete.sql.tera"),
-            Some("mod.rs.tera"),
-            Some("types.rs.tera"),
-            Some("queries.rs.tera"),
-            self.model
-                .endpoints
-                .any_enabled()
-                .then_some("endpoints.rs.tera"),
+            "mod.rs.tera",
+            "generated/select_some.sql.tera",
+            "generated/list.sql.tera",
+            "generated/insert.sql.tera",
+            "generated/update.sql.tera",
+            "generated/delete.sql.tera",
+            "generated/mod.rs.tera",
+            "generated/types.rs.tera",
+            "generated/queries.rs.tera",
+            "endpoints.rs.tera",
         ];
 
         let output = files
             .into_par_iter()
-            .flatten()
             .map(|file| self.render(file, &self.context))
             .collect::<Result<Vec<_>, _>>()?;
 
