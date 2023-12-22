@@ -18,12 +18,12 @@ pub struct AuthLookup<T: AuthInfo> {
     info: Mutex<Option<Result<T, AuthError>>>,
     // Erase the type so that we don't have to reference it everywhere such as
     // in the Authed extractor, which can become inconvenient.
-    queries: Box<dyn AuthQueries<AuthInfo = T>>,
+    queries: Arc<dyn AuthQueries<AuthInfo = T>>,
 }
 
 impl<T: AuthInfo> AuthLookup<T> {
     /// Create a new AuthLookup
-    pub fn new(queries: Box<dyn AuthQueries<AuthInfo = T>>) -> Self {
+    pub fn new(queries: Arc<dyn AuthQueries<AuthInfo = T>>) -> Self {
         Self {
             info: Mutex::new(None),
             queries,

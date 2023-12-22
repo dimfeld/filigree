@@ -5,17 +5,20 @@ use tower::{Layer, Service};
 
 use super::{lookup::AuthLookup, AuthInfo, AuthQueries};
 
+/// A type-erased container for AuthQueries
+pub type AuthQueriesContainer<INFO> = Arc<dyn AuthQueries<AuthInfo = INFO>>;
+
 /// A layer that inserts the auth lookup object into the request, for later
 /// use by the Authed extractor.
 #[derive(Clone)]
 pub struct AuthLayer<INFO: AuthInfo> {
-    lookup: Arc<AuthLookup<INFO>>,
+    queries: AuthQueriesContainer<INFO>,
 }
 
 impl<INFO: AuthInfo> AuthLayer<INFO> {
     /// Create a new AuthLayer with the provided lookup object
-    pub fn new(lookup: Arc<AuthLookup<INFO>>) -> Self {
-        Self { lookup }
+    pub fn new(queries: AuthQueriesContainer<INFO>) -> Self {
+        Self { queries }
     }
 }
 
@@ -24,7 +27,7 @@ impl<S, INFO: AuthInfo> Layer<S> for AuthLayer<INFO> {
 
     fn layer(&self, inner: S) -> Self::Service {
         AuthService {
-            lookup: self.lookup.clone(),
+            queries: self.queries.clone(),
             inner,
         }
     }
@@ -33,7 +36,7 @@ impl<S, INFO: AuthInfo> Layer<S> for AuthLayer<INFO> {
 /// A middleware service for fetching authorization info
 #[derive(Clone)]
 pub struct AuthService<S, INFO: AuthInfo> {
-    lookup: Arc<AuthLookup<INFO>>,
+    queries: AuthQueriesContainer<INFO>,
     inner: S,
 }
 
@@ -55,15 +58,8 @@ where
     }
 
     fn call(&mut self, mut request: Request) -> Self::Future {
-        request.extensions_mut().insert(self.lookup.clone());
+        let lookup = AuthLookup::new(self.queries.clone());
+        request.extensions_mut().insert(Arc::new(lookup));
         self.inner.call(request)
     }
-}
-
-/// Create a new [AuthLayer] containing an [AuthLookup] built from the given options.
-pub fn auth_layer<INFO: AuthInfo>(
-    queries: Box<dyn AuthQueries<AuthInfo = INFO>>,
-) -> AuthLayer<INFO> {
-    let lookup = Arc::new(AuthLookup::new(queries));
-    AuthLayer::new(lookup)
 }

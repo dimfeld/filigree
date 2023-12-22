@@ -2,6 +2,7 @@
 pub mod api_key;
 mod check_middleware;
 mod extractors;
+/// A Request extension for lazy lookup of user auth info
 pub mod lookup;
 /// Authentication middleware
 pub mod middleware;
@@ -50,8 +51,10 @@ pub enum AuthError {
     /// Occurs when the API key is in the wrong format.
     #[error("API key format does not match")]
     ApiKeyFormat,
+    /// The user is missing a permission requred for an operation
     #[error("Missing permission {0}")]
     MissingPermission(Cow<'static, str>),
+    /// The [has_auth_predicate] middleware rejected a user
     #[error("Auth error: {0}")]
     FailedPredicate(Cow<'static, str>),
 }
