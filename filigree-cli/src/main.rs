@@ -125,6 +125,7 @@ pub fn main() -> Result<(), Report<Error>> {
     let (before_up, after_up) = ModelGenerator::fixed_up_migration_files();
     write_vecs(
         &up_migration_path,
+        args.force,
         before_up,
         &up_migrations,
         after_up,
@@ -138,6 +139,7 @@ pub fn main() -> Result<(), Report<Error>> {
     let (before_down, after_down) = ModelGenerator::fixed_down_migration_files();
     write_vecs(
         &down_migration_path,
+        args.force,
         before_down,
         &down_migrations,
         after_down,
@@ -167,6 +169,10 @@ pub fn main() -> Result<(), Report<Error>> {
         .into_par_iter()
         .try_for_each(|file| {
             let path = config.models_path.join(&file.path);
+            if !args.force && !path.to_string_lossy().contains("/generated/") && path.exists() {
+                return Ok(());
+            }
+
             // eprintln!("Writing file {}", path.display());
             std::fs::write(&path, &file.contents)
                 .attach_printable_lazy(|| path.display().to_string())
@@ -189,20 +195,27 @@ pub fn main() -> Result<(), Report<Error>> {
         &model_mod_context,
     )?;
     let path = config.models_path.join("mod.rs");
-    std::fs::write(&path, model_mod.contents)
-        .attach_printable_lazy(|| path.display().to_string())
-        .change_context(Error::WriteFile)?;
+    if args.force || !path.exists() {
+        std::fs::write(&path, model_mod.contents)
+            .attach_printable_lazy(|| path.display().to_string())
+            .change_context(Error::WriteFile)?;
+    }
 
     Ok(())
 }
 
 fn write_vecs(
     path: &Path,
+    overwrite: bool,
     before: String,
     data: &[Vec<u8>],
     after: String,
     sep: &[u8],
 ) -> Result<(), std::io::Error> {
+    if !overwrite && path.exists() {
+        return Ok(());
+    }
+
     let file = std::fs::File::create(path)?;
     let mut writer = BufWriter::new(file);
 
