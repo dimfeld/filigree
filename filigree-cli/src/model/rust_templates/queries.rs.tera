@@ -51,7 +51,7 @@ enum OrderByField {
         {% if field.snake_case_name == default_sort_field -%}
         #[default]
         {%- endif %}
-    {{field.camel_case_name}},
+    {{field.pascal_case_name}},
     {% endif %}
     {% endfor %}
 }
@@ -61,7 +61,7 @@ impl OrderByField {
         match self {
             {% for field in fields  %}
             {% if field.sortable != "none" %}
-            Self::{{field.camel_case_name}} => "{{field.snake_case_name}}",
+            Self::{{field.pascal_case_name}} => "{{field.snake_case_name}}",
             {% endif %}
             {% endfor %}
         }
@@ -70,10 +70,10 @@ impl OrderByField {
     fn allowed_direction(&self, descending: bool) -> bool {
         match self {
             {% for field in fields | filter(attribute="sortable", value="ascending_only") %}
-            Self::{{field.camel_case_name}} => descending == false,
+            Self::{{field.pascal_case_name}} => descending == false,
             {% endfor %}
             {% for field in fields | filter(attribute="sortable", value="descending_only") %}
-            Self::{{field.camel_case_name}} => descending == true,
+            Self::{{field.pascal_case_name}} => descending == true,
             {% endfor %}
             _ => true
         }
@@ -87,10 +87,10 @@ impl FromStr for OrderByField {
         let value = match field {
             {% for field in fields  %}
             {% if field.sortable != "none" %}
-            "{{field.sql_name}}" => OrderByField::{{field.camel_case_name}},
+            "{{field.sql_name}}" => OrderByField::{{field.pascal_case_name}},
             {% endif %}
             {% endfor %}
-            _ => return (Err(OrderByError::InvalidField)),
+            _ => return Err(OrderByError::InvalidField),
         };
 
         Ok(value)

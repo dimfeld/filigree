@@ -76,7 +76,7 @@ impl<'a> ModelGenerator<'a> {
                     "sql_full_name": field.qualified_sql_field_name(),
                     "sql_type": field.typ.to_sql_type(config.sql_dialect),
                     "snake_case_name": field.name.to_case(Case::Camel),
-                    "camel_case_name": field.name.to_case(Case::Camel),
+                    "pascal_case_name": field.name.to_case(Case::Pascal),
                     "rust_name": field.rust_field_name(),
                     "base_rust_type": field.base_rust_type(),
                     "rust_type": field.rust_type(),

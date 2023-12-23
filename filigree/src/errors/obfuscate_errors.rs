@@ -11,7 +11,7 @@ use tower::{Layer, Service};
 use super::ErrorResponseData;
 
 /// Configuration for [ObfuscateErrorLayer]
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct ObfuscateErrorLayerSettings {
     /// Enable the middleware
     pub enabled: bool,
@@ -19,6 +19,18 @@ pub struct ObfuscateErrorLayerSettings {
     pub obfuscate_forbidden: bool,
     /// Obfucate 401 unauthorized errors
     pub obfuscate_unauthorized: bool,
+}
+
+impl Default for ObfuscateErrorLayerSettings {
+    /// The default settings for [ObfuscateErrorLayerSettings] will enable the middleware,
+    /// and obfuscate 401 Unauthorized errors, but not opbfuscate 403 Forbidden errors.
+    fn default() -> Self {
+        ObfuscateErrorLayerSettings {
+            enabled: true,
+            obfuscate_forbidden: false,
+            obfuscate_unauthorized: true,
+        }
+    }
 }
 
 /// A layer that obfuscates error details when running in production.

@@ -14,10 +14,11 @@ use thiserror::Error;
 use crate::{config::FullConfig, model::generator::ModelGenerator};
 
 mod auth;
-pub mod config;
+mod config;
 mod format;
-pub mod model;
-pub mod templates;
+mod model;
+mod server;
+mod templates;
 
 pub struct RenderedFile {
     path: PathBuf,
@@ -35,7 +36,17 @@ pub struct Cli {
     /// (Eventually these files and the always-regenerated files will be generated as separate
     /// commands.)
     #[clap(long)]
-    force: bool,
+    force_all: bool,
+
+    /// Force regenerating these specific files, even if they already exist.
+    #[clap(long)]
+    force_files: Vec<PathBuf>,
+}
+
+impl Cli {
+    fn force_write(&self, path: &Path) -> bool {
+        self.force_all || self.force_files.iter().any(|p| p == path)
+    }
 }
 
 #[derive(Error, Debug)]
@@ -72,7 +83,10 @@ fn build_models(mut config_models: Vec<Model>) -> Vec<Model> {
 pub fn main() -> Result<(), Report<Error>> {
     let args = Cli::parse();
 
-    let config_path = args.config.unwrap_or_else(|| PathBuf::from("filigree"));
+    let config_path = args
+        .config
+        .clone()
+        .unwrap_or_else(|| PathBuf::from("filigree"));
     let config = FullConfig::from_dir(&config_path)?;
 
     let FullConfig {
@@ -93,10 +107,27 @@ pub fn main() -> Result<(), Report<Error>> {
         .map(|m| (m.model.name.clone(), m.context.clone().into_json()))
         .collect::<Vec<_>>();
 
-    let model_files = generators
-        .par_iter()
-        .map(|gen| gen.render_model_directory())
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut auth_files = None;
+    let mut server_files = None;
+    let mut model_files = None;
+    rayon::scope(|s| {
+        s.spawn(|_| server_files = Some(server::render_files(&config, &renderer)));
+        s.spawn(|_| {
+            model_files = Some(
+                generators
+                    .par_iter()
+                    .map(|gen| gen.render_model_directory())
+                    .collect::<Result<Vec<_>, _>>(),
+            );
+        });
+        s.spawn(|_| {
+            auth_files = Some(auth::render_files(&config, &renderer, &all_model_contexts));
+        })
+    });
+
+    let server_files = server_files.expect("server_files was not set")?;
+    let model_files = model_files.expect("model_files was not set")?;
+    let auth_files = auth_files.expect("auth_files was not set")?;
 
     let up_migrations = generators
         .iter()
@@ -125,7 +156,7 @@ pub fn main() -> Result<(), Report<Error>> {
     let (before_up, after_up) = ModelGenerator::fixed_up_migration_files();
     write_vecs(
         &up_migration_path,
-        args.force,
+        args.force_write(&up_migration_path),
         before_up,
         &up_migrations,
         after_up,
@@ -139,7 +170,7 @@ pub fn main() -> Result<(), Report<Error>> {
     let (before_down, after_down) = ModelGenerator::fixed_down_migration_files();
     write_vecs(
         &down_migration_path,
-        args.force,
+        args.force_write(&down_migration_path),
         before_down,
         &down_migrations,
         after_down,
@@ -147,7 +178,12 @@ pub fn main() -> Result<(), Report<Error>> {
     )
     .change_context(Error::WriteFile)?;
 
-    let files = model_files.into_iter().flatten().collect::<Vec<_>>();
+    let files = model_files
+        .into_iter()
+        .flatten()
+        .chain(server_files)
+        .chain(auth_files)
+        .collect::<Vec<_>>();
 
     let mut created_dirs = HashSet::new();
     for file in &files {
@@ -169,7 +205,10 @@ pub fn main() -> Result<(), Report<Error>> {
         .into_par_iter()
         .try_for_each(|file| {
             let path = config.models_path.join(&file.path);
-            if !args.force && !path.to_string_lossy().contains("/generated/") && path.exists() {
+            if !args.force_write(&path)
+                && !path.to_string_lossy().contains("/generated/")
+                && path.exists()
+            {
                 return Ok(());
             }
 
@@ -195,7 +234,7 @@ pub fn main() -> Result<(), Report<Error>> {
         &model_mod_context,
     )?;
     let path = config.models_path.join("mod.rs");
-    if args.force || !path.exists() {
+    if args.force_write(&path) || !path.exists() {
         std::fs::write(&path, model_mod.contents)
             .attach_printable_lazy(|| path.display().to_string())
             .change_context(Error::WriteFile)?;

@@ -1,12 +1,12 @@
 use axum::{Json, extract::{State, Path, Query}, http::StatusCode, routing};
 use filigree::sql::QueryBindings;
 
-use crate::auth::AuthInfo;
+use crate::{auth::AuthInfo, server::ServerState};
 
 use super::{queries, types::*, {{id_type}} };
 
 async fn get(
-    State(state): State<AppState>,
+    State(state): State<ServerState>,
     AuthInfo(auth): AuthInfo,
     Path(id): Path<{{ id_type }}>
     ) -> Result<impl IntoResponse, Error> {
@@ -16,7 +16,7 @@ async fn get(
 }
 
 async fn list(
-    State(state): State<AppState>,
+    State(state): State<ServerState>,
     AuthInfo(auth): AuthInfo,
     Query(qs): Query<ListQueryFilters>,
     ) -> Result<impl IntoResponse, Error> {
@@ -25,7 +25,7 @@ async fn list(
 }
 
 async fn create(
-    State(state): State<AppState>,
+    State(state): State<ServerState>,
     AuthInfo(auth): AuthInfo,
     Json(payload): Json<{{ struct_base }}CreatePayload>,
     ) -> Result<impl IntoResponse, Error> {
@@ -35,7 +35,7 @@ async fn create(
 }
 
 async fn update(
-    State(state): State<AppState>,
+    State(state): State<ServerState>,
     AuthInfo(auth): AuthInfo,
     Json(payload): Json<{{ struct_base }}UpdatePayload>,
     Path(id): Path<{{ id_type }}>
@@ -46,7 +46,7 @@ async fn update(
 }
 
 async fn delete(
-    State(state): State<AppState>,
+    State(state): State<ServerState>,
     AuthInfo(auth): AuthInfo,
     Path(id): Path<{{ id_type }}>
     ) -> Result<impl IntoResponse, Error> {
@@ -56,7 +56,7 @@ async fn delete(
     Ok(StatusCode::OK);
 }
 
-pub fn create_routes() -> axum::Router<AppState> {
+pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
         {% if endpoints.list %}.route("/{{ url_path }}", routing::get(list)){% endif %}
         {% if endpoints.get %}.route("/{{ url_path }}/:id", routing::get(get)){% endif %}

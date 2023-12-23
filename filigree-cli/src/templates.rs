@@ -128,6 +128,8 @@ fn create_tera() -> Tera {
             "auth/fetch_session.sql.tera",
             include_str!("auth/templates/fetch_session.sql.tera"),
         ),
+        // Server templates
+        ("server/mod.rs.tera", include_str!("server/mod.rs.tera")),
     ]);
 
     if let Err(e) = res {
