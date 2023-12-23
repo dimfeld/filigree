@@ -1,5 +1,6 @@
 {% import "sql_macros.tera" as macros %}
 
+{# See if any field is filterable #}
 {% set has_filterable = false %}
 {% for field in fields %}
   {% if field.filterable != 'none' %}
@@ -12,21 +13,32 @@ SELECT
     | filter(attribute='owner_read', value=true)
     | map(attribute='sql_full_name')
     | join(sep=',') }},
+  _permission
 FROM
-  {{ table }}
+  {{ table }} tb
+JOIN LATERAL (
+  {{ macros::permissions_value(
+      auth_scope=auth_scope,
+      organization="$1",
+      actor_ids="$2",
+      object_id="tb.id",
+      owner_perm=owner_permission,
+      read_perm=read_permission,
+      write_perm=write_permission
+  )}}
+) _permission ON _permission IS NOT NULL
 
-{% set p = 1 %}
 WHERE
 {% if not global %}
-    organization_id = ${{ p }} {% if has_filterable %}AND{% endif %}
-{% set p = p + 1 %}
+   AND organization_id = $1 
 {% endif %}
 {% if has_filterable %}
-  <filters>
+  AND <filters>
 {% endif %}
 
+ORDER BY <order_by>
 {% if not pagination.disable %}
-LIMIT ${{ p }}
-OFFSET ${{ p + 1 }}
+LIMIT $3
+OFFSET $4
 {% endif %}
 

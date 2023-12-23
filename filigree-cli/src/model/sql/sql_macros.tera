@@ -19,4 +19,62 @@ WHERE
     organization_id = {{organization}}
     AND actor_id = ANY({{actor_ids}})
     AND permission in ('org_admin', {{owner_perm | to_sql}}, {{user_perm | to_sql}} )
+GROUP BY permission
 {% endmacro permissions_lookup %}
+
+{% macro global_permissions_value(actor_ids, organization, owner_perm, write_perm, read_perm) %}
+{# Look up global permissions #}
+
+SELECT
+  CASE
+    WHEN bool_or(permission in ('org_admin', {{owner_perm | to_sql}})) THEN 'owner',
+    WHEN bool_or(permission = {{write_perm | to_sql}}) THEN 'write',
+    WHEN bool_or(permission = {{read_perm | to_sql}}) THEN 'read',
+    ELSE NULL
+  END
+FROM permisssions
+WHERE
+    organization_id = {{organization}}
+    AND actor_id = ANY({{actor_ids}})
+    AND permission in ('org_admin', {{owner_perm | to_sql}}, {{write_perm | to_sql}}, {{read_perm | to_sql}} )
+GROUP BY permission
+{% endmacro permissions_value %}
+
+{% macro object_permissions_value(actor_ids, organization, object_id, owner_perm, write_perm, read_perm, extra_fields="") %}
+{# Look up object permissions #}
+SELECT
+  CASE
+    WHEN bool_or(permission in ('org_admin', {{owner_perm | to_sql}})) THEN 'owner',
+    WHEN bool_or(permission = {{write_perm | to_sql}}) THEN 'write',
+    WHEN bool_or(permission = {{read_perm | to_sql}}) THEN 'read',
+    ELSE NULL
+  END
+FROM object_permissions
+WHERE
+    organization_id = {{organization}}
+    AND actor_id = ANY({{actor_ids}})
+    AND object_id = {{object_id}}
+    AND permission in ('org_admin', {{owner_perm | to_sql}}, {{write_perm | to_sql}}, {{read_perm | to_sql}} )
+GROUP BY permission
+{% endmacro object_permissions_clause %}
+
+{% macro permissions_value(auth_scope, organization, actor_ids, object_id, owner_perm, write_perm, read_perm) %}
+{% if auth_scope == "model" %}
+  {{ self::global_permissions_value(
+    actor_ids=actor_ids,
+    organization=organization,
+    owner_perm=owner_perm,
+    write_perm=write_perm,
+    read_perm=read_perm)
+  }}
+{% else %}
+  {{ self::object_permissions_value(
+    actor_ids=actor_ids,
+    organization=organization,
+    object_id=object_id,
+    owner_perm=owner_perm,
+    write_perm=write_perm,
+    read_perm=read_perm)
+  }}
+{% endif %}
+{% endmacro permissions_value %}

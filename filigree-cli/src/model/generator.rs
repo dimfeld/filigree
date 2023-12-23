@@ -1,5 +1,6 @@
 use std::{ops::Deref, path::PathBuf};
 
+use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
 use rayon::prelude::*;
 use serde_json::json;
@@ -45,6 +46,28 @@ impl<'a> ModelGenerator<'a> {
             &model.auth_scope.unwrap_or(config.default_auth_scope),
         );
 
+        let default_sort_field = model.default_sort_field.as_deref().unwrap_or("-updated_at");
+
+        {
+            let actual_default = if default_sort_field.starts_with('-') {
+                &default_sort_field[1..]
+            } else {
+                default_sort_field
+            };
+
+            if !model
+                .all_fields()
+                .any(|(_, field)| field.name == actual_default)
+            {
+                panic!(
+                    "Default sort field {} does not exist in model {}",
+                    actual_default, model.name
+                );
+            }
+        }
+
+        context.insert("default_sort_field", default_sort_field);
+
         let fields = model
             .all_fields()
             .map(|(fixed, field)| {
@@ -52,12 +75,15 @@ impl<'a> ModelGenerator<'a> {
                     "sql_name": field.sql_field_name(),
                     "sql_full_name": field.qualified_sql_field_name(),
                     "sql_type": field.typ.to_sql_type(config.sql_dialect),
+                    "snake_case_name": field.name.to_case(Case::Camel),
+                    "camel_case_name": field.name.to_case(Case::Camel),
                     "rust_name": field.rust_field_name(),
                     "base_rust_type": field.base_rust_type(),
                     "rust_type": field.rust_type(),
                     "default": field.default,
                     "nullable": field.nullable,
                     "filterable": field.filterable,
+                    "sortable": field.sortable,
                     "unique": field.unique,
                     "extra_sql_modifiers": field.extra_sql_modifiers,
                     "user_read": field.user_access.can_read(),

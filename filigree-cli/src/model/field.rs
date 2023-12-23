@@ -48,6 +48,9 @@ pub struct ModelField {
     #[serde(default)]
     pub filterable: FilterableType,
 
+    #[serde(default)]
+    pub sortable: SortableType,
+
     /// A field in another model that this field references. This sets up a foreign
     /// key in the SQL definition.
     pub references: Option<ModelFieldReference>,
@@ -209,4 +212,15 @@ pub enum FilterableType {
     None,
     Exact,
     Range,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SortableType {
+    #[default]
+    None,
+    DefaultAscending,
+    DefaultDescending,
+    AscendingOnly,
+    DescendingOnly,
 }

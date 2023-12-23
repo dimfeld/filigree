@@ -5,15 +5,25 @@ SELECT
     | filter(attribute='owner_read', value=true)
     | map(attribute='sql_full_name')
     | join(sep=', ') }}
-  {% endblock select_fields %}
+  {% endblock select_fields %},
+  _permission
 FROM
-  {{ table }}
+  {{ table }} tb
+JOIN LATERAL ({{ macros::permissions_value(
+      auth_scope=auth_scope,
+      object_id="$1",
+      organization="$2",
+      actor_ids="$3",
+      owner_perm=owner_permission,
+      read_perm=read_permission,
+      write_perm=write_permission
+  )}}) _permission ON _permission IS NOT NULL
 WHERE
-id = {% block id_param %}$1{% endblock id_param %}
+  tb.id = {% block id_param %}$1{% endblock id_param %}
+  AND _permission IS NOT NULL
   {% if not global %}
-    AND organization_id = $2
+    AND tb.organization_id = $2
   {% endif %}
-  AND {{ macros::permissions_check(actor_ids="$3", organization="$2", permissions=[owner_permission, read_permission]) }}
 
 
 

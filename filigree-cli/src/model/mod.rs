@@ -24,6 +24,9 @@ pub struct Model {
     pub fields: Vec<ModelField>,
     /// If true, generate API endpoints for this model.
     pub endpoints: Endpoints,
+    /// The default field to order by on list operations. Prefix with '-' to order descending.
+    /// If omitted, "-updated_at" is used.
+    pub default_sort_field: Option<String>,
 
     /// Pagination options for this model, if not the default.
     #[serde(default)]
@@ -121,6 +124,7 @@ impl Model {
                 nullable: false,
                 unique: false,
                 indexed: true,
+                sortable: field::SortableType::None,
                 filterable: FilterableType::None,
                 extra_sql_modifiers: String::new(),
                 user_access: Access::Read,
@@ -143,6 +147,7 @@ impl Model {
                 unique: false,
                 indexed: false,
                 filterable: FilterableType::Exact,
+                sortable: field::SortableType::None,
                 extra_sql_modifiers: "primary key".to_string(),
                 user_access: Access::Read,
                 owner_access: Access::Read,
@@ -158,6 +163,7 @@ impl Model {
                 unique: false,
                 indexed: false,
                 filterable: FilterableType::Range,
+                sortable: field::SortableType::DefaultDescending,
                 extra_sql_modifiers: String::new(),
                 user_access: Access::Read,
                 owner_access: Access::Read,
@@ -172,6 +178,7 @@ impl Model {
                 unique: false,
                 indexed: false,
                 filterable: FilterableType::Range,
+                sortable: field::SortableType::DefaultDescending,
                 extra_sql_modifiers: String::new(),
                 user_access: Access::Read,
                 owner_access: Access::Read,

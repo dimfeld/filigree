@@ -1,2 +1,0 @@
-{% extends "model/generated/select_base.sql.tera" %}
-{% block id_param %}ANY($1){% endblock id_param %}
