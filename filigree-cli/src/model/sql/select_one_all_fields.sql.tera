@@ -1,4 +1,4 @@
-{% extends "model/generated/select_base.sql.tera" %}
+{% extends "model/select_base.sql.tera" %}
 {% block select_fields %}
   {{ fields
     | map(attribute='sql_full_name')

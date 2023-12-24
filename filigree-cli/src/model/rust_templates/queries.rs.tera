@@ -1,6 +1,7 @@
+use error_stack::{Report, ResultExt};
 use filigree::{
     auth::ObjectPermission,
-    server::{OrderByError, QueryError},
+    errors::OrderByError,
     sql::{BindingOperator, WhereBuilder}
 };
 use serde::{Serialize, Deserialize};
@@ -82,11 +83,11 @@ impl OrderByField {
     }
 }
 
-impl FromStr for OrderByField {
+impl std::str::FromStr for OrderByField {
     type Err = OrderByError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = match field {
+        let value = match s {
             {% for field in fields  %}
             {% if field.sortable != "none" %}
             "{{field.sql_name}}" => OrderByField::{{field.pascal_case_name}},
@@ -117,26 +118,26 @@ fn parse_order_by(field: &str) -> Result<(bool, OrderByField), OrderByError> {
 {% set_global has_filterable = false %}
 
 #[derive(Serialize, Debug)]
-struct ListQuery {
+pub struct ListQueryFilters {
     {%if not pagination.disable %}
-    page: Option<u32>,
-    per_page: Option<u32>,
+    pub page: Option<u32>,
+    pub per_page: Option<u32>,
     {% endif %}
-    order_by: Option<String>,
+    pub order_by: Option<String>,
 
     {%- for field in fields | filter(attribute="filterable", value="exact") -%}
         {% set_global has_filterable = true %}
     #[serde(default)]
-    {{field.rust_name}}: Vec<{{field.base_rust_type}}>,
+    pub {{field.rust_name}}: Vec<{{field.base_rust_type}}>,
     {%- endfor -%}
     {%- for field in fields | filter(attribute="filterable", value="range") -%}
         {% set_global has_filterable = true %}
-    {{field.rust_name}}_lte: Option<{{field.base_rust_type}}>,
-    {{field.rust_name}}_gte: Option<{{field.base_rust_type}}>,
+    pub {{field.rust_name}}_lte: Option<{{field.base_rust_type}}>,
+    pub {{field.rust_name}}_gte: Option<{{field.base_rust_type}}>,
     {%- endfor -%}
 }
 
-impl ListQuery {
+impl ListQueryFilters {
     fn build_where_clause(&self) -> String {
         {% set start_binding = 3 %}
         {% if not pagination.disable %}
@@ -193,7 +194,7 @@ impl ListQuery {
     }
 }
 
-pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQuery) -> Result<Vec<{{ struct_base }}FilteredView>, Report<Error>> {
+pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}FilteredView>, Report<Error>> {
     let q = include_str!("{{dir}}/list.sql");
 
     let (descending, order_by_field) = parse_order_by(filters.order_by.as_deref().unwrap_or("{{default_sort_field}}"))?;

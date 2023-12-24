@@ -167,15 +167,15 @@ impl<'a> ModelGenerator<'a> {
         let base_path = PathBuf::from("src/models").join(self.model.module_name());
         let files = [
             "mod.rs.tera",
-            "generated/select_one.sql.tera",
-            "generated/select_one_all_fields.sql.tera",
-            "generated/list.sql.tera",
-            "generated/insert.sql.tera",
-            "generated/update.sql.tera",
-            "generated/delete.sql.tera",
-            "generated/mod.rs.tera",
-            "generated/types.rs.tera",
-            "generated/queries.rs.tera",
+            "select_one.sql.tera",
+            "select_one_all_fields.sql.tera",
+            "list.sql.tera",
+            "insert.sql.tera",
+            "update.sql.tera",
+            "delete.sql.tera",
+            "mod.rs.tera",
+            "types.rs.tera",
+            "queries.rs.tera",
             "endpoints.rs.tera",
         ];
 

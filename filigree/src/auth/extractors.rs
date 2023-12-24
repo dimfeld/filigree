@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
 use axum::{
@@ -10,6 +10,17 @@ use super::{lookup::AuthLookup, AuthError, AuthInfo};
 
 /// Extract authentication info from the Request, or return an error if the user is not valid.
 pub struct Authed<T: AuthInfo>(T);
+
+impl<T> Deref for Authed<T>
+where
+    T: AuthInfo,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[async_trait]
 impl<S, T: AuthInfo + 'static> FromRequestParts<S> for Authed<T>

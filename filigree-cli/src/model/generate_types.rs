@@ -11,28 +11,32 @@ impl<'a> ModelGenerator<'a> {
         let struct_list = [
             (
                 "AllFields",
-                Self::struct_contents(model.all_fields().map(|f| f.1), |_| false),
+                Self::struct_contents(model.all_fields().map(|f| f.1), |_| false, true),
             ),
             (
                 "UserView",
-                Self::struct_contents(model.user_view_struct_fields(), |_| false),
+                Self::struct_contents(model.user_view_struct_fields(), |_| false, true),
             ),
             (
                 "OwnerView",
-                Self::struct_contents(model.owner_view_struct_fields(), |_| false),
+                Self::struct_contents(model.owner_view_struct_fields(), |_| false, true),
             ),
             (
                 "CreatePayload",
-                Self::struct_contents(model.write_payload_struct_fields(), |_| false),
+                Self::struct_contents(model.write_payload_struct_fields(), |_| false, false),
             ),
             (
                 "UpdatePayload",
-                Self::struct_contents(model.write_payload_struct_fields(), |f| {
-                    // Allow optional fields for those that the owner can write,
-                    // but the user can not, so that we can accept either form of
-                    // the field.
-                    f.owner_access.can_write() && !f.user_access.can_write()
-                }),
+                Self::struct_contents(
+                    model.write_payload_struct_fields(),
+                    |f| {
+                        // Allow optional fields for those that the owner can write,
+                        // but the user can not, so that we can accept either form of
+                        // the field.
+                        f.owner_access.can_write() && !f.user_access.can_write()
+                    },
+                    false,
+                ),
             ),
         ];
 
@@ -94,8 +98,9 @@ impl<'a> ModelGenerator<'a> {
     fn struct_contents<'b>(
         fields: impl Iterator<Item = Cow<'b, ModelField>>,
         force_optional: impl Fn(&ModelField) -> bool,
+        add_permissions_field: bool,
     ) -> String {
-        fields
+        let content = fields
             .map(|f| {
                 let typ = if force_optional(&f) {
                     format!("Option<{}>", f.base_rust_type()).into()
@@ -105,6 +110,11 @@ impl<'a> ModelGenerator<'a> {
 
                 format!("pub {}: {},", f.rust_field_name(), typ)
             })
-            .join("\n")
+            .join("\n");
+        if add_permissions_field {
+            format!("{content}\npub _permission: ObjectPermission,")
+        } else {
+            content
+        }
     }
 }

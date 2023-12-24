@@ -1,13 +1,13 @@
-use axum::{Json, extract::{State, Path, Query}, http::StatusCode, routing};
+use axum::{Json, extract::{State, Path, Query}, http::StatusCode, response::IntoResponse, routing};
 use filigree::sql::QueryBindings;
 
-use crate::{auth::AuthInfo, server::ServerState};
+use crate::{Error, auth::Authed, server::ServerState};
 
 use super::{queries, types::*, {{id_type}} };
 
 async fn get(
     State(state): State<ServerState>,
-    AuthInfo(auth): AuthInfo,
+    auth: Authed,
     Path(id): Path<{{ id_type }}>
     ) -> Result<impl IntoResponse, Error> {
 
@@ -17,8 +17,8 @@ async fn get(
 
 async fn list(
     State(state): State<ServerState>,
-    AuthInfo(auth): AuthInfo,
-    Query(qs): Query<ListQueryFilters>,
+    auth: Authed,
+    Query(qs): Query<queries::ListQueryFilters>,
     ) -> Result<impl IntoResponse, Error> {
     let results = queries::list(&state.db, &auth, &qs).await?;
     Ok(Json(results))
@@ -26,7 +26,7 @@ async fn list(
 
 async fn create(
     State(state): State<ServerState>,
-    AuthInfo(auth): AuthInfo,
+    auth: Authed,
     Json(payload): Json<{{ struct_base }}CreatePayload>,
     ) -> Result<impl IntoResponse, Error> {
     let result = queries::create(&state.db, &auth, &payload).await?;
@@ -36,7 +36,7 @@ async fn create(
 
 async fn update(
     State(state): State<ServerState>,
-    AuthInfo(auth): AuthInfo,
+    auth: Authed,
     Json(payload): Json<{{ struct_base }}UpdatePayload>,
     Path(id): Path<{{ id_type }}>
     ) -> Result<impl IntoResponse, Error> {
@@ -47,7 +47,7 @@ async fn update(
 
 async fn delete(
     State(state): State<ServerState>,
-    AuthInfo(auth): AuthInfo,
+    auth: Authed,
     Path(id): Path<{{ id_type }}>
     ) -> Result<impl IntoResponse, Error> {
 

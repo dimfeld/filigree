@@ -31,23 +31,6 @@ pub struct Cli {
     /// Override the path to the configuration directory. By default this looks for ./filigree
     #[clap(short, long, value_name = "FILE")]
     config: Option<PathBuf>,
-
-    /// Force regenerating all templates, even those which would normally be generated
-    /// only once.
-    /// (Eventually these files and the always-regenerated files will be generated as separate
-    /// commands.)
-    #[clap(long)]
-    force_all: bool,
-
-    /// Force regenerating these specific files, even if they already exist.
-    #[clap(long)]
-    force_files: Vec<PathBuf>,
-}
-
-impl Cli {
-    fn force_write(&self, path: &Path) -> bool {
-        self.force_all || self.force_files.iter().any(|p| p == path)
-    }
 }
 
 #[derive(Error, Debug)]
@@ -160,7 +143,6 @@ pub fn main() -> Result<(), Report<Error>> {
     let (before_up, after_up) = ModelGenerator::fixed_up_migration_files();
     write_vecs(
         &up_migration_path,
-        args.force_write(&up_migration_path),
         before_up,
         &up_migrations,
         after_up,
@@ -172,7 +154,6 @@ pub fn main() -> Result<(), Report<Error>> {
     let (before_down, after_down) = ModelGenerator::fixed_down_migration_files();
     write_vecs(
         &down_migration_path,
-        args.force_write(&down_migration_path),
         before_down,
         &down_migrations,
         after_down,
@@ -206,13 +187,6 @@ pub fn main() -> Result<(), Report<Error>> {
     files
         .into_par_iter()
         .try_for_each(|file| {
-            if !args.force_write(&file.path)
-                && !file.path.to_string_lossy().contains("/generated/")
-                && file.path.exists()
-            {
-                return Ok(());
-            }
-
             // eprintln!("Writing file {}", path.display());
             std::fs::write(&file.path, &file.contents)
                 .attach_printable_lazy(|| file.path.display().to_string())
@@ -232,27 +206,20 @@ pub fn main() -> Result<(), Report<Error>> {
     let model_mod =
         renderer.render(&models_dir, "model", "main_mod.rs.tera", &model_mod_context)?;
     let path = models_dir.join("mod.rs");
-    if args.force_write(&path) || !path.exists() {
-        std::fs::write(&path, model_mod.contents)
-            .attach_printable_lazy(|| path.display().to_string())
-            .change_context(Error::WriteFile)?;
-    }
+    std::fs::write(&path, model_mod.contents)
+        .attach_printable_lazy(|| path.display().to_string())
+        .change_context(Error::WriteFile)?;
 
     Ok(())
 }
 
 fn write_vecs(
     path: &Path,
-    overwrite: bool,
     before: String,
     data: &[Vec<u8>],
     after: String,
     sep: &[u8],
 ) -> Result<(), std::io::Error> {
-    if !overwrite && path.exists() {
-        return Ok(());
-    }
-
     let file = std::fs::File::create(path)?;
     let mut writer = BufWriter::new(file);
 

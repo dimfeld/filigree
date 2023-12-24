@@ -41,7 +41,7 @@ impl From<Report<Error>> for Error {
     }
 }
 
-impl crate::server::error::HttpError for Error {
+impl HttpError for Error {
     fn error_kind(&self) -> &'static str {
         match self {
             Error::WrapReport(e) => e.current_context().error_kind(),

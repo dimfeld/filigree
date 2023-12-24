@@ -61,7 +61,7 @@ impl Model {
                 fields: vec![
                     simple_model_field("name", SqlType::Text),
                     ModelField {
-                        rust_type: Some("UserId".to_string()),
+                        rust_type: Some("crate::models::user::UserId".to_string()),
                         user_access: Access::None,
                         nullable: true,
                         references: Some(ModelFieldReference::new(

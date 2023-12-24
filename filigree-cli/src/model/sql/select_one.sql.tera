@@ -1,1 +1,1 @@
-{% extends "model/generated/select_base.sql.tera" %}
+{% extends "model/select_base.sql.tera" %}

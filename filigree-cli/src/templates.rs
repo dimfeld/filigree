@@ -49,6 +49,25 @@ impl<'a> Renderer<'a> {
     }
 }
 
+// For debug builds, just read from the file system so we dont have to recompile for every
+// template-only change.
+#[cfg(debug_assertions)]
+macro_rules! read_template {
+    ($path: expr) => {{
+        let file_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join($path);
+        std::fs::read_to_string(&file_path).expect(&format!("Failed to read {file_path:?}"))
+    }};
+}
+
+#[cfg(not(debug_assertions))]
+macro_rules! read_template {
+    ($path: expr) => {
+        include_str!($path)
+    };
+}
+
 fn create_tera() -> Tera {
     let mut tera = Tera::default();
 
@@ -56,93 +75,95 @@ fn create_tera() -> Tera {
         // Root templates
         (
             "root/lib.rs.tera",
-            include_str!("root/templates/lib.rs.tera"),
+            read_template!("root/templates/lib.rs.tera"),
         ),
         (
             "root/error.rs.tera",
-            include_str!("root/templates/error.rs.tera"),
+            read_template!("root/templates/error.rs.tera"),
         ),
         // Model templates
         (
             "model/migrate_up.sql.tera",
-            include_str!("model/sql/migrate_up.sql.tera"),
+            read_template!("model/sql/migrate_up.sql.tera"),
         ),
         (
             "model/migrate_down.sql.tera",
-            include_str!("model/sql/migrate_down.sql.tera"),
+            read_template!("model/sql/migrate_down.sql.tera"),
         ),
         (
-            "model/generated/delete.sql.tera",
-            include_str!("model/sql/delete.sql.tera"),
+            "model/delete.sql.tera",
+            read_template!("model/sql/delete.sql.tera"),
         ),
         (
-            "model/generated/insert.sql.tera",
-            include_str!("model/sql/insert.sql.tera"),
+            "model/insert.sql.tera",
+            read_template!("model/sql/insert.sql.tera"),
         ),
         (
-            "model/generated/list.sql.tera",
-            include_str!("model/sql/list.sql.tera"),
+            "model/list.sql.tera",
+            read_template!("model/sql/list.sql.tera"),
         ),
         (
-            "model/generated/select_base.sql.tera",
-            include_str!("model/sql/select_base.sql.tera"),
+            "model/select_base.sql.tera",
+            read_template!("model/sql/select_base.sql.tera"),
         ),
         (
-            "model/generated/select_one.sql.tera",
-            include_str!("model/sql/select_one.sql.tera"),
+            "model/select_one.sql.tera",
+            read_template!("model/sql/select_one.sql.tera"),
         ),
         (
-            "model/generated/select_one_all_fields.sql.tera",
-            include_str!("model/sql/select_one_all_fields.sql.tera"),
+            "model/select_one_all_fields.sql.tera",
+            read_template!("model/sql/select_one_all_fields.sql.tera"),
         ),
         (
-            "model/generated/update.sql.tera",
-            include_str!("model/sql/update.sql.tera"),
+            "model/update.sql.tera",
+            read_template!("model/sql/update.sql.tera"),
         ),
-        ("sql_macros.tera", include_str!("model/sql/sql_macros.tera")),
+        (
+            "sql_macros.tera",
+            read_template!("model/sql/sql_macros.tera"),
+        ),
         (
             "model/mod.rs.tera",
-            include_str!("model/rust_templates/mod.rs.tera"),
+            read_template!("model/rust_templates/mod.rs.tera"),
         ),
         (
             "model/endpoints.rs.tera",
-            include_str!("model/rust_templates/endpoints.rs.tera"),
+            read_template!("model/rust_templates/endpoints.rs.tera"),
         ),
         (
-            "model/generated/types.rs.tera",
-            include_str!("model/rust_templates/types.rs.tera"),
+            "model/types.rs.tera",
+            read_template!("model/rust_templates/types.rs.tera"),
         ),
         (
-            "model/generated/queries.rs.tera",
-            include_str!("model/rust_templates/queries.rs.tera"),
-        ),
-        (
-            "model/generated/mod.rs.tera",
-            include_str!("model/rust_templates/generated_mod.rs.tera"),
+            "model/queries.rs.tera",
+            read_template!("model/rust_templates/queries.rs.tera"),
         ),
         (
             "model/main_mod.rs.tera",
-            include_str!("model/rust_templates/main_mod.rs.tera"),
+            read_template!("model/rust_templates/main_mod.rs.tera"),
         ),
         // Auth templates
         (
             "auth/fetch_base.sql.tera",
-            include_str!("auth/templates/fetch_base.sql.tera"),
+            read_template!("auth/templates/fetch_base.sql.tera"),
         ),
         (
             "auth/fetch_api_key.sql.tera",
-            include_str!("auth/templates/fetch_api_key.sql.tera"),
+            read_template!("auth/templates/fetch_api_key.sql.tera"),
         ),
         (
             "auth/fetch_session.sql.tera",
-            include_str!("auth/templates/fetch_session.sql.tera"),
+            read_template!("auth/templates/fetch_session.sql.tera"),
         ),
         (
             "auth/mod.rs.tera",
-            include_str!("auth/templates/mod.rs.tera"),
+            read_template!("auth/templates/mod.rs.tera"),
         ),
         // Server templates
-        ("server/mod.rs.tera", include_str!("server/mod.rs.tera")),
+        (
+            "server/mod.rs.tera",
+            read_template!("server/templates/mod.rs.tera"),
+        ),
     ]);
 
     if let Err(e) = res {

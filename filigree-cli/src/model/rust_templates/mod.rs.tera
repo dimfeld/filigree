@@ -1,8 +1,8 @@
-mod generated;
-pub use generated::queries;
-pub use generated::types::*;
-
 pub mod endpoints;
+pub mod queries;
+pub mod types;
+
+pub use types::*;
 
 {% if predefined_object_id  %}
 pub type {{id_type}} = filigree::auth::{{id_type}};

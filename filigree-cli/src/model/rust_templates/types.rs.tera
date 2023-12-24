@@ -1,4 +1,4 @@
-use super::{{id_type}};
+use super::super::{{id_type}};
 {%- if id_type != "OrganizationId" %}
 use crate::models::organization::OrganizationId;
 {% endif -%}
@@ -10,7 +10,6 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct {{ struct.name }} {
     {{ struct.fields }}
-    _permission: ObjectPermission,
 }
 
 {% for alias in struct.aliases %}
@@ -76,13 +75,13 @@ impl {{struct_base}}FilteredView {
 
 impl From<{{struct_base}}UserView> for {{struct_base}}FilteredView {
     fn from(data: {{struct_base}}UserView) -> Self {
-        Self::User(view.into())
+        Self::User(data.into())
     }
 }
 
 impl From<{{struct_base}}OwnerView> for {{struct_base}}FilteredView {
     fn from(data: {{struct_base}}OwnerView) -> Self {
-        Self::Owner(view.into())
+        Self::Owner(data.into())
     }
 }
 

@@ -1,6 +1,8 @@
 use async_trait::async_trait;
-use filigree::auth::{sessions::SessionKey, AuthError, OrganizationId, RoleId, UserId};
+use filigree::auth::{AuthError, OrganizationId, RoleId, SessionKey, UserId};
 use sqlx::{query_as, PgPool};
+
+pub type Authed = filigree::auth::Authed<AuthInfo>;
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct AuthInfo {
