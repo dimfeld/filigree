@@ -1,5 +1,4 @@
 use axum::{Json, extract::{State, Path, Query}, http::StatusCode, response::IntoResponse, routing};
-use filigree::sql::QueryBindings;
 
 use crate::{Error, auth::Authed, server::ServerState};
 

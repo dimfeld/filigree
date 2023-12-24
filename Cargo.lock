@@ -766,6 +766,7 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
+ "error-stack",
  "filigree",
  "serde",
  "serde_json",

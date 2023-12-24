@@ -10,6 +10,7 @@ publish = false
 async-trait = "0.1.75"
 axum = "0.7.2"
 chrono = "0.4.31"
+error-stack = "0.4.1"
 filigree = { version = "0.1.0", path = "../filigree" }
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
