@@ -53,6 +53,15 @@ fn create_tera() -> Tera {
     let mut tera = Tera::default();
 
     let res = tera.add_raw_templates(vec![
+        // Root templates
+        (
+            "root/lib.rs.tera",
+            include_str!("root/templates/lib.rs.tera"),
+        ),
+        (
+            "root/error.rs.tera",
+            include_str!("root/templates/error.rs.tera"),
+        ),
         // Model templates
         (
             "model/migrate_up.sql.tera",
@@ -127,6 +136,10 @@ fn create_tera() -> Tera {
         (
             "auth/fetch_session.sql.tera",
             include_str!("auth/templates/fetch_session.sql.tera"),
+        ),
+        (
+            "auth/mod.rs.tera",
+            include_str!("auth/templates/mod.rs.tera"),
         ),
         // Server templates
         ("server/mod.rs.tera", include_str!("server/mod.rs.tera")),

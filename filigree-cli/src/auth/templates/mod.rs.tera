@@ -1,0 +1,62 @@
+use async_trait::async_trait;
+use filigree::auth::{sessions::SessionKey, AuthError, OrganizationId, RoleId, UserId};
+use sqlx::{query_as, PgPool};
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct AuthInfo {
+    pub user_id: UserId,
+    pub organization_id: OrganizationId,
+    pub active: bool,
+    pub verified: bool,
+    pub roles: Vec<RoleId>,
+    pub permissions: Vec<String>,
+}
+
+pub struct AuthQueries {
+    db: PgPool,
+}
+
+#[async_trait]
+impl filigree::auth::AuthQueries for AuthQueries {
+    type AuthInfo = AuthInfo;
+
+    async fn get_user_by_api_key(
+        &self,
+        api_key: Uuid,
+        hash: Vec<u8>,
+    ) -> Result<Option<AuthInfo>, sqlx::Error> {
+        query_file_as!(AuthInfo, "src/auth/fetch_api_key.sql", api_key, hash)
+            .fetch_optional(&self.db)
+            .await
+    }
+
+    async fn get_user_by_session_id(
+        &self,
+        session_key: SessionKey,
+    ) -> Result<Option<AuthInfo>, sqlx::Error> {
+        query_file_as!(
+            AuthInfo,
+            "src/auth/fetch_api_key.sql",
+            &session_key.session_id,
+            &session_key.hash
+        )
+        .fetch_optional(&self.db)
+        .await
+    }
+}
+
+impl filigree::auth::AuthInfo for AuthInfo {
+    fn check_valid(&self) -> Result<(), AuthError> {
+        if !self.active {
+            Err(AuthError::Disabled)
+        } else if !self.verified {
+            Err(AuthError::NotVerified)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn has_permission(&self, permission: &str) -> bool {
+        self.permissions.contains(permission)
+    }
+}

@@ -12,7 +12,7 @@ pub fn render_files(
     let files = ["mod.rs.tera"];
 
     let context = tera::Context::new();
-    let base_path = PathBuf::from("server");
+    let base_path = PathBuf::from("src/server");
 
     files
         .into_par_iter()

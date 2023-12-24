@@ -17,6 +17,7 @@ mod auth;
 mod config;
 mod format;
 mod model;
+mod root;
 mod server;
 mod templates;
 
@@ -107,10 +108,12 @@ pub fn main() -> Result<(), Report<Error>> {
         .map(|m| (m.model.name.clone(), m.context.clone().into_json()))
         .collect::<Vec<_>>();
 
+    let mut root_files = None;
     let mut auth_files = None;
     let mut server_files = None;
     let mut model_files = None;
     rayon::scope(|s| {
+        s.spawn(|_| root_files = Some(root::render_files(&renderer)));
         s.spawn(|_| server_files = Some(server::render_files(&config, &renderer)));
         s.spawn(|_| {
             model_files = Some(
@@ -125,6 +128,7 @@ pub fn main() -> Result<(), Report<Error>> {
         })
     });
 
+    let root_files = root_files.expect("root_files was not set")?;
     let server_files = server_files.expect("server_files was not set")?;
     let model_files = model_files.expect("model_files was not set")?;
     let auth_files = auth_files.expect("auth_files was not set")?;
@@ -139,20 +143,20 @@ pub fn main() -> Result<(), Report<Error>> {
         .map(|gen| gen.render_down_migration())
         .collect::<Result<Vec<_>, _>>()?;
 
-    std::fs::create_dir_all(&config.migrations_path)
+    let migrations_dir = PathBuf::from("migrations");
+
+    std::fs::create_dir_all(&migrations_dir)
         .change_context(Error::WriteFile)
         .attach_printable_lazy(|| {
             format!(
-                "Unable to create migrations directory {}",
-                config.migrations_path.display()
+                "Unable to create migrations directory {0}",
+                migrations_dir.display()
             )
         })?;
 
     // TODO This works once but we don't want to change the initial migration after it's been
     // created.
-    let up_migration_path = config
-        .migrations_path
-        .join("00000000000000_filigree_init.up.sql");
+    let up_migration_path = migrations_dir.join("00000000000000_filigree_init.up.sql");
     let (before_up, after_up) = ModelGenerator::fixed_up_migration_files();
     write_vecs(
         &up_migration_path,
@@ -164,9 +168,7 @@ pub fn main() -> Result<(), Report<Error>> {
     )
     .change_context(Error::WriteFile)?;
 
-    let down_migration_path = config
-        .migrations_path
-        .join("00000000000000_filigree_init.down.sql");
+    let down_migration_path = migrations_dir.join("00000000000000_filigree_init.down.sql");
     let (before_down, after_down) = ModelGenerator::fixed_down_migration_files();
     write_vecs(
         &down_migration_path,
@@ -181,6 +183,7 @@ pub fn main() -> Result<(), Report<Error>> {
     let files = model_files
         .into_iter()
         .flatten()
+        .chain(root_files)
         .chain(server_files)
         .chain(auth_files)
         .collect::<Vec<_>>();
@@ -188,13 +191,12 @@ pub fn main() -> Result<(), Report<Error>> {
     let mut created_dirs = HashSet::new();
     for file in &files {
         let parent = file.path.parent();
-        if let Some(parent) = parent {
-            let dir = config.models_path.join(parent);
+        if let Some(dir) = parent {
             if !created_dirs.contains(&dir) {
                 std::fs::create_dir_all(&dir)
                     .change_context(Error::WriteFile)
                     .attach_printable_lazy(|| {
-                        format!("Unable to create directory {}", parent.display())
+                        format!("Unable to create directory {}", dir.display())
                     })?;
                 created_dirs.insert(dir);
             }
@@ -204,17 +206,16 @@ pub fn main() -> Result<(), Report<Error>> {
     files
         .into_par_iter()
         .try_for_each(|file| {
-            let path = config.models_path.join(&file.path);
-            if !args.force_write(&path)
-                && !path.to_string_lossy().contains("/generated/")
-                && path.exists()
+            if !args.force_write(&file.path)
+                && !file.path.to_string_lossy().contains("/generated/")
+                && file.path.exists()
             {
                 return Ok(());
             }
 
             // eprintln!("Writing file {}", path.display());
-            std::fs::write(&path, &file.contents)
-                .attach_printable_lazy(|| path.display().to_string())
+            std::fs::write(&file.path, &file.contents)
+                .attach_printable_lazy(|| file.path.display().to_string())
         })
         .change_context(Error::WriteFile)?;
 
@@ -227,13 +228,10 @@ pub fn main() -> Result<(), Report<Error>> {
             .collect::<Vec<_>>(),
     );
 
-    let model_mod = renderer.render(
-        &config.models_path,
-        "model",
-        "main_mod.rs.tera",
-        &model_mod_context,
-    )?;
-    let path = config.models_path.join("mod.rs");
+    let models_dir = PathBuf::from("src/models");
+    let model_mod =
+        renderer.render(&models_dir, "model", "main_mod.rs.tera", &model_mod_context)?;
+    let path = models_dir.join("mod.rs");
     if args.force_write(&path) || !path.exists() {
         std::fs::write(&path, model_mod.contents)
             .attach_printable_lazy(|| path.display().to_string())

@@ -28,9 +28,11 @@ impl<'a> ModelGenerator<'a> {
 
     fn create_template_context(config: &Config, model: &Model) -> tera::Context {
         let mut context = tera::Context::new();
-        context.insert("dir", &config.models_path.join(model.module_name()));
+        let base_dir = PathBuf::from("src/models").join(model.module_name());
+        context.insert("dir", &base_dir);
         context.insert("module_name", &model.module_name());
 
+        context.insert("model_name", &model.name);
         context.insert("table", &model.table());
         context.insert("indexes", &model.indexes);
 
@@ -139,32 +141,30 @@ impl<'a> ModelGenerator<'a> {
         (before_down, after_down)
     }
 
-    pub fn render(
-        &self,
-        template_name: &str,
-        context: &tera::Context,
-    ) -> Result<RenderedFile, Report<Error>> {
+    pub fn render_up_migration(&self) -> Result<Vec<u8>, Report<Error>> {
         self.renderer
             .render(
-                &PathBuf::from(self.model.module_name()),
+                &PathBuf::new(),
                 "model",
-                template_name,
-                context,
+                "migrate_up.sql.tera",
+                &self.context,
             )
-            .attach_printable_lazy(|| format!("Model {}", self.model.name))
-    }
-
-    pub fn render_up_migration(&self) -> Result<Vec<u8>, Report<Error>> {
-        self.render("migrate_up.sql.tera", &self.context)
             .map(|f| f.contents)
     }
 
     pub fn render_down_migration(&self) -> Result<Vec<u8>, Report<Error>> {
-        self.render("migrate_down.sql.tera", &self.context)
+        self.renderer
+            .render(
+                &PathBuf::new(),
+                "model",
+                "migrate_down.sql.tera",
+                &self.context,
+            )
             .map(|f| f.contents)
     }
 
     pub fn render_model_directory(&self) -> Result<Vec<RenderedFile>, Report<Error>> {
+        let base_path = PathBuf::from("src/models").join(self.model.module_name());
         let files = [
             "mod.rs.tera",
             "generated/select_one.sql.tera",
@@ -181,7 +181,11 @@ impl<'a> ModelGenerator<'a> {
 
         let output = files
             .into_par_iter()
-            .map(|file| self.render(file, &self.context))
+            .map(|file| {
+                self.renderer
+                    .render(&base_path, "model", file, &self.context)
+                    .attach_printable_lazy(|| format!("Model {}", self.model.name))
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(output)

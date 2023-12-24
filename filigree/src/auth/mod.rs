@@ -17,7 +17,6 @@ use axum::{http::StatusCode, response::IntoResponse};
 pub use check_middleware::*;
 pub use extractors::*;
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgRow, FromRow};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -116,7 +115,7 @@ pub trait AuthQueries: Send + Sync {
 }
 
 /// An object containing information about the current user.
-pub trait AuthInfo: 'static + Clone + Send + Sync + Unpin + for<'db> FromRow<'db, PgRow> {
+pub trait AuthInfo: 'static + Clone + Send + Sync {
     /// Return Ok if the user is valid, or an [AuthError] if the user is not authenticated or
     /// authorized.
     fn check_valid(&self) -> Result<(), AuthError>;

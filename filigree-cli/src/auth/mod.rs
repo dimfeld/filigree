@@ -32,12 +32,13 @@ pub fn render_files(
     context.insert("org_model", org_model);
 
     let files = [
+        "mod.rs.tera",
         "fetch_base.sql.tera",
         "fetch_api_key.sql.tera",
         "fetch_session.sql.tera",
     ];
 
-    let dir = PathBuf::from("auth");
+    let dir = PathBuf::from("src/auth");
     files
         .into_par_iter()
         .map(|file| renderer.render(&dir, "auth", file, &context))

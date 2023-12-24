@@ -18,16 +18,6 @@ pub struct Config {
     #[serde(default = "Config::default_sql_dialect")]
     pub sql_dialect: SqlDialect,
 
-    /// Where to place generated model files.
-    /// Defaults to `src/models`
-    #[serde(default = "Config::default_models_path")]
-    pub models_path: PathBuf,
-
-    /// Where the place the SQL migrations
-    /// Defaults to `migrations`
-    #[serde(default = "Config::default_migrations_path")]
-    pub migrations_path: PathBuf,
-
     /// The auth scope for models that don't specify a different one.
     pub default_auth_scope: ModelAuthScope,
     // TODO This is coming later
