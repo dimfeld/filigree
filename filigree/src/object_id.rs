@@ -214,7 +214,13 @@ impl<'de, PREFIX: ObjectIdPrefix> serde::Deserialize<'de> for ObjectId<PREFIX> {
 /// Store and retrieve in Postgres as a raw UUID
 impl<PREFIX: ObjectIdPrefix> sqlx::Type<sqlx::Postgres> for ObjectId<PREFIX> {
     fn type_info() -> <sqlx::Postgres as Database>::TypeInfo {
-        PgTypeInfo::with_name("uuid")
+        Uuid::type_info()
+    }
+}
+
+impl<PREFIX: ObjectIdPrefix> sqlx::postgres::PgHasArrayType for ObjectId<PREFIX> {
+    fn array_type_info() -> PgTypeInfo {
+        Uuid::array_type_info()
     }
 }
 
