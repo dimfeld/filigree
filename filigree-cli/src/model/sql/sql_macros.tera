@@ -27,9 +27,9 @@ GROUP BY permission
 
 SELECT
   CASE
-    WHEN bool_or(permission in ('org_admin', {{owner_perm | to_sql}})) THEN 'owner',
-    WHEN bool_or(permission = {{write_perm | to_sql}}) THEN 'write',
-    WHEN bool_or(permission = {{read_perm | to_sql}}) THEN 'read',
+    WHEN bool_or(permission in ('org_admin', {{owner_perm | to_sql}})) THEN 'owner'
+    WHEN bool_or(permission = {{write_perm | to_sql}}) THEN 'write'
+    WHEN bool_or(permission = {{read_perm | to_sql}}) THEN 'read'
     ELSE NULL
   END
 FROM permisssions
@@ -44,9 +44,9 @@ GROUP BY permission
 {# Look up object permissions #}
 SELECT
   CASE
-    WHEN bool_or(permission in ('org_admin', {{owner_perm | to_sql}})) THEN 'owner',
-    WHEN bool_or(permission = {{write_perm | to_sql}}) THEN 'write',
-    WHEN bool_or(permission = {{read_perm | to_sql}}) THEN 'read',
+    WHEN bool_or(permission in ('org_admin', {{owner_perm | to_sql}})) THEN 'owner'
+    WHEN bool_or(permission = {{write_perm | to_sql}}) THEN 'write'
+    WHEN bool_or(permission = {{read_perm | to_sql}}) THEN 'read'
     ELSE NULL
   END
 FROM object_permissions

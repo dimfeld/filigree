@@ -1,8 +1,4 @@
-{% if id_type == "UserId" %}
-use super::UserId;
-{% else %}
-use super::super::{{id_type}};
-{% endif %}
+use super::{{id_type}};
 {%- if id_type != "OrganizationId" %}
 use crate::models::organization::OrganizationId;
 {% endif -%}

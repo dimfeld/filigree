@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use filigree::auth::{AuthError, OrganizationId, RoleId, SessionKey, UserId};
-use sqlx::PgPool;
+use sqlx::{query_file_as, PgPool};
 use uuid::Uuid;
 
 pub type Authed = filigree::auth::Authed<AuthInfo>;
