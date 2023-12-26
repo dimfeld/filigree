@@ -9,7 +9,7 @@ use axum::{
 use super::{lookup::AuthLookup, AuthError, AuthInfo};
 
 /// Extract authentication info from the Request, or return an error if the user is not valid.
-pub struct Authed<T: AuthInfo>(T);
+pub struct Authed<T: AuthInfo>(Arc<T>);
 
 impl<T> Deref for Authed<T>
 where
@@ -36,7 +36,7 @@ where
 }
 
 /// Extract the AuthInfo from Request [Parts]
-pub async fn get_auth_info_from_parts<T: AuthInfo>(parts: &mut Parts) -> Result<T, AuthError> {
+pub async fn get_auth_info_from_parts<T: AuthInfo>(parts: &mut Parts) -> Result<Arc<T>, AuthError> {
     let auth_lookup = parts
         .extensions
         .get::<Arc<AuthLookup<T>>>()
@@ -48,7 +48,7 @@ pub async fn get_auth_info_from_parts<T: AuthInfo>(parts: &mut Parts) -> Result<
 }
 
 /// Extract the AuthInfo from a [Request]
-pub async fn get_auth_info<T: AuthInfo>(request: Request) -> Result<(Request, T), AuthError> {
+pub async fn get_auth_info<T: AuthInfo>(request: Request) -> Result<(Request, Arc<T>), AuthError> {
     let (mut parts, body) = request.into_parts();
     let auth_info = get_auth_info_from_parts(&mut parts).await?;
 

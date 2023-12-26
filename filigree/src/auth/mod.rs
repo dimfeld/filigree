@@ -115,7 +115,7 @@ pub trait AuthQueries: Send + Sync {
 }
 
 /// An object containing information about the current user.
-pub trait AuthInfo: 'static + Clone + Send + Sync {
+pub trait AuthInfo: 'static + Send + Sync {
     /// Return Ok if the user is valid, or an [AuthError] if the user is not authenticated or
     /// authorized.
     fn check_valid(&self) -> Result<(), AuthError>;

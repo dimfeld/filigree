@@ -15,7 +15,7 @@ use super::{
 
 /// Functionality to fetch authorization info from the database given session cookies and Bearer tokens
 pub struct AuthLookup<T: AuthInfo> {
-    info: Mutex<Option<Result<T, AuthError>>>,
+    info: Mutex<Option<Result<Arc<T>, AuthError>>>,
     // Erase the type so that we don't have to reference it everywhere such as
     // in the Authed extractor, which can become inconvenient.
     queries: Arc<dyn AuthQueries<AuthInfo = T>>,
@@ -30,23 +30,25 @@ impl<T: AuthInfo> AuthLookup<T> {
         }
     }
 
-    async fn get_info_from_api_key(&self, key: Uuid, hash: Vec<u8>) -> Result<T, AuthError> {
+    async fn get_info_from_api_key(&self, key: Uuid, hash: Vec<u8>) -> Result<Arc<T>, AuthError> {
         self.queries
             .get_user_by_api_key(key, hash)
             .await
             .map_err(|e| AuthError::Db(Arc::new(e)))?
+            .map(Arc::new)
             .ok_or(AuthError::InvalidApiKey)
     }
 
-    async fn get_info_from_session(&self, key: &SessionKey) -> Result<T, AuthError> {
+    async fn get_info_from_session(&self, key: &SessionKey) -> Result<Arc<T>, AuthError> {
         self.queries
             .get_user_by_session_id(key)
             .await
             .map_err(|e| AuthError::Db(Arc::new(e)))?
+            .map(Arc::new)
             .ok_or(AuthError::Unauthenticated)
     }
 
-    async fn fetch_auth_info(&self, request: &mut Parts) -> Result<T, AuthError> {
+    async fn fetch_auth_info(&self, request: &mut Parts) -> Result<Arc<T>, AuthError> {
         // Look for API key
         let bearer: Option<TypedHeader<Authorization<Bearer>>> =
             TypedHeader::from_request_parts(request, &()).await.ok();
@@ -66,7 +68,7 @@ impl<T: AuthInfo> AuthLookup<T> {
     }
 
     /// Return the authorization info, fetching it if it hasn't yet been fetched for this request.
-    pub async fn get_auth_info(&self, request: &mut Parts) -> Result<T, AuthError> {
+    pub async fn get_auth_info(&self, request: &mut Parts) -> Result<Arc<T>, AuthError> {
         let mut info = self.info.lock().await;
         if let Some(info) = info.as_ref() {
             return info.clone();

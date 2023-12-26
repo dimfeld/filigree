@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use filigree::auth::{AuthError, OrganizationId, RoleId, SessionKey, UserId};
 use sqlx::{query_as, PgPool};

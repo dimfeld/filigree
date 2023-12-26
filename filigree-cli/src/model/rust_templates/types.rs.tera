@@ -25,6 +25,7 @@ impl From<{{owner_view_struct}}> for {{user_view_struct}} {
             {% for field in fields | filter(attribute="user_read", value=true) -%}
             {{field.rust_name}}: owner.{{field.rust_name}},
             {%- endfor %}
+            _permission: owner._permission,
         }
     }
 }
@@ -37,18 +38,20 @@ impl From<{{struct_base}}> for {{owner_view_struct}} {
             {% for field in fields | filter(attribute="owner_read", value=true) -%}
             {{field.rust_name}}: data.{{field.rust_name}},
             {%- endfor %}
+            _permission: data._permission,
         }
     }
 }
 {% endif %}
 
-{% if user_view_struct != struct_base %}
+{% if user_view_struct != struct_base and owner_view_struct != struct_base %}
 impl From<{{struct_base}}> for {{user_view_struct}} {
     fn from(data: {{struct_base}}) -> Self {
         Self {
             {% for field in fields | filter(attribute="user_read", value=true) -%}
             {{field.rust_name}}: data.{{field.rust_name}},
             {%- endfor %}
+            _permission: data._permission,
         }
     }
 }
@@ -73,11 +76,13 @@ impl {{struct_base}}FilteredView {
     }
 }
 
+{% if user_view_struct != owner_view_struct %}
 impl From<{{struct_base}}UserView> for {{struct_base}}FilteredView {
     fn from(data: {{struct_base}}UserView) -> Self {
         Self::User(data.into())
     }
 }
+{% endif %}
 
 impl From<{{struct_base}}OwnerView> for {{struct_base}}FilteredView {
     fn from(data: {{struct_base}}OwnerView) -> Self {
