@@ -30,18 +30,18 @@ async fn create(
     ) -> Result<impl IntoResponse, Error> {
     let result = queries::create(&state.db, &auth, &payload).await?;
 
-    Ok((StatusCode::CREATED, Json(result)));
+    Ok((StatusCode::CREATED, Json(result)))
 }
 
 async fn update(
     State(state): State<ServerState>,
     auth: Authed,
+    Path(id): Path<{{ id_type }}>,
     Json(payload): Json<{{ struct_base }}UpdatePayload>,
-    Path(id): Path<{{ id_type }}>
     ) -> Result<impl IntoResponse, Error> {
 
     queries::update(&state.db, &auth, id, &payload).await?;
-    Ok(StatusCode::OK);
+    Ok(StatusCode::OK)
 }
 
 async fn delete(
@@ -52,7 +52,7 @@ async fn delete(
 
     queries::delete(&state.db, &auth, id).await?;
 
-    Ok(StatusCode::OK);
+    Ok(StatusCode::OK)
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {

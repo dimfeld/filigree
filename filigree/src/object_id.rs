@@ -244,6 +244,8 @@ impl<'r, PREFIX: ObjectIdPrefix> sqlx::Decode<'r, sqlx::Postgres> for ObjectId<P
 
 #[cfg(test)]
 mod tests {
+    use axum::{extract::Path, response::IntoResponse, Router};
+
     use super::*;
 
     make_object_id!(TeamId, tm);
@@ -262,6 +264,16 @@ mod tests {
         let id = TeamId::new();
         let json_str = serde_json::to_string(&id).unwrap();
         let id2: TeamId = serde_json::from_str(&json_str).unwrap();
+        drop(json_str);
         assert_eq!(id, id2, "Value serializes and deserializes to itself");
+    }
+
+    #[test]
+    fn can_use_in_axum_path() {
+        async fn get_id(Path(_id): Path<TeamId>) -> impl IntoResponse {
+            "ok"
+        }
+
+        let _ = Router::<()>::new().route("/:id", axum::routing::get(get_id));
     }
 }
