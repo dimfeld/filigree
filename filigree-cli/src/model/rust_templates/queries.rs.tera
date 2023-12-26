@@ -8,6 +8,8 @@ use serde::{Serialize, Deserialize};
 use sqlx::PgPool;
 use thiserror::Error;
 
+use std::str::FromStr;
+
 use super::{{id_type}};
 use super::types::*;
 
@@ -171,7 +173,7 @@ impl ListQueryFilters {
             const DEFAULT_PER_PAGE: u32 = {{ pagination.default_per_page }};
             let per_page = self.per_page.unwrap_or(DEFAULT_PER_PAGE).min(MAX_PER_PAGE).max(1);
             let offset = self.page.unwrap_or(0) * per_page;
-            query = query.bind(per_page).bind(offset);
+            query = query.bind(per_page as i32).bind(offset as i32);
         {% endif %}
 
 
