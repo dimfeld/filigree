@@ -768,12 +768,17 @@ dependencies = [
  "chrono",
  "error-stack",
  "filigree",
+ "hyper",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror",
  "tokio",
+ "tower-cookies",
+ "tower-http",
  "tower-sessions",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

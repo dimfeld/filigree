@@ -7,11 +7,14 @@ use super::super::{{id_type}};
 use crate::models::organization::OrganizationId;
 {% endif -%}
 use filigree::auth::ObjectPermission;
-use serde::{Serialize, Deserialize};
+use serde::{
+    ser::{Serializer, SerializeStruct},
+    Serialize, Deserialize
+};
 
 {% for struct in structs %}
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
 pub struct {{ struct.name }} {
     {{ struct.fields }}
 }
@@ -22,75 +25,27 @@ pub struct {{ struct.name }} {
 
 {% endfor %}
 
-{% if user_view_struct != owner_view_struct %}
-impl From<{{owner_view_struct}}> for {{user_view_struct}} {
-    fn from(owner: {{owner_view_struct}}) -> Self {
-        Self {
-            {% for field in fields | filter(attribute="user_read", value=true) -%}
-            {{field.rust_name}}: owner.{{field.rust_name}},
+impl Serialize for {{struct_base}} {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if self._permission == ObjectPermission::Owner {
+            {% set view_fields = fields | filter(attribute="owner_read", value=true) %}
+            let mut state = serializer.serialize_struct("{{struct_base}}", {{ view_fields | length + 1 }})?;
+            {% for field in view_fields -%}
+            state.serialize_field("{{field.name}}", &self.{{field.rust_name}})?;
             {%- endfor %}
-            _permission: owner._permission,
-        }
-    }
-}
-{% endif %}
-
-{% if owner_view_struct != struct_base %}
-impl From<{{struct_base}}> for {{owner_view_struct}} {
-    fn from(data: {{struct_base}}) -> Self {
-        Self {
-            {% for field in fields | filter(attribute="owner_read", value=true) -%}
-            {{field.rust_name}}: data.{{field.rust_name}},
-            {%- endfor %}
-            _permission: data._permission,
-        }
-    }
-}
-{% endif %}
-
-{% if user_view_struct != struct_base and owner_view_struct != struct_base %}
-impl From<{{struct_base}}> for {{user_view_struct}} {
-    fn from(data: {{struct_base}}) -> Self {
-        Self {
-            {% for field in fields | filter(attribute="user_read", value=true) -%}
-            {{field.rust_name}}: data.{{field.rust_name}},
-            {%- endfor %}
-            _permission: data._permission,
-        }
-    }
-}
-{% endif %}
-
-
-#[derive(Serialize, Debug)]
-#[serde(untagged)]
-pub enum {{struct_base}}FilteredView {
-    User({{struct_base}}UserView),
-    Owner({{struct_base}}OwnerView),
-}
-
-impl {{struct_base}}FilteredView {
-    pub fn from_item(item: impl Into<{{struct_base}}OwnerView>) -> Self {
-        let item = item.into();
-        if item._permission == ObjectPermission::Owner {
-            Self::Owner(item)
+            state.serialize_field("_permission", &self._permission)?;
+            state.end()
         } else {
-            Self::User(item.into())
+            {% set view_fields = fields | filter(attribute="user_read", value=true) %}
+            let mut state = serializer.serialize_struct("{{struct_base}}", {{ view_fields | length + 1 }})?;
+            {% for field in view_fields -%}
+            state.serialize_field("{{field.name}}", &self.{{field.rust_name}})?;
+            {%- endfor %}
+            state.serialize_field("_permission", &self._permission)?;
+            state.end()
         }
     }
 }
-
-{% if user_view_struct != owner_view_struct %}
-impl From<{{struct_base}}UserView> for {{struct_base}}FilteredView {
-    fn from(data: {{struct_base}}UserView) -> Self {
-        Self::User(data.into())
-    }
-}
-{% endif %}
-
-impl From<{{struct_base}}OwnerView> for {{struct_base}}FilteredView {
-    fn from(data: {{struct_base}}OwnerView) -> Self {
-        Self::Owner(data.into())
-    }
-}
-

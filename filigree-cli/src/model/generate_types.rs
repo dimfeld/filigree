@@ -14,14 +14,6 @@ impl<'a> ModelGenerator<'a> {
                 Self::struct_contents(model.all_fields().map(|f| f.1), |_| false, true),
             ),
             (
-                "UserView",
-                Self::struct_contents(model.user_view_struct_fields(), |_| false, true),
-            ),
-            (
-                "OwnerView",
-                Self::struct_contents(model.owner_view_struct_fields(), |_| false, true),
-            ),
-            (
                 "CreatePayload",
                 Self::struct_contents(model.write_payload_struct_fields(), |_| false, false),
             ),
@@ -74,22 +66,9 @@ impl<'a> ModelGenerator<'a> {
                     "name": name,
                     "fields": fields,
                     "aliases": aliases,
-                    "is_user_view": suffixes.contains(&"UserView"),
-                    "is_owner_view": suffixes.contains(&"OwnerView"),
                 })
             })
             .collect::<Vec<_>>();
-
-        let user_view_struct = structs
-            .iter()
-            .find(|v| v["is_user_view"].as_bool().unwrap_or_default())
-            .unwrap();
-        let owner_view_struct = structs
-            .iter()
-            .find(|v| v["is_owner_view"].as_bool().unwrap_or_default())
-            .unwrap();
-        context.insert("user_view_struct", &user_view_struct["name"]);
-        context.insert("owner_view_struct", &owner_view_struct["name"]);
 
         context.insert("struct_base", &struct_base);
         context.insert("structs", &structs);
@@ -108,7 +87,13 @@ impl<'a> ModelGenerator<'a> {
                     f.rust_type()
                 };
 
-                format!("pub {}: {},", f.rust_field_name(), typ)
+                let rust_field_name = f.rust_field_name();
+                let serde_rename = if rust_field_name != f.name {
+                    format!("#[serde(rename = \"{name}\")]\n", name = f.name)
+                } else {
+                    String::new()
+                };
+                format!("{serde_rename}pub {rust_field_name}: {typ},")
             })
             .join("\n");
         if add_permissions_field {

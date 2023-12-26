@@ -1,12 +1,10 @@
 use error_stack::ResultExt;
 use filigree::{
-    auth::ObjectPermission,
     errors::OrderByError,
     sql::{BindingOperator, WhereBuilder}
 };
-use serde::{Serialize, Deserialize};
-use sqlx::PgPool;
-use thiserror::Error;
+use serde::Deserialize;
+use sqlx::{PgPool, query_file, query_file_as};
 
 use std::str::FromStr;
 
@@ -16,33 +14,15 @@ use super::types::*;
 use crate::auth::AuthInfo;
 use crate::Error;
 
-type Query<'q> = sqlx::query::Query<'q, sqlx::Postgres, <sqlx::Postgres as sqlx::database::HasArguments<'q>>::Arguments>;
+type QueryAs<'q, T> = sqlx::query::QueryAs<'q, sqlx::Postgres, T, <sqlx::Postgres as sqlx::database::HasArguments<'q>>::Arguments>;
 
-/// Get an object and all its fields. This can be useful for internal operations when the object
-/// should not be returned to the user.
-pub async fn get_with_all_fields(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}, error_stack::Report<Error>> {
-    let object = query_file_as!({{struct_base}}, "{{dir}}/select_one_all_fields.sql",
+/// Get a {{model_name}} from the database
+pub async fn get(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}, error_stack::Report<Error>> {
+    let object = query_file_as!({{struct_base}}, "{{dir}}/select_one.sql",
         id.as_uuid(),
-        auth.org_id.as_uuid(),
-        &auth.actor_ids
+        auth.organization_id.as_uuid(),
+        &auth.actor_ids()
         )
-        .fetch_optional(db)
-        .await
-        .change_context(Error::Db)?
-        .ok_or_else(Error::NotFound("{{model_name}}"))?;
-
-    Ok(object)
-
-}
-
-/// Get an object and coerce it to the owner or user view depending on the user's permissions.
-pub async fn get(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}FilteredView, error_stack::Report<Error>> {
-    let object = query_file_as!({{struct_base}}OwnerView, "{{dir}}/select_one.sql",
-        id.as_uuid(),
-        auth.org_id.as_uuid(),
-        &auth.actor_ids
-        )
-        .map({{struct_base}}FilteredView::from_item)
         .fetch_optional(db)
         .await
         .change_context(Error::Db)?
@@ -167,7 +147,7 @@ impl ListQueryFilters {
         bindings.to_string()
     }
 
-    fn bind_to_query<'a>(&self, mut query: Query<'a>) -> Query<'a> {
+    fn bind_to_query<'a, T>(&self, mut query: QueryAs<'a, T>) -> QueryAs<'a, T> {
         {% if not pagination.disable %}
             const MAX_PER_PAGE: u32 = {{ pagination.max_per_page }};
             const DEFAULT_PER_PAGE: u32 = {{ pagination.default_per_page }};
@@ -198,7 +178,7 @@ impl ListQueryFilters {
     }
 }
 
-pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}FilteredView>, error_stack::Report<Error>> {
+pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}>, error_stack::Report<Error>> {
     let q = include_str!("{{dir}}/list.sql");
 
     let (descending, order_by_field) = parse_order_by(filters.order_by.as_deref().unwrap_or("{{default_sort_field}}"))?;
@@ -208,27 +188,26 @@ pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQueryFilters) -> R
     {% if has_filterable %}
         let q = q.replace("<filters>", &filters.build_where_clause());
     {% endif %}
-    let mut query = sqlx::query_as::<_, {{struct_base}}OwnerView>(q.as_str());
+    let mut query = sqlx::query_as::<_, {{struct_base}}>(q.as_str());
 
-    query = query.bind(auth.org_id)
-        .bind(&auth.actor_ids);
+    query = query.bind(auth.organization_id)
+        .bind(&auth.actor_ids());
 
     query = filters.bind_to_query(query);
 
     let results = query
         .fetch_all(db)
-        .map({{struct_base}}FilteredView::from_item)
         .await
         .change_context(Error::Db)?;
 
     Ok(results)
 }
 
-pub async fn create(db: &PgPool, auth: &AuthInfo, object: &{{struct_base}}CreatePayload) -> Result<{{struct_base}}OwnerView, error_stack::Report<Error>> {
+pub async fn create(db: &PgPool, auth: &AuthInfo, object: &{{struct_base}}CreatePayload) -> Result<{{struct_base}}, error_stack::Report<Error>> {
     let id = {{id_type}}::new();
-    let result = query_file_as!({{struct_base}}OwnerView, "{{dir}}/insert.sql",
+    let result = query_file_as!({{struct_base}}, "{{dir}}/insert.sql",
         id.as_uuid(),
-        auth.org_id.as_uuid(),
+        auth.organization_id.as_uuid(),
         {% for field in fields | filter(attribute="owner_write", value=true) %}
             &payload.{{field.rust_name}},
         {% endfor %}
@@ -243,7 +222,7 @@ pub async fn create(db: &PgPool, auth: &AuthInfo, object: &{{struct_base}}Create
 pub async fn update(db: &PgPool, auth: &AuthInfo, id: {{id_type}}, payload: &{{ struct_base }}UpdatePayload) -> Result<(), error_stack::Report<Error>> {
     query_file!("{{dir}}/update.sql",
         id.as_uuid(),
-        auth.org_id.as_uuid(),
+        auth.organization_id.as_uuid(),
         {% for field in fields | filter(attribute="owner_write", value=true) %}
             &payload.{{field.rust_name}},
         {% endfor %}
@@ -257,7 +236,7 @@ pub async fn update(db: &PgPool, auth: &AuthInfo, id: {{id_type}}, payload: &{{ 
 pub async fn delete(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<(), error_stack::Report<Error>> {
     query_file!("{{dir}}/delete.sql",
         id.as_uuid(),
-        auth.org_id.as_uuid()
+        auth.organization_id.as_uuid()
         )
         .execute(db)
         .await

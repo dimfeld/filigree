@@ -74,6 +74,7 @@ impl<'a> ModelGenerator<'a> {
             .all_fields()
             .map(|(fixed, field)| {
                 json!({
+                    "name": field.name,
                     "sql_name": field.sql_field_name(),
                     "sql_full_name": field.qualified_sql_field_name(),
                     "sql_type": field.typ.to_sql_type(config.sql_dialect),

@@ -94,18 +94,6 @@ impl Model {
             )
     }
 
-    pub fn user_view_struct_fields(&self) -> impl Iterator<Item = Cow<ModelField>> {
-        self.all_fields()
-            .map(|(_, f)| f)
-            .filter(|f| f.user_access.can_read())
-    }
-
-    pub fn owner_view_struct_fields(&self) -> impl Iterator<Item = Cow<ModelField>> {
-        self.all_fields()
-            .map(|(_, f)| f)
-            .filter(|f| f.owner_access.can_read())
-    }
-
     pub fn write_payload_struct_fields(&self) -> impl Iterator<Item = Cow<ModelField>> {
         self.all_fields()
             .map(|(_, f)| f)

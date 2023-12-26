@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use filigree::auth::{AuthError, OrganizationId, RoleId, SessionKey, UserId};
-use sqlx::{query_as, PgPool};
+use sqlx::PgPool;
+use uuid::Uuid;
 
 pub type Authed = filigree::auth::Authed<AuthInfo>;
 
@@ -16,8 +15,40 @@ pub struct AuthInfo {
     pub permissions: Vec<String>,
 }
 
+impl AuthInfo {
+    pub fn actor_ids(&self) -> Vec<Uuid> {
+        self.roles
+            .iter()
+            .map(RoleId::as_uuid)
+            .chain(std::iter::once(self.user_id.as_uuid()))
+            .collect::<Vec<_>>()
+    }
+}
+
+impl filigree::auth::AuthInfo for AuthInfo {
+    fn check_valid(&self) -> Result<(), AuthError> {
+        if !self.active {
+            Err(AuthError::Disabled)
+        } else if !self.verified {
+            Err(AuthError::NotVerified)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn has_permission(&self, permission: &str) -> bool {
+        self.permissions.iter().any(|p| p == permission)
+    }
+}
+
 pub struct AuthQueries {
     db: PgPool,
+}
+
+impl AuthQueries {
+    pub fn new(db: PgPool) -> Self {
+        Self { db }
+    }
 }
 
 #[async_trait]
@@ -36,7 +67,7 @@ impl filigree::auth::AuthQueries for AuthQueries {
 
     async fn get_user_by_session_id(
         &self,
-        session_key: SessionKey,
+        session_key: &SessionKey,
     ) -> Result<Option<AuthInfo>, sqlx::Error> {
         query_file_as!(
             AuthInfo,
@@ -46,21 +77,5 @@ impl filigree::auth::AuthQueries for AuthQueries {
         )
         .fetch_optional(&self.db)
         .await
-    }
-}
-
-impl filigree::auth::AuthInfo for AuthInfo {
-    fn check_valid(&self) -> Result<(), AuthError> {
-        if !self.active {
-            Err(AuthError::Disabled)
-        } else if !self.verified {
-            Err(AuthError::NotVerified)
-        } else {
-            Ok(())
-        }
-    }
-
-    fn has_permission(&self, permission: &str) -> bool {
-        self.permissions.iter().any(|p| p == permission)
     }
 }
