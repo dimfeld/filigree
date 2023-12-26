@@ -61,6 +61,6 @@ impl filigree::auth::AuthInfo for AuthInfo {
     }
 
     fn has_permission(&self, permission: &str) -> bool {
-        self.permissions.contains(permission)
+        self.permissions.iter().any(|p| p == permission)
     }
 }
