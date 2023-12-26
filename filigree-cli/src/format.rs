@@ -8,17 +8,17 @@ use crate::Error;
 #[derive(Deserialize, Debug, Default)]
 pub struct Formatters {
     /// The formatter to use for Rust code. Defaults to rustfmt.
-    pub rust: Option<String>,
+    pub rust: Option<Vec<String>>,
     /// The formatter to use for SQL files.
-    pub sql: Option<String>,
+    pub sql: Option<Vec<String>>,
 }
 
 impl Formatters {
     pub fn run_formatter(&self, filename: &str, input: Vec<u8>) -> Result<Vec<u8>, Report<Error>> {
         let formatter = if filename.ends_with(".sql") {
-            self.sql.as_deref()
+            self.sql.clone()
         } else if filename.ends_with(".rs") {
-            self.rust.as_deref().or(Some("rustfmt"))
+            self.rust.clone().or(Some(vec!["rustfmt".to_string()]))
         } else {
             None
         };
@@ -29,7 +29,14 @@ impl Formatters {
             return Ok(input);
         };
 
-        let mut format_process = std::process::Command::new(formatter)
+        let args = if formatter.len() > 1 {
+            &formatter[1..]
+        } else {
+            &[]
+        };
+
+        let mut format_process = std::process::Command::new(&formatter[0])
+            .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -52,7 +59,10 @@ impl Formatters {
         if !result.status.success() {
             let code = result.status.code().unwrap_or(0);
             return Err(Error::Formatter)
-                .attach_printable(format!("Formatter {formatter} exited with code {code}"))
+                .attach_printable(format!(
+                    "Formatter {cmd} exited with code {code}",
+                    cmd = formatter.join(" ")
+                ))
                 .attach_printable(String::from_utf8(result.stderr).unwrap_or_default());
         }
 

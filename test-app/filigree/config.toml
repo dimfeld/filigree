@@ -1,4 +1,5 @@
-formatter.sql = "pg_format"
+formatter.sql = ["pg_format"]
+formatter.rust = ["rustfmt", "+nightly"]
 
 default_auth_scope = "model"
 
