@@ -36,6 +36,8 @@ fn handle_panic(production: bool, err: Box<dyn Any + Send + 'static>) -> Respons
 
 /// A middleware that handles panics in the application and returns the error formatted as JSON
 /// If `production` is true, this will return a generic error instead of the actual error details.
-pub fn panic_handler(production: bool) -> CatchPanicLayer<impl ResponseForPanic> {
+pub fn panic_handler(
+    production: bool,
+) -> CatchPanicLayer<impl ResponseForPanic<ResponseBody = Body>> {
     CatchPanicLayer::custom(move |err| handle_panic(production, err))
 }
