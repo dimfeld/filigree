@@ -30,6 +30,8 @@ pub enum Error {
     /// The requested item was not found
     #[error("{0} not found")]
     NotFound(&'static str),
+    #[error("Invalid filter")]
+    Filter,
     /// A wrapper around a Report<Error> to let it be returned from an Axum handler
     #[error("{0}")]
     WrapReport(Report<Error>),
@@ -52,6 +54,7 @@ impl HttpError for Error {
             Error::NotFound(_) => "not_found",
             Error::Shutdown => "shutdown",
             Error::ScheduledTask => "scheduled_task",
+            Error::Filter => "invalid_filter",
         }
     }
 
@@ -65,6 +68,7 @@ impl HttpError for Error {
             Error::NotFound(_) => StatusCode::NOT_FOUND,
             Error::Shutdown => StatusCode::INTERNAL_SERVER_ERROR,
             Error::ScheduledTask => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::Filter => StatusCode::BAD_REQUEST,
         }
     }
 }

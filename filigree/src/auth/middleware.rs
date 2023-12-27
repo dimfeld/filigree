@@ -10,9 +10,16 @@ pub type AuthQueriesContainer<INFO> = Arc<dyn AuthQueries<AuthInfo = INFO>>;
 
 /// A layer that inserts the auth lookup object into the request, for later
 /// use by the Authed extractor.
-#[derive(Clone)]
 pub struct AuthLayer<INFO: AuthInfo> {
     queries: AuthQueriesContainer<INFO>,
+}
+
+impl<INFO: AuthInfo> Clone for AuthLayer<INFO> {
+    fn clone(&self) -> Self {
+        Self {
+            queries: self.queries.clone(),
+        }
+    }
 }
 
 impl<INFO: AuthInfo> AuthLayer<INFO> {
@@ -22,7 +29,7 @@ impl<INFO: AuthInfo> AuthLayer<INFO> {
     }
 }
 
-impl<S, INFO: AuthInfo> Layer<S> for AuthLayer<INFO> {
+impl<S: Clone, INFO: AuthInfo> Layer<S> for AuthLayer<INFO> {
     type Service = AuthService<S, INFO>;
 
     fn layer(&self, inner: S) -> Self::Service {
@@ -34,10 +41,18 @@ impl<S, INFO: AuthInfo> Layer<S> for AuthLayer<INFO> {
 }
 
 /// A middleware service for fetching authorization info
-#[derive(Clone)]
-pub struct AuthService<S, INFO: AuthInfo> {
+pub struct AuthService<S: Clone, INFO: AuthInfo> {
     queries: AuthQueriesContainer<INFO>,
     inner: S,
+}
+
+impl<S: Clone, INFO: AuthInfo> Clone for AuthService<S, INFO> {
+    fn clone(&self) -> Self {
+        Self {
+            queries: self.queries.clone(),
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 impl<S, INFO: AuthInfo + 'static> Service<Request> for AuthService<S, INFO>

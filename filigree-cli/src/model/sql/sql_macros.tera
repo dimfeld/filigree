@@ -32,7 +32,7 @@ SELECT
     WHEN bool_or(permission = {{read_perm | to_sql}}) THEN 'read'
     ELSE NULL
   END
-FROM permisssions
+FROM permissions
 WHERE
     organization_id = {{organization}}
     AND actor_id = ANY({{actor_ids}})

@@ -19,8 +19,8 @@ impl AuthInfo {
     pub fn actor_ids(&self) -> Vec<Uuid> {
         self.roles
             .iter()
-            .map(RoleId::as_uuid)
-            .chain(std::iter::once(self.user_id.as_uuid()))
+            .map(|id| *id.as_uuid())
+            .chain(std::iter::once(*self.user_id.as_uuid()))
             .collect::<Vec<_>>()
     }
 }

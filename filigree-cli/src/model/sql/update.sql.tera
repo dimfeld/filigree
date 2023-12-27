@@ -4,7 +4,6 @@ WITH permissions AS (
 )
 UPDATE
   {{table}}
-FROM permissions
 SET
   {% for field in fields | filter(attribute='owner_write', value=true) %}
     {% if field.user_write %}
@@ -14,6 +13,7 @@ SET
     {% endif %}
   {% endfor %}
   updated_at = now()
+FROM permissions
 WHERE
   id = $1
   {% if not global %}

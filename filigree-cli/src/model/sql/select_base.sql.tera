@@ -2,11 +2,10 @@
 SELECT
   {% block select_fields %}
   {{ fields
-    | filter(attribute='owner_read', value=true)
     | map(attribute='sql_full_name')
     | join(sep=', ') }}
   {% endblock select_fields %},
-  _permission
+  _permission AS "_permission!: filigree::auth::ObjectPermission"
 FROM
   {{ table }} tb
 JOIN LATERAL ({{ macros::permissions_value(
@@ -20,7 +19,6 @@ JOIN LATERAL ({{ macros::permissions_value(
   )}}) _permission ON _permission IS NOT NULL
 WHERE
   tb.id = {% block id_param %}$1{% endblock id_param %}
-  AND _permission IS NOT NULL
   {% if not global %}
     AND tb.organization_id = $2
   {% endif %}

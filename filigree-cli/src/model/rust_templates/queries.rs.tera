@@ -1,7 +1,7 @@
 use error_stack::ResultExt;
 use filigree::{
     errors::OrderByError,
-    sql::{BindingOperator, WhereBuilder}
+    sql::{BindingOperator, FilterBuilder}
 };
 use serde::Deserialize;
 use sqlx::{PgPool, query_file, query_file_as};
@@ -18,50 +18,51 @@ type QueryAs<'q, T> = sqlx::query::QueryAs<'q, sqlx::Postgres, T, <sqlx::Postgre
 
 /// Get a {{model_name}} from the database
 pub async fn get(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}, error_stack::Report<Error>> {
+    let actor_ids = auth.actor_ids();
     let object = query_file_as!({{struct_base}}, "{{dir}}/select_one.sql",
         id.as_uuid(),
         auth.organization_id.as_uuid(),
-        &auth.actor_ids()
+        &actor_ids
         )
         .fetch_optional(db)
         .await
         .change_context(Error::Db)?
-        .ok_or_else(Error::NotFound("{{model_name}}"))?;
+        .ok_or(Error::NotFound("{{model_name}}"))?;
 
     Ok(object)
 }
 
 #[derive(Debug, Default)]
 enum OrderByField {
-    {% for field in fields  %}
-    {% if field.sortable != "none" %}
+    {%- for field in fields  %}
+    {%- if field.sortable != "none" -%}
         {% if field.snake_case_name == default_sort_field -%}
         #[default]
         {%- endif %}
     {{field.pascal_case_name}},
-    {% endif %}
-    {% endfor %}
+    {%- endif -%}
+    {%- endfor -%}
 }
 
 impl OrderByField {
     fn as_str(&self) -> &str {
         match self {
-            {% for field in fields  %}
-            {% if field.sortable != "none" %}
+            {% for field in fields -%}
+            {%- if field.sortable != "none" -%}
             Self::{{field.pascal_case_name}} => "{{field.snake_case_name}}",
-            {% endif %}
-            {% endfor %}
+            {%- endif -%}
+            {%- endfor %}
         }
     }
 
     fn allowed_direction(&self, descending: bool) -> bool {
         match self {
-            {% for field in fields | filter(attribute="sortable", value="ascending_only") %}
+            {% for field in fields | filter(attribute="sortable", value="ascending_only") -%}
             Self::{{field.pascal_case_name}} => descending == false,
-            {% endfor %}
-            {% for field in fields | filter(attribute="sortable", value="descending_only") %}
+            {%- endfor %}
+            {% for field in fields | filter(attribute="sortable", value="descending_only") -%}
             Self::{{field.pascal_case_name}} => descending == true,
-            {% endfor %}
+            {%- endfor %}
             _ => true
         }
     }
@@ -127,7 +128,7 @@ impl ListQueryFilters {
         {% if not pagination.disable %}
           {% set start_binding = start_binding + 2 %}
         {% endif %}
-        let mut bindings = WhereBuilder::new({{ start_binding }});
+        let mut bindings = FilterBuilder::new({{ start_binding }});
 
         {% for field in fields | filter(attribute="filterable", value="exact") %}
             if !self.{{field.rust_name}}.is_empty() {
@@ -143,7 +144,7 @@ impl ListQueryFilters {
                 bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}_gte, BindingOperator::Gte);
             }
         {% endfor %}
-        
+
         bindings.to_string()
     }
 
@@ -181,7 +182,8 @@ impl ListQueryFilters {
 pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}>, error_stack::Report<Error>> {
     let q = include_str!("list.sql");
 
-    let (descending, order_by_field) = parse_order_by(filters.order_by.as_deref().unwrap_or("{{default_sort_field}}"))?;
+    let (descending, order_by_field) = parse_order_by(filters.order_by.as_deref().unwrap_or("{{default_sort_field}}"))
+        .change_context(Error::Filter)?;
     let order_direction = if descending { "DESC" } else { "ASC" };
 
     let q = q.replace("<order_by>", &format!("{} {}", order_by_field.as_str(), order_direction));
@@ -190,8 +192,9 @@ pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQueryFilters) -> R
     {% endif %}
     let mut query = sqlx::query_as::<_, {{struct_base}}>(q.as_str());
 
-    query = query.bind(auth.organization_id)
-        .bind(&auth.actor_ids());
+    let actor_ids = auth.actor_ids();
+    query = query.bind(&auth.organization_id)
+        .bind(&actor_ids);
 
     query = filters.bind_to_query(query);
 
@@ -234,9 +237,11 @@ pub async fn update(db: &PgPool, auth: &AuthInfo, id: {{id_type}}, payload: &{{ 
 }
 
 pub async fn delete(db: &PgPool, auth: &AuthInfo, id: {{id_type}}) -> Result<(), error_stack::Report<Error>> {
+    let actor_ids = auth.actor_ids();
     query_file!("{{dir}}/delete.sql",
         id.as_uuid(),
-        auth.organization_id.as_uuid()
+        auth.organization_id.as_uuid(),
+        &actor_ids
         )
         .execute(db)
         .await

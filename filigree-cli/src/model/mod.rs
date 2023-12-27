@@ -108,7 +108,7 @@ impl Model {
             Some(ModelField {
                 name: "organization_id".to_string(),
                 typ: SqlType::Uuid,
-                rust_type: Some("OrganizationId".to_string()),
+                rust_type: Some("crate::models::organization::OrganizationId".to_string()),
                 nullable: false,
                 unique: false,
                 indexed: true,

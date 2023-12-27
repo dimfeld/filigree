@@ -10,10 +10,9 @@
 
 SELECT
   {{ fields
-    | filter(attribute='owner_read', value=true)
     | map(attribute='sql_full_name')
     | join(sep=',') }},
-  _permission
+  _permission AS "_permission!: filigree::auth::ObjectPermission"
 FROM
   {{ table }} tb
 JOIN LATERAL (

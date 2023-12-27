@@ -5,7 +5,7 @@ use error_stack::{Report, ResultExt};
 use rayon::prelude::*;
 use serde_json::json;
 
-use super::Model;
+use super::{field::SortableType, Model};
 use crate::{config::Config, templates::Renderer, Error, RenderedFile};
 
 pub struct ModelGenerator<'a> {
@@ -57,13 +57,18 @@ impl<'a> ModelGenerator<'a> {
                 default_sort_field
             };
 
-            if !model
-                .all_fields()
-                .any(|(_, field)| field.name == actual_default)
-            {
+            let default_field = model.all_fields().find(|(_, f)| f.name == actual_default);
+            if let Some(default_field) = default_field {
+                if default_field.1.sortable == SortableType::None {
+                    panic!(
+                        "Model {}: Default sort field {actual_default} is not sortable",
+                        model.name
+                    );
+                }
+            } else {
                 panic!(
-                    "Default sort field {} does not exist in model {}",
-                    actual_default, model.name
+                    "Model {}, Default sort field {} does not exist in model {}",
+                    model.name, actual_default, model.name
                 );
             }
         }
@@ -78,7 +83,7 @@ impl<'a> ModelGenerator<'a> {
                     "sql_name": field.sql_field_name(),
                     "sql_full_name": field.qualified_sql_field_name(),
                     "sql_type": field.typ.to_sql_type(config.sql_dialect),
-                    "snake_case_name": field.name.to_case(Case::Camel),
+                    "snake_case_name": field.name.to_case(Case::Snake),
                     "pascal_case_name": field.name.to_case(Case::Pascal),
                     "rust_name": field.rust_field_name(),
                     "base_rust_type": field.base_rust_type(),

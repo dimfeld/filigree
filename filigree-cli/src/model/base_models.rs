@@ -35,7 +35,10 @@ impl Model {
                 extra_create_table_sql: String::new(),
                 pagination: Default::default(),
                 fields: vec![
-                    simple_model_field("name", SqlType::Text),
+                    ModelField {
+                        sortable: super::field::SortableType::DefaultAscending,
+                        ..simple_model_field("name", SqlType::Text)
+                    },
                     ModelField {
                         unique: true,
                         ..simple_model_field("email", SqlType::Text)
@@ -59,7 +62,10 @@ impl Model {
                 extra_create_table_sql: String::new(),
                 pagination: Default::default(),
                 fields: vec![
-                    simple_model_field("name", SqlType::Text),
+                    ModelField {
+                        sortable: super::field::SortableType::DefaultAscending,
+                        ..simple_model_field("name", SqlType::Text)
+                    },
                     ModelField {
                         rust_type: Some("crate::models::user::UserId".to_string()),
                         user_access: Access::None,
@@ -91,7 +97,10 @@ impl Model {
                 extra_create_table_sql: String::new(),
                 pagination: Default::default(),
                 fields: vec![
-                    simple_model_field("name", SqlType::Text),
+                    ModelField {
+                        sortable: super::field::SortableType::DefaultAscending,
+                        ..simple_model_field("name", SqlType::Text)
+                    },
                     ModelField {
                         nullable: true,
                         user_access: Access::Read,

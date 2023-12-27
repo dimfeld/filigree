@@ -1,3 +1,4 @@
+#![allow(unused_imports, dead_code)]
 use axum::{Json, extract::{State, Path, Query}, http::StatusCode, response::IntoResponse, routing};
 
 use crate::{Error, auth::Authed, server::ServerState};

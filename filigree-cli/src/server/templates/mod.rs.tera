@@ -16,7 +16,6 @@ use std::{
 use axum::Router;
 use error_stack::{Report, ResultExt};
 use filigree::errors::{panic_handler, ObfuscateErrorLayer, ObfuscateErrorLayerSettings};
-use hyper::server::conn::AddrIncoming;
 use sqlx::PgPool;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -25,6 +24,7 @@ use tower_http::{
     request_id::MakeRequestUuid,
     timeout::TimeoutLayer,
     trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+    ServiceBuilderExt,
 };
 use tracing::{event, Level};
 
@@ -111,18 +111,18 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                 enabled: production,
                 ..Default::default()
             }))
-            .layer(TimeoutLayer::new(config.request_timeout))
-            .layer(RequestDecompressionLayer::new())
-            .layer(CompressionLayer::new())
-            .layer(tower_cookies::CookieManagerLayer::new())
-            .set_x_request_id(MakeRequestUuid)
-            .propagate_x_request_id()
             .layer(
                 TraceLayer::new_for_http()
                     .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
                     .on_response(DefaultOnResponse::new().level(Level::INFO))
                     .on_request(DefaultOnRequest::new().level(Level::INFO)),
             )
+            .layer(TimeoutLayer::new(config.request_timeout))
+            .layer(CompressionLayer::new())
+            .layer(tower_cookies::CookieManagerLayer::new())
+            .set_x_request_id(MakeRequestUuid)
+            .propagate_x_request_id()
+            .decompression()
             .layer(filigree::auth::middleware::AuthLayer::new(auth_queries))
             .into_inner(),
     );
