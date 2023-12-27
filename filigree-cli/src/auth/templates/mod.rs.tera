@@ -71,8 +71,8 @@ impl filigree::auth::AuthQueries for AuthQueries {
     ) -> Result<Option<AuthInfo>, sqlx::Error> {
         query_file_as!(
             AuthInfo,
-            "src/auth/fetch_api_key.sql",
-            &session_key.session_id,
+            "src/auth/fetch_session.sql",
+            session_key.session_id.as_uuid(),
             &session_key.hash
         )
         .fetch_optional(&self.db)

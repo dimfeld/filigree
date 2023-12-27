@@ -8,6 +8,7 @@ use super::{field::ModelField, generator::ModelGenerator, Model};
 impl<'a> ModelGenerator<'a> {
     pub(super) fn add_structs_to_rust_context(model: &Model, context: &mut tera::Context) {
         let struct_base = model.struct_name();
+        let user_can_write_anything = model.all_fields().any(|f| f.1.user_access.can_write());
         let struct_list = [
             (
                 "AllFields",
@@ -25,7 +26,9 @@ impl<'a> ModelGenerator<'a> {
                         // Allow optional fields for those that the owner can write,
                         // but the user can not, so that we can accept either form of
                         // the field.
-                        f.owner_access.can_write() && !f.user_access.can_write()
+                        user_can_write_anything
+                            && !f.user_access.can_write()
+                            && f.owner_access.can_write()
                     },
                     false,
                 ),

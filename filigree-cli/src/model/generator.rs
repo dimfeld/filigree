@@ -48,31 +48,33 @@ impl<'a> ModelGenerator<'a> {
             &model.auth_scope.unwrap_or(config.default_auth_scope),
         );
 
-        let default_sort_field = model.default_sort_field.as_deref().unwrap_or("-updated_at");
+        let full_default_sort_field = model.default_sort_field.as_deref().unwrap_or("-updated_at");
+        let default_sort_field = if full_default_sort_field.starts_with('-') {
+            &full_default_sort_field[1..]
+        } else {
+            full_default_sort_field
+        };
 
         {
-            let actual_default = if default_sort_field.starts_with('-') {
-                &default_sort_field[1..]
-            } else {
-                default_sort_field
-            };
-
-            let default_field = model.all_fields().find(|(_, f)| f.name == actual_default);
+            let default_field = model
+                .all_fields()
+                .find(|(_, f)| f.name == default_sort_field);
             if let Some(default_field) = default_field {
                 if default_field.1.sortable == SortableType::None {
                     panic!(
-                        "Model {}: Default sort field {actual_default} is not sortable",
+                        "Model {}: Default sort field {default_sort_field} is not sortable",
                         model.name
                     );
                 }
             } else {
                 panic!(
                     "Model {}, Default sort field {} does not exist in model {}",
-                    model.name, actual_default, model.name
+                    model.name, default_sort_field, model.name
                 );
             }
         }
 
+        context.insert("full_default_sort_field", full_default_sort_field);
         context.insert("default_sort_field", default_sort_field);
 
         let fields = model
@@ -88,6 +90,7 @@ impl<'a> ModelGenerator<'a> {
                     "rust_name": field.rust_field_name(),
                     "base_rust_type": field.base_rust_type(),
                     "rust_type": field.rust_type(),
+                    "is_custom_rust_type": field.rust_type.is_some(),
                     "default": field.default,
                     "nullable": field.nullable,
                     "filterable": field.filterable,

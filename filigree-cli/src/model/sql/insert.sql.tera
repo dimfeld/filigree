@@ -5,7 +5,7 @@ INSERT INTO {{table}}
   organization_id,
   {% endif %}
   {{ fields
-    | filter(attribute='updatable', value=true)
+    | filter(attribute='owner_write', value=true)
     | map(attribute='sql_name')
     | join(sep=', ') }}
 )
@@ -25,6 +25,6 @@ VALUES
 {% endfor %}
 )
 RETURNING
-{{ fields | filter(attribute="owner_read", value=true) | map(attribute='sql_full_name') | join(sep=', ') }},
+{{ fields | map(attribute='sql_full_name') | join(sep=', ') }},
 'owner' AS "_permission!: filigree::auth::ObjectPermission"
 

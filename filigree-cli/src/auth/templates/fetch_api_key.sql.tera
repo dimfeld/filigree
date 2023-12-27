@@ -1,16 +1,18 @@
 {% extends "auth/fetch_base.sql.tera" %}
 {% block base_lookup %}
   SELECT
-    user_id,
+    api_keys.user_id,
     -- API key always uses the organization the key was created with,
     -- regardless of the users currently-chosen org
     api_keys.organization_id,
-    inherits_user_permissions,
+    api_keys.inherits_user_permissions,
     om.active,
     users.verified
   FROM api_keys
-  JOIN users USING (user_id)
-  JOIN organization_members om USING (user_id, organization_id)
+  JOIN users ON users.id = api_keys.user_id
+  JOIN organization_members om
+    ON om.user_id = api_keys.user_id
+    AND om.organization_id = api_keys.organization_id
   WHERE
     api_key_id = $1
     AND hash = $2
@@ -32,9 +34,9 @@
     organization_id
     FROM base_lookup
   UNION ALL
-  SELECT role_id AS actor_id, organization_id FROM role_lookup
+  SELECT role_id AS actor_id, role_lookup.organization_id FROM role_lookup
     CROSS JOIN base_lookup
-    WHERE base_lookup.inherit_user_permissions
+    WHERE base_lookup.inherits_user_permissions
 {% endblock actor_ids %}
 
 

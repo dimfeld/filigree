@@ -14,20 +14,19 @@ actor_ids AS (
 {% endblock actor_ids %}
 ),
 permissions AS (
-  SELECT ARRAY_AGG(DISTINCT permission) AS permissions
+  SELECT COALESCE(ARRAY_AGG(DISTINCT permission), ARRAY[]::text[]) AS permissions
   FROM permissions
   JOIN actor_ids USING (actor_id, organization_id)
 )
 SELECT
-  bl.user_id AS "user_id: crate::models::user::UserId",
-  bl.organization_id AS "organization_id: crate::models::organization::OrganizationId",
+  bl.user_id AS "user_id!: crate::models::user::UserId",
+  bl.organization_id AS "organization_id!: crate::models::organization::OrganizationId",
   bl.active,
   bl.verified,
   COALESCE(
     (SELECT ARRAY_AGG(role_id) FILTER (WHERE role_id IS NOT NULL) FROM role_lookup),
     ARRAY[]::uuid[]
-  ) AS "roles: Vec<RoleId>",
-  COALESCE(permissions, ARRAY[]::text[]) AS "permissions: Vec<Permission>",
+  ) AS "roles!: Vec<RoleId>",
+  permissions as "permissions!: Vec<String>"
 FROM base_lookup bl
-LEFT JOIN role_lookup USING (user_id, organization_id)
-LEFT JOIN permissions USING (permissions)
+CROSS JOIN permissions
