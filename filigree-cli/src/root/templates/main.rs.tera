@@ -1,8 +1,10 @@
 use clap::{Args, Parser, Subcommand};
 use error_stack::{Report, ResultExt};
 use filigree::tracing_config::{configure_tracing, teardown_tracing, TracingExportConfig};
-use filigree_test_app::{server, Error};
 use tracing::{event, Level};
+
+use {{crate_name}}::{Error, server};
+
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -21,24 +23,25 @@ enum Command {
 #[derive(Args, Debug)]
 struct ServeCommand {
     /// The PostgreSQL database to connect to
-    #[clap(long = "db", env = "DATABASE_URL")]
+    #[clap(long = "db", env = "{{env_prefix}}DATABASE_URL")]
     database_url: String,
 
     /// The IP host to bind to
-    #[clap(long, env = "HOST", default_value_t = String::from("127.0.0.1"))]
+    #[clap(long, env = "{{env_prefix}}HOST", default_value_t = String::from("127.0.0.1"))]
     host: String,
 
     /// The TCP port to listen on
-    #[clap(long, env = "PORT", default_value_t = 7823)]
+    #[clap(long, env = "{{env_prefix}}PORT", default_value_t = {{default_port}})]
     port: u16,
 
     /// The environment in which this server is running
-    #[clap(long = "env", env = "ENV", default_value_t = String::from("development"))]
+    #[clap(long = "env", env = "{{env_prefix}}ENV", default_value_t = String::from("development"))]
     env: String,
 
-    #[clap(long, env = "REQUEST_TIMEOUT", default_value_t = 60)]
+    #[clap(long, env = "{{env_prefix}}REQUEST_TIMEOUT", default_value_t = 60)]
     /// Request timeout, in seconds
     request_timeout: u64,
+
     // tracing endpoint (if any)
     // honeycomb team
     // honeycomb dataset
@@ -47,8 +50,10 @@ struct ServeCommand {
 }
 
 async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
+
     // TODO make this configurable
-    configure_tracing("", TracingExportConfig::None).change_context(Error::ServerStart)?;
+    configure_tracing("{{env_prefix}}", TracingExportConfig::None)
+        .change_context(Error::ServerStart)?;
 
     let pg_pool = sqlx::PgPool::connect(&cmd.database_url)
         .await
@@ -66,7 +71,9 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     server.run().await?;
 
     event!(Level::INFO, "Exporting remaining traces");
-    teardown_tracing().await.change_context(Error::Shutdown)?;
+    teardown_tracing()
+        .await
+        .change_context(Error::Shutdown)?;
     event!(Level::INFO, "Trace shut down complete");
 
     Ok(())
@@ -74,6 +81,9 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), Report<Error>> {
+    {% if load_dotenv -%}
+    dotenvy::dotenv().ok();
+    {%- endif %}
     let cli = Cli::parse();
 
     match cli.command {

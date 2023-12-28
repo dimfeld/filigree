@@ -6,6 +6,7 @@ use std::{
 };
 
 use clap::Parser;
+use config::find_up_file;
 use error_stack::{Report, ResultExt};
 use model::Model;
 use rayon::prelude::*;
@@ -67,13 +68,11 @@ fn build_models(mut config_models: Vec<Model>) -> Vec<Model> {
 pub fn main() -> Result<(), Report<Error>> {
     let args = Cli::parse();
 
-    let config_path = args
-        .config
-        .clone()
-        .unwrap_or_else(|| PathBuf::from("filigree"));
-    let config = FullConfig::from_dir(&config_path)?;
+    let config_path = args.config.clone();
+    let config = FullConfig::from_dir(config_path)?;
 
     let FullConfig {
+        crate_name,
         config,
         models: config_models,
     } = config;
@@ -96,7 +95,7 @@ pub fn main() -> Result<(), Report<Error>> {
     let mut server_files = None;
     let mut model_files = None;
     rayon::scope(|s| {
-        s.spawn(|_| root_files = Some(root::render_files(&renderer)));
+        s.spawn(|_| root_files = Some(root::render_files(&crate_name, &config, &renderer)));
         s.spawn(|_| server_files = Some(server::render_files(&config, &renderer)));
         s.spawn(|_| {
             model_files = Some(

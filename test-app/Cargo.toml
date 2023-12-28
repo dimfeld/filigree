@@ -17,6 +17,8 @@ name = "test-app"
 async-trait = "0.1.75"
 axum = { version = "0.7.2", features = ["tokio", "http1", "http2"] }
 chrono = "0.4.31"
+clap = { version = "4.4.11", features = ["derive", "env"] }
+dotenvy = "0.15.7"
 error-stack = "0.4.1"
 filigree = { version = "0.1.0", path = "../filigree" }
 hyper = { version = "1.1.0", features = ["server", "http1", "http2"] }

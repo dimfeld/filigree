@@ -74,6 +74,10 @@ fn create_tera() -> Tera {
     let res = tera.add_raw_templates(vec![
         // Root templates
         (
+            "root/main.rs.tera",
+            read_template!("root/templates/main.rs.tera"),
+        ),
+        (
             "root/lib.rs.tera",
             read_template!("root/templates/lib.rs.tera"),
         ),
