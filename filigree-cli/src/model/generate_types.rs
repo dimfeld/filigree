@@ -71,6 +71,7 @@ impl<'a> ModelGenerator<'a> {
                     "aliases": aliases,
                 })
             })
+            .sorted_by(|a, b| a["name"].as_str().unwrap().cmp(b["name"].as_str().unwrap()))
             .collect::<Vec<_>>();
 
         context.insert("struct_base", &struct_base);
