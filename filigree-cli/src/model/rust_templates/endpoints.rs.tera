@@ -1,8 +1,7 @@
 #![allow(unused_imports, dead_code)]
 use axum::{Json, extract::{State, Path, Query}, http::StatusCode, response::IntoResponse, routing};
-use filigree::auth::has_permission;
 
-use crate::{Error, auth::Authed, server::ServerState};
+use crate::{Error, auth::{Authed, has_permission}, server::ServerState};
 
 use super::{queries, types::*, {{id_type}}, OWNER_PERMISSION };
 
@@ -61,7 +60,10 @@ pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
         {% if endpoints.list %}.route("/{{ url_path }}", routing::get(list)){% endif %}
         {% if endpoints.get %}.route("/{{ url_path }}/:id", routing::get(get)){% endif %}
-        {% if endpoints.create %}.route("/{{ url_path }}", routing::post(create)){% endif %}
+        {% if endpoints.create %}.route("/{{ url_path }}",
+            routing::post(create)
+                .route_layer(has_permission(OWNER_PERMISSION))
+        ){% endif %}
         {% if endpoints.update %}.route("/{{ url_path }}/:id", routing::put(update)){% endif %}
         {% if endpoints.delete %}.route("/{{ url_path }}/:id", routing::delete(delete)){% endif %}
 }

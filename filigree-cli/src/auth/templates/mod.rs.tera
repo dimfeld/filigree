@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use async_trait::async_trait;
 use filigree::auth::{AuthError, OrganizationId, RoleId, SessionKey, UserId};
 use sqlx::{query_file_as, PgPool};
@@ -78,4 +80,20 @@ impl filigree::auth::AuthQueries for AuthQueries {
         .fetch_optional(&self.db)
         .await
     }
+}
+
+pub fn has_permission(
+    permission: impl Into<Cow<'static, str>>,
+) -> filigree::auth::HasPermissionLayer<AuthInfo> {
+    filigree::auth::has_permission(permission.into())
+}
+
+pub fn has_auth_predicate<F>(
+    message: impl Into<Cow<'static, str>>,
+    f: F,
+) -> filigree::auth::HasPredicateLayer<AuthInfo, F>
+where
+    F: Fn(&AuthInfo) -> bool + Clone,
+{
+    filigree::auth::has_auth_predicate(message.into(), f)
 }

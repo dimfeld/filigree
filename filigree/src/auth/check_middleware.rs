@@ -15,10 +15,18 @@ pub fn has_permission<INFO: AuthInfo>(s: impl Into<Cow<'static, str>>) -> HasPer
 }
 
 /// Middleware layer that checks if the user has a particular permission
-#[derive(Clone)]
 pub struct HasPermissionLayer<INFO: AuthInfo> {
     permission: Cow<'static, str>,
     _marker: PhantomData<INFO>,
+}
+
+impl<INFO: AuthInfo> Clone for HasPermissionLayer<INFO> {
+    fn clone(&self) -> Self {
+        Self {
+            permission: self.permission.clone(),
+            _marker: PhantomData::default(),
+        }
+    }
 }
 
 impl<S, INFO: AuthInfo> Layer<S> for HasPermissionLayer<INFO> {
@@ -34,11 +42,20 @@ impl<S, INFO: AuthInfo> Layer<S> for HasPermissionLayer<INFO> {
 }
 
 /// The middleware service for checking if the user has a particular permission
-#[derive(Clone)]
 pub struct HasPermissionService<S, INFO: AuthInfo> {
     permission: Cow<'static, str>,
     inner: S,
     _marker: PhantomData<INFO>,
+}
+
+impl<S: Clone, INFO: AuthInfo> Clone for HasPermissionService<S, INFO> {
+    fn clone(&self) -> Self {
+        Self {
+            permission: self.permission.clone(),
+            inner: self.inner.clone(),
+            _marker: PhantomData::default(),
+        }
+    }
 }
 
 impl<S, INFO: AuthInfo> Service<Request> for HasPermissionService<S, INFO>
@@ -95,7 +112,6 @@ where
 }
 
 /// The middleware layer for checking an auth predicate
-#[derive(Clone)]
 pub struct HasPredicateLayer<INFO, F>
 where
     INFO: AuthInfo,
@@ -104,6 +120,20 @@ where
     message: Cow<'static, str>,
     f: F,
     _marker: PhantomData<INFO>,
+}
+
+impl<INFO, F> Clone for HasPredicateLayer<INFO, F>
+where
+    INFO: AuthInfo,
+    F: Fn(&INFO) -> bool + Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            message: self.message.clone(),
+            f: self.f.clone(),
+            _marker: PhantomData::default(),
+        }
+    }
 }
 
 impl<S, INFO, F> Layer<S> for HasPredicateLayer<INFO, F>
@@ -124,7 +154,6 @@ where
 }
 
 /// The middleware service for checking an auth predicate
-#[derive(Clone)]
 pub struct HasPredicateService<S, INFO, F>
 where
     INFO: AuthInfo,
@@ -134,6 +163,22 @@ where
     f: F,
     inner: S,
     _marker: PhantomData<INFO>,
+}
+
+impl<S, INFO, F> Clone for HasPredicateService<S, INFO, F>
+where
+    INFO: AuthInfo,
+    F: Fn(&INFO) -> bool + Clone,
+    S: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            message: self.message.clone(),
+            f: self.f.clone(),
+            inner: self.inner.clone(),
+            _marker: self._marker.clone(),
+        }
+    }
 }
 
 impl<S, INFO, F> Service<Request> for HasPredicateService<S, INFO, F>
