@@ -11,21 +11,25 @@ use super::UserId;
 
 crate::make_object_id!(SessionId, sid);
 
+/// Errors when creating or retrieving a session
 #[derive(Debug, Error)]
 pub enum SessionError {
+    /// An error accessing the database
     #[error("Failed to access database")]
     Db,
+    /// Failed to find a session in the database
     #[error("Session does not exist")]
     NotFound,
 }
 
+/// Builds cookies and stores some settings that will apply to all generated cookies.
 pub struct SessionCookieBuilder {
     secure: bool,
     same_site: tower_cookies::cookie::SameSite,
 }
 
 impl SessionCookieBuilder {
-    /// Create a new `SessionCookieBuilder`
+    /// Create a new [SessionCookieBuilder]
     pub fn new(secure: bool, same_site: tower_cookies::cookie::SameSite) -> Self {
         Self { secure, same_site }
     }
@@ -44,12 +48,16 @@ impl SessionCookieBuilder {
     }
 }
 
+/// How session expiration should be calculated
 pub enum ExpiryStyle {
+    /// Always expire the session at a fixed duration after it is created
     FromCreation(std::time::Duration),
+    /// Expire the session after no activity is seen for the given duration
     AfterIdle(std::time::Duration),
 }
 
 impl ExpiryStyle {
+    /// Return the expiry duration, regardless of the style
     pub fn expiry_duration(&self) -> std::time::Duration {
         match self {
             ExpiryStyle::FromCreation(duration) => *duration,
@@ -58,18 +66,24 @@ impl ExpiryStyle {
     }
 }
 
+/// The backend for storing and retrieving session information.
 pub struct SessionBackend {
     db: PgPool,
     cookies: SessionCookieBuilder,
     expiry_style: ExpiryStyle,
 }
 
+/// The cookie value for a session, parsed into its individual values
 pub struct SessionKey {
+    /// The id for the session
     pub session_id: SessionId,
+    /// A corresponding hash to make it slightly harder to guess a session ID.
+    /// This is somewhat overkill since the ID is already a UUID.
     pub hash: Uuid,
 }
 
 impl SessionKey {
+    /// Create a new session key
     pub fn new(session_id: SessionId, hash: Uuid) -> Self {
         Self { session_id, hash }
     }
@@ -94,6 +108,7 @@ impl FromStr for SessionKey {
 }
 
 impl SessionBackend {
+    /// Create the [SessionBackend]
     pub fn new(db: PgPool, cookies: SessionCookieBuilder, expiry_style: ExpiryStyle) -> Self {
         Self {
             db,
@@ -119,6 +134,7 @@ impl SessionBackend {
     //     Ok(key)
     // }
 
+    /// Create a new session and set a cookie with the session key.
     pub async fn create_session(
         &self,
         cookies: &Cookies,
@@ -215,6 +231,7 @@ impl SessionBackend {
     }
 }
 
+/// Try to retrieve the session cookie from the request [Parts]
 pub fn get_session_cookie(request: &Parts) -> Option<SessionKey> {
     let cookies = request.extensions.get::<Cookies>()?;
     let sid = cookies.get("sid")?;

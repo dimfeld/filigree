@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use futures_util::future::BoxFuture;
+use futures::future::BoxFuture;
 use tower::{Layer, Service};
 
 use super::ErrorResponseData;

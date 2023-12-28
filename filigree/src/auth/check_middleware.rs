@@ -1,7 +1,7 @@
 use std::{borrow::Cow, marker::PhantomData};
 
 use axum::{extract::Request, response::IntoResponse};
-use futures_util::future::BoxFuture;
+use futures::future::BoxFuture;
 use tower::{Layer, Service};
 
 use super::{get_auth_info, AuthError, AuthInfo};

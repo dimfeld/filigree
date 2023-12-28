@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Filigree web framework
+//! The non-generated components of the Filigree web framework
 
 /// Authentication and Authorization
 pub mod auth;
@@ -11,3 +11,6 @@ pub mod object_id;
 pub mod server;
 /// Utilities for working with SQL queries
 pub mod sql;
+/// Tracing configuration
+#[cfg(feature = "tracing")]
+pub mod tracing_config;
