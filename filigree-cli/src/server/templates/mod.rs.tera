@@ -20,7 +20,6 @@ use sqlx::PgPool;
 use tower::ServiceBuilder;
 use tower_http::{
     compression::CompressionLayer,
-    decompression::RequestDecompressionLayer,
     request_id::MakeRequestUuid,
     timeout::TimeoutLayer,
     trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},

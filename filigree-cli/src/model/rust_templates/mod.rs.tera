@@ -4,6 +4,10 @@ pub mod types;
 
 pub use types::*;
 
+pub const READ_PERMISSION: &str = "{{read_permission}}";
+pub const WRITE_PERMISSION: &str = "{{write_permission}}";
+pub const OWNER_PERMISSION: &str = "{{owner_permission}}";
+
 {% if predefined_object_id  %}
 pub type {{id_type}} = filigree::auth::{{id_type}};
 {% else %}

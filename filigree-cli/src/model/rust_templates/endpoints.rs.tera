@@ -1,9 +1,10 @@
 #![allow(unused_imports, dead_code)]
 use axum::{Json, extract::{State, Path, Query}, http::StatusCode, response::IntoResponse, routing};
+use filigree::auth::has_permission;
 
 use crate::{Error, auth::Authed, server::ServerState};
 
-use super::{queries, types::*, {{id_type}} };
+use super::{queries, types::*, {{id_type}}, OWNER_PERMISSION };
 
 async fn get(
     State(state): State<ServerState>,
