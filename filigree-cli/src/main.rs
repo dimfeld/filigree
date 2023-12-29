@@ -6,7 +6,6 @@ use std::{
 };
 
 use clap::Parser;
-use config::find_up_file;
 use error_stack::{Report, ResultExt};
 use model::Model;
 use rayon::prelude::*;
@@ -201,12 +200,14 @@ pub fn main() -> Result<(), Report<Error>> {
             .collect::<Vec<_>>(),
     );
 
-    let models_dir = PathBuf::from("src/models");
-    let model_mod =
-        renderer.render(&models_dir, "model", "main_mod.rs.tera", &model_mod_context)?;
-    let path = models_dir.join("mod.rs");
-    std::fs::write(&path, model_mod.contents)
-        .attach_printable_lazy(|| path.display().to_string())
+    let models_main_mod_path = PathBuf::from("src/models/mod.rs");
+    let model_mod = renderer.render_with_full_path(
+        models_main_mod_path,
+        "model/main_mod.rs.tera",
+        &model_mod_context,
+    )?;
+    std::fs::write(&model_mod.path, model_mod.contents)
+        .attach_printable_lazy(|| model_mod.path.display().to_string())
         .change_context(Error::WriteFile)?;
 
     Ok(())

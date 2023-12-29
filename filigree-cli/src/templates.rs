@@ -1,6 +1,12 @@
-use std::{borrow::Cow, collections::HashMap, error::Error as _, path::Path};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    error::Error as _,
+    path::{Path, PathBuf},
+};
 
 use error_stack::{Report, ResultExt};
+use rust_embed::RustEmbed;
 use tera::{Tera, Value};
 
 use crate::{config::Config, Error, RenderedFile};
@@ -16,31 +22,42 @@ impl<'a> Renderer<'a> {
         Self { tera, config }
     }
 
+    /// Render a template, joining the template name to `dir` to calculate the output path.
     pub fn render(
         &self,
         dir: &Path,
-        prefix: &str,
         template_name: &str,
         context: &tera::Context,
     ) -> Result<RenderedFile, Report<Error>> {
-        let full_name = format!("{prefix}/{template_name}");
+        let path = dir.join(
+            template_name
+                .strip_suffix(".tera")
+                .expect("template name did not end with .tera"),
+        );
+        self.render_with_full_path(path, template_name, context)
+    }
+
+    /// Render a template with a precalculated path
+    pub fn render_with_full_path(
+        &self,
+        path: PathBuf,
+        template_name: &str,
+        context: &tera::Context,
+    ) -> Result<RenderedFile, Report<Error>> {
         let output = self
             .tera
-            .render(&full_name, context)
+            .render(template_name, context)
             .map_err(Error::Render)
-            .attach_printable_lazy(|| format!("Template {}", full_name))?
+            .attach_printable_lazy(|| format!("Template {}", template_name))?
             .into_bytes();
 
-        let filename = template_name
-            .strip_suffix(".tera")
-            .expect("Template name did not end in .tera");
+        let filename = template_name.strip_suffix(".tera").unwrap_or(template_name);
 
         let output = self
             .config
             .formatter
             .run_formatter(filename, output)
             .change_context(Error::Formatter)?;
-        let path = dir.join(filename);
 
         Ok(RenderedFile {
             path,
@@ -68,111 +85,53 @@ macro_rules! read_template {
     };
 }
 
+#[derive(RustEmbed)]
+#[prefix = "root/"]
+#[folder = "$CARGO_MANIFEST_DIR/src/root/templates"]
+pub struct RootTemplates;
+
+#[derive(RustEmbed)]
+#[prefix = "server/"]
+#[folder = "$CARGO_MANIFEST_DIR/src/server/templates"]
+pub struct ServerTemplates;
+
+#[derive(RustEmbed)]
+#[prefix = "auth/"]
+#[folder = "$CARGO_MANIFEST_DIR/src/auth/templates"]
+pub struct AuthTemplates;
+
+#[derive(RustEmbed)]
+#[prefix = "model/"]
+#[folder = "$CARGO_MANIFEST_DIR/src/model/sql"]
+pub struct ModelSqlTemplates;
+
+#[derive(RustEmbed)]
+#[prefix = "model/"]
+#[folder = "$CARGO_MANIFEST_DIR/src/model/rust_templates/"]
+pub struct ModelRustTemplates;
+
+fn get_files<FILES: RustEmbed>() -> impl Iterator<Item = (String, Cow<'static, str>)> {
+    FILES::iter().map(|f| {
+        let filename = f.to_string();
+        let data = FILES::get(&filename).unwrap();
+        let data = match data.data {
+            Cow::Borrowed(b) => Cow::Borrowed(std::str::from_utf8(b).unwrap()),
+            Cow::Owned(s) => Cow::Owned(String::from_utf8(s).unwrap()),
+        };
+        (filename, data)
+    })
+}
+
 fn create_tera() -> Tera {
     let mut tera = Tera::default();
 
-    let res = tera.add_raw_templates(vec![
-        // Root templates
-        (
-            "root/main.rs.tera",
-            read_template!("root/templates/main.rs.tera"),
-        ),
-        (
-            "root/lib.rs.tera",
-            read_template!("root/templates/lib.rs.tera"),
-        ),
-        (
-            "root/error.rs.tera",
-            read_template!("root/templates/error.rs.tera"),
-        ),
-        // Model templates
-        (
-            "model/migrate_up.sql.tera",
-            read_template!("model/sql/migrate_up.sql.tera"),
-        ),
-        (
-            "model/migrate_down.sql.tera",
-            read_template!("model/sql/migrate_down.sql.tera"),
-        ),
-        (
-            "model/delete.sql.tera",
-            read_template!("model/sql/delete.sql.tera"),
-        ),
-        (
-            "model/insert.sql.tera",
-            read_template!("model/sql/insert.sql.tera"),
-        ),
-        (
-            "model/list.sql.tera",
-            read_template!("model/sql/list.sql.tera"),
-        ),
-        (
-            "model/select_base.sql.tera",
-            read_template!("model/sql/select_base.sql.tera"),
-        ),
-        (
-            "model/select_one.sql.tera",
-            read_template!("model/sql/select_one.sql.tera"),
-        ),
-        (
-            "model/select_one_all_fields.sql.tera",
-            read_template!("model/sql/select_one_all_fields.sql.tera"),
-        ),
-        (
-            "model/update.sql.tera",
-            read_template!("model/sql/update.sql.tera"),
-        ),
-        (
-            "sql_macros.tera",
-            read_template!("model/sql/sql_macros.tera"),
-        ),
-        (
-            "model/mod.rs.tera",
-            read_template!("model/rust_templates/mod.rs.tera"),
-        ),
-        (
-            "model/endpoints.rs.tera",
-            read_template!("model/rust_templates/endpoints.rs.tera"),
-        ),
-        (
-            "model/types.rs.tera",
-            read_template!("model/rust_templates/types.rs.tera"),
-        ),
-        (
-            "model/queries.rs.tera",
-            read_template!("model/rust_templates/queries.rs.tera"),
-        ),
-        (
-            "model/main_mod.rs.tera",
-            read_template!("model/rust_templates/main_mod.rs.tera"),
-        ),
-        // Auth templates
-        (
-            "auth/fetch_base.sql.tera",
-            read_template!("auth/templates/fetch_base.sql.tera"),
-        ),
-        (
-            "auth/fetch_api_key.sql.tera",
-            read_template!("auth/templates/fetch_api_key.sql.tera"),
-        ),
-        (
-            "auth/fetch_session.sql.tera",
-            read_template!("auth/templates/fetch_session.sql.tera"),
-        ),
-        (
-            "auth/mod.rs.tera",
-            read_template!("auth/templates/mod.rs.tera"),
-        ),
-        // Server templates
-        (
-            "server/mod.rs.tera",
-            read_template!("server/templates/mod.rs.tera"),
-        ),
-        (
-            "server/health.rs.tera",
-            read_template!("server/templates/health.rs.tera"),
-        ),
-    ]);
+    let template_files = get_files::<RootTemplates>()
+        .chain(get_files::<ServerTemplates>())
+        .chain(get_files::<AuthTemplates>())
+        .chain(get_files::<ModelSqlTemplates>())
+        .chain(get_files::<ModelRustTemplates>())
+        .collect::<Vec<_>>();
+    let res = tera.add_raw_templates(template_files);
 
     if let Err(e) = res {
         eprintln!("{e}");

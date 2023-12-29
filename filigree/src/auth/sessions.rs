@@ -77,7 +77,7 @@ pub struct SessionBackend {
 pub struct SessionKey {
     /// The id for the session
     pub session_id: SessionId,
-    /// A corresponding hash to make it slightly harder to guess a session ID.
+    /// A random UUID to make it slightly harder to guess a valid session key.
     /// This is somewhat overkill since the ID is already a UUID.
     pub hash: Uuid,
 }

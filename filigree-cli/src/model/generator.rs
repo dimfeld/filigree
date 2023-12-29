@@ -6,7 +6,11 @@ use rayon::prelude::*;
 use serde_json::json;
 
 use super::{field::SortableType, Model};
-use crate::{config::Config, templates::Renderer, Error, RenderedFile};
+use crate::{
+    config::Config,
+    templates::{ModelRustTemplates, ModelSqlTemplates, Renderer},
+    Error, RenderedFile,
+};
 
 pub struct ModelGenerator<'a> {
     pub model: Model,
@@ -152,12 +156,7 @@ impl<'a> ModelGenerator<'a> {
 
     pub fn render_up_migration(&self) -> Result<Vec<u8>, Report<Error>> {
         self.renderer
-            .render(
-                &PathBuf::new(),
-                "model",
-                "migrate_up.sql.tera",
-                &self.context,
-            )
+            .render(&PathBuf::new(), "model/migrate_up.sql.tera", &self.context)
             .map(|f| f.contents)
     }
 
@@ -165,8 +164,7 @@ impl<'a> ModelGenerator<'a> {
         self.renderer
             .render(
                 &PathBuf::new(),
-                "model",
-                "migrate_down.sql.tera",
+                "model/migrate_down.sql.tera",
                 &self.context,
             )
             .map(|f| f.contents)
@@ -174,25 +172,31 @@ impl<'a> ModelGenerator<'a> {
 
     pub fn render_model_directory(&self) -> Result<Vec<RenderedFile>, Report<Error>> {
         let base_path = PathBuf::from("src/models").join(self.model.module_name());
-        let files = [
-            "mod.rs.tera",
-            "select_one.sql.tera",
-            "select_one_all_fields.sql.tera",
-            "list.sql.tera",
-            "insert.sql.tera",
-            "update.sql.tera",
-            "delete.sql.tera",
-            "mod.rs.tera",
-            "types.rs.tera",
-            "queries.rs.tera",
-            "endpoints.rs.tera",
+
+        let skip_files = [
+            "model/main_mod.rs.tera",
+            "model/sql_macros.tera",
+            "model/migrate_up.sql.tera",
+            "model/migrate_down.sql.tera",
+            "model/select_base.sql.tera",
         ];
+
+        let files = ModelSqlTemplates::iter()
+            .chain(ModelRustTemplates::iter())
+            .filter(|f| !skip_files.contains(&f.as_ref()))
+            .collect::<Vec<_>>();
 
         let output = files
             .into_par_iter()
             .map(|file| {
+                let filename = file
+                    .strip_prefix("model/")
+                    .unwrap()
+                    .strip_suffix(".tera")
+                    .unwrap();
+                let path = base_path.join(filename);
                 self.renderer
-                    .render(&base_path, "model", file, &self.context)
+                    .render_with_full_path(path, &file, &self.context)
                     .attach_printable_lazy(|| format!("Model {}", self.model.name))
             })
             .collect::<Result<Vec<_>, _>>()?;

@@ -1,4 +1,4 @@
-{% import "sql_macros.tera" as macros %}
+{% import "model/sql_macros.tera" as macros %}
 
 {# See if any field is filterable #}
 {% set has_filterable = false %}
