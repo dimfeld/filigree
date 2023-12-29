@@ -9,17 +9,6 @@ use super::UserId;
 use crate::models::organization::OrganizationId;
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
-pub struct UserCreatePayloadAndUpdatePayload {
-    pub name: String,
-    pub email: String,
-    pub verified: bool,
-}
-
-pub type UserCreatePayload = UserCreatePayloadAndUpdatePayload;
-
-pub type UserUpdatePayload = UserCreatePayloadAndUpdatePayload;
-
-#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
 pub struct User {
     pub id: UserId,
     pub organization_id: crate::models::organization::OrganizationId,
@@ -30,6 +19,17 @@ pub struct User {
     pub verified: bool,
     pub _permission: ObjectPermission,
 }
+
+#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+pub struct UserCreatePayloadAndUpdatePayload {
+    pub name: String,
+    pub email: String,
+    pub verified: bool,
+}
+
+pub type UserCreatePayload = UserCreatePayloadAndUpdatePayload;
+
+pub type UserUpdatePayload = UserCreatePayloadAndUpdatePayload;
 
 impl Serialize for User {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

@@ -36,8 +36,8 @@ struct ServeCommand {
     #[clap(long = "env", env = "ENV", default_value_t = String::from("development"))]
     env: String,
 
-    #[clap(long, env = "REQUEST_TIMEOUT", default_value_t = 60)]
     /// Request timeout, in seconds
+    #[clap(long, env = "REQUEST_TIMEOUT", default_value_t = 60)]
     request_timeout: u64,
     // tracing endpoint (if any)
     // honeycomb team

@@ -252,13 +252,13 @@ mod test {
 
         #[test]
         fn quotes_string() {
-            assert_eq!(call("don't".to_string()), "'don''t");
+            assert_eq!(call("don't".to_string()), "'don''t'");
         }
 
         #[test]
         fn array() {
             assert_eq!(
-                call(json!(["hello", "wo'rld"])),
+                sql_string_filter(&json!(["hello", "wo'rld"]), &HashMap::default()).unwrap(),
                 json!(["'hello'", "'wo''rld'"])
             );
         }

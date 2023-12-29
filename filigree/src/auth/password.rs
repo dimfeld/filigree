@@ -33,19 +33,18 @@ pub fn verify_password(password: &str, hash_str: &str) -> Result<(), AuthError> 
         .map_err(|_| AuthError::Unauthenticated)
 }
 
-#[cfg(all(test, any(test_slow, test_password)))]
+#[cfg(all(test, any(feature = "test_slow", feature = "test_password")))]
 mod tests {
     use super::*;
-    use crate::error::Result;
 
     #[test]
-    fn good_password() -> Result<()> {
+    fn good_password() -> Result<(), AuthError> {
         let hash = new_hash("abcdef")?;
         verify_password("abcdef", &hash)
     }
 
     #[test]
-    fn bad_password() -> Result<()> {
+    fn bad_password() -> Result<(), AuthError> {
         let hash = new_hash("abcdef")?;
         verify_password("abcdefg", &hash).expect_err("non-matching password");
         Ok(())

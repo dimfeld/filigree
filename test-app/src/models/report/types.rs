@@ -9,13 +9,6 @@ use super::ReportId;
 use crate::models::organization::OrganizationId;
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
-pub struct ReportCreatePayload {
-    pub title: String,
-    pub description: Option<String>,
-    pub ui: serde_json::Value,
-}
-
-#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
 pub struct Report {
     pub id: ReportId,
     pub organization_id: crate::models::organization::OrganizationId,
@@ -25,6 +18,13 @@ pub struct Report {
     pub description: Option<String>,
     pub ui: serde_json::Value,
     pub _permission: ObjectPermission,
+}
+
+#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+pub struct ReportCreatePayload {
+    pub title: String,
+    pub description: Option<String>,
+    pub ui: serde_json::Value,
 }
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
