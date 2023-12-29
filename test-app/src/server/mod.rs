@@ -13,7 +13,7 @@ use std::{
     sync::Arc,
 };
 
-use axum::Router;
+use axum::{routing::get, Router};
 use error_stack::{Report, ResultExt};
 use filigree::errors::{panic_handler, ObfuscateErrorLayer, ObfuscateErrorLayerSettings};
 use sqlx::PgPool;
@@ -28,6 +28,8 @@ use tower_http::{
 use tracing::{event, Level};
 
 use crate::error::Error;
+
+mod health;
 
 /// Shared state used by the server
 pub struct ServerStateInner {
@@ -103,28 +105,31 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
 
     let auth_queries = Arc::new(crate::auth::AuthQueries::new(config.pg_pool));
 
-    let app: Router<ServerState> = Router::new().merge(crate::models::create_routes()).layer(
-        ServiceBuilder::new()
-            .layer(panic_handler(production))
-            .layer(ObfuscateErrorLayer::new(ObfuscateErrorLayerSettings {
-                enabled: production,
-                ..Default::default()
-            }))
-            .layer(
-                TraceLayer::new_for_http()
-                    .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
-                    .on_response(DefaultOnResponse::new().level(Level::INFO))
-                    .on_request(DefaultOnRequest::new().level(Level::INFO)),
-            )
-            .layer(TimeoutLayer::new(config.request_timeout))
-            .layer(CompressionLayer::new())
-            .layer(tower_cookies::CookieManagerLayer::new())
-            .set_x_request_id(MakeRequestUuid)
-            .propagate_x_request_id()
-            .decompression()
-            .layer(filigree::auth::middleware::AuthLayer::new(auth_queries))
-            .into_inner(),
-    );
+    let app: Router<ServerState> = Router::new()
+        .route("/healthz", get(health::healthz))
+        .merge(crate::models::create_routes())
+        .layer(
+            ServiceBuilder::new()
+                .layer(panic_handler(production))
+                .layer(ObfuscateErrorLayer::new(ObfuscateErrorLayerSettings {
+                    enabled: production,
+                    ..Default::default()
+                }))
+                .layer(
+                    TraceLayer::new_for_http()
+                        .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                        .on_response(DefaultOnResponse::new().level(Level::INFO))
+                        .on_request(DefaultOnRequest::new().level(Level::INFO)),
+                )
+                .layer(TimeoutLayer::new(config.request_timeout))
+                .layer(CompressionLayer::new())
+                .layer(tower_cookies::CookieManagerLayer::new())
+                .set_x_request_id(MakeRequestUuid)
+                .propagate_x_request_id()
+                .decompression()
+                .layer(filigree::auth::middleware::AuthLayer::new(auth_queries))
+                .into_inner(),
+        );
 
     let app: Router<()> = app.with_state(state.clone());
 

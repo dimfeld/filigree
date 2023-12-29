@@ -74,6 +74,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), Report<Error>> {
+    dotenvy::dotenv().ok();
     let cli = Cli::parse();
 
     match cli.command {

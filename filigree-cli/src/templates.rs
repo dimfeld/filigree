@@ -168,6 +168,10 @@ fn create_tera() -> Tera {
             "server/mod.rs.tera",
             read_template!("server/templates/mod.rs.tera"),
         ),
+        (
+            "server/health.rs.tera",
+            read_template!("server/templates/health.rs.tera"),
+        ),
     ]);
 
     if let Err(e) = res {

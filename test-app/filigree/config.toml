@@ -1,6 +1,7 @@
 formatter.sql = ["pg_format"]
 formatter.rust = ["rustfmt", "+nightly"]
 
+dotenv = true
 default_auth_scope = "model"
 
 # models_path = "test-output/models"

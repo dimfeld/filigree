@@ -9,7 +9,7 @@ pub fn render_files(
     config: &Config,
     renderer: &Renderer,
 ) -> Result<Vec<RenderedFile>, Report<Error>> {
-    let files = ["mod.rs.tera"];
+    let files = ["mod.rs.tera", "health.rs.tera"];
 
     let context = tera::Context::new();
     let base_path = PathBuf::from("src/server");
