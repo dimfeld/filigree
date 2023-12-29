@@ -15,6 +15,7 @@ struct Cli {
 enum Command {
     // TODO bootstrap DB command
     // TODO migrate command
+    Util(UtilCommand),
     Serve(ServeCommand),
 }
 
@@ -44,6 +45,22 @@ struct ServeCommand {
     // honeycomb dataset
     // jaeger service name
     // jaeger endpoint
+}
+
+#[derive(Args, Debug)]
+struct UtilCommand {
+    #[clap(subcommand)]
+    command: UtilSubcommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum UtilSubcommand {
+    HashPassword(HashPasswordCommand),
+}
+
+#[derive(Args, Debug)]
+struct HashPasswordCommand {
+    password: String,
 }
 
 async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
@@ -78,6 +95,15 @@ pub async fn main() -> Result<(), Report<Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Serve(cmd) => serve(cmd).await,
+        Command::Serve(cmd) => serve(cmd).await?,
+        Command::Util(cmd) => match cmd.command {
+            UtilSubcommand::HashPassword(password) => {
+                let hash = filigree::auth::password::new_hash(&password.password)
+                    .change_context(Error::AuthSubsystem)?;
+                println!("{hash}");
+            }
+        },
     }
+
+    Ok(())
 }

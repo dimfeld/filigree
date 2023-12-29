@@ -37,6 +37,8 @@ pub enum Error {
     WrapReport(Report<Error>),
     #[error("Missing Permission {0}")]
     MissingPermission(&'static str),
+    #[error("Auth subsystem error")]
+    AuthSubsystem,
 }
 
 impl From<Report<Error>> for Error {
@@ -57,6 +59,7 @@ impl HttpError for Error {
             Error::Shutdown => "shutdown",
             Error::ScheduledTask => "scheduled_task",
             Error::Filter => "invalid_filter",
+            Error::AuthSubsystem => "auth",
             Error::MissingPermission(_) => "missing_permission",
         }
     }
@@ -72,6 +75,7 @@ impl HttpError for Error {
             Error::Shutdown => StatusCode::INTERNAL_SERVER_ERROR,
             Error::ScheduledTask => StatusCode::INTERNAL_SERVER_ERROR,
             Error::Filter => StatusCode::BAD_REQUEST,
+            Error::AuthSubsystem => StatusCode::INTERNAL_SERVER_ERROR,
             Error::MissingPermission(_) => StatusCode::FORBIDDEN,
         }
     }
