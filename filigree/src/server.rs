@@ -1,6 +1,16 @@
 use futures::FutureExt;
 use tokio::signal;
 
+use crate::auth::SessionBackend;
+
+/// Internal state used by the server
+pub struct FiligreeState {
+    /// The database connection pool
+    pub db: sqlx::PgPool,
+    /// User session backend
+    pub session_backend: SessionBackend,
+}
+
 /// Create a future which will resolve when receiving SIGINT or SIGTERM
 pub async fn shutdown_signal() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();

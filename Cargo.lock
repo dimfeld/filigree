@@ -698,6 +698,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a1abaf4d861455be59f64fd2b55606cb151fce304ede7165f410243ce96bde6"
 
 [[package]]
+name = "diffy"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e616e59155c92257e84970156f506287853355f58cd4a6eb167385722c32b790"
+dependencies = [
+ "nu-ansi-term 0.46.0",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -840,6 +849,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "convert_case",
+ "diffy",
  "error-stack",
  "glob",
  "ignore",

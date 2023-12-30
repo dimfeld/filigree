@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 clap = { version = "4.4.11", features = ["derive"] }
 convert_case = "0.6.0"
+diffy = "0.3.0"
 error-stack = "0.4.1"
 glob = "0.3.1"
 ignore = "0.4.21"

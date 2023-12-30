@@ -19,6 +19,7 @@ use error_stack::{Report, ResultExt};
 use filigree::{
     auth::{ExpiryStyle, SessionBackend, SessionCookieBuilder},
     errors::{panic_handler, ObfuscateErrorLayer, ObfuscateErrorLayerSettings},
+    server::FiligreeState,
 };
 use sqlx::PgPool;
 use tower::ServiceBuilder;
@@ -39,22 +40,36 @@ mod health;
 #[derive(FromRef)]
 pub struct ServerStateInner {
     /// If the app is running in production mode. This should be used sparingly as there should be
-    /// a minimum of difference between production and development.
+    /// a minimum of difference between production and development to prevent bugs.
     pub production: bool,
+    /// State for internal filigree endpoints
+    pub filigree: Arc<FiligreeState>,
     /// The Postgres database connection pool
     pub db: PgPool,
-    /// Manages creating and tearing down sessions
-    pub session_backend: SessionBackend,
+}
+
+impl std::ops::Deref for ServerStateInner {
+    type Target = FiligreeState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.filigree
+    }
 }
 
 #[derive(Clone)]
-pub(super) struct ServerState(Arc<ServerStateInner>);
+pub struct ServerState(Arc<ServerStateInner>);
 
 impl std::ops::Deref for ServerState {
     type Target = ServerStateInner;
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl FromRef<ServerState> for Arc<FiligreeState> {
+    fn from_ref(inner: &ServerState) -> Self {
+        inner.0.filigree.clone()
     }
 }
 
@@ -131,11 +146,14 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
 
     let state = ServerState(Arc::new(ServerStateInner {
         production,
-        session_backend: SessionBackend::new(
-            config.pg_pool.clone(),
-            config.cookie_configuration,
-            config.session_expiry,
-        ),
+        filigree: Arc::new(FiligreeState {
+            db: config.pg_pool.clone(),
+            session_backend: SessionBackend::new(
+                config.pg_pool.clone(),
+                config.cookie_configuration,
+                config.session_expiry,
+            ),
+        }),
         db: config.pg_pool.clone(),
     }));
 
