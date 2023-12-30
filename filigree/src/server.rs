@@ -1,7 +1,8 @@
+use futures::FutureExt;
 use tokio::signal;
 
-/// Create a channel which will close when receiving SIGINT or SIGTERM
-pub async fn shutdown_signal() -> tokio::sync::oneshot::Receiver<()> {
+/// Create a future which will resolve when receiving SIGINT or SIGTERM
+pub async fn shutdown_signal() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     tokio::task::spawn(async move {
         let ctrl_c = async {
@@ -27,5 +28,5 @@ pub async fn shutdown_signal() -> tokio::sync::oneshot::Receiver<()> {
         shutdown_tx.send(()).ok();
     });
 
-    shutdown_rx
+    shutdown_rx.map(|_| ()).await
 }

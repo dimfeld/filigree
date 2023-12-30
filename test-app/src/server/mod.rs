@@ -9,6 +9,7 @@
 // tracing = "0.1.40"
 
 use std::{
+    future::Future,
     net::{IpAddr, SocketAddr},
     sync::Arc,
 };
@@ -86,17 +87,17 @@ impl Server {
     /// Run the server, and perform a graceful shutdown when receiving a ctrl+c (SIGINT or
     /// equivalent).
     pub async fn run(self) -> Result<(), Report<Error>> {
-        // let shutdown = filigree::server::shutdown_signal();
-        self.run_with_shutdown_signal(/*shutdown*/).await
+        let shutdown = filigree::server::shutdown_signal();
+        self.run_with_shutdown_signal(shutdown).await
     }
 
     /// Run the server, and shut it down when `shutdown_rx` closes.
     pub async fn run_with_shutdown_signal(
         self,
-        // TODO graceful shutdown will be supported better in axum 0.7.3
-        // shutdown_rx: impl Future<Output = T> + Send + 'static,
+        shutdown: impl Future<Output = ()> + Send + 'static,
     ) -> Result<(), Report<Error>> {
         axum::serve(self.listener, self.app)
+            .with_graceful_shutdown(shutdown)
             .await
             .change_context(Error::ServerStart)?;
         event!(Level::INFO, "Shutting down server");
