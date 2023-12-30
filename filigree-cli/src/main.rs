@@ -6,6 +6,7 @@ use std::{
 };
 
 use clap::Parser;
+use config::Config;
 use error_stack::{Report, ResultExt};
 use model::Model;
 use rayon::prelude::*;
@@ -47,8 +48,8 @@ pub enum Error {
     Formatter,
 }
 
-fn build_models(mut config_models: Vec<Model>) -> Vec<Model> {
-    let mut models = Model::create_default_models();
+fn build_models(config: &Config, mut config_models: Vec<Model>) -> Vec<Model> {
+    let mut models = Model::create_default_models(config);
     // See if any of the built-in models have been customized
     for model in models.iter_mut() {
         let same_model = config_models.iter().position(|m| m.name == model.name);
@@ -78,7 +79,7 @@ pub fn main() -> Result<(), Report<Error>> {
 
     let renderer = templates::Renderer::new(&config);
 
-    let models = build_models(config_models);
+    let models = build_models(&config, config_models);
 
     let generators = models
         .into_iter()

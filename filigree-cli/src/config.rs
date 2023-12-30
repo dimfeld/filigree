@@ -35,6 +35,10 @@ pub struct Config {
     /// If set, the generated application will load .env files when it starts
     #[serde(default)]
     pub dotenv: bool,
+
+    /// If true, require that users verify their email address after registering.
+    #[serde(default)]
+    pub require_user_email_verification: bool,
 }
 
 impl Config {

@@ -1,5 +1,8 @@
 use super::{Access, Model};
-use crate::model::{DeleteBehavior, ModelField, ModelFieldReference, SqlType};
+use crate::{
+    config::Config,
+    model::{DeleteBehavior, ModelField, ModelFieldReference, SqlType},
+};
 
 fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
     ModelField {
@@ -21,7 +24,7 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
 
 impl Model {
     /// Return models for the user, org, etc.
-    pub fn create_default_models() -> Vec<Model> {
+    pub fn create_default_models(config: &Config) -> Vec<Model> {
         vec![
             Model {
                 name: "User".to_string(),
@@ -45,7 +48,7 @@ impl Model {
                     },
                     ModelField {
                         user_access: Access::None,
-                        default: "false".into(),
+                        default: config.require_user_email_verification.to_string(),
                         ..simple_model_field("verified", SqlType::Boolean)
                     },
                 ],
