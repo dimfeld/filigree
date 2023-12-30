@@ -1,6 +1,7 @@
 /// Functions for working with API keys
 pub mod api_key;
 mod check_middleware;
+pub mod endpoints;
 mod extractors;
 /// A Request extension for lazy lookup of user auth info
 pub mod lookup;
@@ -57,6 +58,9 @@ pub enum AuthError {
     /// The [has_auth_predicate] middleware rejected a user
     #[error("Auth error: {0}")]
     FailedPredicate(Cow<'static, str>),
+    /// Generic error to wrap errors from the session backend
+    #[error("Session backend error")]
+    SessionBackend,
 }
 
 impl HttpError for AuthError {
@@ -68,7 +72,9 @@ impl HttpError for AuthError {
             | Self::MissingPermission(_)
             | Self::FailedPredicate(_) => StatusCode::FORBIDDEN,
             Self::ApiKeyFormat => StatusCode::BAD_REQUEST,
-            Self::Db(_) | Self::PasswordHasherError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Db(_) | Self::PasswordHasherError(_) | Self::SessionBackend => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         }
     }
 
@@ -83,6 +89,7 @@ impl HttpError for AuthError {
             Self::PasswordHasherError(_) => "password_hash_internal",
             Self::MissingPermission(_) => "missing_permission",
             Self::FailedPredicate(_) => "failed_authz_condition",
+            Self::SessionBackend => "session_backend",
         }
     }
 }
@@ -90,6 +97,12 @@ impl HttpError for AuthError {
 impl IntoResponse for AuthError {
     fn into_response(self) -> axum::response::Response {
         self.to_response()
+    }
+}
+
+impl From<sqlx::Error> for AuthError {
+    fn from(value: sqlx::Error) -> Self {
+        Self::Db(Arc::new(value))
     }
 }
 

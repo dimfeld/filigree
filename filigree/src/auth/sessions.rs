@@ -1,13 +1,16 @@
 use std::{fmt::Display, str::FromStr};
 
 use axum::http::request::Parts;
+use clap::ValueEnum;
 use error_stack::{Report, ResultExt};
+use hyper::StatusCode;
 use sqlx::PgPool;
 use thiserror::Error;
 use tower_cookies::{Cookie, Cookies};
 use uuid::Uuid;
 
 use super::UserId;
+use crate::errors::HttpError;
 
 crate::make_object_id!(SessionId, sid);
 
@@ -22,7 +25,56 @@ pub enum SessionError {
     NotFound,
 }
 
+impl HttpError for SessionError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::Db => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::NotFound => StatusCode::NOT_FOUND,
+        }
+    }
+
+    fn error_kind(&self) -> &'static str {
+        match self {
+            Self::Db => "db",
+            Self::NotFound => "not_found",
+        }
+    }
+}
+
+/// The same site setting, set up to be used with clap
+#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+pub enum SameSiteArg {
+    /// Allow any origin to use this cookie.
+    None,
+    /// Only the same domain
+    Lax,
+    /// Only the same subdomain
+    #[default]
+    Strict,
+}
+
+impl Display for SameSiteArg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => write!(f, "none"),
+            Self::Lax => write!(f, "lax"),
+            Self::Strict => write!(f, "strict"),
+        }
+    }
+}
+
+impl From<SameSiteArg> for tower_cookies::cookie::SameSite {
+    fn from(value: SameSiteArg) -> Self {
+        match value {
+            SameSiteArg::None => Self::None,
+            SameSiteArg::Lax => Self::Lax,
+            SameSiteArg::Strict => Self::Strict,
+        }
+    }
+}
+
 /// Builds cookies and stores some settings that will apply to all generated cookies.
+#[derive(Debug, Clone)]
 pub struct SessionCookieBuilder {
     secure: bool,
     same_site: tower_cookies::cookie::SameSite,
@@ -30,8 +82,11 @@ pub struct SessionCookieBuilder {
 
 impl SessionCookieBuilder {
     /// Create a new [SessionCookieBuilder]
-    pub fn new(secure: bool, same_site: tower_cookies::cookie::SameSite) -> Self {
-        Self { secure, same_site }
+    pub fn new(secure: bool, same_site: impl Into<tower_cookies::cookie::SameSite>) -> Self {
+        Self {
+            secure,
+            same_site: same_site.into(),
+        }
     }
 
     /// Create a session cookie
@@ -49,6 +104,7 @@ impl SessionCookieBuilder {
 }
 
 /// How session expiration should be calculated
+#[derive(Debug, Clone)]
 pub enum ExpiryStyle {
     /// Always expire the session at a fixed duration after it is created
     FromCreation(std::time::Duration),
@@ -67,10 +123,12 @@ impl ExpiryStyle {
 }
 
 /// The backend for storing and retrieving session information.
+#[derive(Clone)]
 pub struct SessionBackend {
-    db: PgPool,
-    cookies: SessionCookieBuilder,
-    expiry_style: ExpiryStyle,
+    /// The database connection pool
+    pub db: PgPool,
+    pub cookies: SessionCookieBuilder,
+    pub expiry_style: ExpiryStyle,
 }
 
 /// The cookie value for a session, parsed into its individual values
@@ -207,17 +265,24 @@ impl SessionBackend {
     }
 
     /// Delete a session, as when logging out.
-    pub async fn delete_session(
-        &self,
-        cookies: &Cookies,
-        id: &str,
-    ) -> Result<(), Report<SessionError>> {
+    pub async fn delete_session(&self, cookies: &Cookies) -> Result<(), Report<SessionError>> {
+        let cookie = cookies.get("sid");
+        let Some(cookie) = cookie else {
+            return Ok(());
+        };
+
         cookies.remove(Cookie::new("sid", ""));
 
-        sqlx::query!("DELETE FROM user_sessions WHERE id = $1", id as _)
-            .execute(&self.db)
-            .await
-            .change_context(SessionError::Db)?;
+        let key = SessionKey::from_str(cookie.value())?;
+
+        sqlx::query!(
+            "DELETE FROM user_sessions WHERE id = $1 and hash = $2",
+            key.session_id.as_uuid(),
+            &key.hash
+        )
+        .execute(&self.db)
+        .await
+        .change_context(SessionError::Db)?;
         Ok(())
     }
 

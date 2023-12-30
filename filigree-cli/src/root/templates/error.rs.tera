@@ -32,7 +32,8 @@ pub enum Error {
     NotFound(&'static str),
     #[error("Invalid filter")]
     Filter,
-    /// A wrapper around a Report<Error> to let it be returned from an Axum handler
+    /// A wrapper around a Report<Error> to let it be returned from an Axum handler, since we can't
+    /// implement IntoResponse on Report
     #[error("{0}")]
     WrapReport(Report<Error>),
     #[error("Missing Permission {0}")]
@@ -77,6 +78,13 @@ impl HttpError for Error {
             Error::Filter => StatusCode::BAD_REQUEST,
             Error::AuthSubsystem => StatusCode::INTERNAL_SERVER_ERROR,
             Error::MissingPermission(_) => StatusCode::FORBIDDEN,
+        }
+    }
+
+    fn error_detail(&self) -> String {
+        match self {
+            Error::WrapReport(e) => e.error_detail(),
+            _ => String::new(),
         }
     }
 }

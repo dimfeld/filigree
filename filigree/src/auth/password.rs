@@ -2,9 +2,13 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
+use error_stack::{Report, ResultExt};
+use serde::Deserialize;
+use sqlx::PgPool;
+use tower_cookies::Cookies;
 use uuid::Uuid;
 
-use super::AuthError;
+use super::{sessions::SessionBackend, AuthError, UserId};
 
 /// Hash a password using a randomly-generated salt value
 pub fn new_hash(password: &str) -> Result<String, AuthError> {
@@ -24,29 +28,90 @@ fn hash_password(password: &str, salt: &Uuid) -> Result<String, AuthError> {
 }
 
 /// Verify that the given password matches the stored hash
-pub fn verify_password(password: &str, hash_str: &str) -> Result<(), AuthError> {
-    let hash =
-        PasswordHash::new(hash_str).map_err(|e| AuthError::PasswordHasherError(e.to_string()))?;
+pub async fn verify_password(password: String, hash_str: String) -> Result<(), AuthError> {
+    tokio::task::spawn_blocking(move || {
+        let hash = PasswordHash::new(&hash_str)
+            .map_err(|e| AuthError::PasswordHasherError(e.to_string()))?;
 
-    Argon2::default()
-        .verify_password(password.as_bytes(), &hash)
-        .map_err(|_| AuthError::Unauthenticated)
+        Argon2::default()
+            .verify_password(password.as_bytes(), &hash)
+            .map_err(|_| AuthError::Unauthenticated)
+    })
+    .await
+    .map_err(|e| AuthError::PasswordHasherError(e.to_string()))??;
+
+    Ok(())
+}
+
+/// An email and password to attempt login
+#[derive(Debug, Deserialize)]
+pub struct EmailAndPassword {
+    email: String,
+    password: String,
+}
+
+/// Look up a user, verify the password, and check that the user is verified.
+pub async fn lookup_user_from_email_and_password(
+    db: &PgPool,
+    email_and_password: EmailAndPassword,
+) -> Result<UserId, Report<AuthError>> {
+    let user_info = sqlx::query!(
+        r#"SELECT user_id as "user_id: UserId", password, verified
+        FROM email_logins
+        JOIN users ON users.id = email_logins.user_id
+        WHERE email_logins.email = $1"#,
+        email_and_password.email
+    )
+    .fetch_optional(db)
+    .await
+    .map_err(AuthError::from)?
+    .ok_or(AuthError::Unauthenticated)?;
+
+    let password_hash = user_info.password.unwrap_or_default();
+
+    verify_password(email_and_password.password, password_hash).await?;
+
+    if !user_info.verified {
+        return Err(Report::new(AuthError::NotVerified))?;
+    }
+
+    Ok(user_info.user_id)
+}
+
+/// Lookup a user based on the email/password, and create a new session.
+/// This returns an error if the email is not found, the password is incorrect, or if the user is
+/// not verified.
+pub async fn login_with_password(
+    session_backend: &SessionBackend,
+    cookies: &Cookies,
+    email_and_password: EmailAndPassword,
+) -> Result<(), Report<AuthError>> {
+    let user_id =
+        lookup_user_from_email_and_password(&session_backend.db, email_and_password).await?;
+
+    session_backend
+        .create_session(&cookies, &user_id)
+        .await
+        .change_context(AuthError::SessionBackend)?;
+    Ok(())
 }
 
 #[cfg(all(test, any(feature = "test_slow", feature = "test_password")))]
 mod tests {
     use super::*;
 
-    #[test]
-    fn good_password() -> Result<(), AuthError> {
+    #[tokio::test]
+    async fn good_password() -> Result<(), AuthError> {
         let hash = new_hash("abcdef")?;
-        verify_password("abcdef", &hash)
+        verify_password("abcdef".to_string(), hash).await
     }
 
-    #[test]
-    fn bad_password() -> Result<(), AuthError> {
+    #[tokio::test]
+    async fn bad_password() -> Result<(), AuthError> {
         let hash = new_hash("abcdef")?;
-        verify_password("abcdefg", &hash).expect_err("non-matching password");
+        verify_password("abcdefg".to_string(), hash)
+            .await
+            .expect_err("non-matching password");
         Ok(())
     }
 

@@ -1,7 +1,10 @@
 use clap::{Args, Parser, Subcommand};
 use error_stack::{Report, ResultExt};
-use filigree::tracing_config::{configure_tracing, teardown_tracing, TracingExportConfig};
-use filigree_test_app::{server, Error};
+use filigree::{
+    auth::{SameSiteArg, SessionCookieBuilder},
+    tracing_config::{configure_tracing, teardown_tracing, TracingExportConfig},
+};
+use filigree_test_app::{server, util_cmd, Error};
 use tracing::{event, Level};
 
 #[derive(Parser)]
@@ -15,7 +18,7 @@ struct Cli {
 enum Command {
     // TODO bootstrap DB command
     // TODO migrate command
-    Util(UtilCommand),
+    Util(util_cmd::UtilCommand),
     Serve(ServeCommand),
 }
 
@@ -40,27 +43,21 @@ struct ServeCommand {
     /// Request timeout, in seconds
     #[clap(long, env = "REQUEST_TIMEOUT", default_value_t = 60)]
     request_timeout: u64,
+
+    #[clap(long, env = "COOKIE_SAME_SITE", value_enum, default_value_t = SameSiteArg::Strict)]
+    cookie_same_site: SameSiteArg,
+
+    #[clap(long, env = "COOKIE_INSECURE")]
+    cookie_insecure: bool,
+
+    /// Session expiry time, in days
+    #[clap(long, env = "SESSION_EXPIRY", default_value_t = 7)]
+    session_expiry: u64,
     // tracing endpoint (if any)
     // honeycomb team
     // honeycomb dataset
     // jaeger service name
     // jaeger endpoint
-}
-
-#[derive(Args, Debug)]
-struct UtilCommand {
-    #[clap(subcommand)]
-    command: UtilSubcommand,
-}
-
-#[derive(Debug, Subcommand)]
-enum UtilSubcommand {
-    HashPassword(HashPasswordCommand),
-}
-
-#[derive(Args, Debug)]
-struct HashPasswordCommand {
-    password: String,
 }
 
 async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
@@ -71,11 +68,17 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         .await
         .change_context(Error::Db)?;
 
+    let secure_cookies = !cmd.cookie_insecure;
+
     let server = server::create_server(server::Config {
         env: cmd.env,
         host: cmd.host,
         port: cmd.port,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),
+        cookie_configuration: SessionCookieBuilder::new(secure_cookies, cmd.cookie_same_site),
+        session_expiry: filigree::auth::ExpiryStyle::AfterIdle(std::time::Duration::from_secs(
+            cmd.session_expiry * 24 * 60 * 60,
+        )),
         pg_pool,
     })
     .await?;
@@ -96,13 +99,7 @@ pub async fn main() -> Result<(), Report<Error>> {
 
     match cli.command {
         Command::Serve(cmd) => serve(cmd).await?,
-        Command::Util(cmd) => match cmd.command {
-            UtilSubcommand::HashPassword(password) => {
-                let hash = filigree::auth::password::new_hash(&password.password)
-                    .change_context(Error::AuthSubsystem)?;
-                println!("{hash}");
-            }
-        },
+        Command::Util(cmd) => cmd.handle().await?,
     }
 
     Ok(())

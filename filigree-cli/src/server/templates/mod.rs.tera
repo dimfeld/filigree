@@ -13,9 +13,12 @@ use std::{
     sync::Arc,
 };
 
-use axum::{routing::get, Router};
+use axum::{extract::FromRef, routing::get, Router};
 use error_stack::{Report, ResultExt};
-use filigree::errors::{panic_handler, ObfuscateErrorLayer, ObfuscateErrorLayerSettings};
+use filigree::{
+    auth::{ExpiryStyle, SessionBackend, SessionCookieBuilder},
+    errors::{panic_handler, ObfuscateErrorLayer, ObfuscateErrorLayerSettings},
+};
 use sqlx::PgPool;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -32,15 +35,39 @@ use crate::error::Error;
 mod health;
 
 /// Shared state used by the server
+#[derive(FromRef)]
 pub struct ServerStateInner {
     /// If the app is running in production mode. This should be used sparingly as there should be
     /// a minimum of difference between production and development.
     pub production: bool,
     /// The Postgres database connection pool
     pub db: PgPool,
+    /// Manages creating and tearing down sessions
+    pub session_backend: SessionBackend,
 }
 
-pub(super) type ServerState = Arc<ServerStateInner>;
+#[derive(Clone)]
+pub(super) struct ServerState(Arc<ServerStateInner>);
+
+impl std::ops::Deref for ServerState {
+    type Target = ServerStateInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl FromRef<ServerState> for PgPool {
+    fn from_ref(inner: &ServerState) -> Self {
+        inner.0.db.clone()
+    }
+}
+
+impl FromRef<ServerState> for SessionBackend {
+    fn from_ref(inner: &ServerState) -> Self {
+        inner.0.session_backend.clone()
+    }
+}
 
 /// The server and related information
 pub struct Server {
@@ -92,22 +119,31 @@ pub struct Config {
     /// How long to wait before timing out a request
     pub request_timeout: std::time::Duration,
     pub pg_pool: PgPool,
+
+    pub cookie_configuration: SessionCookieBuilder,
+    pub session_expiry: ExpiryStyle,
 }
 
 /// Create the server and return it, ready to run.
 pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
     let production = config.env != "development" && !cfg!(debug_assertions);
 
-    let state = Arc::new(ServerStateInner {
+    let state = ServerState(Arc::new(ServerStateInner {
         production,
+        session_backend: SessionBackend::new(
+            config.pg_pool.clone(),
+            config.cookie_configuration,
+            config.session_expiry,
+        ),
         db: config.pg_pool.clone(),
-    });
+    }));
 
     let auth_queries = Arc::new(crate::auth::AuthQueries::new(config.pg_pool));
 
     let app: Router<ServerState> = Router::new()
         .route("/healthz", get(health::healthz))
         .merge(crate::models::create_routes())
+        .merge(filigree::auth::endpoints::create_routes())
         .layer(
             ServiceBuilder::new()
                 .layer(panic_handler(production))
