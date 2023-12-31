@@ -3,8 +3,10 @@ use uuid::Uuid;
 use super::ApiKey;
 use crate::auth::{AuthError, OrganizationId, UserId};
 
-/// Retrieve an API key
-pub async fn get_api_key(
+/// Retrieve an API key, making sure that the hash matches and that the key is valid
+/// In most cases you will prefer to call [lookup_api_key_from_bearer_token] instead, which
+/// calls this after decoding the token.
+pub async fn lookup_api_key_for_auth(
     pool: &sqlx::PgPool,
     api_key_id: &Uuid,
     hash: &[u8],
@@ -23,7 +25,7 @@ pub async fn get_api_key(
                 api_key_id = $1
                 AND hash = $2
                 AND active
-                AND (expires_at IS NULL OR expires_at < now())"##,
+                AND expires_at > now()"##,
         api_key_id,
         hash
     )

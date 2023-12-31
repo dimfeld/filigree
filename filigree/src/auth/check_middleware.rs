@@ -10,7 +10,7 @@ use super::{get_auth_info, AuthError, AuthInfo};
 pub fn has_permission<INFO: AuthInfo>(s: impl Into<Cow<'static, str>>) -> HasPermissionLayer<INFO> {
     HasPermissionLayer {
         permission: s.into(),
-        _marker: PhantomData::default(),
+        _marker: PhantomData,
     }
 }
 
@@ -24,7 +24,7 @@ impl<INFO: AuthInfo> Clone for HasPermissionLayer<INFO> {
     fn clone(&self) -> Self {
         Self {
             permission: self.permission.clone(),
-            _marker: PhantomData::default(),
+            _marker: PhantomData,
         }
     }
 }
@@ -36,7 +36,7 @@ impl<S, INFO: AuthInfo> Layer<S> for HasPermissionLayer<INFO> {
         HasPermissionService {
             permission: self.permission.clone(),
             inner,
-            _marker: PhantomData::default(),
+            _marker: PhantomData,
         }
     }
 }
@@ -53,7 +53,7 @@ impl<S: Clone, INFO: AuthInfo> Clone for HasPermissionService<S, INFO> {
         Self {
             permission: self.permission.clone(),
             inner: self.inner.clone(),
-            _marker: PhantomData::default(),
+            _marker: PhantomData,
         }
     }
 }
@@ -107,7 +107,7 @@ where
     HasPredicateLayer {
         message: message.into(),
         f,
-        _marker: PhantomData::default(),
+        _marker: PhantomData,
     }
 }
 
@@ -131,7 +131,7 @@ where
         Self {
             message: self.message.clone(),
             f: self.f.clone(),
-            _marker: PhantomData::default(),
+            _marker: PhantomData,
         }
     }
 }
@@ -148,7 +148,7 @@ where
             inner,
             message: self.message.clone(),
             f: self.f.clone(),
-            _marker: PhantomData::default(),
+            _marker: PhantomData,
         }
     }
 }

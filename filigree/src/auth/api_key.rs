@@ -1,3 +1,10 @@
+//! API keys consist of an ID and a random string. These are combined into a hash, which is
+//! stored in the database and used to look up the key. The random string is not stored in the
+//! database, which makes it impossible to reconstruct a key from a database row.
+//!
+//! Keys have the option to inherit the permissions of the user who created them, or to have their
+//! own subset of permissions.
+
 mod queries;
 
 use base64::{display::Base64Display, engine::GeneralPurpose, Engine};
@@ -41,10 +48,6 @@ pub struct ApiKeyUpdateBody {
 }
 
 /// A generated API key
-/// A key consists of an ID and a random string.
-/// The ID is used to look up the key in the database. The random portion is used to prevent tampering.
-/// This entire key is hashed, and both the ID and the hash are compared against
-/// in the database.
 pub struct ApiKeyData {
     /// The ID of the key
     pub api_key_id: Uuid,
@@ -104,7 +107,7 @@ pub async fn lookup_api_key_from_bearer_token(
     key: &str,
 ) -> Result<ApiKey, AuthError> {
     let (api_key_id, hash) = decode_key(key)?;
-    queries::get_api_key(pool, &api_key_id, &hash).await
+    queries::lookup_api_key_for_auth(pool, &api_key_id, &hash).await
 }
 
 #[cfg(test)]

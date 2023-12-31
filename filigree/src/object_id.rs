@@ -50,34 +50,34 @@ pub struct ObjectId<PREFIX: ObjectIdPrefix>(pub Uuid, PhantomData<PREFIX>);
 
 impl<PREFIX: ObjectIdPrefix> Clone for ObjectId<PREFIX> {
     fn clone(&self) -> Self {
-        Self(self.0, PhantomData::default())
+        Self(self.0, PhantomData)
     }
 }
 
 impl<PREFIX: ObjectIdPrefix> ObjectId<PREFIX> {
     /// Create a new ObjectId with a timestamp of now
     pub fn new() -> Self {
-        Self(uuid::Uuid::now_v7(), PhantomData::default())
+        Self(uuid::Uuid::now_v7(), PhantomData)
     }
 
     /// Create a new ObjectId from a UUID
-    pub fn from_uuid(u: Uuid) -> Self {
-        Self(u, PhantomData::default())
+    pub const fn from_uuid(u: Uuid) -> Self {
+        Self(u, PhantomData)
     }
 
     /// Return the inner Uuid
-    pub fn into_inner(self) -> Uuid {
+    pub const fn into_inner(self) -> Uuid {
         self.0
     }
 
     /// Return a reference to the inner Uuid
-    pub fn as_uuid(&self) -> &Uuid {
+    pub const fn as_uuid(&self) -> &Uuid {
         &self.0
     }
 
     /// Return an ObjectId corresponding to the "all zeroes" UUID
-    pub fn nil() -> Self {
-        Self(Uuid::nil(), PhantomData::default())
+    pub const fn nil() -> Self {
+        Self(Uuid::nil(), PhantomData)
     }
 
     /// Writes the UUID portion of the object ID, without the prefix
@@ -109,7 +109,7 @@ impl<PREFIX: ObjectIdPrefix> PartialEq<Uuid> for ObjectId<PREFIX> {
 
 impl<PREFIX: ObjectIdPrefix> From<Uuid> for ObjectId<PREFIX> {
     fn from(u: Uuid) -> Self {
-        Self(u, PhantomData::default())
+        Self(u, PhantomData)
     }
 }
 
@@ -238,7 +238,7 @@ impl<'r, PREFIX: ObjectIdPrefix> sqlx::Decode<'r, sqlx::Postgres> for ObjectId<P
         value: <sqlx::Postgres as sqlx::database::HasValueRef<'r>>::ValueRef,
     ) -> Result<Self, sqlx::error::BoxDynError> {
         let u = Uuid::decode(value)?;
-        Ok(Self(u, PhantomData::default()))
+        Ok(Self(u, PhantomData))
     }
 }
 

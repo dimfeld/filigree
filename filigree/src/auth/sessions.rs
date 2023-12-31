@@ -103,6 +103,15 @@ impl SessionCookieBuilder {
     }
 }
 
+impl Default for SessionCookieBuilder {
+    fn default() -> Self {
+        Self {
+            secure: true,
+            same_site: tower_cookies::cookie::SameSite::Strict,
+        }
+    }
+}
+
 /// How session expiration should be calculated
 #[derive(Debug, Clone)]
 pub enum ExpiryStyle {

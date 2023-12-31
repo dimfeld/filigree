@@ -209,10 +209,20 @@ pub async fn list(db: &PgPool, auth: &AuthInfo, filters: &ListQueryFilters) -> R
 pub async fn create(db: &PgPool, auth: &AuthInfo, payload: &{{struct_base}}CreatePayload) -> Result<{{struct_base}}, error_stack::Report<Error>> {
     // TODO create permissions auth check
     let id = {{id_type}}::new();
+    create_raw(db, id, auth.organization_id, payload).await
+}
+
+/// Create a new {{struct_base}} in the database, allowing the ID to be explicitly specified.
+pub async fn create_raw(
+    db: &PgPool,
+    id: {{id_type}},
+    organization_id: OrganizationId,
+    payload: &{{struct_base}}CreatePayload) -> Result<{{struct_base}}, error_stack::Report<Error>> {
+
     let result = query_file_as!({{struct_base}}, "{{dir}}/insert.sql",
         id.as_uuid(),
         {% if not global -%}
-        auth.organization_id.as_uuid(),
+        organization_id.as_uuid(),
         {%- endif %}
         {% for field in fields | filter(attribute="owner_write", value=true) %}
             {%- if field.nullable -%}
