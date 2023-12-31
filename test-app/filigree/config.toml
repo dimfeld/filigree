@@ -4,6 +4,8 @@ formatter.rust = ["rustfmt", "+nightly"]
 dotenv = true
 default_auth_scope = "model"
 
+
+[database]
 migrate_on_start = true
 
 

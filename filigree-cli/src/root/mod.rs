@@ -24,7 +24,7 @@ pub fn render_files(
         "env_prefix",
         config.env_prefix.as_deref().unwrap_or_default(),
     );
-    context.insert("migrate_on_start", &config.migrate_on_start);
+    context.insert("db", &config.database);
 
     let base_path = PathBuf::from("src");
 

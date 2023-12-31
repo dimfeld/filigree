@@ -52,6 +52,12 @@ struct ServeCommand {
     /// Session expiry time, in days
     #[clap(long, env = "SESSION_EXPIRY", default_value_t = 7)]
     session_expiry: u64,
+
+    #[clap(long, env = "DB_MIN_CONNECTIONS", default_value_t = 0)]
+    db_min_connections: u32,
+
+    #[clap(long, env = "DB_MAX_CONNECTIONS", default_value_t = 100)]
+    db_max_connections: u32,
     // tracing endpoint (if any)
     // honeycomb team
     // honeycomb dataset
@@ -63,9 +69,17 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     // TODO make this configurable
     configure_tracing("", TracingExportConfig::None).change_context(Error::ServerStart)?;
 
-    let pg_pool = sqlx::PgPool::connect(&cmd.database_url)
-        .await
-        .change_context(Error::Db)?;
+    let pool_options = sqlx::postgres::PgPoolOptions::new()
+        .min_connections(cmd.db_min_connections)
+        .max_connections(cmd.db_max_connections);
+
+    let pg_pool = if cmd.db_min_connections > 0 {
+        pool_options.connect(&cmd.database_url).await
+    } else {
+        pool_options.connect_lazy(&cmd.database_url)
+    };
+
+    let pg_pool = pg_pool.change_context(Error::Db)?;
 
     db::run_migrations(&pg_pool).await?;
 

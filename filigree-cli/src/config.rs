@@ -40,9 +40,9 @@ pub struct Config {
     #[serde(default)]
     pub require_user_email_verification: bool,
 
+    /// Configuration for the database
     #[serde(default)]
-    /// If true, migrations will be run automatically when starting the application
-    pub migrate_on_start: bool,
+    pub database: DatabaseConfig,
 }
 
 impl Config {
@@ -56,6 +56,36 @@ impl Config {
 
     const fn default_port() -> u16 {
         7823
+    }
+}
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct DatabaseConfig {
+    /// If true, migrations will be run automatically when starting the application
+    #[serde(default)]
+    pub migrate_on_start: bool,
+
+    /// The minimum number of connections for the database pool to have open.
+    /// This defaults to 0 which is appropriate when using a "serverless" Postgres
+    /// provider which may charge you for resources incurred by holding open an idle
+    /// connection for a while, but you may want a higher value for better responsiveness
+    /// when this is not a consideration.
+    #[serde(default = "DatabaseConfig::default_min_connections")]
+    pub min_connections: u16,
+
+    /// The maximum number of connections in the database pool.
+    /// Defaults to 100
+    #[serde(default = "DatabaseConfig::default_max_connections")]
+    pub max_connections: u16,
+}
+
+impl DatabaseConfig {
+    const fn default_min_connections() -> u16 {
+        0
+    }
+
+    const fn default_max_connections() -> u16 {
+        100
     }
 }
 
