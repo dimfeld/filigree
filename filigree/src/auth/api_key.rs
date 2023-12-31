@@ -1,5 +1,9 @@
+mod queries;
+
 use base64::{display::Base64Display, engine::GeneralPurpose, Engine};
 use chrono::{DateTime, Utc};
+pub use queries::*;
+use serde::Deserialize;
 use sha3::Digest;
 use uuid::Uuid;
 
@@ -11,16 +15,27 @@ pub struct ApiKey {
     /// The ID of the key
     pub api_key_id: Uuid,
     /// The organization that this key belongs to
-    pub org_id: OrganizationId,
+    pub organization_id: OrganizationId,
     /// The user that this key belongs to
     pub user_id: Option<UserId>,
     /// Whether this key should use the permissions of the user, or have its
     /// own set of permissions just for this key.
     pub inherits_user_permissions: bool,
     /// A description of the key
-    pub description: Option<String>,
+    pub description: String,
     /// Whether the key is enabled. Inactive keys can not be used.
     pub active: bool,
+    /// When the key will expire
+    pub expires_at: DateTime<Utc>,
+}
+
+/// A submission to update an API key
+#[derive(Clone, Debug, Deserialize, sqlx::FromRow)]
+pub struct ApiKeyUpdateBody {
+    /// The description of the key
+    pub description: Option<String>,
+    /// Whether the key is active or not
+    pub active: Option<bool>,
     /// When the key will expire
     pub expires_at: Option<DateTime<Utc>>,
 }
@@ -33,16 +48,17 @@ pub struct ApiKey {
 pub struct ApiKeyData {
     /// The ID of the key
     pub api_key_id: Uuid,
-    /// The full representation of the key, which the user passes in to the API
-    pub key: String,
     /// The hash of the key.
     pub hash: Vec<u8>,
+    /// The full representation of the key, which the user passes in to the API.
+    /// This is not stored in the database.
+    pub key: String,
 }
 
 const B64_ENGINE: GeneralPurpose = base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
 impl ApiKeyData {
-    /// Create a new API key with the give prefix
+    /// Create a new API key
     pub fn new() -> ApiKeyData {
         let id = Uuid::now_v7();
         let base64_id = Base64Display::new(id.as_bytes(), &B64_ENGINE);
@@ -80,6 +96,15 @@ pub fn decode_key(key: &str) -> Result<(Uuid, Vec<u8>), AuthError> {
     let api_key_id = Uuid::from_slice(&api_key_bytes).map_err(|_| AuthError::ApiKeyFormat)?;
 
     Ok((api_key_id, hash))
+}
+
+/// Lookup an API token given the bearer token form that the user provides.
+pub async fn lookup_api_key_from_bearer_token(
+    pool: &sqlx::PgPool,
+    key: &str,
+) -> Result<ApiKey, AuthError> {
+    let (api_key_id, hash) = decode_key(key)?;
+    queries::get_api_key(pool, &api_key_id, &hash).await
 }
 
 #[cfg(test)]

@@ -79,9 +79,9 @@ CREATE TABLE api_keys (
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
   user_id uuid REFERENCES users (id) ON DELETE SET NULL,
   inherits_user_permissions bool NOT NULL DEFAULT FALSE,
-  description text,
+  description text NOT NULL DEFAULT '',
   active boolean NOT NULL DEFAULT TRUE,
-  expires_at timestamptz
+  expires_at timestamptz NOT NULL
 );
 
 -- Methods for a user to log in.
