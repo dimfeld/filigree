@@ -3,7 +3,7 @@ use thiserror::Error;
 use tracing::subscriber::set_global_default;
 use tracing_error::ErrorLayer;
 use tracing_log::LogTracer;
-use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
+use tracing_subscriber::{fmt::MakeWriter, layer::SubscriberExt, EnvFilter, Registry};
 use tracing_tree::HierarchicalLayer;
 
 /// Configuration for sending telemetry to Honeycomb
@@ -40,10 +40,14 @@ pub enum TracingExportConfig {
 pub struct TraceConfigureError;
 
 /// Set up tracing, optionally exporting to an external service
-pub fn configure_tracing(
+pub fn configure_tracing<W>(
     env_prefix: &str,
     export_config: TracingExportConfig,
-) -> Result<(), Report<TraceConfigureError>> {
+    writer: W,
+) -> Result<(), Report<TraceConfigureError>>
+where
+    for<'writer> W: MakeWriter<'writer> + Send + Sync + 'static,
+{
     LogTracer::builder()
         .ignore_crate("rustls")
         .with_max_level(log::LevelFilter::Debug)
@@ -60,7 +64,8 @@ pub fn configure_tracing(
 
     let tree = HierarchicalLayer::new(2)
         .with_targets(true)
-        .with_bracketed_fields(true);
+        .with_bracketed_fields(true)
+        .with_writer(writer);
     let subscriber = Registry::default()
         .with(env_filter)
         .with(tree)
@@ -130,4 +135,25 @@ pub async fn teardown_tracing() -> Result<(), tokio::task::JoinError> {
     .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+pub mod test {
+    use std::sync::Once;
+
+    use super::TracingExportConfig;
+
+    static TRACING: Once = Once::new();
+
+    pub fn init() {
+        TRACING.call_once(|| {
+            if std::env::var("TEST_LOG").is_ok() {
+                super::configure_tracing("TEST_", TracingExportConfig::None, std::io::stdout)
+                    .expect("starting tracing");
+            } else {
+                super::configure_tracing("TEST_", TracingExportConfig::None, std::io::sink)
+                    .expect("starting tracing");
+            }
+        })
+    }
 }

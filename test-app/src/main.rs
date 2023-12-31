@@ -67,7 +67,8 @@ struct ServeCommand {
 
 async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     // TODO make this configurable
-    configure_tracing("", TracingExportConfig::None).change_context(Error::ServerStart)?;
+    configure_tracing("", TracingExportConfig::None, std::io::stdout)
+        .change_context(Error::ServerStart)?;
 
     let pool_options = sqlx::postgres::PgPoolOptions::new()
         .min_connections(cmd.db_min_connections)
