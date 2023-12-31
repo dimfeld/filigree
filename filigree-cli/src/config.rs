@@ -17,10 +17,10 @@ pub struct Config {
 
     #[serde(default)]
     pub formatter: Formatters,
-    /// The SQL dialect to use. Defaults to postgresql
-    #[serde(default = "Config::default_sql_dialect")]
-    pub sql_dialect: SqlDialect,
-
+    // Maybe support SQLite some day
+    // /// The SQL dialect to use. Defaults to postgresql
+    // #[serde(default = "Config::default_sql_dialect")]
+    // pub sql_dialect: SqlDialect,
     /// The auth scope for models that don't specify a different one.
     pub default_auth_scope: ModelAuthScope,
     // TODO implement this
@@ -50,7 +50,7 @@ impl Config {
         read_toml(path)
     }
 
-    const fn default_sql_dialect() -> SqlDialect {
+    pub const fn default_sql_dialect() -> SqlDialect {
         SqlDialect::Postgresql
     }
 
@@ -67,8 +67,8 @@ pub struct DatabaseConfig {
 
     /// The minimum number of connections for the database pool to have open.
     /// This defaults to 0 which is appropriate when using a "serverless" Postgres
-    /// provider which may charge you for resources incurred by holding open an idle
-    /// connection for a while, but you may want a higher value for better responsiveness
+    /// provider that may charge you for resources incurred by holding open an idle
+    /// connection, but you may want a higher value for better responsiveness
     /// when this is not a consideration.
     #[serde(default = "DatabaseConfig::default_min_connections")]
     pub min_connections: u16,

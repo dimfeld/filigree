@@ -31,6 +31,7 @@ impl<'a> ModelGenerator<'a> {
     }
 
     fn create_template_context(config: &Config, model: &Model) -> tera::Context {
+        let sql_dialect = Config::default_sql_dialect();
         let mut context = tera::Context::new();
         let base_dir = PathBuf::from("src/models").join(model.module_name());
         context.insert("dir", &base_dir);
@@ -45,7 +46,7 @@ impl<'a> ModelGenerator<'a> {
         context.insert("read_permission", &format!("{}::read", model.name));
         context.insert("write_permission", &format!("{}::write", model.name));
         context.insert("extra_create_table_sql", &model.extra_create_table_sql);
-        context.insert("sql_dialect", &config.sql_dialect);
+        context.insert("sql_dialect", &sql_dialect);
         context.insert("pagination", &model.pagination);
         context.insert(
             "auth_scope",
@@ -88,7 +89,7 @@ impl<'a> ModelGenerator<'a> {
                     "name": field.name,
                     "sql_name": field.sql_field_name(),
                     "sql_full_name": field.qualified_sql_field_name(),
-                    "sql_type": field.typ.to_sql_type(config.sql_dialect),
+                    "sql_type": field.typ.to_sql_type(sql_dialect),
                     "snake_case_name": field.name.to_case(Case::Snake),
                     "pascal_case_name": field.name.to_case(Case::Pascal),
                     "rust_name": field.rust_field_name(),
