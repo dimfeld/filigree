@@ -22,7 +22,7 @@ pub async fn shutdown_signal() {
         #[cfg(unix)]
         let terminate = async {
             signal::unix::signal(signal::unix::SignalKind::terminate())
-                .expect("failed to install signal handler")
+                .expect("failed to install SIGTERM handler")
                 .recv()
                 .await;
         };

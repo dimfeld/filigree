@@ -15,6 +15,8 @@ pub mod object_id;
 pub mod server;
 /// Utilities for working with SQL queries
 pub mod sql;
+#[cfg(test)]
+pub mod testing;
 /// Tracing configuration
 #[cfg(feature = "tracing")]
 pub mod tracing_config;
