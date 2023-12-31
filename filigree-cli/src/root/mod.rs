@@ -24,12 +24,14 @@ pub fn render_files(
         "env_prefix",
         config.env_prefix.as_deref().unwrap_or_default(),
     );
+    context.insert("migrate_on_start", &config.migrate_on_start);
 
     let base_path = PathBuf::from("src");
 
     let files = RootTemplates::iter().collect::<Vec<_>>();
-    files
+    let mut output = files
         .into_par_iter()
+        .filter(|file| file != "root/build.rs.tera")
         .map(|file| {
             let filename = file
                 .strip_prefix("root/")
@@ -39,5 +41,15 @@ pub fn render_files(
             let path = base_path.join(filename);
             renderer.render_with_full_path(path, &file, &context)
         })
-        .collect::<Result<Vec<_>, _>>()
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // build.rs doesn't go in src
+    let build_rs = renderer.render_with_full_path(
+        PathBuf::from("build.rs"),
+        "root/build.rs.tera",
+        &context,
+    )?;
+    output.push(build_rs);
+
+    Ok(output)
 }

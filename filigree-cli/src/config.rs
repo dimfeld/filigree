@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use error_stack::{Report, ResultExt};
 use glob::glob;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
     format::Formatters,
@@ -39,6 +39,10 @@ pub struct Config {
     /// If true, require that users verify their email address after registering.
     #[serde(default)]
     pub require_user_email_verification: bool,
+
+    #[serde(default)]
+    /// If true, migrations will be run automatically when starting the application
+    pub migrate_on_start: bool,
 }
 
 impl Config {

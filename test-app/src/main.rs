@@ -4,7 +4,7 @@ use filigree::{
     auth::{SameSiteArg, SessionCookieBuilder},
     tracing_config::{configure_tracing, teardown_tracing, TracingExportConfig},
 };
-use filigree_test_app::{server, util_cmd, Error};
+use filigree_test_app::{db, server, util_cmd, Error};
 use tracing::{event, Level};
 
 #[derive(Parser)]
@@ -16,9 +16,8 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    // TODO bootstrap DB command
-    // TODO migrate command
     Util(util_cmd::UtilCommand),
+    Db(db::DbCommand),
     Serve(ServeCommand),
 }
 
@@ -68,6 +67,8 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         .await
         .change_context(Error::Db)?;
 
+    db::run_migrations(&pg_pool).await?;
+
     let secure_cookies = !cmd.cookie_insecure;
 
     let server = server::create_server(server::Config {
@@ -98,6 +99,7 @@ pub async fn main() -> Result<(), Report<Error>> {
     let cli = Cli::parse();
 
     match cli.command {
+        Command::Db(cmd) => cmd.handle().await?,
         Command::Serve(cmd) => serve(cmd).await?,
         Command::Util(cmd) => cmd.handle().await?,
     }

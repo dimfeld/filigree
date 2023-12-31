@@ -4,7 +4,6 @@ formatter.rust = ["rustfmt", "+nightly"]
 dotenv = true
 default_auth_scope = "model"
 
-# models_path = "test-output/models"
-# migrations_path = "test-output/migrations"
+migrate_on_start = true
 
 
