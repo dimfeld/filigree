@@ -56,7 +56,7 @@ impl Model {
             Model {
                 name: "Organization".to_string(),
                 plural: None,
-                id_prefix: Some("tm".to_string()),
+                id_prefix: Some("org".to_string()),
                 global: true,
                 endpoints: crate::model::Endpoints::All(false),
                 indexes: vec![],
