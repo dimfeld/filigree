@@ -122,11 +122,18 @@ impl FullConfig {
 
         let config = Config::from_path(&config_file_path)?;
 
-        let cargo_toml = dir
+        let cargo_toml_path = dir
             .parent()
             .ok_or(Error::ReadConfigFile)?
             .join("Cargo.toml");
-        let crate_name = read_toml::<CargoToml>(&cargo_toml)?.package.name;
+        let manifest = cargo_toml::Manifest::from_path(&cargo_toml_path)
+            .change_context(Error::ReadConfigFile)
+            .attach_printable_lazy(|| cargo_toml_path.display().to_string())?;
+        let crate_name = manifest
+            .package
+            .ok_or(Error::ReadConfigFile)
+            .attach_printable("Cargo.toml has no crate name")?
+            .name;
 
         let models_glob = dir.join("models/*.toml");
         let models = glob(&models_glob.to_string_lossy())
