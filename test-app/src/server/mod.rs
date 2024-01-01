@@ -35,6 +35,8 @@ use tracing::{event, Level};
 use crate::error::Error;
 
 mod health;
+#[cfg(test)]
+mod tests;
 
 /// Shared state used by the server
 #[derive(FromRef)]

@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     error::Error as _,
     path::{Path, PathBuf},
 };
@@ -64,25 +64,6 @@ impl<'a> Renderer<'a> {
             contents: output,
         })
     }
-}
-
-// For debug builds, just read from the file system so we dont have to recompile for every
-// template-only change.
-#[cfg(debug_assertions)]
-macro_rules! read_template {
-    ($path: expr) => {{
-        let file_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src")
-            .join($path);
-        std::fs::read_to_string(&file_path).expect(&format!("Failed to read {file_path:?}"))
-    }};
-}
-
-#[cfg(not(debug_assertions))]
-macro_rules! read_template {
-    ($path: expr) => {
-        include_str!($path)
-    };
 }
 
 #[derive(RustEmbed)]

@@ -9,7 +9,7 @@ use serde::Deserialize;
 use sqlx::{query_file, query_file_as, PgPool};
 
 use super::{types::*, RoleId};
-use crate::{auth::AuthInfo, Error};
+use crate::{auth::AuthInfo, models::organization::OrganizationId, Error};
 
 type QueryAs<'q, T> = sqlx::query::QueryAs<
     'q,
@@ -207,11 +207,21 @@ pub async fn create(
 ) -> Result<Role, error_stack::Report<Error>> {
     // TODO create permissions auth check
     let id = RoleId::new();
+    create_raw(db, id, auth.organization_id, payload).await
+}
+
+/// Create a new Role in the database, allowing the ID to be explicitly specified.
+pub async fn create_raw(
+    db: &PgPool,
+    id: RoleId,
+    organization_id: OrganizationId,
+    payload: &RoleCreatePayload,
+) -> Result<Role, error_stack::Report<Error>> {
     let result = query_file_as!(
         Role,
         "src/models/role/insert.sql",
         id.as_uuid(),
-        auth.organization_id.as_uuid(),
+        organization_id.as_uuid(),
         &payload.name,
         payload.description.as_ref(),
     )

@@ -9,6 +9,9 @@ use sqlx::{PgPool, query_file, query_file_as};
 use std::str::FromStr;
 
 use super::{{id_type}};
+{% if model_name != "Organization" %}
+use crate::models::organization::OrganizationId;
+{% endif %}
 use super::types::*;
 
 use crate::auth::AuthInfo;

@@ -137,7 +137,7 @@ pub async fn teardown_tracing() -> Result<(), tokio::task::JoinError> {
     Ok(())
 }
 
-#[cfg(test)]
+/// Initiailize tracing from a test context
 pub mod test {
     use std::sync::Once;
 
@@ -145,6 +145,8 @@ pub mod test {
 
     static TRACING: Once = Once::new();
 
+    /// Initiialize tracing. This only starts tracing once per process, so is safe to
+    /// call from every test.
     pub fn init() {
         TRACING.call_once(|| {
             if std::env::var("TEST_LOG").is_ok() {

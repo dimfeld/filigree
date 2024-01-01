@@ -9,7 +9,7 @@ use serde::Deserialize;
 use sqlx::{query_file, query_file_as, PgPool};
 
 use super::{types::*, UserId};
-use crate::{auth::AuthInfo, Error};
+use crate::{auth::AuthInfo, models::organization::OrganizationId, Error};
 
 type QueryAs<'q, T> = sqlx::query::QueryAs<
     'q,
@@ -207,11 +207,21 @@ pub async fn create(
 ) -> Result<User, error_stack::Report<Error>> {
     // TODO create permissions auth check
     let id = UserId::new();
+    create_raw(db, id, auth.organization_id, payload).await
+}
+
+/// Create a new User in the database, allowing the ID to be explicitly specified.
+pub async fn create_raw(
+    db: &PgPool,
+    id: UserId,
+    organization_id: OrganizationId,
+    payload: &UserCreatePayload,
+) -> Result<User, error_stack::Report<Error>> {
     let result = query_file_as!(
         User,
         "src/models/user/insert.sql",
         id.as_uuid(),
-        auth.organization_id.as_uuid(),
+        organization_id.as_uuid(),
         &payload.name,
         &payload.email,
         &payload.verified,

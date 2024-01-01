@@ -45,7 +45,7 @@ pub trait ObjectIdPrefix {
 /// A type that is internally stored as a UUID but externally as a
 /// more accessible string with a prefix indicating its type. This uses
 /// UUID v7 so that the output will be lexicographically sortable.
-#[derive(Copy, Eq, Hash, PartialOrd, Ord)]
+#[derive(Eq, Hash, PartialOrd, Ord)]
 pub struct ObjectId<PREFIX: ObjectIdPrefix>(pub Uuid, PhantomData<PREFIX>);
 
 impl<PREFIX: ObjectIdPrefix> Clone for ObjectId<PREFIX> {
@@ -53,6 +53,8 @@ impl<PREFIX: ObjectIdPrefix> Clone for ObjectId<PREFIX> {
         Self(self.0, PhantomData)
     }
 }
+
+impl<PREFIX: ObjectIdPrefix> Copy for ObjectId<PREFIX> {}
 
 impl<PREFIX: ObjectIdPrefix> ObjectId<PREFIX> {
     /// Create a new ObjectId with a timestamp of now

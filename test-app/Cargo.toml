@@ -22,6 +22,7 @@ dotenvy = "0.15.7"
 error-stack = "0.4.1"
 eyre = "0.6.11"
 filigree = { version = "0.1.0", path = "../filigree" }
+futures = "0.3.30"
 hyper = { version = "1.1.0", features = ["server", "http1", "http2"] }
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"

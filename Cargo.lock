@@ -908,6 +908,7 @@ dependencies = [
  "error-stack",
  "eyre",
  "filigree",
+ "futures",
  "hyper 1.1.0",
  "serde",
  "serde_json",

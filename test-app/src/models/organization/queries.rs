@@ -207,6 +207,16 @@ pub async fn create(
 ) -> Result<Organization, error_stack::Report<Error>> {
     // TODO create permissions auth check
     let id = OrganizationId::new();
+    create_raw(db, id, auth.organization_id, payload).await
+}
+
+/// Create a new Organization in the database, allowing the ID to be explicitly specified.
+pub async fn create_raw(
+    db: &PgPool,
+    id: OrganizationId,
+    organization_id: OrganizationId,
+    payload: &OrganizationCreatePayload,
+) -> Result<Organization, error_stack::Report<Error>> {
     let result = query_file_as!(
         Organization,
         "src/models/organization/insert.sql",
