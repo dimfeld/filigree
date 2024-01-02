@@ -47,11 +47,6 @@ impl Model {
                         unique: true,
                         ..simple_model_field("email", SqlType::Text)
                     },
-                    ModelField {
-                        user_access: Access::None,
-                        default_rust: config.require_user_email_verification.to_string(),
-                        ..simple_model_field("verified", SqlType::Boolean)
-                    },
                 ],
             },
             Model {

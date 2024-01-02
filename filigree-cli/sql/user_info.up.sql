@@ -40,6 +40,7 @@ CREATE TABLE email_logins (
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   reset_token text,
   reset_expires_at timestamptz,
+  verified bool NOT NULL,
   verify_token text,
   verify_expires_at timestamptz
 );

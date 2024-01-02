@@ -13,12 +13,47 @@ use serde::{
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
 pub struct {{ struct.name }} {
-    {{ struct.fields }}
+    {{ struct.fields_content }}
 }
 
 {% for alias in struct.aliases %}
     pub type {{ alias }} = {{ struct.name }};
 {% endfor %}
+
+impl {{struct.name}} {
+    // The <T as Default> syntax here is weird but lets us generate from the template without needing to
+    // detect whether to add the extra :: in cases like DateTime::<Utc>::default
+    {% for field in struct.fields %}
+        pub fn default_{{field.rust_name}}() -> {{field.rust_type}} {
+            {% if field.default_rust %}
+                {% if field.nullable %}
+                    Some({{field.default_rust}}.into())
+                {% else %}
+                    {{field.default_rust}}.into()
+                {% endif %}
+            {% else %}
+                {% if field.nullable %}
+                    None
+                {% else %}
+                    <{{field.rust_type}} as Default>::default().into()
+                {% endif %}
+            {% endif %}
+        }
+    {% endfor %}
+}
+
+impl Default for {{struct.name}} {
+    fn default() -> Self {
+        Self {
+            {% for field in struct.fields -%}
+            {{field.rust_name}}: Self::default_{{field.rust_name}}(),
+            {%- endfor %}
+            {% if struct.has_permission_field -%}
+            _permission: ObjectPermission::Owner,
+            {%- endif %}
+        }
+    }
+}
 
 {% endfor %}
 
@@ -47,24 +82,3 @@ impl Serialize for {{struct_base}} {
     }
 }
 
-impl {{struct_base}} {
-    {% for field in fields %}
-        pub fn default_{{field.rust_name}}(&self) -> {{field.rust_type}} {
-            {% if field.default_rust %}
-                {% if field.nullable %}
-                    Some({{field.default_rust}}.into())
-                {% else %}
-                    {{field.default_rust}}.into()
-                {% endif %}
-            {% else %}
-                {% if field.nullable %}
-                    None
-                {% else %}
-                    // This is weird but lets us generate from the template without needing to
-                    // detect whether to add the extra :: in cases like DateTime::<Utc>::default
-                    <{{field.rust_type}} as Default>::default().into()
-                {% endif %}
-            {% endif %}
-        }
-    {% endfor %}
-}

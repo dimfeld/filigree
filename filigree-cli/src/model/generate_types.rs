@@ -38,39 +38,59 @@ impl<'a> ModelGenerator<'a> {
         let mut grouped_fields = HashMap::new();
         for (suffix, fields) in struct_list {
             grouped_fields
-                .entry(fields)
-                .or_insert_with(Vec::new)
+                .entry(fields.2)
+                .or_insert_with(|| (fields.0, fields.1, Vec::new()))
+                .2
                 .push(suffix);
         }
 
         let structs = grouped_fields
             .into_iter()
-            .map(|(fields, suffixes)| {
-                let name = if suffixes.contains(&"AllFields") {
-                    // The AllFields struct should just have the base name
-                    Cow::Borrowed(&struct_base)
-                } else {
-                    Cow::Owned(format!(
-                        "{struct_base}{suffix}",
-                        suffix = suffixes.join("And")
-                    ))
-                };
+            .map(
+                |(fields_content, (fields, has_permission_field, suffixes))| {
+                    let name = if suffixes.contains(&"AllFields") {
+                        // The AllFields struct should just have the base name
+                        Cow::Borrowed(&struct_base)
+                    } else {
+                        Cow::Owned(format!(
+                            "{struct_base}{suffix}",
+                            suffix = suffixes.join("And")
+                        ))
+                    };
 
-                let aliases = (suffixes.len() > 1)
-                    .then(|| {
-                        suffixes
-                            .iter()
-                            .map(|suffix| format!("{struct_base}{suffix}"))
-                            .collect::<Vec<_>>()
+                    let aliases = (suffixes.len() > 1)
+                        .then(|| {
+                            suffixes
+                                .iter()
+                                .map(|suffix| format!("{struct_base}{suffix}"))
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
+
+                    let field_info = fields
+                        .into_iter()
+                        .map(|field| {
+                            json!({
+                                "name": field.name,
+                                "rust_name": field.rust_field_name(),
+                                "base_rust_type": field.base_rust_type(),
+                                "rust_type": field.rust_type(),
+                                "is_custom_rust_type": field.rust_type.is_some(),
+                                "default_rust": field.default_rust,
+                                "nullable": field.nullable,
+                            })
+                        })
+                        .collect::<Vec<_>>();
+
+                    json!({
+                        "name": name,
+                        "fields_content": fields_content,
+                        "fields": field_info,
+                        "aliases": aliases,
+                        "has_permission_field": has_permission_field,
                     })
-                    .unwrap_or_default();
-
-                json!({
-                    "name": name,
-                    "fields": fields,
-                    "aliases": aliases,
-                })
-            })
+                },
+            )
             .sorted_by(|a, b| a["name"].as_str().unwrap().cmp(b["name"].as_str().unwrap()))
             .collect::<Vec<_>>();
 
@@ -82,28 +102,38 @@ impl<'a> ModelGenerator<'a> {
         fields: impl Iterator<Item = Cow<'b, ModelField>>,
         force_optional: impl Fn(&ModelField) -> bool,
         add_permissions_field: bool,
-    ) -> String {
-        let content = fields
+    ) -> (Vec<ModelField>, bool, String) {
+        let fields = fields
             .map(|f| {
-                let typ = if force_optional(&f) {
-                    format!("Option<{}>", f.base_rust_type()).into()
-                } else {
-                    f.rust_type()
-                };
+                let mut f = f.into_owned();
+                if force_optional(&f) {
+                    f.nullable = true;
+                }
 
+                f
+            })
+            .collect::<Vec<_>>();
+
+        let content = fields
+            .iter()
+            .map(|f| {
                 let rust_field_name = f.rust_field_name();
+                let rust_type = f.rust_type();
                 let serde_rename = if rust_field_name != f.name {
                     format!("#[serde(rename = \"{name}\")]\n", name = f.name)
                 } else {
                     String::new()
                 };
-                format!("{serde_rename}pub {rust_field_name}: {typ},")
+                format!("{serde_rename}pub {rust_field_name}: {rust_type},")
             })
             .join("\n");
-        if add_permissions_field {
+
+        let content = if add_permissions_field {
             format!("{content}\npub _permission: ObjectPermission,")
         } else {
             content
-        }
+        };
+
+        (fields, add_permissions_field, content)
     }
 }
