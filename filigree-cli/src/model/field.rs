@@ -35,9 +35,15 @@ pub struct ModelField {
     #[serde(default)]
     pub owner_access: Access,
 
-    /// The default value of this field, as a SQL expression
+    /// The default value of this field, as a SQL expression. This requires a migration to change.
     #[serde(default)]
-    pub default: String,
+    pub default_sql: String,
+
+    /// The default value of the field, as a Rust expression. This can be useful for expressing
+    /// more complex types, or values that may need to change regularly and so are less suited for
+    /// migrations.
+    #[serde(default)]
+    pub default_rust: String,
 
     /// If true, create an index on this field.
     /// More exotic index types can be specified using [Model#indexes].

@@ -117,7 +117,8 @@ impl Model {
                 extra_sql_modifiers: String::new(),
                 user_access: Access::Read,
                 owner_access: Access::Read,
-                default: String::new(),
+                default_sql: String::new(),
+                default_rust: String::new(),
                 references: Some(ModelFieldReference::new(
                     "organizations",
                     "id",
@@ -140,7 +141,8 @@ impl Model {
                 user_access: Access::Read,
                 owner_access: Access::Read,
                 references: None,
-                default: String::new(),
+                default_sql: String::new(),
+                default_rust: String::new(),
             }),
             org_field,
             Some(ModelField {
@@ -156,7 +158,8 @@ impl Model {
                 user_access: Access::Read,
                 owner_access: Access::Read,
                 references: None,
-                default: "now()".to_string(),
+                default_sql: "now()".to_string(),
+                default_rust: String::new(),
             }),
             Some(ModelField {
                 name: "created_at".to_string(),
@@ -171,7 +174,8 @@ impl Model {
                 user_access: Access::Read,
                 owner_access: Access::Read,
                 references: None,
-                default: "now()".to_string(),
+                default_sql: "now()".to_string(),
+                default_rust: String::new(),
             }),
         ]
         .into_iter()

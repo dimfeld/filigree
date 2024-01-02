@@ -41,7 +41,8 @@ impl Formatters {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .change_context(Error::Formatter)?;
+            .change_context(Error::Formatter)
+            .attach_printable_lazy(|| filename.to_string())?;
 
         let mut stdin = format_process.stdin.take().ok_or(Error::Formatter)?;
         let writer_thread =
@@ -49,16 +50,19 @@ impl Formatters {
 
         let result = format_process
             .wait_with_output()
-            .change_context(Error::Formatter)?;
+            .change_context(Error::Formatter)
+            .attach_printable_lazy(|| filename.to_string())?;
 
         writer_thread
             .join()
             .expect("format writer thread")
-            .change_context(Error::Formatter)?;
+            .change_context(Error::Formatter)
+            .attach_printable_lazy(|| filename.to_string())?;
 
         if !result.status.success() {
             let code = result.status.code().unwrap_or(0);
             return Err(Error::Formatter)
+                .attach_printable(format!("Formatting file {}", filename))
                 .attach_printable(format!(
                     "Formatter {cmd} exited with code {code}",
                     cmd = formatter.join(" ")

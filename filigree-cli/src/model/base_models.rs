@@ -15,7 +15,8 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
         sortable: super::field::SortableType::None,
         user_access: Access::Read,
         owner_access: Access::ReadWrite,
-        default: String::new(),
+        default_sql: String::new(),
+        default_rust: String::new(),
         extra_sql_modifiers: String::new(),
         indexed: false,
         references: None,
@@ -48,7 +49,7 @@ impl Model {
                     },
                     ModelField {
                         user_access: Access::None,
-                        default: config.require_user_email_verification.to_string(),
+                        default_rust: config.require_user_email_verification.to_string(),
                         ..simple_model_field("verified", SqlType::Boolean)
                     },
                 ],
@@ -83,7 +84,7 @@ impl Model {
                     ModelField {
                         user_access: Access::None,
                         owner_access: Access::None,
-                        default: "true".into(),
+                        default_sql: "true".into(),
                         ..simple_model_field("active", SqlType::Boolean)
                     },
                 ],

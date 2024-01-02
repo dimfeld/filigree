@@ -46,3 +46,25 @@ impl Serialize for {{struct_base}} {
         }
     }
 }
+
+impl {{struct_base}} {
+    {% for field in fields %}
+        pub fn default_{{field.rust_name}}(&self) -> {{field.rust_type}} {
+            {% if field.default_rust %}
+                {% if field.nullable %}
+                    Some({{field.default_rust}}.into())
+                {% else %}
+                    {{field.default_rust}}.into()
+                {% endif %}
+            {% else %}
+                {% if field.nullable %}
+                    None
+                {% else %}
+                    // This is weird but lets us generate from the template without needing to
+                    // detect whether to add the extra :: in cases like DateTime::<Utc>::default
+                    <{{field.rust_type}} as Default>::default().into()
+                {% endif %}
+            {% endif %}
+        }
+    {% endfor %}
+}

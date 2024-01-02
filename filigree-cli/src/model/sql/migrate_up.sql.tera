@@ -3,7 +3,7 @@ CREATE TABLE {{table}} (
     {{ field.sql_name }} {{ field.sql_type }}
     {%- if field.unique %} UNIQUE {% endif -%}
     {%- if not field.nullable %} NOT NULL {% endif -%}
-    {%- if field.default %} DEFAULT {{ field.default }} {% endif -%}
+    {%- if field.default_sql %} DEFAULT {{ field.default_sql }} {% endif -%}
     {%- if field.extra_sql_modifiers %} {{ field.extra_sql_modifiers }} {% endif %}
     {% if not loop.last and not extra_create_table_sql %},{% endif %}
   {%- endfor %}
