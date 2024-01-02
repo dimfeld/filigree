@@ -20,6 +20,8 @@ pub mod testing;
 /// Tracing configuration
 #[cfg(feature = "tracing")]
 pub mod tracing_config;
+/// Manage users, roles, and related data
+pub mod users;
 
 /// A simple structure for sending back a message-only response
 #[derive(Serialize, Debug)]

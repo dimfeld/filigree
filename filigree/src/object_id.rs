@@ -109,6 +109,12 @@ impl<PREFIX: ObjectIdPrefix> PartialEq<Uuid> for ObjectId<PREFIX> {
     }
 }
 
+impl<PREFIX: ObjectIdPrefix> AsRef<Uuid> for ObjectId<PREFIX> {
+    fn as_ref(&self) -> &Uuid {
+        &self.0
+    }
+}
+
 impl<PREFIX: ObjectIdPrefix> From<Uuid> for ObjectId<PREFIX> {
     fn from(u: Uuid) -> Self {
         Self(u, PhantomData)
