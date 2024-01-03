@@ -6,7 +6,7 @@ use filigree::{
     sql::{BindingOperator, FilterBuilder},
 };
 use serde::Deserialize;
-use sqlx::{query_file, query_file_as, PgPool};
+use sqlx::{query_file, query_file_as, PgExecutor, PgPool};
 
 use super::{types::*, ReportId};
 use crate::{auth::AuthInfo, models::organization::OrganizationId, Error};
@@ -20,7 +20,7 @@ type QueryAs<'q, T> = sqlx::query::QueryAs<
 
 /// Get a Report from the database
 pub async fn get(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: ReportId,
 ) -> Result<Report, error_stack::Report<Error>> {
@@ -166,7 +166,7 @@ impl ListQueryFilters {
 }
 
 pub async fn list(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     filters: &ListQueryFilters,
 ) -> Result<Vec<Report>, error_stack::Report<Error>> {
@@ -197,7 +197,7 @@ pub async fn list(
 }
 
 pub async fn create(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     payload: &ReportCreatePayload,
 ) -> Result<Report, error_stack::Report<Error>> {
@@ -208,7 +208,7 @@ pub async fn create(
 
 /// Create a new Report in the database, allowing the ID to be explicitly specified.
 pub async fn create_raw(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     id: ReportId,
     organization_id: OrganizationId,
     payload: &ReportCreatePayload,
@@ -230,7 +230,7 @@ pub async fn create_raw(
 }
 
 pub async fn update(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: ReportId,
     payload: &ReportUpdatePayload,
@@ -252,7 +252,7 @@ pub async fn update(
 }
 
 pub async fn delete(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: ReportId,
 ) -> Result<(), error_stack::Report<Error>> {

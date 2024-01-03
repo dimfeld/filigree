@@ -6,7 +6,7 @@ use filigree::{
     sql::{BindingOperator, FilterBuilder},
 };
 use serde::Deserialize;
-use sqlx::{query_file, query_file_as, PgPool};
+use sqlx::{query_file, query_file_as, PgExecutor, PgPool};
 
 use super::{types::*, OrganizationId};
 use crate::{auth::AuthInfo, Error};
@@ -20,7 +20,7 @@ type QueryAs<'q, T> = sqlx::query::QueryAs<
 
 /// Get a Organization from the database
 pub async fn get(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: OrganizationId,
 ) -> Result<Organization, error_stack::Report<Error>> {
@@ -170,7 +170,7 @@ impl ListQueryFilters {
 }
 
 pub async fn list(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     filters: &ListQueryFilters,
 ) -> Result<Vec<Organization>, error_stack::Report<Error>> {
@@ -201,7 +201,7 @@ pub async fn list(
 }
 
 pub async fn create(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     payload: &OrganizationCreatePayload,
 ) -> Result<Organization, error_stack::Report<Error>> {
@@ -212,7 +212,7 @@ pub async fn create(
 
 /// Create a new Organization in the database, allowing the ID to be explicitly specified.
 pub async fn create_raw(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     id: OrganizationId,
     organization_id: OrganizationId,
     payload: &OrganizationCreatePayload,
@@ -232,7 +232,7 @@ pub async fn create_raw(
 }
 
 pub async fn update(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: OrganizationId,
     payload: &OrganizationUpdatePayload,
@@ -253,7 +253,7 @@ pub async fn update(
 }
 
 pub async fn delete(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: OrganizationId,
 ) -> Result<(), error_stack::Report<Error>> {

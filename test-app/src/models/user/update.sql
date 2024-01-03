@@ -23,11 +23,6 @@ SET
   ELSE
     users.email
   END,
-  verified = CASE WHEN permissions.is_owner THEN
-    $6
-  ELSE
-    users.verified
-  END,
   updated_at = now()
 FROM
   permissions

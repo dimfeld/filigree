@@ -5,7 +5,6 @@ SELECT
   created_at,
   name,
   email,
-  verified,
   _permission AS "_permission!: filigree::auth::ObjectPermission"
 FROM
   users tb

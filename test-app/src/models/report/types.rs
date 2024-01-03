@@ -20,6 +20,54 @@ pub struct Report {
     pub _permission: ObjectPermission,
 }
 
+impl Report {
+    // The <T as Default> syntax here is weird but lets us generate from the template without needing to
+    // detect whether to add the extra :: in cases like DateTime::<Utc>::default
+
+    pub fn default_id() -> ReportId {
+        <ReportId as Default>::default().into()
+    }
+
+    pub fn default_organization_id() -> crate::models::organization::OrganizationId {
+        <crate::models::organization::OrganizationId as Default>::default().into()
+    }
+
+    pub fn default_updated_at() -> chrono::DateTime<chrono::Utc> {
+        <chrono::DateTime<chrono::Utc> as Default>::default().into()
+    }
+
+    pub fn default_created_at() -> chrono::DateTime<chrono::Utc> {
+        <chrono::DateTime<chrono::Utc> as Default>::default().into()
+    }
+
+    pub fn default_title() -> String {
+        <String as Default>::default().into()
+    }
+
+    pub fn default_description() -> Option<String> {
+        None
+    }
+
+    pub fn default_ui() -> serde_json::Value {
+        <serde_json::Value as Default>::default().into()
+    }
+}
+
+impl Default for Report {
+    fn default() -> Self {
+        Self {
+            id: Self::default_id(),
+            organization_id: Self::default_organization_id(),
+            updated_at: Self::default_updated_at(),
+            created_at: Self::default_created_at(),
+            title: Self::default_title(),
+            description: Self::default_description(),
+            ui: Self::default_ui(),
+            _permission: ObjectPermission::Owner,
+        }
+    }
+}
+
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
 pub struct ReportCreatePayload {
     pub title: String,
@@ -27,11 +75,65 @@ pub struct ReportCreatePayload {
     pub ui: serde_json::Value,
 }
 
+impl ReportCreatePayload {
+    // The <T as Default> syntax here is weird but lets us generate from the template without needing to
+    // detect whether to add the extra :: in cases like DateTime::<Utc>::default
+
+    pub fn default_title() -> String {
+        <String as Default>::default().into()
+    }
+
+    pub fn default_description() -> Option<String> {
+        None
+    }
+
+    pub fn default_ui() -> serde_json::Value {
+        <serde_json::Value as Default>::default().into()
+    }
+}
+
+impl Default for ReportCreatePayload {
+    fn default() -> Self {
+        Self {
+            title: Self::default_title(),
+            description: Self::default_description(),
+            ui: Self::default_ui(),
+        }
+    }
+}
+
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
 pub struct ReportUpdatePayload {
     pub title: String,
     pub description: Option<String>,
     pub ui: Option<serde_json::Value>,
+}
+
+impl ReportUpdatePayload {
+    // The <T as Default> syntax here is weird but lets us generate from the template without needing to
+    // detect whether to add the extra :: in cases like DateTime::<Utc>::default
+
+    pub fn default_title() -> String {
+        <String as Default>::default().into()
+    }
+
+    pub fn default_description() -> Option<String> {
+        None
+    }
+
+    pub fn default_ui() -> Option<serde_json::Value> {
+        None
+    }
+}
+
+impl Default for ReportUpdatePayload {
+    fn default() -> Self {
+        Self {
+            title: Self::default_title(),
+            description: Self::default_description(),
+            ui: Self::default_ui(),
+        }
+    }
 }
 
 impl Serialize for Report {

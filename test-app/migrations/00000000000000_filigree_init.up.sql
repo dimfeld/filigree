@@ -13,8 +13,7 @@ CREATE TABLE users (
   updated_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   name text NOT NULL,
-  email text UNIQUE NOT NULL,
-  verified boolean NOT NULL DEFAULT FALSE
+  email text UNIQUE NOT NULL
 );
 
 
@@ -91,6 +90,7 @@ CREATE TABLE email_logins (
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   reset_token text,
   reset_expires_at timestamptz,
+  verified bool NOT NULL,
   verify_token text,
   verify_expires_at timestamptz
 );

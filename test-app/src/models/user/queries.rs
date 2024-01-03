@@ -6,7 +6,7 @@ use filigree::{
     sql::{BindingOperator, FilterBuilder},
 };
 use serde::Deserialize;
-use sqlx::{query_file, query_file_as, PgPool};
+use sqlx::{query_file, query_file_as, PgExecutor, PgPool};
 
 use super::{types::*, UserId};
 use crate::{auth::AuthInfo, models::organization::OrganizationId, Error};
@@ -20,7 +20,7 @@ type QueryAs<'q, T> = sqlx::query::QueryAs<
 
 /// Get a User from the database
 pub async fn get(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: UserId,
 ) -> Result<User, error_stack::Report<Error>> {
@@ -170,7 +170,7 @@ impl ListQueryFilters {
 }
 
 pub async fn list(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     filters: &ListQueryFilters,
 ) -> Result<Vec<User>, error_stack::Report<Error>> {
@@ -201,7 +201,7 @@ pub async fn list(
 }
 
 pub async fn create(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     payload: &UserCreatePayload,
 ) -> Result<User, error_stack::Report<Error>> {
@@ -212,7 +212,7 @@ pub async fn create(
 
 /// Create a new User in the database, allowing the ID to be explicitly specified.
 pub async fn create_raw(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     id: UserId,
     organization_id: OrganizationId,
     payload: &UserCreatePayload,
@@ -224,7 +224,6 @@ pub async fn create_raw(
         organization_id.as_uuid(),
         &payload.name,
         &payload.email,
-        &payload.verified,
     )
     .fetch_one(db)
     .await
@@ -234,7 +233,7 @@ pub async fn create_raw(
 }
 
 pub async fn update(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: UserId,
     payload: &UserUpdatePayload,
@@ -247,7 +246,6 @@ pub async fn update(
         &actor_ids,
         &payload.name as _,
         &payload.email as _,
-        &payload.verified as _,
     )
     .execute(db)
     .await
@@ -256,7 +254,7 @@ pub async fn update(
 }
 
 pub async fn delete(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: UserId,
 ) -> Result<(), error_stack::Report<Error>> {

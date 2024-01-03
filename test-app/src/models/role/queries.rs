@@ -6,7 +6,7 @@ use filigree::{
     sql::{BindingOperator, FilterBuilder},
 };
 use serde::Deserialize;
-use sqlx::{query_file, query_file_as, PgPool};
+use sqlx::{query_file, query_file_as, PgExecutor, PgPool};
 
 use super::{types::*, RoleId};
 use crate::{auth::AuthInfo, models::organization::OrganizationId, Error};
@@ -20,7 +20,7 @@ type QueryAs<'q, T> = sqlx::query::QueryAs<
 
 /// Get a Role from the database
 pub async fn get(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: RoleId,
 ) -> Result<Role, error_stack::Report<Error>> {
@@ -170,7 +170,7 @@ impl ListQueryFilters {
 }
 
 pub async fn list(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     filters: &ListQueryFilters,
 ) -> Result<Vec<Role>, error_stack::Report<Error>> {
@@ -201,7 +201,7 @@ pub async fn list(
 }
 
 pub async fn create(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     payload: &RoleCreatePayload,
 ) -> Result<Role, error_stack::Report<Error>> {
@@ -212,7 +212,7 @@ pub async fn create(
 
 /// Create a new Role in the database, allowing the ID to be explicitly specified.
 pub async fn create_raw(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     id: RoleId,
     organization_id: OrganizationId,
     payload: &RoleCreatePayload,
@@ -233,7 +233,7 @@ pub async fn create_raw(
 }
 
 pub async fn update(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: RoleId,
     payload: &RoleUpdatePayload,
@@ -254,7 +254,7 @@ pub async fn update(
 }
 
 pub async fn delete(
-    db: &PgPool,
+    db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: RoleId,
 ) -> Result<(), error_stack::Report<Error>> {
