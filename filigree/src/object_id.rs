@@ -1,6 +1,10 @@
 use std::{marker::PhantomData, str::FromStr};
 
-use base64::{display::Base64Display, engine::GeneralPurpose, Engine};
+use base64::{
+    display::Base64Display,
+    engine::{general_purpose::URL_SAFE_NO_PAD, GeneralPurpose},
+    Engine,
+};
 use sqlx::{postgres::PgTypeInfo, Database};
 use thiserror::Error;
 use uuid::Uuid;
@@ -84,10 +88,7 @@ impl<PREFIX: ObjectIdPrefix> ObjectId<PREFIX> {
 
     /// Writes the UUID portion of the object ID, without the prefix
     pub fn display_without_prefix(&self) -> Base64Display<GeneralPurpose> {
-        base64::display::Base64Display::new(
-            self.0.as_bytes(),
-            &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        )
+        base64::display::Base64Display::new(self.0.as_bytes(), &URL_SAFE_NO_PAD)
     }
 }
 
@@ -144,7 +145,7 @@ impl<PREFIX: ObjectIdPrefix> std::fmt::Display for ObjectId<PREFIX> {
 }
 
 fn decode_suffix(s: &str) -> Result<Uuid, ObjectIdError> {
-    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+    let bytes = URL_SAFE_NO_PAD
         .decode(s)
         .map_err(|_| ObjectIdError::DecodeFailure)?;
     Uuid::from_slice(&bytes).map_err(|_| ObjectIdError::DecodeFailure)

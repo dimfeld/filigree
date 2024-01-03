@@ -1,19 +1,17 @@
-use error_stack::{Report, ResultExt};
-use sqlx::{postgres::PgHasArrayType, query, PgConnection, PgExecutor};
+use sqlx::{query, PgExecutor};
+use tracing::instrument;
 use uuid::Uuid;
 
-// TODO this can go in the main filigree crate
-use crate::{
-    models::{organization::OrganizationId, role::RoleId, user::UserId},
-    Error,
-};
+use crate::auth::{OrganizationId, RoleId, UserId};
 
+/// Add roles to a user
+#[instrument(skip(db))]
 pub async fn add_roles_to_user(
     db: impl PgExecutor<'_>,
     organization_id: OrganizationId,
     user_id: UserId,
     role_ids: &[RoleId],
-) -> Result<(), Report<Error>> {
+) -> Result<(), sqlx::Error> {
     query!(
         r##"
         INSERT INTO user_roles (organization_id, user_id, role_id)
@@ -27,18 +25,19 @@ pub async fn add_roles_to_user(
         role_ids as _
     )
     .execute(db)
-    .await
-    .change_context(Error::Db)?;
+    .await?;
 
     Ok(())
 }
 
+/// Remove roles from a user
+#[instrument(skip(db))]
 pub async fn remove_roles_from_user(
     db: impl PgExecutor<'_>,
     organization_id: OrganizationId,
     user_id: UserId,
     role_ids: &[RoleId],
-) -> Result<(), Report<Error>> {
+) -> Result<(), sqlx::Error> {
     query!(
         r##"
         DELETE FROM user_roles
@@ -52,18 +51,19 @@ pub async fn remove_roles_from_user(
         role_ids as _,
     )
     .execute(db)
-    .await
-    .change_context(Error::Db)?;
+    .await?;
 
     Ok(())
 }
 
+/// Add org-wide permissions to a role or user
+#[instrument(skip(db))]
 pub async fn add_permissions_to_role(
     db: impl PgExecutor<'_>,
     organization_id: OrganizationId,
-    role_id: impl AsRef<Uuid>,
+    actor_id: impl AsRef<Uuid> + std::fmt::Debug,
     permissions: &[String],
-) -> Result<(), Report<Error>> {
+) -> Result<(), sqlx::Error> {
     query!(
         r##"
         INSERT INTO permissions (organization_id, actor_id, permission)
@@ -73,22 +73,23 @@ pub async fn add_permissions_to_role(
         ON CONFLICT DO NOTHING
         "##,
         organization_id.as_uuid(),
-        role_id.as_ref(),
+        actor_id.as_ref(),
         permissions
     )
     .execute(db)
-    .await
-    .change_context(Error::Db)?;
+    .await?;
 
     Ok(())
 }
 
+/// Remove org-wide permissions from a role or user
+#[instrument(skip(db))]
 pub async fn remove_permissions_from_role(
     db: impl PgExecutor<'_>,
     organization_id: OrganizationId,
-    role_id: RoleId,
+    role_id: impl AsRef<Uuid> + std::fmt::Debug,
     permissions: &[String],
-) -> Result<(), Report<Error>> {
+) -> Result<(), sqlx::Error> {
     query!(
         r##"
         DELETE FROM permissions
@@ -98,12 +99,11 @@ pub async fn remove_permissions_from_role(
                 AND permission = ANY($3)
         "##,
         organization_id.as_uuid(),
-        role_id.as_uuid(),
+        role_id.as_ref(),
         permissions
     )
     .execute(db)
-    .await
-    .change_context(Error::Db)?;
+    .await?;
 
     Ok(())
 }
