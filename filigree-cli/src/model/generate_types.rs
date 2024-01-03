@@ -8,11 +8,11 @@ use super::{field::ModelField, generator::ModelGenerator, Model};
 impl<'a> ModelGenerator<'a> {
     pub(super) fn add_structs_to_rust_context(model: &Model, context: &mut tera::Context) {
         let struct_base = model.struct_name();
-        let user_can_write_anything = model.all_fields().any(|f| f.1.user_access.can_write());
+        let user_can_write_anything = model.all_fields().any(|f| f.user_access.can_write());
         let struct_list = [
             (
                 "AllFields",
-                Self::struct_contents(model.all_fields().map(|f| f.1), |_| false, true),
+                Self::struct_contents(model.all_fields(), |_| false, true),
             ),
             (
                 "CreatePayload",
@@ -69,17 +69,7 @@ impl<'a> ModelGenerator<'a> {
 
                     let field_info = fields
                         .into_iter()
-                        .map(|field| {
-                            json!({
-                                "name": field.name,
-                                "rust_name": field.rust_field_name(),
-                                "base_rust_type": field.base_rust_type(),
-                                "rust_type": field.rust_type(),
-                                "is_custom_rust_type": field.rust_type.is_some(),
-                                "default_rust": field.default_rust,
-                                "nullable": field.nullable,
-                            })
-                        })
+                        .map(|field| field.template_context())
                         .collect::<Vec<_>>();
 
                     json!({

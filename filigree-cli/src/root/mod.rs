@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use convert_case::{Case, Casing};
 use error_stack::Report;
 use rayon::prelude::*;
-use rust_embed::RustEmbed;
 
 use crate::{
     config::Config,

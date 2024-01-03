@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use super::SqlDialect;
 
@@ -60,6 +61,12 @@ pub struct ModelField {
     /// A field in another model that this field references. This sets up a foreign
     /// key in the SQL definition.
     pub references: Option<ModelFieldReference>,
+
+    /// Fields such as updated_at which are fixed for each model and can not be updated.
+    /// Fields defined in the config should not set this.
+    #[doc(hidden)]
+    #[serde(default)]
+    pub fixed: bool,
 }
 
 impl ModelField {
@@ -101,6 +108,32 @@ impl ModelField {
         } else {
             field_name
         }
+    }
+
+    pub fn template_context(&self) -> serde_json::Value {
+        json!({
+            "name": self.name,
+            "sql_name": self.sql_field_name(),
+            "sql_full_name": self.qualified_sql_field_name(),
+            "sql_type": self.typ.to_sql_type(SqlDialect::Postgresql),
+            "snake_case_name": self.name.to_case(Case::Snake),
+            "pascal_case_name": self.name.to_case(Case::Pascal),
+            "rust_name": self.rust_field_name(),
+            "base_rust_type": self.base_rust_type(),
+            "rust_type": self.rust_type(),
+            "is_custom_rust_type": self.rust_type.is_some(),
+            "default_sql": self.default_sql,
+            "default_rust": self.default_rust,
+            "nullable": self.nullable,
+            "filterable": self.filterable,
+            "sortable": self.sortable,
+            "unique": self.unique,
+            "extra_sql_modifiers": self.extra_sql_modifiers,
+            "user_read": self.user_access.can_read(),
+            "user_write": !self.fixed && self.user_access.can_write(),
+            "owner_read": self.owner_access.can_read() || self.user_access.can_read(),
+            "owner_write": !self.fixed && (self.owner_access.can_write() || self.user_access.can_write()),
+        })
     }
 }
 

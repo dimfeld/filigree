@@ -89,16 +89,6 @@ impl DatabaseConfig {
     }
 }
 
-#[derive(Deserialize)]
-struct CargoToml {
-    package: CargoTomlPackage,
-}
-
-#[derive(Deserialize)]
-struct CargoTomlPackage {
-    name: String,
-}
-
 #[derive(Debug)]
 pub struct FullConfig {
     pub crate_name: String,

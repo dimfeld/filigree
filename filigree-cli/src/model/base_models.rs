@@ -20,12 +20,13 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
         extra_sql_modifiers: String::new(),
         indexed: false,
         references: None,
+        fixed: false,
     }
 }
 
 impl Model {
     /// Return models for the user, org, etc.
-    pub fn create_default_models(config: &Config) -> Vec<Model> {
+    pub fn create_default_models(_config: &Config) -> Vec<Model> {
         vec![
             Model {
                 name: "User".to_string(),

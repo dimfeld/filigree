@@ -5,7 +5,7 @@ use rayon::prelude::*;
 
 use crate::{
     config::Config,
-    templates::{AuthTemplates, Renderer},
+    templates::{Renderer, UsersTemplates},
     Error, RenderedFile,
 };
 
@@ -30,12 +30,15 @@ pub fn render_files(
         .expect("Organization model not found")
         .1;
 
+    let all_models = models.iter().map(|(_, value)| value).collect::<Vec<_>>();
+
     let mut context = tera::Context::new();
+    context.insert("models", &all_models);
     context.insert("user_model", user_model);
     context.insert("role_model", role_model);
     context.insert("org_model", org_model);
 
-    let files = AuthTemplates::iter().collect::<Vec<_>>();
+    let files = UsersTemplates::iter().collect::<Vec<_>>();
     let dir = PathBuf::from("src");
     files
         .into_par_iter()

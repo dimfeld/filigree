@@ -10,7 +10,7 @@ use crate::{
 };
 
 pub fn render_files(
-    config: &Config,
+    _config: &Config,
     renderer: &Renderer,
 ) -> Result<Vec<RenderedFile>, Report<Error>> {
     let context = tera::Context::new();

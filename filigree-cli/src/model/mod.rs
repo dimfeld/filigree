@@ -7,10 +7,12 @@ use std::borrow::Cow;
 
 use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use self::field::{
     Access, DeleteBehavior, FilterableType, ModelField, ModelFieldReference, SqlType,
 };
+use crate::{config::Config, model::field::SortableType};
 
 #[derive(Deserialize, Debug)]
 pub struct Model {
@@ -84,20 +86,70 @@ impl Model {
             .unwrap_or_else(|| Cow::Owned(format!("{}s", self.name)))
     }
 
-    pub fn all_fields(&self) -> impl Iterator<Item = (bool, Cow<ModelField>)> {
+    pub fn all_fields(&self) -> impl Iterator<Item = Cow<ModelField>> {
         self.standard_fields()
-            .map(|field| (true, Cow::Owned(field)))
-            .chain(
-                self.fields
-                    .iter()
-                    .map(|field| (false, Cow::Borrowed(field))),
-            )
+            .map(|field| Cow::Owned(field))
+            .chain(self.fields.iter().map(|field| Cow::Borrowed(field)))
     }
 
     pub fn write_payload_struct_fields(&self) -> impl Iterator<Item = Cow<ModelField>> {
-        self.all_fields()
-            .map(|(_, f)| f)
-            .filter(|f| f.owner_access.can_write())
+        self.all_fields().filter(|f| f.owner_access.can_write())
+    }
+
+    pub fn template_context(&self, config: &Config) -> serde_json::Value {
+        let full_default_sort_field = self.default_sort_field.as_deref().unwrap_or("-updated_at");
+        let default_sort_field = if full_default_sort_field.starts_with('-') {
+            &full_default_sort_field[1..]
+        } else {
+            full_default_sort_field
+        };
+
+        {
+            let default_field = self.all_fields().find(|f| f.name == default_sort_field);
+            if let Some(default_field) = default_field {
+                if default_field.sortable == SortableType::None {
+                    panic!(
+                        "Model {}: Default sort field {default_sort_field} is not sortable",
+                        self.name
+                    );
+                }
+            } else {
+                panic!(
+                    "Model {}, Default sort field {} does not exist in model {}",
+                    self.name, default_sort_field, self.name
+                );
+            }
+        }
+
+        let predefined_object_id =
+            &["role", "user", "organization"].contains(&self.module_name().as_str());
+
+        let fields = self
+            .all_fields()
+            .map(|field| field.template_context())
+            .collect::<Vec<_>>();
+
+        json!({
+            "name": self.name,
+            "table": self.table(),
+            "indexes": self.indexes,
+            "global": self.global,
+            "fields": fields,
+            "owner_permission": format!("{}::owner", self.name),
+            "read_permission": format!("{}::read", self.name),
+            "write_permission": format!("{}::write", self.name),
+            "extra_create_table_sql": self.extra_create_table_sql,
+            "pagination": self.pagination,
+            "full_default_sort_field": full_default_sort_field,
+            "default_sort_field": default_sort_field,
+            "id_type": self.object_id_type(),
+            "id_prefix": self.id_prefix(),
+            "predefined_object_id": predefined_object_id,
+            "url_path": self.module_name(),
+            "has_any_endpoints": self.endpoints.any_enabled(),
+            "endpoints": self.endpoints.per_endpoint(),
+            "auth_scope": self.auth_scope.unwrap_or(config.default_auth_scope),
+        })
     }
 
     /// The fields that apply to every object
@@ -119,6 +171,7 @@ impl Model {
                 owner_access: Access::Read,
                 default_sql: String::new(),
                 default_rust: String::new(),
+                fixed: true,
                 references: Some(ModelFieldReference::new(
                     "organizations",
                     "id",
@@ -143,6 +196,7 @@ impl Model {
                 references: None,
                 default_sql: String::new(),
                 default_rust: String::new(),
+                fixed: true,
             }),
             org_field,
             Some(ModelField {
@@ -160,6 +214,7 @@ impl Model {
                 references: None,
                 default_sql: "now()".to_string(),
                 default_rust: String::new(),
+                fixed: true,
             }),
             Some(ModelField {
                 name: "created_at".to_string(),
@@ -176,6 +231,7 @@ impl Model {
                 references: None,
                 default_sql: "now()".to_string(),
                 default_rust: String::new(),
+                fixed: true,
             }),
         ]
         .into_iter()
