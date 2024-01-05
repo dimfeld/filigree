@@ -5,6 +5,7 @@ use filigree::{
 };
 use futures::future::FutureExt;
 use sqlx::{PgConnection, PgExecutor, PgPool};
+use tracing::instrument;
 
 use crate::{
     models::{
@@ -35,6 +36,7 @@ pub struct BootstrappedData {
     user: TestUser,
 }
 
+#[instrument]
 pub async fn start_app(pg_pool: PgPool) -> TestApp {
     filigree::tracing_config::test::init();
 
@@ -94,12 +96,12 @@ async fn add_test_user(
         ..Default::default()
     };
 
-    crate::users::users::create_new_user(
+    crate::users::users::create_new_user_with_prehashed_password(
         &mut *db,
         user_id,
         organization_id,
         user_payload,
-        testing::TEST_PASSWORD.to_string(),
+        testing::TEST_PASSWORD_HASH.to_string(),
     )
     .await
     .expect("Creating user");

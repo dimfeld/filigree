@@ -72,7 +72,12 @@ struct ServeCommand {
 async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
 
     // TODO make this configurable
-    configure_tracing("{{env_prefix}}", TracingExportConfig::None, std::io::stdout)
+    configure_tracing(
+            "{{env_prefix}}",
+            TracingExportConfig::None,
+            tracing_tree::time::UtcDateTime::default(),
+            std::io::stdout
+        )
         .change_context(Error::ServerStart)?;
 
     let pool_options = sqlx::postgres::PgPoolOptions::new()

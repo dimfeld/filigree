@@ -20,6 +20,17 @@ pub async fn create_new_user(
         .await
         .change_context(Error::AuthSubsystem)?;
 
+    create_new_user_with_prehashed_password(db, user_id, organization_id, payload, password_hash)
+        .await
+}
+
+pub async fn create_new_user_with_prehashed_password(
+    db: impl PgExecutor<'_>,
+    user_id: UserId,
+    organization_id: OrganizationId,
+    payload: UserCreatePayload,
+    password_hash: String,
+) -> Result<User, Report<Error>> {
     let user = sqlx::query_file_as!(
         User,
         "src/users/create_user.sql",

@@ -6,6 +6,7 @@ use error_stack::{Report, ResultExt};
 use serde::Deserialize;
 use sqlx::PgPool;
 use tower_cookies::Cookies;
+use tracing::instrument;
 use uuid::Uuid;
 
 use super::{sessions::SessionBackend, AuthError, UserId};
@@ -16,6 +17,7 @@ pub async fn new_hash(password: String) -> Result<String, AuthError> {
     hash_password(password, salt).await
 }
 
+#[instrument]
 async fn hash_password(password: String, salt: Uuid) -> Result<String, AuthError> {
     let hash = tokio::task::spawn_blocking(move || {
         let saltstring = SaltString::encode_b64(salt.as_bytes())

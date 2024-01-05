@@ -4,7 +4,7 @@ use tracing::subscriber::set_global_default;
 use tracing_error::ErrorLayer;
 use tracing_log::LogTracer;
 use tracing_subscriber::{fmt::MakeWriter, layer::SubscriberExt, EnvFilter, Registry};
-use tracing_tree::HierarchicalLayer;
+use tracing_tree::{time::FormatTime, HierarchicalLayer};
 
 /// Configuration for sending telemetry to Honeycomb
 pub struct HoneycombConfig {
@@ -40,12 +40,14 @@ pub enum TracingExportConfig {
 pub struct TraceConfigureError;
 
 /// Set up tracing, optionally exporting to an external service
-pub fn configure_tracing<W>(
+pub fn configure_tracing<FT, W>(
     env_prefix: &str,
     export_config: TracingExportConfig,
+    timer: FT,
     writer: W,
 ) -> Result<(), Report<TraceConfigureError>>
 where
+    FT: FormatTime + Send + Sync + 'static,
     for<'writer> W: MakeWriter<'writer> + Send + Sync + 'static,
 {
     LogTracer::builder()
@@ -63,6 +65,7 @@ where
     let env_filter = EnvFilter::try_from_env(&env_name).unwrap_or_else(|_| EnvFilter::new("info"));
 
     let tree = HierarchicalLayer::new(2)
+        .with_timer(timer)
         .with_targets(true)
         .with_bracketed_fields(true)
         .with_writer(writer);
@@ -150,10 +153,15 @@ pub mod test {
     pub fn init() {
         TRACING.call_once(|| {
             if std::env::var("TEST_LOG").is_ok() {
-                super::configure_tracing("TEST_", TracingExportConfig::None, std::io::stdout)
-                    .expect("starting tracing");
+                super::configure_tracing(
+                    "TEST_",
+                    TracingExportConfig::None,
+                    tracing_tree::time::Uptime::default(),
+                    std::io::stdout,
+                )
+                .expect("starting tracing");
             } else {
-                super::configure_tracing("TEST_", TracingExportConfig::None, std::io::sink)
+                super::configure_tracing("TEST_", TracingExportConfig::None, (), std::io::sink)
                     .expect("starting tracing");
             }
         })
