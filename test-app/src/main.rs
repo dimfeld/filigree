@@ -70,7 +70,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     configure_tracing(
         "",
         TracingExportConfig::None,
-        tracing_tree::time::UtcDateTime::default(),
+        tracing_subscriber::fmt::time::ChronoUtc::rfc_3339(),
         std::io::stdout,
     )
     .change_context(Error::ServerStart)?;

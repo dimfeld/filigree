@@ -5,7 +5,7 @@ use filigree::{
 };
 use futures::future::FutureExt;
 use sqlx::{PgConnection, PgExecutor, PgPool};
-use tracing::instrument;
+use tracing::{event, Level};
 
 use crate::{
     models::{
@@ -36,7 +36,6 @@ pub struct BootstrappedData {
     user: TestUser,
 }
 
-#[instrument]
 pub async fn start_app(pg_pool: PgPool) -> TestApp {
     filigree::tracing_config::test::init();
 
@@ -67,6 +66,8 @@ pub async fn start_app(pg_pool: PgPool) -> TestApp {
     let bootstrapped_data = bootstrap_data(&pg_pool, &test_client).await;
 
     let server_task = tokio::task::spawn(server.run_with_shutdown_signal(shutdown_rx));
+
+    event!(Level::INFO, "finished bootstrapping test");
 
     TestApp {
         shutdown_tx,

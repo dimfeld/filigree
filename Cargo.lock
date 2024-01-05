@@ -723,7 +723,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e616e59155c92257e84970156f506287853355f58cd4a6eb167385722c32b790"
 dependencies = [
- "nu-ansi-term 0.46.0",
+ "nu-ansi-term",
 ]
 
 [[package]]
@@ -879,7 +879,6 @@ dependencies = [
  "tracing-log",
  "tracing-opentelemetry",
  "tracing-subscriber",
- "tracing-tree",
  "uuid",
 ]
 
@@ -932,7 +931,6 @@ dependencies = [
  "tower-sessions",
  "tracing",
  "tracing-subscriber",
- "tracing-tree",
  "uuid",
 ]
 
@@ -1806,15 +1804,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nu-ansi-term"
-version = "0.49.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c073d3c1930d0751774acf49e66653acecb416c3a54c6ec095a9b11caddb5a68"
-dependencies = [
- "windows-sys 0.48.0",
-]
-
-[[package]]
 name = "num-bigint-dig"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1869,15 +1858,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
 dependencies = [
  "hermit-abi",
- "libc",
-]
-
-[[package]]
-name = "num_threads"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2819ce041d2ee131036f4fc9d6ae7ae125a3a40e97ba64d04fe799ad9dabbb44"
-dependencies = [
  "libc",
 ]
 
@@ -3283,8 +3263,6 @@ checksum = "f657ba42c3f86e7680e53c8cd3af8abbe56b5491790b46e22e19c0d57463583e"
 dependencies = [
  "deranged",
  "itoa",
- "libc",
- "num_threads",
  "powerfmt",
  "serde",
  "time-core",
@@ -3674,8 +3652,9 @@ version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad0f048c97dbd9faa9b7df56362b8ebcaa52adb06b498c050d2f4e32f90a7a8b"
 dependencies = [
+ "chrono",
  "matchers",
- "nu-ansi-term 0.46.0",
+ "nu-ansi-term",
  "once_cell",
  "regex",
  "sharded-slab",
@@ -3684,19 +3663,6 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
-]
-
-[[package]]
-name = "tracing-tree"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65139ecd2c3f6484c3b99bc01c77afe21e95473630747c7aca525e78b0666675"
-dependencies = [
- "nu-ansi-term 0.49.0",
- "time",
- "tracing-core",
- "tracing-log",
- "tracing-subscriber",
 ]
 
 [[package]]

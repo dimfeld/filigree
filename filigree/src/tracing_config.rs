@@ -3,8 +3,11 @@ use thiserror::Error;
 use tracing::subscriber::set_global_default;
 use tracing_error::ErrorLayer;
 use tracing_log::LogTracer;
-use tracing_subscriber::{fmt::MakeWriter, layer::SubscriberExt, EnvFilter, Registry};
-use tracing_tree::{time::FormatTime, HierarchicalLayer};
+use tracing_subscriber::{
+    fmt::{format::FmtSpan, time::FormatTime, MakeWriter},
+    layer::SubscriberExt,
+    EnvFilter, Registry,
+};
 
 /// Configuration for sending telemetry to Honeycomb
 pub struct HoneycombConfig {
@@ -64,14 +67,15 @@ where
 
     let env_filter = EnvFilter::try_from_env(&env_name).unwrap_or_else(|_| EnvFilter::new("info"));
 
-    let tree = HierarchicalLayer::new(2)
+    let formatter = tracing_subscriber::fmt::layer()
+        .with_span_events(FmtSpan::NEW)
         .with_timer(timer)
-        .with_targets(true)
-        .with_bracketed_fields(true)
+        .with_target(true)
         .with_writer(writer);
+
     let subscriber = Registry::default()
         .with(env_filter)
-        .with(tree)
+        .with(formatter)
         .with(ErrorLayer::default());
 
     match export_config {
@@ -144,6 +148,8 @@ pub async fn teardown_tracing() -> Result<(), tokio::task::JoinError> {
 pub mod test {
     use std::sync::Once;
 
+    use tracing_subscriber::fmt::TestWriter;
+
     use super::TracingExportConfig;
 
     static TRACING: Once = Once::new();
@@ -152,18 +158,13 @@ pub mod test {
     /// call from every test.
     pub fn init() {
         TRACING.call_once(|| {
-            if std::env::var("TEST_LOG").is_ok() {
-                super::configure_tracing(
-                    "TEST_",
-                    TracingExportConfig::None,
-                    tracing_tree::time::Uptime::default(),
-                    std::io::stdout,
-                )
-                .expect("starting tracing");
-            } else {
-                super::configure_tracing("TEST_", TracingExportConfig::None, (), std::io::sink)
-                    .expect("starting tracing");
-            }
+            super::configure_tracing(
+                "TEST_",
+                TracingExportConfig::None,
+                tracing_subscriber::fmt::time::Uptime::default(),
+                TestWriter::new(),
+            )
+            .expect("starting tracing");
         })
     }
 }
