@@ -13,7 +13,9 @@ CREATE TABLE users (
   updated_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   name text NOT NULL,
-  email text UNIQUE NOT NULL
+  password_hash text,
+  email text UNIQUE NOT NULL,
+  verified boolean NOT NULL
 );
 
 
@@ -76,7 +78,7 @@ CREATE TABLE api_keys (
   api_key_id uuid PRIMARY KEY,
   hash bytea NOT NULL,
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
-  user_id uuid REFERENCES users (id) ON DELETE SET NULL,
+  user_id uuid REFERENCES users (id) ON DELETE CASCADE,
   inherits_user_permissions bool NOT NULL DEFAULT FALSE,
   description text NOT NULL DEFAULT '',
   active boolean NOT NULL DEFAULT TRUE,
@@ -86,12 +88,11 @@ CREATE TABLE api_keys (
 -- Methods for a user to log in.
 CREATE TABLE email_logins (
   email text PRIMARY KEY,
-  password text,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
-  reset_token text,
+  reset_token uuid,
   reset_expires_at timestamptz,
   verified bool NOT NULL,
-  verify_token text,
+  verify_token uuid,
   verify_expires_at timestamptz
 );
 

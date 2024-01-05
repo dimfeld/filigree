@@ -6,7 +6,7 @@ use sqlx::PgConnection;
 use crate::{
     models::{
         organization::{self, Organization, OrganizationCreatePayload, OrganizationId},
-        role,
+        role::{self, RoleId},
         user::UserId,
     },
     Error,
@@ -16,6 +16,12 @@ const ADMIN_DEFAULT_PERMISSIONS: &[&str] = &["org_admin"];
 // TODO This needs all the models, create permissions, etc.
 const USER_DEFAULT_PERMISSIONS: &[&str] = &["Organization:read", "User:read", "Role:read"];
 
+pub struct CreatedOrganization {
+    organization: Organization,
+    admin_role: RoleId,
+    user_role: RoleId,
+}
+
 /// Creates a new organization containing the specified user. The user doesn't
 /// actually have to exist yet, but it is assumed that the user will be created within
 /// the current transaction if it hasn't yet been created.
@@ -23,7 +29,7 @@ pub async fn create_new_organization(
     db: &mut PgConnection,
     name: String,
     owner: UserId,
-) -> Result<Organization, error_stack::Report<Error>> {
+) -> Result<CreatedOrganization, error_stack::Report<Error>> {
     // The user might not be created yet, so defer foreign key enforcement until the
     // transaction is committed.
     sqlx::query!("SET CONSTRAINTS ALL DEFERRED")
@@ -78,5 +84,9 @@ pub async fn create_new_organization(
         .await
         .change_context(Error::Db)?;
 
-    Ok(new_org)
+    Ok(CreatedOrganization {
+        organization: new_org,
+        admin_role: admin_role_id,
+        user_role: user_role_id,
+    })
 }

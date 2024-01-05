@@ -45,8 +45,19 @@ impl Model {
                         ..simple_model_field("name", SqlType::Text)
                     },
                     ModelField {
+                        user_access: Access::None,
+                        owner_access: Access::None,
+                        nullable: true,
+                        ..simple_model_field("password_hash", SqlType::Text)
+                    },
+                    ModelField {
                         unique: true,
                         ..simple_model_field("email", SqlType::Text)
+                    },
+                    ModelField {
+                        user_access: Access::None,
+                        owner_access: Access::ReadWrite,
+                        ..simple_model_field("verified", SqlType::Boolean)
                     },
                 ],
             },

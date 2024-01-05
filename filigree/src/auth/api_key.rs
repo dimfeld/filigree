@@ -43,8 +43,6 @@ pub struct ApiKeyUpdateBody {
     pub description: Option<String>,
     /// Whether the key is active or not
     pub active: Option<bool>,
-    /// When the key will expire
-    pub expires_at: Option<DateTime<Utc>>,
 }
 
 /// A generated API key
@@ -128,7 +126,7 @@ mod tests {
     fn bad_key() {
         let data = ApiKeyData::new();
 
-        // Alter the key.
+        // Alter the key while keeping the length the same
         let mut key = data.key;
         key.pop();
         key.push('a');

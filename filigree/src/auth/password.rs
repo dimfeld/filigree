@@ -55,8 +55,14 @@ pub async fn lookup_user_from_email_and_password(
     db: &PgPool,
     email_and_password: EmailAndPassword,
 ) -> Result<UserId, Report<AuthError>> {
+    if email_and_password.password.is_empty() {
+        // This should really be caught earlier, but just make sure that nothing weird happens if
+        // the user doesn't have a password (e.g. OAuth only) and someone tries to log in with an empty password.
+        Err(AuthError::Unauthenticated)?;
+    }
+
     let user_info = sqlx::query!(
-        r#"SELECT user_id as "user_id: UserId", password, verified
+        r#"SELECT user_id as "user_id: UserId", password_hash, verified
         FROM email_logins
         JOIN users ON users.id = email_logins.user_id
         WHERE email_logins.email = $1"#,
@@ -67,7 +73,7 @@ pub async fn lookup_user_from_email_and_password(
     .map_err(AuthError::from)?
     .ok_or(AuthError::Unauthenticated)?;
 
-    let password_hash = user_info.password.unwrap_or_default();
+    let password_hash = user_info.password_hash.unwrap_or_default();
 
     verify_password(email_and_password.password, password_hash).await?;
 

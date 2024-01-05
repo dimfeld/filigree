@@ -73,8 +73,7 @@ pub async fn update_api_key(
         UPDATE api_keys
         SET
             description = COALESCE($4, description),
-            active = COALESCE($5, active),
-            expires_at = COALESCE($6, expires_at)
+            active = COALESCE($5, active)
         WHERE
             api_key_id = $1
             AND organization_id = $2
@@ -84,8 +83,7 @@ pub async fn update_api_key(
         organization_id.as_uuid(),
         user_id.as_ref().map(|id| id.as_uuid()),
         body.description,
-        body.active,
-        body.expires_at
+        body.active
     )
     .execute(pool)
     .await?;

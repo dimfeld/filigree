@@ -15,7 +15,9 @@ pub struct User {
     pub updated_at: chrono::DateTime<chrono::Utc>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub name: String,
+    pub password_hash: Option<String>,
     pub email: String,
+    pub verified: bool,
     pub _permission: ObjectPermission,
 }
 
@@ -43,8 +45,16 @@ impl User {
         <String as Default>::default().into()
     }
 
+    pub fn default_password_hash() -> Option<String> {
+        None
+    }
+
     pub fn default_email() -> String {
         <String as Default>::default().into()
+    }
+
+    pub fn default_verified() -> bool {
+        <bool as Default>::default().into()
     }
 }
 
@@ -56,7 +66,9 @@ impl Default for User {
             updated_at: Self::default_updated_at(),
             created_at: Self::default_created_at(),
             name: Self::default_name(),
+            password_hash: Self::default_password_hash(),
             email: Self::default_email(),
+            verified: Self::default_verified(),
             _permission: ObjectPermission::Owner,
         }
     }
@@ -66,6 +78,7 @@ impl Default for User {
 pub struct UserCreatePayloadAndUpdatePayload {
     pub name: String,
     pub email: String,
+    pub verified: bool,
 }
 
 pub type UserCreatePayload = UserCreatePayloadAndUpdatePayload;
@@ -83,6 +96,10 @@ impl UserCreatePayloadAndUpdatePayload {
     pub fn default_email() -> String {
         <String as Default>::default().into()
     }
+
+    pub fn default_verified() -> bool {
+        <bool as Default>::default().into()
+    }
 }
 
 impl Default for UserCreatePayloadAndUpdatePayload {
@@ -90,6 +107,7 @@ impl Default for UserCreatePayloadAndUpdatePayload {
         Self {
             name: Self::default_name(),
             email: Self::default_email(),
+            verified: Self::default_verified(),
         }
     }
 }
@@ -100,13 +118,14 @@ impl Serialize for User {
         S: Serializer,
     {
         if self._permission == ObjectPermission::Owner {
-            let mut state = serializer.serialize_struct("User", 7)?;
+            let mut state = serializer.serialize_struct("User", 8)?;
             state.serialize_field("id", &self.id)?;
             state.serialize_field("organization_id", &self.organization_id)?;
             state.serialize_field("updated_at", &self.updated_at)?;
             state.serialize_field("created_at", &self.created_at)?;
             state.serialize_field("name", &self.name)?;
             state.serialize_field("email", &self.email)?;
+            state.serialize_field("verified", &self.verified)?;
             state.serialize_field("_permission", &self._permission)?;
             state.end()
         } else {
