@@ -2,6 +2,7 @@
 SELECT
   {% block select_fields %}
   {{ fields
+    | filter(attribute='never_read', value=false)
     | map(attribute='sql_full_name')
     | join(sep=', ') }}
   {% endblock select_fields %},

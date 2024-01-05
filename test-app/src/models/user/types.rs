@@ -15,7 +15,6 @@ pub struct User {
     pub updated_at: chrono::DateTime<chrono::Utc>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub name: String,
-    pub password_hash: Option<String>,
     pub email: String,
     pub verified: bool,
     pub _permission: ObjectPermission,
@@ -45,10 +44,6 @@ impl User {
         <String as Default>::default().into()
     }
 
-    pub fn default_password_hash() -> Option<String> {
-        None
-    }
-
     pub fn default_email() -> String {
         <String as Default>::default().into()
     }
@@ -66,7 +61,6 @@ impl Default for User {
             updated_at: Self::default_updated_at(),
             created_at: Self::default_created_at(),
             name: Self::default_name(),
-            password_hash: Self::default_password_hash(),
             email: Self::default_email(),
             verified: Self::default_verified(),
             _permission: ObjectPermission::Owner,

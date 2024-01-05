@@ -20,6 +20,7 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
         extra_sql_modifiers: String::new(),
         indexed: false,
         references: None,
+        never_read: false,
         fixed: false,
     }
 }
@@ -48,6 +49,7 @@ impl Model {
                         user_access: Access::None,
                         owner_access: Access::None,
                         nullable: true,
+                        never_read: true,
                         ..simple_model_field("password_hash", SqlType::Text)
                     },
                     ModelField {

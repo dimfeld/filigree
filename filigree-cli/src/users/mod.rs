@@ -33,6 +33,7 @@ pub fn render_files(
     let all_models = models.iter().map(|(_, value)| value).collect::<Vec<_>>();
 
     let mut context = tera::Context::new();
+    context.insert("dir", "src/users");
     context.insert("models", &all_models);
     context.insert("user_model", user_model);
     context.insert("role_model", role_model);

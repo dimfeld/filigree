@@ -11,20 +11,26 @@ use uuid::Uuid;
 use super::{sessions::SessionBackend, AuthError, UserId};
 
 /// Hash a password using a randomly-generated salt value
-pub fn new_hash(password: &str) -> Result<String, AuthError> {
+pub async fn new_hash(password: String) -> Result<String, AuthError> {
     let salt = uuid::Uuid::new_v4();
-    hash_password(password, &salt)
+    hash_password(password, salt).await
 }
 
-fn hash_password(password: &str, salt: &Uuid) -> Result<String, AuthError> {
-    let saltstring = SaltString::encode_b64(salt.as_bytes())
-        .map_err(|e| AuthError::PasswordHasherError(e.to_string()))?;
+async fn hash_password(password: String, salt: Uuid) -> Result<String, AuthError> {
+    let hash = tokio::task::spawn_blocking(move || {
+        let saltstring = SaltString::encode_b64(salt.as_bytes())
+            .map_err(|e| AuthError::PasswordHasherError(e.to_string()))?;
 
-    let hash = Argon2::default()
-        .hash_password(password.as_bytes(), saltstring.as_salt())
-        .map_err(|e| AuthError::PasswordHasherError(e.to_string()))?;
+        let hash = Argon2::default()
+            .hash_password(password.as_bytes(), saltstring.as_salt())
+            .map_err(|e| AuthError::PasswordHasherError(e.to_string()))?;
 
-    Ok(hash.to_string())
+        Ok::<_, AuthError>(hash.to_string())
+    })
+    .await
+    .map_err(|e| AuthError::PasswordHasherError(e.to_string()))??;
+
+    Ok(hash)
 }
 
 /// Verify that the given password matches the stored hash
@@ -62,7 +68,7 @@ pub async fn lookup_user_from_email_and_password(
     }
 
     let user_info = sqlx::query!(
-        r#"SELECT user_id as "user_id: UserId", password_hash, verified
+        r#"SELECT user_id as "user_id: UserId", password_hash, email_logins.verified
         FROM email_logins
         JOIN users ON users.id = email_logins.user_id
         WHERE email_logins.email = $1"#,
@@ -108,23 +114,24 @@ mod tests {
 
     #[tokio::test]
     async fn good_password() -> Result<(), AuthError> {
-        let hash = new_hash("abcdef")?;
+        let hash = new_hash("abcdef".into()).await?;
         verify_password("abcdef".to_string(), hash).await
     }
 
     #[tokio::test]
     async fn bad_password() -> Result<(), AuthError> {
-        let hash = new_hash("abcdef")?;
+        let hash = new_hash("abcdef".into()).await?;
         verify_password("abcdefg".to_string(), hash)
             .await
             .expect_err("non-matching password");
         Ok(())
     }
 
-    #[test]
-    fn unique_password_salt() {
-        let p1 = new_hash("abc").unwrap();
-        let p2 = new_hash("abc").unwrap();
+    /// Test that the salt actually results in a different hash every time.
+    #[tokio::test]
+    async fn unique_password_salt() {
+        let p1 = new_hash("abc".into()).await.unwrap();
+        let p2 = new_hash("abc".into()).await.unwrap();
         assert_ne!(p1, p2);
     }
 }

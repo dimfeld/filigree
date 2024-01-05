@@ -1,13 +1,17 @@
 use error_stack::Report;
 use filigree::{
-    auth::{ExpiryStyle, SessionBackend, SessionCookieBuilder},
+    auth::{api_key::ApiKeyData, ExpiryStyle, SessionBackend, SessionCookieBuilder},
     testing::{self, TestClient, TestUser},
 };
 use futures::future::FutureExt;
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgExecutor, PgPool};
 
 use crate::{
-    models::{organization, role, user},
+    models::{
+        organization::{self, Organization, OrganizationId},
+        role::{self, RoleId},
+        user::{self, UserId},
+    },
     users::organization::{create_new_organization, CreatedOrganization},
     Error,
 };
@@ -19,6 +23,7 @@ pub struct TestApp {
     // pub admin_user: TestUser,
     pub base_url: String,
     pub pg_pool: PgPool,
+    pub bootstrapped_data: BootstrappedData,
     pub server_task: tokio::task::JoinHandle<Result<(), Report<Error>>>,
 }
 
@@ -57,7 +62,7 @@ pub async fn start_app(pg_pool: PgPool) -> TestApp {
     let base_url = format!("http://{}:{}", server.host, server.port);
     let test_client = TestClient::new(base_url.clone());
 
-    let bootstrapped_data = bootstrap_data(&pg_pool & test_client).await;
+    let bootstrapped_data = bootstrap_data(&pg_pool, &test_client).await;
 
     let server_task = tokio::task::spawn(server.run_with_shutdown_signal(shutdown_rx));
 
@@ -71,21 +76,13 @@ pub async fn start_app(pg_pool: PgPool) -> TestApp {
     }
 }
 
-async fn add_test_api_key(
-    db: impl PgExecutor<'_>,
-    organization_id: OrganizationId,
-    user_id: UserId,
-) -> Result<String> {
-    let key_data = ApiKeyData::new();
-}
-
 async fn add_test_user(
     db: &mut PgConnection,
     base_client: &TestClient,
     user_id: UserId,
     organization_id: OrganizationId,
     name: &str,
-) -> Result<TestUser> {
+) -> TestUser {
     let key_data = ApiKeyData::new();
 
     let test_client = base_client.with_api_key(&key_data.key);
@@ -94,13 +91,18 @@ async fn add_test_user(
     let user_payload = user::UserCreatePayload {
         email: email.clone(),
         name: name.to_string(),
-        password_hash: testing::TEST_PASSWORD_HASH.into(),
         ..Default::default()
     };
 
-    user::queries::create_raw(db, user_id, organization_id, &user_payload)
-        .await
-        .expect("Creating user");
+    crate::users::users::create_new_user(
+        &mut *db,
+        user_id,
+        organization_id,
+        user_payload,
+        testing::TEST_PASSWORD.to_string(),
+    )
+    .await
+    .expect("Creating user");
 
     let key = filigree::auth::api_key::ApiKey {
         api_key_id: key_data.api_key_id,
@@ -109,13 +111,13 @@ async fn add_test_user(
         inherits_user_permissions: true,
         description: String::new(),
         active: true,
-        expires_at: Utc::now() + chrono::Duration::days(365),
+        expires_at: chrono::Utc::now() + chrono::Duration::days(365),
     };
-    filigree::auth::api_key::add_api_key(db, &key, &key_data.hash)
+    filigree::auth::api_key::add_api_key(&mut *db, &key, &key_data.hash)
         .await
         .expect("Adding api key");
 
-    filigree::users::users::add_user_email_login(&mut *tx, user_id, email, true)
+    filigree::users::users::add_user_email_login(&mut *db, user_id, email, true)
         .await
         .expect("Adding admin email login");
 
@@ -128,7 +130,7 @@ async fn add_test_user(
     }
 }
 
-async fn bootstrap_data(pg_pool: &sqlx::PgPool, base_client: &TestClient) {
+async fn bootstrap_data(pg_pool: &sqlx::PgPool, base_client: &TestClient) -> BootstrappedData {
     let mut tx = pg_pool.begin().await.unwrap();
     let admin_user_id = testing::ADMIN_USER_ID;
     let CreatedOrganization {
@@ -143,12 +145,22 @@ async fn bootstrap_data(pg_pool: &sqlx::PgPool, base_client: &TestClient) {
     .await
     .expect("Creating test org");
 
-    let admin_user = add_test_user(&mut *tx, admin_user_id, organization.id, "Admin")
-        .await
-        .expect("Creating admin user");
-    let regular_user = add_test_user(&mut *tx, UserId::new(), organization.id, "User")
-        .await
-        .expect("Creating regular user");
+    let admin_user = add_test_user(
+        &mut *tx,
+        base_client,
+        admin_user_id,
+        organization.id,
+        "Admin",
+    )
+    .await;
+    let regular_user = add_test_user(
+        &mut *tx,
+        base_client,
+        UserId::new(),
+        organization.id,
+        "User",
+    )
+    .await;
     filigree::users::roles::add_roles_to_user(
         &mut *tx,
         organization.id,

@@ -12,7 +12,11 @@ impl<'a> ModelGenerator<'a> {
         let struct_list = [
             (
                 "AllFields",
-                Self::struct_contents(model.all_fields(), |_| false, true),
+                Self::struct_contents(
+                    model.all_fields().filter(|f| !f.never_read),
+                    |_| false,
+                    true,
+                ),
             ),
             (
                 "CreatePayload",

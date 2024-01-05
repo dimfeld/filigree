@@ -3,7 +3,7 @@ _list:
 
 build-test-app:
   cd filigree-cli && cargo build
-  cd test-app && ../target/debug/filigree && cargo check
+  cd test-app && ../target/debug/filigree && cargo test
 
 build-test-app-and-db:
   cd filigree-cli && cargo build

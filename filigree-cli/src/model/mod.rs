@@ -93,7 +93,8 @@ impl Model {
     }
 
     pub fn write_payload_struct_fields(&self) -> impl Iterator<Item = Cow<ModelField>> {
-        self.all_fields().filter(|f| f.owner_access.can_write())
+        self.all_fields()
+            .filter(|f| f.owner_access.can_write() && !f.never_read)
     }
 
     pub fn template_context(&self, config: &Config) -> serde_json::Value {
@@ -171,6 +172,7 @@ impl Model {
                 owner_access: Access::Read,
                 default_sql: String::new(),
                 default_rust: String::new(),
+                never_read: false,
                 fixed: true,
                 references: Some(ModelFieldReference::new(
                     "organizations",
@@ -196,6 +198,7 @@ impl Model {
                 references: None,
                 default_sql: String::new(),
                 default_rust: String::new(),
+                never_read: false,
                 fixed: true,
             }),
             org_field,
@@ -214,6 +217,7 @@ impl Model {
                 references: None,
                 default_sql: "now()".to_string(),
                 default_rust: String::new(),
+                never_read: false,
                 fixed: true,
             }),
             Some(ModelField {
@@ -231,6 +235,7 @@ impl Model {
                 references: None,
                 default_sql: "now()".to_string(),
                 default_rust: String::new(),
+                never_read: false,
                 fixed: true,
             }),
         ]

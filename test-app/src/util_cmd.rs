@@ -23,7 +23,8 @@ impl UtilCommand {
     pub async fn handle(self) -> Result<(), Report<Error>> {
         match self.command {
             UtilSubcommand::HashPassword(password) => {
-                let hash = filigree::auth::password::new_hash(&password.password)
+                let hash = filigree::auth::password::new_hash(password.password)
+                    .await
                     .change_context(Error::AuthSubsystem)?;
                 println!("{hash}");
             }

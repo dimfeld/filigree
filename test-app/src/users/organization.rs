@@ -17,9 +17,9 @@ const ADMIN_DEFAULT_PERMISSIONS: &[&str] = &["org_admin"];
 const USER_DEFAULT_PERMISSIONS: &[&str] = &["Organization:read", "User:read", "Role:read"];
 
 pub struct CreatedOrganization {
-    organization: Organization,
-    admin_role: RoleId,
-    user_role: RoleId,
+    pub organization: Organization,
+    pub admin_role: RoleId,
+    pub user_role: RoleId,
 }
 
 /// Creates a new organization containing the specified user. The user doesn't

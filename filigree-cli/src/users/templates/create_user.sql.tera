@@ -1,9 +1,9 @@
-INSERT INTO {{table}}
+{%- set fields = user_model.fields %}
+INSERT INTO {{user_model.table}}
 (
   id,
-  {% if not global %}
   organization_id,
-  {% endif %}
+  password_hash,
   {{ fields
     | filter(attribute='owner_write', value=true)
     | map(attribute='sql_name')
@@ -13,15 +13,10 @@ INSERT INTO {{table}}
 VALUES
 
 (
-  $1
-  {% set p = 1 %}
-  {% if not global %}
-    {% set p = 2 %}
-    ,  $2
-  {% endif %}
+  $1, $2, $3
 
 {% for field in fields | filter(attribute='owner_write', value=true) %}
-  , ${{loop.index + p}}
+  , ${{loop.index + 3}}
 {% endfor %}
 )
 RETURNING
