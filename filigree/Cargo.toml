@@ -1,8 +1,13 @@
 [package]
 name = "filigree"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 resolver = "2"
+license = "MIT OR Apache-2.0"
+description = "Filigree web application framework"
+repository = "https://github.com/dimfeld/filigree"
+homepage = "https://github.com/dimfeld/filigree"
+documentation = "https://docs.rs/filigree"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -26,7 +31,7 @@ reqwest = "0.11.23"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
 sha3 = "0.10.8"
-sqlx = "0.7.3"
+sqlx = { version = "0.7.3", features = ["chrono", "postgres"] }
 thiserror = "1.0.50"
 tokio = { version = "1.35.1", features = ["full"] }
 tonic = { version = "0.9.2", default-features = false, features = ["channel"], optional = true }

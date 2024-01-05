@@ -844,7 +844,7 @@ checksum = "25cbce373ec4653f1a01a31e8a5e5ec0c622dc27ff9c4e6606eefef5cbbed4a5"
 
 [[package]]
 name = "filigree"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "argon2",
  "async-trait",
@@ -883,7 +883,7 @@ dependencies = [
 
 [[package]]
 name = "filigree-cli"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "cargo_toml",
  "clap",
@@ -3122,6 +3122,8 @@ dependencies = [
 [[package]]
 name = "tera"
 version = "1.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "970dff17c11e884a4a09bc76e3a17ef71e01bb13447a11e85226e254fe6d10b8"
 dependencies = [
  "chrono",
  "chrono-tz",

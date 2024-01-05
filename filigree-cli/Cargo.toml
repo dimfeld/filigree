@@ -1,8 +1,13 @@
 [package]
 name = "filigree-cli"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 resolver = "2"
+license = "MIT OR Apache-2.0"
+description = "Scaffolding utility for the Filigree web application framework"
+repository = "https://github.com/dimfeld/filigree"
+homepage = "https://github.com/dimfeld/filigree"
+documentation = "https://docs.rs/filigree"
 
 [[bin]]
 name = "filigree"
@@ -23,8 +28,7 @@ rayon = "1.8.0"
 rust-embed = { version = "8.1.0", features = ["interpolate-folder-path"] }
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
-# tera = "1.19.1"
-tera = { path = "../../tera" }
+tera = "1.19.1"
 thiserror = "1.0.50"
 toml = "0.8.8"
 tracing = "0.1.40"
