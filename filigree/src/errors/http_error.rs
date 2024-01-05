@@ -27,7 +27,7 @@ pub trait HttpError: ToString + std::fmt::Debug {
     fn response_tuple(&self) -> (StatusCode, ErrorResponseData) {
         let detail = self.error_detail();
 
-        let detail = detail.is_empty().then_some(detail);
+        let detail = (!detail.is_empty()).then_some(detail);
 
         (
             self.status_code(),

@@ -68,3 +68,155 @@ pub fn create_routes() -> axum::Router<ServerState> {
         {% if endpoints.delete %}.route("/{{ url_path }}/:id", routing::delete(delete)){% endif %}
 }
 
+#[cfg(test)]
+mod test {
+    use futures::{StreamExt, TryStreamExt};
+
+    use super::*;
+    use crate::{
+        {% if model_name != "Organization" %}
+        models::organization::OrganizationId,
+        {% endif %}
+        tests::{start_app, BootstrappedData},
+    };
+
+    async fn setup_test_objects(
+        db: &sqlx::PgPool,
+        organization_id: OrganizationId,
+        count: usize,
+    ) -> Vec<{{struct_base}}> {
+        futures::stream::iter(1..=count)
+            .map(Ok)
+            .and_then(|i| async move {
+                super::queries::create_raw(
+                    db,
+                    {{id_type}}::new(),
+                    organization_id,
+                    &{{struct_base}}CreatePayload {
+                        {% for field in fields | filter(attribute="owner_write", value=true) %}
+                        {{field.rust_name}}: 
+                            {% if field.nullable %}(i > 1).then(|| {%endif%}
+                            {%- if field.base_type == "text" -%}
+                                format!("Test object {i}")
+                            {%- elif field.base_type in ["int", "bigint", "float"] -%}
+                                i as {{field.base_rust_type}}
+                            {%- elif field.base_type == "boolean" -%}
+                               i % 2 == 0
+                            {%- elif field.base_type == "timestamp" -%}
+                                chrono::Utc::now()
+                            {%- elif field.base_rust_type == "serde_json::Value" -%}
+                                serde_json::json!({ "key": i })
+                            {%- elif field.is_custom_rust_type -%}
+                                <{{field.base_rust_type}} as Default>::default()
+                            {%- elif field.base_type == "uuid" -%}
+                                uuid::Uuid::new_v4()
+                            {%- else -%}
+                                <{{field.base_rust_type}} as Default>::default()
+                            {%- endif -%}
+                            {% if field.nullable %}){%endif%},
+                        {% endfor %}
+                    },
+                )
+                .await
+            })
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap()
+    }
+
+    {% if endpoints.list %}
+    #[sqlx::test]
+    async fn list_objects(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                user,
+                admin_role,
+                user_role,
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let mut added_objects = setup_test_objects(&pool, organization.id, 3).await;
+
+        let mut results = admin_user
+            .client
+            .get("report")
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<Vec<serde_json::Value>>()
+            .await
+            .unwrap();
+
+        {% if model_name == "Role" %}
+        let fixed_roles = [
+            admin_role.to_string(),
+            user_role.to_string(),
+        ];
+        results.retain_mut(|value| { !fixed_roles.iter().any(|i| i == value["id"].as_str().unwrap()) });
+        {% endif %}
+
+        assert_eq!(results.len(), added_objects.len());
+
+        added_objects.sort_by(|a, b| a.id.cmp(&b.id));
+        results.sort_by(|a, b| a["id"].as_str().unwrap().cmp(&b["id"].as_str().unwrap()));
+
+        for (added, result) in added_objects.iter().zip(results.iter()) {
+            {% for field in fields | filter (attribute="owner_read", value=true) %}
+            assert_eq!(
+                serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
+                result["{{field.rust_name}}"]
+            );
+            {% endfor %}
+        }
+
+        // TODO Add test for user with only "read" permission and make sure that fields that are
+        // owner_read but not user_read are omitted.
+    }
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn list_fetch_specific_ids(_pool: sqlx::PgPool) {}
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn list_order_by(_pool: sqlx::PgPool) {}
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn list_paginated(_pool: sqlx::PgPool) {}
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn list_filters(_pool: sqlx::PgPool) {}
+    {% endif %}
+
+    {% if endpoints.get %}
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn get_object(_pool: sqlx::PgPool) {}
+    {% endif %}
+
+    {% if endpoints.update %}
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn update_object(_pool: sqlx::PgPool) {}
+    {% endif %}
+
+    {% if endpoints.create %}
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn create_object(_pool: sqlx::PgPool) {}
+    {% endif %}
+
+    {% if endpoints.delete %}
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn delete_object(_pool: sqlx::PgPool) {}
+    {% endif %}
+}

@@ -1,7 +1,7 @@
 use super::{Access, Model};
 use crate::{
     config::Config,
-    model::{DeleteBehavior, ModelField, ModelFieldReference, SqlType},
+    model::{DeleteBehavior, ModelField, ModelFieldReference, PerEndpoint, SqlType},
 };
 
 fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
@@ -33,7 +33,13 @@ impl Model {
                 name: "User".to_string(),
                 plural: None,
                 id_prefix: Some("usr".to_string()),
-                endpoints: crate::model::Endpoints::All(true),
+                endpoints: crate::model::Endpoints::Only(PerEndpoint {
+                    get: true,
+                    list: true,
+                    create: false,
+                    update: true,
+                    delete: true,
+                }),
                 auth_scope: Some(crate::model::ModelAuthScope::Model),
                 global: false,
                 indexes: vec![],

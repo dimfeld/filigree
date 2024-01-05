@@ -15,6 +15,7 @@ use uuid::Uuid;
 macro_rules! make_object_id {
     ($typ:ident, $prefix:ident) => {
         mod $prefix {
+            #[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
             pub struct $typ;
             impl $crate::object_id::ObjectIdPrefix for $typ {
                 fn prefix() -> &'static str {
@@ -41,7 +42,9 @@ pub enum ObjectIdError {
 }
 
 /// An object that provides a the prefix for a serialized ObjectId.
-pub trait ObjectIdPrefix {
+pub trait ObjectIdPrefix:
+    Clone + Copy + Eq + PartialEq + PartialOrd + Ord + std::hash::Hash
+{
     /// The short prefix for this ID type
     fn prefix() -> &'static str;
 }
@@ -49,7 +52,7 @@ pub trait ObjectIdPrefix {
 /// A type that is internally stored as a UUID but externally as a
 /// more accessible string with a prefix indicating its type. This uses
 /// UUID v7 so that the output will be lexicographically sortable.
-#[derive(Eq, Hash, PartialOrd, Ord)]
+#[derive(Hash, PartialOrd, Ord, Eq)]
 pub struct ObjectId<PREFIX: ObjectIdPrefix>(pub Uuid, PhantomData<PREFIX>);
 
 impl<PREFIX: ObjectIdPrefix> Clone for ObjectId<PREFIX> {

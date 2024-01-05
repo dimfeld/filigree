@@ -24,19 +24,18 @@ pub struct TestApp {
     // pub admin_user: TestUser,
     pub base_url: String,
     pub pg_pool: PgPool,
-    pub bootstrapped_data: BootstrappedData,
     pub server_task: tokio::task::JoinHandle<Result<(), Report<Error>>>,
 }
 
 pub struct BootstrappedData {
-    organization: Organization,
-    admin_role: RoleId,
-    user_role: RoleId,
-    admin_user: TestUser,
-    user: TestUser,
+    pub organization: Organization,
+    pub admin_role: RoleId,
+    pub user_role: RoleId,
+    pub admin_user: TestUser,
+    pub user: TestUser,
 }
 
-pub async fn start_app(pg_pool: PgPool) -> TestApp {
+pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
     filigree::tracing_config::test::init();
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
@@ -70,14 +69,15 @@ pub async fn start_app(pg_pool: PgPool) -> TestApp {
 
     event!(Level::INFO, "finished bootstrapping test");
 
-    TestApp {
+    let app = TestApp {
         shutdown_tx,
         client: test_client,
-        bootstrapped_data,
         base_url,
         server_task,
         pg_pool,
-    }
+    };
+
+    (app, bootstrapped_data)
 }
 
 async fn add_test_user(
@@ -95,6 +95,7 @@ async fn add_test_user(
     let user_payload = user::UserCreatePayload {
         email: email.clone(),
         name: name.to_string(),
+        verified: true,
         ..Default::default()
     };
 

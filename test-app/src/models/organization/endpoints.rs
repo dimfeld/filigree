@@ -64,3 +64,36 @@ async fn delete(
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
 }
+
+#[cfg(test)]
+mod test {
+    use futures::{StreamExt, TryStreamExt};
+
+    use super::*;
+    use crate::tests::{start_app, BootstrappedData};
+
+    async fn setup_test_objects(
+        db: &sqlx::PgPool,
+        organization_id: OrganizationId,
+        count: usize,
+    ) -> Vec<Organization> {
+        futures::stream::iter(1..=count)
+            .map(Ok)
+            .and_then(|i| async move {
+                super::queries::create_raw(
+                    db,
+                    OrganizationId::new(),
+                    organization_id,
+                    &OrganizationCreatePayload {
+                        name: format!("Test object {i}"),
+
+                        owner: (i > 1).then(|| <crate::models::user::UserId as Default>::default()),
+                    },
+                )
+                .await
+            })
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap()
+    }
+}

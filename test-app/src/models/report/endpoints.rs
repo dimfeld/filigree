@@ -72,3 +72,138 @@ pub fn create_routes() -> axum::Router<ServerState> {
         .route("/report/:id", routing::put(update))
         .route("/report/:id", routing::delete(delete))
 }
+
+#[cfg(test)]
+mod test {
+    use futures::{StreamExt, TryStreamExt};
+
+    use super::*;
+    use crate::{
+        models::organization::OrganizationId,
+        tests::{start_app, BootstrappedData},
+    };
+
+    async fn setup_test_objects(
+        db: &sqlx::PgPool,
+        organization_id: OrganizationId,
+        count: usize,
+    ) -> Vec<Report> {
+        futures::stream::iter(1..=count)
+            .map(Ok)
+            .and_then(|i| async move {
+                super::queries::create_raw(
+                    db,
+                    ReportId::new(),
+                    organization_id,
+                    &ReportCreatePayload {
+                        title: format!("Test object {i}"),
+
+                        description: (i > 1).then(|| format!("Test object {i}")),
+
+                        ui: serde_json::json!({ "key": i }),
+                    },
+                )
+                .await
+            })
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap()
+    }
+
+    #[sqlx::test]
+    async fn list_objects(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                user,
+                admin_role,
+                user_role,
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let mut added_objects = setup_test_objects(&pool, organization.id, 3).await;
+
+        let mut results = admin_user
+            .client
+            .get("report")
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<Vec<serde_json::Value>>()
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), added_objects.len());
+
+        added_objects.sort_by(|a, b| a.id.cmp(&b.id));
+        results.sort_by(|a, b| a["id"].as_str().unwrap().cmp(&b["id"].as_str().unwrap()));
+
+        for (added, result) in added_objects.iter().zip(results.iter()) {
+            assert_eq!(serde_json::to_value(&added.id).unwrap(), result["id"]);
+
+            assert_eq!(
+                serde_json::to_value(&added.organization_id).unwrap(),
+                result["organization_id"]
+            );
+
+            assert_eq!(
+                serde_json::to_value(&added.updated_at).unwrap(),
+                result["updated_at"]
+            );
+
+            assert_eq!(
+                serde_json::to_value(&added.created_at).unwrap(),
+                result["created_at"]
+            );
+
+            assert_eq!(serde_json::to_value(&added.title).unwrap(), result["title"]);
+
+            assert_eq!(
+                serde_json::to_value(&added.description).unwrap(),
+                result["description"]
+            );
+
+            assert_eq!(serde_json::to_value(&added.ui).unwrap(), result["ui"]);
+        }
+
+        // TODO Add test for user with only "read" permission and make sure that fields that are
+        // owner_read but not user_read are omitted.
+    }
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn list_fetch_specific_ids(_pool: sqlx::PgPool) {}
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn list_order_by(_pool: sqlx::PgPool) {}
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn list_paginated(_pool: sqlx::PgPool) {}
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn list_filters(_pool: sqlx::PgPool) {}
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn get_object(_pool: sqlx::PgPool) {}
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn update_object(_pool: sqlx::PgPool) {}
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn create_object(_pool: sqlx::PgPool) {}
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn delete_object(_pool: sqlx::PgPool) {}
+}

@@ -139,6 +139,7 @@ impl ModelField {
     pub fn template_context(&self) -> serde_json::Value {
         json!({
             "name": self.name,
+            "base_type": self.typ,
             "sql_name": self.sql_field_name(),
             "sql_full_name": self.qualified_sql_field_name(),
             "sql_type": self.typ.to_sql_type(SqlDialect::Postgresql),
