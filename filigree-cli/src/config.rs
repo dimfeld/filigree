@@ -37,8 +37,9 @@ pub struct Config {
     pub dotenv: bool,
 
     /// If true, require that users verify their email address after registering.
-    #[serde(default)]
-    pub require_user_email_verification: bool,
+    /// Defaults to true.
+    #[serde(default = "Config::default_require_email_verification")]
+    pub require_email_verification: bool,
 
     /// Configuration for the database
     #[serde(default)]
@@ -52,6 +53,10 @@ impl Config {
 
     pub const fn default_sql_dialect() -> SqlDialect {
         SqlDialect::Postgresql
+    }
+
+    const fn default_require_email_verification() -> bool {
+        true
     }
 
     const fn default_port() -> u16 {

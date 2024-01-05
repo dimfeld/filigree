@@ -140,6 +140,7 @@ pub struct Config {
 
     pub cookie_configuration: SessionCookieBuilder,
     pub session_expiry: ExpiryStyle,
+    pub require_email_verification: bool,
 }
 
 /// Create the server and return it, ready to run.

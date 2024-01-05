@@ -58,6 +58,9 @@ struct ServeCommand {
 
     #[clap(long, env = "DB_MAX_CONNECTIONS", default_value_t = 100)]
     db_max_connections: u32,
+
+    #[clap(env = "REQUIRE_EMAIL_VERIFICATION", default_value_t = true)]
+    require_email_verification: bool,
     // tracing endpoint (if any)
     // honeycomb team
     // honeycomb dataset
@@ -96,6 +99,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         host: cmd.host,
         port: cmd.port,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),
+        require_email_verification: cmd.require_email_verification,
         cookie_configuration: SessionCookieBuilder::new(secure_cookies, cmd.cookie_same_site),
         session_expiry: filigree::auth::ExpiryStyle::AfterIdle(std::time::Duration::from_secs(
             cmd.session_expiry * 24 * 60 * 60,

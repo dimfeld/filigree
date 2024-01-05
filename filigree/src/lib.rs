@@ -30,6 +30,7 @@ pub struct Message<'a> {
 }
 
 impl<'a> Message<'a> {
+    /// Create a new Message with the given text.
     pub fn new(message: impl Into<Cow<'a, str>>) -> Self {
         Self {
             message: message.into(),

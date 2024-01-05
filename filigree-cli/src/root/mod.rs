@@ -23,6 +23,10 @@ pub fn render_files(
         "env_prefix",
         config.env_prefix.as_deref().unwrap_or_default(),
     );
+    context.insert(
+        "require_email_verification",
+        &config.require_email_verification,
+    );
     context.insert("db", &config.database);
 
     let base_path = PathBuf::from("src");

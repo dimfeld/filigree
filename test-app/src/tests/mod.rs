@@ -54,6 +54,7 @@ pub async fn start_app(pg_pool: PgPool) -> TestApp {
             tower_cookies::cookie::SameSite::Strict,
         ),
         session_expiry: ExpiryStyle::AfterIdle(std::time::Duration::from_secs(24 * 60 * 60)),
+        require_email_verification: false,
     };
 
     let server = crate::server::create_server(config)
