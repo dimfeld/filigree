@@ -9,6 +9,7 @@ use super::ReportId;
 use crate::models::organization::OrganizationId;
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+
 pub struct Report {
     pub id: ReportId,
     pub organization_id: crate::models::organization::OrganizationId,
@@ -69,6 +70,7 @@ impl Default for Report {
 }
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[cfg_attr(test, derive(Serialize))]
 pub struct ReportCreatePayload {
     pub title: String,
     pub description: Option<String>,
@@ -103,6 +105,7 @@ impl Default for ReportCreatePayload {
 }
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[cfg_attr(test, derive(Serialize))]
 pub struct ReportUpdatePayload {
     pub title: String,
     pub description: Option<String>,

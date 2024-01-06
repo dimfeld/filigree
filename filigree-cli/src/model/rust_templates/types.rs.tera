@@ -12,6 +12,9 @@ use serde::{
 {% for struct in structs %}
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+{% if struct.name != struct_base -%}
+#[cfg_attr(test, derive(Serialize))]
+{%- endif %}
 pub struct {{ struct.name }} {
     {{ struct.fields_content }}
 }

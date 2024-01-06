@@ -9,6 +9,7 @@ use super::UserId;
 use crate::models::organization::OrganizationId;
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+
 pub struct User {
     pub id: UserId,
     pub organization_id: crate::models::organization::OrganizationId,
@@ -69,6 +70,7 @@ impl Default for User {
 }
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[cfg_attr(test, derive(Serialize))]
 pub struct UserCreatePayloadAndUpdatePayload {
     pub name: String,
     pub email: String,

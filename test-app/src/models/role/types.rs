@@ -9,6 +9,7 @@ use super::RoleId;
 use crate::models::organization::OrganizationId;
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+
 pub struct Role {
     pub id: RoleId,
     pub organization_id: crate::models::organization::OrganizationId,
@@ -63,6 +64,7 @@ impl Default for Role {
 }
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[cfg_attr(test, derive(Serialize))]
 pub struct RoleCreatePayloadAndUpdatePayload {
     pub name: String,
     pub description: Option<String>,

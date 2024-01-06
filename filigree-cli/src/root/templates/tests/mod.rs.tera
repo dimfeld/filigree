@@ -1,7 +1,7 @@
 use error_stack::Report;
 use filigree::{
     auth::{api_key::ApiKeyData, ExpiryStyle, SessionBackend, SessionCookieBuilder},
-    testing::{self, TestClient, TestUser},
+    testing::{self, TestClient},
 };
 use futures::future::FutureExt;
 use sqlx::{PgConnection, PgExecutor, PgPool};
@@ -21,10 +21,19 @@ pub struct TestApp {
     /// Hold on to the shutdown signal so the server stays alive
     pub shutdown_tx: tokio::sync::oneshot::Sender<()>,
     pub client: TestClient,
-    // pub admin_user: TestUser,
     pub base_url: String,
     pub pg_pool: PgPool,
     pub server_task: tokio::task::JoinHandle<Result<(), Report<Error>>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TestUser {
+    pub user_id: UserId,
+    pub organization_id: OrganizationId,
+    pub email: String,
+    pub password: String,
+    pub api_key: String,
+    pub client: TestClient,
 }
 
 pub struct BootstrappedData {
@@ -123,13 +132,14 @@ async fn add_test_user(
         .await
         .expect("Adding api key");
 
-    filigree::users::users::add_user_email_login(&mut *db, user_id, email, true)
+    filigree::users::users::add_user_email_login(&mut *db, user_id, email.clone(), true)
         .await
         .expect("Adding admin email login");
 
     TestUser {
         user_id,
         organization_id,
+        email,
         password: testing::TEST_PASSWORD.to_string(),
         client: test_client,
         api_key: key_data.key,

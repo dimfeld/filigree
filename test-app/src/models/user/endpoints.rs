@@ -8,7 +8,7 @@ use axum::{
 
 use super::{queries, types::*, UserId, OWNER_PERMISSION};
 use crate::{
-    auth::{has_permission, Authed},
+    auth::{has_any_permission, Authed},
     server::ServerState,
     Error,
 };
@@ -80,6 +80,14 @@ mod test {
         tests::{start_app, BootstrappedData},
     };
 
+    fn make_create_payload(i: usize) -> UserCreatePayload {
+        UserCreatePayload {
+            name: format!("Test object {i}"),
+            email: format!("Test object {i}"),
+            verified: i % 2 == 0,
+        }
+    }
+
     async fn setup_test_objects(
         db: &sqlx::PgPool,
         organization_id: OrganizationId,
@@ -90,17 +98,7 @@ mod test {
             .and_then(|i| async move {
                 let id = UserId::new();
                 event!(Level::INFO, %id, "Creating test object {}", i);
-                super::queries::create_raw(
-                    db,
-                    id,
-                    organization_id,
-                    &UserCreatePayload {
-                        name: format!("Test object {i}"),
-                        email: format!("Test object {i}"),
-                        verified: i % 2 == 0,
-                    },
-                )
-                .await
+                super::queries::create_raw(db, id, organization_id, &make_create_payload(i)).await
             })
             .try_collect::<Vec<_>>()
             .await
@@ -115,13 +113,11 @@ mod test {
                 organization,
                 admin_user,
                 user,
-                admin_role,
-                user_role,
                 ..
             },
         ) = start_app(pool.clone()).await;
 
-        let mut added_objects = setup_test_objects(&pool, organization.id, 3).await;
+        let added_objects = setup_test_objects(&pool, organization.id, 3).await;
 
         let mut results = admin_user
             .client
@@ -149,31 +145,48 @@ mod test {
                 .iter()
                 .find(|i| i.id.to_string() == result["id"].as_str().unwrap())
                 .expect("Returned object did not match any of the added objects");
-
-            assert_eq!(serde_json::to_value(&added.id).unwrap(), result["id"]);
-
             assert_eq!(
+                result["id"],
+                serde_json::to_value(&added.id).unwrap(),
+                "field id"
+            );
+            assert_eq!(
+                result["organization_id"],
                 serde_json::to_value(&added.organization_id).unwrap(),
-                result["organization_id"]
+                "field organization_id"
             );
-
             assert_eq!(
+                result["updated_at"],
                 serde_json::to_value(&added.updated_at).unwrap(),
-                result["updated_at"]
+                "field updated_at"
             );
-
             assert_eq!(
+                result["created_at"],
                 serde_json::to_value(&added.created_at).unwrap(),
-                result["created_at"]
+                "field created_at"
             );
-
-            assert_eq!(serde_json::to_value(&added.name).unwrap(), result["name"]);
-
-            assert_eq!(serde_json::to_value(&added.email).unwrap(), result["email"]);
-
             assert_eq!(
+                result["name"],
+                serde_json::to_value(&added.name).unwrap(),
+                "field name"
+            );
+            assert_eq!(
+                result["email"],
+                serde_json::to_value(&added.email).unwrap(),
+                "field email"
+            );
+            assert_eq!(
+                result["verified"],
                 serde_json::to_value(&added.verified).unwrap(),
-                result["verified"]
+                "field verified"
+            );
+            assert_eq!(result["_permission"], "owner");
+
+            // Check that we don't return any fields which are supposed to be omitted.
+            assert_eq!(
+                result.get("password_hash"),
+                None,
+                "field password_hash should be omitted"
             );
         }
 
@@ -198,14 +211,113 @@ mod test {
     async fn list_filters(_pool: sqlx::PgPool) {}
 
     #[sqlx::test]
-    #[ignore = "todo"]
-    async fn get_object(_pool: sqlx::PgPool) {}
+    async fn get_object(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                user,
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let added_objects = setup_test_objects(&pool, organization.id, 2).await;
+
+        let result = admin_user
+            .client
+            .get(&format!("user/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+
+        let added = &added_objects[1];
+        assert_eq!(
+            result["id"],
+            serde_json::to_value(&added.id).unwrap(),
+            "field id"
+        );
+        assert_eq!(
+            result["organization_id"],
+            serde_json::to_value(&added.organization_id).unwrap(),
+            "field organization_id"
+        );
+        assert_eq!(
+            result["updated_at"],
+            serde_json::to_value(&added.updated_at).unwrap(),
+            "field updated_at"
+        );
+        assert_eq!(
+            result["created_at"],
+            serde_json::to_value(&added.created_at).unwrap(),
+            "field created_at"
+        );
+        assert_eq!(
+            result["name"],
+            serde_json::to_value(&added.name).unwrap(),
+            "field name"
+        );
+        assert_eq!(
+            result["email"],
+            serde_json::to_value(&added.email).unwrap(),
+            "field email"
+        );
+        assert_eq!(
+            result["verified"],
+            serde_json::to_value(&added.verified).unwrap(),
+            "field verified"
+        );
+        assert_eq!(result["_permission"], "owner");
+
+        // Check that we don't return any fields which are supposed to be omitted.
+        assert_eq!(
+            result.get("password_hash"),
+            None,
+            "field password_hash should be omitted"
+        );
+
+        // TODO Add test for user with only "read" permission and make sure that fields that are
+        // owner_read but not user_read are omitted.
+    }
 
     #[sqlx::test]
     #[ignore = "todo"]
     async fn update_object(_pool: sqlx::PgPool) {}
 
     #[sqlx::test]
-    #[ignore = "todo"]
-    async fn delete_object(_pool: sqlx::PgPool) {}
+    async fn delete_object(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                user,
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let added_objects = setup_test_objects(&pool, organization.id, 2).await;
+
+        admin_user
+            .client
+            .delete(&format!("user/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+
+        let response = admin_user
+            .client
+            .get(&format!("user/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+    }
 }

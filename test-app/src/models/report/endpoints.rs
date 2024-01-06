@@ -8,7 +8,7 @@ use axum::{
 
 use super::{queries, types::*, ReportId, OWNER_PERMISSION};
 use crate::{
-    auth::{has_permission, Authed},
+    auth::{has_any_permission, Authed},
     server::ServerState,
     Error,
 };
@@ -67,7 +67,8 @@ pub fn create_routes() -> axum::Router<ServerState> {
         .route("/report/:id", routing::get(get))
         .route(
             "/report",
-            routing::post(create).route_layer(has_permission(OWNER_PERMISSION)),
+            routing::post(create)
+                .route_layer(has_any_permission(vec!["org_admin", OWNER_PERMISSION])),
         )
         .route("/report/:id", routing::put(update))
         .route("/report/:id", routing::delete(delete))
@@ -84,6 +85,14 @@ mod test {
         tests::{start_app, BootstrappedData},
     };
 
+    fn make_create_payload(i: usize) -> ReportCreatePayload {
+        ReportCreatePayload {
+            title: format!("Test object {i}"),
+            description: (i > 1).then(|| format!("Test object {i}")),
+            ui: serde_json::json!({ "key": i }),
+        }
+    }
+
     async fn setup_test_objects(
         db: &sqlx::PgPool,
         organization_id: OrganizationId,
@@ -94,17 +103,7 @@ mod test {
             .and_then(|i| async move {
                 let id = ReportId::new();
                 event!(Level::INFO, %id, "Creating test object {}", i);
-                super::queries::create_raw(
-                    db,
-                    id,
-                    organization_id,
-                    &ReportCreatePayload {
-                        title: format!("Test object {i}"),
-                        description: (i > 1).then(|| format!("Test object {i}")),
-                        ui: serde_json::json!({ "key": i }),
-                    },
-                )
-                .await
+                super::queries::create_raw(db, id, organization_id, &make_create_payload(i)).await
             })
             .try_collect::<Vec<_>>()
             .await
@@ -119,13 +118,11 @@ mod test {
                 organization,
                 admin_user,
                 user,
-                admin_role,
-                user_role,
                 ..
             },
         ) = start_app(pool.clone()).await;
 
-        let mut added_objects = setup_test_objects(&pool, organization.id, 3).await;
+        let added_objects = setup_test_objects(&pool, organization.id, 3).await;
 
         let mut results = admin_user
             .client
@@ -146,32 +143,44 @@ mod test {
                 .iter()
                 .find(|i| i.id.to_string() == result["id"].as_str().unwrap())
                 .expect("Returned object did not match any of the added objects");
-
-            assert_eq!(serde_json::to_value(&added.id).unwrap(), result["id"]);
-
             assert_eq!(
+                result["id"],
+                serde_json::to_value(&added.id).unwrap(),
+                "field id"
+            );
+            assert_eq!(
+                result["organization_id"],
                 serde_json::to_value(&added.organization_id).unwrap(),
-                result["organization_id"]
+                "field organization_id"
             );
-
             assert_eq!(
+                result["updated_at"],
                 serde_json::to_value(&added.updated_at).unwrap(),
-                result["updated_at"]
+                "field updated_at"
             );
-
             assert_eq!(
+                result["created_at"],
                 serde_json::to_value(&added.created_at).unwrap(),
-                result["created_at"]
+                "field created_at"
             );
-
-            assert_eq!(serde_json::to_value(&added.title).unwrap(), result["title"]);
-
             assert_eq!(
-                serde_json::to_value(&added.description).unwrap(),
-                result["description"]
+                result["title"],
+                serde_json::to_value(&added.title).unwrap(),
+                "field title"
             );
+            assert_eq!(
+                result["description"],
+                serde_json::to_value(&added.description).unwrap(),
+                "field description"
+            );
+            assert_eq!(
+                result["ui"],
+                serde_json::to_value(&added.ui).unwrap(),
+                "field ui"
+            );
+            assert_eq!(result["_permission"], "owner");
 
-            assert_eq!(serde_json::to_value(&added.ui).unwrap(), result["ui"]);
+            // Check that we don't return any fields which are supposed to be omitted.
         }
 
         // TODO Add test for user with only "read" permission and make sure that fields that are
@@ -195,18 +204,195 @@ mod test {
     async fn list_filters(_pool: sqlx::PgPool) {}
 
     #[sqlx::test]
-    #[ignore = "todo"]
-    async fn get_object(_pool: sqlx::PgPool) {}
+    async fn get_object(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                user,
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let added_objects = setup_test_objects(&pool, organization.id, 2).await;
+
+        let result = admin_user
+            .client
+            .get(&format!("report/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+
+        let added = &added_objects[1];
+        assert_eq!(
+            result["id"],
+            serde_json::to_value(&added.id).unwrap(),
+            "field id"
+        );
+        assert_eq!(
+            result["organization_id"],
+            serde_json::to_value(&added.organization_id).unwrap(),
+            "field organization_id"
+        );
+        assert_eq!(
+            result["updated_at"],
+            serde_json::to_value(&added.updated_at).unwrap(),
+            "field updated_at"
+        );
+        assert_eq!(
+            result["created_at"],
+            serde_json::to_value(&added.created_at).unwrap(),
+            "field created_at"
+        );
+        assert_eq!(
+            result["title"],
+            serde_json::to_value(&added.title).unwrap(),
+            "field title"
+        );
+        assert_eq!(
+            result["description"],
+            serde_json::to_value(&added.description).unwrap(),
+            "field description"
+        );
+        assert_eq!(
+            result["ui"],
+            serde_json::to_value(&added.ui).unwrap(),
+            "field ui"
+        );
+        assert_eq!(result["_permission"], "owner");
+
+        // Check that we don't return any fields which are supposed to be omitted.
+
+        // TODO Add test for user with only "read" permission and make sure that fields that are
+        // owner_read but not user_read are omitted.
+    }
 
     #[sqlx::test]
     #[ignore = "todo"]
     async fn update_object(_pool: sqlx::PgPool) {}
 
     #[sqlx::test]
-    #[ignore = "todo"]
-    async fn create_object(_pool: sqlx::PgPool) {}
+    async fn create_object(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                user,
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let create_payload = make_create_payload(10);
+        let created_result: serde_json::Value = admin_user
+            .client
+            .post("report")
+            .json(&create_payload)
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            created_result["title"],
+            serde_json::to_value(&create_payload.title).unwrap(),
+            "field title from create response"
+        );
+        assert_eq!(
+            created_result["description"],
+            serde_json::to_value(&create_payload.description).unwrap(),
+            "field description from create response"
+        );
+        assert_eq!(
+            created_result["ui"],
+            serde_json::to_value(&create_payload.ui).unwrap(),
+            "field ui from create response"
+        );
+        assert_eq!(created_result["_permission"], "owner");
+
+        let created_id = created_result["id"].as_str().unwrap();
+        let get_result = admin_user
+            .client
+            .get(&format!("report/{}", created_id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            get_result["id"], created_result["id"],
+            "field id from get response"
+        );
+        assert_eq!(
+            get_result["organization_id"], created_result["organization_id"],
+            "field organization_id from get response"
+        );
+        assert_eq!(
+            get_result["updated_at"], created_result["updated_at"],
+            "field updated_at from get response"
+        );
+        assert_eq!(
+            get_result["created_at"], created_result["created_at"],
+            "field created_at from get response"
+        );
+        assert_eq!(
+            get_result["title"], created_result["title"],
+            "field title from get response"
+        );
+        assert_eq!(
+            get_result["description"], created_result["description"],
+            "field description from get response"
+        );
+        assert_eq!(
+            get_result["ui"], created_result["ui"],
+            "field ui from get response"
+        );
+        assert_eq!(get_result["_permission"], "owner");
+    }
 
     #[sqlx::test]
-    #[ignore = "todo"]
-    async fn delete_object(_pool: sqlx::PgPool) {}
+    async fn delete_object(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                user,
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let added_objects = setup_test_objects(&pool, organization.id, 2).await;
+
+        admin_user
+            .client
+            .delete(&format!("report/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+
+        let response = admin_user
+            .client
+            .get(&format!("report/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+    }
 }

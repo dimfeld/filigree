@@ -6,35 +6,158 @@ use tower::{Layer, Service};
 
 use super::{get_auth_info, AuthError, AuthInfo};
 
-/// Generate a middleware layer that checks if the user has a particular permission
-pub fn has_permission<INFO: AuthInfo>(s: impl Into<Cow<'static, str>>) -> HasPermissionLayer<INFO> {
-    HasPermissionLayer {
-        permission: s.into(),
-        _marker: PhantomData,
-    }
+pub trait PermissionChecker<INFO: AuthInfo>: Clone + Send + Sync + 'static {
+    /// Perform the check, and return a missing permission if the check fails.
+    fn check(&self, info: &INFO) -> Result<(), Cow<'static, str>>;
 }
 
-/// Middleware layer that checks if the user has a particular permission
-pub struct HasPermissionLayer<INFO: AuthInfo> {
-    permission: Cow<'static, str>,
+#[derive(Debug)]
+pub struct CheckOnePermission<INFO: AuthInfo> {
+    perm: Cow<'static, str>,
     _marker: PhantomData<INFO>,
 }
 
-impl<INFO: AuthInfo> Clone for HasPermissionLayer<INFO> {
+impl<INFO: AuthInfo> PermissionChecker<INFO> for CheckOnePermission<INFO> {
+    fn check(&self, info: &INFO) -> Result<(), Cow<'static, str>> {
+        match info.has_permission(&self.perm) {
+            true => Ok(()),
+            false => Err(self.perm.clone()),
+        }
+    }
+}
+
+impl<INFO: AuthInfo> Clone for CheckOnePermission<INFO> {
     fn clone(&self) -> Self {
         Self {
-            permission: self.permission.clone(),
+            perm: self.perm.clone(),
             _marker: PhantomData,
         }
     }
 }
 
-impl<S, INFO: AuthInfo> Layer<S> for HasPermissionLayer<INFO> {
-    type Service = HasPermissionService<S, INFO>;
+#[derive(Debug)]
+pub struct CheckAllPermissions<INFO: AuthInfo> {
+    perms: Vec<Cow<'static, str>>,
+    _marker: PhantomData<INFO>,
+}
+
+impl<INFO: AuthInfo> PermissionChecker<INFO> for CheckAllPermissions<INFO> {
+    fn check(&self, info: &INFO) -> Result<(), Cow<'static, str>> {
+        for perm in &self.perms {
+            if !info.has_permission(perm) {
+                return Err(perm.clone());
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl<INFO: AuthInfo> Clone for CheckAllPermissions<INFO> {
+    fn clone(&self) -> Self {
+        Self {
+            perms: self.perms.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CheckAnyPermission<INFO: AuthInfo> {
+    perms: Vec<Cow<'static, str>>,
+    _marker: PhantomData<INFO>,
+}
+
+impl<INFO: AuthInfo> PermissionChecker<INFO> for CheckAnyPermission<INFO> {
+    fn check(&self, info: &INFO) -> Result<(), Cow<'static, str>> {
+        for perm in &self.perms {
+            if info.has_permission(perm) {
+                return Ok(());
+            }
+        }
+
+        Err(self.perms[0].clone())
+    }
+}
+
+impl<INFO: AuthInfo> Clone for CheckAnyPermission<INFO> {
+    fn clone(&self) -> Self {
+        Self {
+            perms: self.perms.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+/// Generate a middleware layer that checks if the user has a particular permission
+pub fn has_permission<INFO: AuthInfo>(
+    s: impl Into<Cow<'static, str>>,
+) -> HasPermissionLayer<INFO, CheckOnePermission<INFO>> {
+    HasPermissionLayer {
+        checker: CheckOnePermission {
+            perm: s.into(),
+            _marker: PhantomData,
+        },
+        _marker: PhantomData,
+    }
+}
+
+/// Generate a middleware layer that checks if the user has all of the given permissions
+pub fn has_any_permission<INFO: AuthInfo>(
+    perms: Vec<impl Into<Cow<'static, str>>>,
+) -> HasPermissionLayer<INFO, CheckAnyPermission<INFO>> {
+    if perms.is_empty() {
+        panic!("`has_any_permission` requires at least one permission");
+    }
+
+    HasPermissionLayer {
+        checker: CheckAnyPermission {
+            perms: perms.into_iter().map(|s| s.into()).collect(),
+            _marker: PhantomData,
+        },
+        _marker: PhantomData,
+    }
+}
+/// Generate a middleware layer that checks if the user has a particular permission
+pub fn has_all_permissions<INFO: AuthInfo>(
+    perms: Vec<impl Into<Cow<'static, str>>>,
+) -> HasPermissionLayer<INFO, CheckAllPermissions<INFO>> {
+    if perms.is_empty() {
+        panic!("`has_all_permission` requires at least one permission");
+    }
+
+    HasPermissionLayer {
+        checker: CheckAllPermissions {
+            perms: perms.into_iter().map(|s| s.into()).collect(),
+            _marker: PhantomData,
+        },
+        _marker: PhantomData,
+    }
+}
+
+/// Middleware layer that checks if the user has a particular permission
+pub struct HasPermissionLayer<INFO: AuthInfo, CHECKER: PermissionChecker<INFO>> {
+    checker: CHECKER,
+    _marker: PhantomData<INFO>,
+}
+
+impl<INFO: AuthInfo, CHECKER: PermissionChecker<INFO>> Clone for HasPermissionLayer<INFO, CHECKER> {
+    fn clone(&self) -> Self {
+        Self {
+            checker: self.checker.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, INFO: AuthInfo, CHECKER: PermissionChecker<INFO>> Layer<S>
+    for HasPermissionLayer<INFO, CHECKER>
+{
+    type Service = HasPermissionService<S, INFO, CHECKER>;
 
     fn layer(&self, inner: S) -> Self::Service {
         HasPermissionService {
-            permission: self.permission.clone(),
+            checker: self.checker.clone(),
             inner,
             _marker: PhantomData,
         }
@@ -42,23 +165,26 @@ impl<S, INFO: AuthInfo> Layer<S> for HasPermissionLayer<INFO> {
 }
 
 /// The middleware service for checking if the user has a particular permission
-pub struct HasPermissionService<S, INFO: AuthInfo> {
-    permission: Cow<'static, str>,
+pub struct HasPermissionService<S, INFO: AuthInfo, CHECKER: PermissionChecker<INFO>> {
+    checker: CHECKER,
     inner: S,
     _marker: PhantomData<INFO>,
 }
 
-impl<S: Clone, INFO: AuthInfo> Clone for HasPermissionService<S, INFO> {
+impl<S: Clone, INFO: AuthInfo, CHECKER: PermissionChecker<INFO>> Clone
+    for HasPermissionService<S, INFO, CHECKER>
+{
     fn clone(&self) -> Self {
         Self {
-            permission: self.permission.clone(),
+            checker: self.checker.clone(),
             inner: self.inner.clone(),
             _marker: PhantomData,
         }
     }
 }
 
-impl<S, INFO: AuthInfo> Service<Request> for HasPermissionService<S, INFO>
+impl<S, INFO: AuthInfo, CHECKER: PermissionChecker<INFO>> Service<Request>
+    for HasPermissionService<S, INFO, CHECKER>
 where
     S: Service<Request, Response = axum::response::Response> + Clone + Send + 'static,
     S::Future: Send + 'static,
@@ -78,7 +204,7 @@ where
     fn call(&mut self, request: Request) -> Self::Future {
         let cloned = self.inner.clone();
         let mut inner = std::mem::replace(&mut self.inner, cloned);
-        let perm = self.permission.clone();
+        let checker = self.checker.clone();
 
         Box::pin(async move {
             let (request, info) = match get_auth_info::<INFO>(request).await {
@@ -86,7 +212,7 @@ where
                 Err(e) => return Ok(e.into_response()),
             };
 
-            if !info.has_permission(&perm) {
+            if let Err(perm) = checker.check(&info) {
                 return Ok(AuthError::MissingPermission(perm).into_response());
             }
 

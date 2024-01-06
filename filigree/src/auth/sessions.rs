@@ -215,8 +215,8 @@ impl SessionBackend {
             INSERT INTO user_sessions (id, user_id, hash, expires_at) VALUES
             ($1, $2, $3, now() + $4)",
             session_id.as_uuid(),
-            &hash,
             user_id.as_uuid(),
+            &hash,
             self.expiry_style.expiry_duration() as _
         )
         .execute(&self.db)

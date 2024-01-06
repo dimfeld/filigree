@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use async_trait::async_trait;
-use filigree::auth::{AuthError, OrganizationId, RoleId, SessionKey, UserId};
+use filigree::auth::{AuthError, OrganizationId, PermissionChecker, RoleId, SessionKey, UserId};
 use sqlx::{query_file_as, PgPool};
 use uuid::Uuid;
 
@@ -84,8 +84,20 @@ impl filigree::auth::AuthQueries for AuthQueries {
 
 pub fn has_permission(
     permission: impl Into<Cow<'static, str>>,
-) -> filigree::auth::HasPermissionLayer<AuthInfo> {
+) -> filigree::auth::HasPermissionLayer<AuthInfo, impl PermissionChecker<AuthInfo>> {
     filigree::auth::has_permission(permission.into())
+}
+
+pub fn has_any_permission(
+    permissions: Vec<impl Into<Cow<'static, str>>>,
+) -> filigree::auth::HasPermissionLayer<AuthInfo, impl PermissionChecker<AuthInfo>> {
+    filigree::auth::has_any_permission(permissions)
+}
+
+pub fn has_all_permissions(
+    permissions: Vec<impl Into<Cow<'static, str>>>,
+) -> filigree::auth::HasPermissionLayer<AuthInfo, impl PermissionChecker<AuthInfo>> {
+    filigree::auth::has_all_permissions(permissions)
 }
 
 pub fn has_auth_predicate<F>(

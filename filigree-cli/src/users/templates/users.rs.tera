@@ -51,3 +51,79 @@ pub async fn create_new_user_with_prehashed_password(
 
     Ok(user)
 }
+
+#[cfg(test)]
+mod test {
+    use serde_json::json;
+
+    use crate::tests::{start_app, BootstrappedData};
+
+    #[sqlx::test]
+    async fn login_with_password_and_logout(db: sqlx::PgPool) {
+        let (
+            app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                user,
+                admin_role,
+                user_role,
+                ..
+            },
+        ) = start_app(db).await;
+
+        let client = &app.client;
+        let response: serde_json::Value = client
+            .post("login")
+            .json(&json!({ "email": admin_user.email, "password": admin_user.password }))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert_eq!(response["message"], "Logged in");
+
+        let user: serde_json::Value = client
+            .get(&format!("user/{}", admin_user.user_id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(user["name"], "Admin");
+
+        let response: serde_json::Value = client
+            .post("logout")
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(response["message"], "Logged out");
+
+        let anon_response = client
+            .get(&format!("user/{}", admin_user.user_id))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            anon_response.status(),
+            reqwest::StatusCode::UNAUTHORIZED,
+            "Authed requests should not work after logout"
+        );
+
+        // TODO check explicitly that the session cookie is gone
+        // TODO check that adding the session cookie back to the request after logout doesn't work
+    }
+}

@@ -1,7 +1,7 @@
 #![allow(unused_imports, dead_code)]
 use axum::{Json, extract::{State, Path, Query}, http::StatusCode, response::IntoResponse, routing};
 
-use crate::{Error, auth::{Authed, has_permission}, server::ServerState};
+use crate::{Error, auth::{Authed, has_any_permission}, server::ServerState};
 
 use super::{queries, types::*, {{id_type}}, OWNER_PERMISSION };
 
@@ -62,7 +62,7 @@ pub fn create_routes() -> axum::Router<ServerState> {
         {% if endpoints.get %}.route("/{{ url_path }}/:id", routing::get(get)){% endif %}
         {% if endpoints.create %}.route("/{{ url_path }}",
             routing::post(create)
-                .route_layer(has_permission(OWNER_PERMISSION))
+                .route_layer(has_any_permission(vec!["org_admin", OWNER_PERMISSION]))
         ){% endif %}
         {% if endpoints.update %}.route("/{{ url_path }}/:id", routing::put(update)){% endif %}
         {% if endpoints.delete %}.route("/{{ url_path }}/:id", routing::delete(delete)){% endif %}
@@ -81,6 +81,33 @@ mod test {
         tests::{start_app, BootstrappedData},
     };
 
+    fn make_create_payload(i: usize) -> {{struct_base}}CreatePayload {
+        {{struct_base}}CreatePayload {
+            {% for field in fields | filter(attribute="owner_write", value=true) -%}
+            {{field.rust_name}}: 
+                {%- if field.nullable -%}(i > 1).then(|| {%endif%}
+                {%- if field.base_type == "text" -%}
+                    format!("Test object {i}")
+                {%- elif field.base_type in ["int", "bigint", "float"] -%}
+                    i as {{field.base_rust_type}}
+                {%- elif field.base_type == "boolean" -%}
+                   i % 2 == 0
+                {%- elif field.base_type == "timestamp" -%}
+                    chrono::Utc::now()
+                {%- elif field.base_rust_type == "serde_json::Value" -%}
+                    serde_json::json!({ "key": i })
+                {%- elif field.is_custom_rust_type -%}
+                    <{{field.base_rust_type}} as Default>::default()
+                {%- elif field.base_type == "uuid" -%}
+                    uuid::Uuid::new_v4()
+                {%- else -%}
+                    <{{field.base_rust_type}} as Default>::default()
+                {%- endif -%}
+                {%- if field.nullable -%}){%endif%},
+            {%- endfor %}
+        }
+    }
+
     async fn setup_test_objects(
         db: &sqlx::PgPool,
         organization_id: OrganizationId,
@@ -95,30 +122,7 @@ mod test {
                     db,
                     id,
                     organization_id,
-                    &{{struct_base}}CreatePayload {
-                        {% for field in fields | filter(attribute="owner_write", value=true) -%}
-                        {{field.rust_name}}: 
-                            {%- if field.nullable -%}(i > 1).then(|| {%endif%}
-                            {%- if field.base_type == "text" -%}
-                                format!("Test object {i}")
-                            {%- elif field.base_type in ["int", "bigint", "float"] -%}
-                                i as {{field.base_rust_type}}
-                            {%- elif field.base_type == "boolean" -%}
-                               i % 2 == 0
-                            {%- elif field.base_type == "timestamp" -%}
-                                chrono::Utc::now()
-                            {%- elif field.base_rust_type == "serde_json::Value" -%}
-                                serde_json::json!({ "key": i })
-                            {%- elif field.is_custom_rust_type -%}
-                                <{{field.base_rust_type}} as Default>::default()
-                            {%- elif field.base_type == "uuid" -%}
-                                uuid::Uuid::new_v4()
-                            {%- else -%}
-                                <{{field.base_rust_type}} as Default>::default()
-                            {%- endif -%}
-                            {%- if field.nullable -%}){%endif%},
-                        {%- endfor %}
-                    },
+                    &make_create_payload(i),
                 )
                 .await
             })
@@ -136,13 +140,15 @@ mod test {
                 organization,
                 admin_user,
                 user,
+                {% if model_name == "Role" %}
                 admin_role,
                 user_role,
+                {% endif %}
                 ..
             },
         ) = start_app(pool.clone()).await;
 
-        let mut added_objects = setup_test_objects(&pool, organization.id, 3).await;
+        let added_objects = setup_test_objects(&pool, organization.id, 3).await;
 
         let mut results = admin_user
             .client
@@ -177,12 +183,23 @@ mod test {
         for result in results {
             let added = added_objects.iter().find(|i| i.id.to_string() == result["id"].as_str().unwrap())
                 .expect("Returned object did not match any of the added objects");
-            {% for field in fields | filter (attribute="owner_read", value=true) %}
+            {% for field in fields | filter (attribute="owner_read", value=true) -%}
             assert_eq!(
+                result["{{field.rust_name}}"],
                 serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
-                result["{{field.rust_name}}"]
+                "field {{field.rust_name}}"
             );
-            {% endfor %}
+            {%- endfor %}
+            assert_eq!(result["_permission"], "owner");
+
+            // Check that we don't return any fields which are supposed to be omitted.
+            {% for field in fields | filter (attribute="owner_read", value=false) -%}
+            assert_eq!(
+                result.get("{{field.rust_name}}"),
+                None,
+                "field {{field.rust_name}} should be omitted"
+            );
+            {%- endfor %}
         }
 
         // TODO Add test for user with only "read" permission and make sure that fields that are
@@ -208,8 +225,57 @@ mod test {
 
     {% if endpoints.get %}
     #[sqlx::test]
-    #[ignore = "todo"]
-    async fn get_object(_pool: sqlx::PgPool) {}
+    async fn get_object(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                user,
+                {% if model_name == "Role" %}
+                admin_role,
+                user_role,
+                {% endif %}
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let added_objects = setup_test_objects(&pool, organization.id, 2).await;
+
+        let result = admin_user
+            .client
+            .get(&format!("{{url_path}}/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+
+        let added = &added_objects[1];
+        {% for field in fields | filter (attribute="owner_read", value=true) -%}
+        assert_eq!(
+            result["{{field.rust_name}}"],
+            serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
+            "field {{field.rust_name}}"
+        );
+        {%- endfor %}
+        assert_eq!(result["_permission"], "owner");
+
+        // Check that we don't return any fields which are supposed to be omitted.
+        {% for field in fields | filter (attribute="owner_read", value=false) -%}
+        assert_eq!(
+            result.get("{{field.rust_name}}"),
+            None,
+            "field {{field.rust_name}} should be omitted"
+        );
+        {%- endfor %}
+
+        // TODO Add test for user with only "read" permission and make sure that fields that are
+        // owner_read but not user_read are omitted.
+    }
     {% endif %}
 
     {% if endpoints.update %}
@@ -220,13 +286,104 @@ mod test {
 
     {% if endpoints.create %}
     #[sqlx::test]
-    #[ignore = "todo"]
-    async fn create_object(_pool: sqlx::PgPool) {}
+    async fn create_object(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                user,
+                {% if model_name == "Role" %}
+                admin_role,
+                user_role,
+                {% endif %}
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let create_payload = make_create_payload(10);
+        let created_result : serde_json::Value = admin_user
+            .client
+            .post("{{url_path}}")
+            .json(&create_payload)
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+
+        {% for field in fields | filter (attribute="owner_write", value=true) -%}
+        assert_eq!(
+            created_result["{{field.rust_name}}"],
+            serde_json::to_value(&create_payload.{{field.rust_name}}).unwrap(),
+            "field {{field.rust_name}} from create response"
+        );
+        {%- endfor %}
+        assert_eq!(created_result["_permission"], "owner");
+
+        let created_id = created_result["id"].as_str().unwrap();
+        let get_result = admin_user
+            .client
+            .get(&format!("{{url_path}}/{}", created_id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+
+        {% for field in fields | filter (attribute="owner_read", value=true) -%}
+        assert_eq!(
+            get_result["{{field.rust_name}}"],
+            created_result["{{field.rust_name}}"],
+            "field {{field.rust_name}} from get response"
+        );
+        {%- endfor %}
+        assert_eq!(get_result["_permission"], "owner");
+    }
     {% endif %}
 
     {% if endpoints.delete %}
     #[sqlx::test]
-    #[ignore = "todo"]
-    async fn delete_object(_pool: sqlx::PgPool) {}
+    async fn delete_object(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                user,
+                {% if model_name == "Role" %}
+                admin_role,
+                user_role,
+                {% endif %}
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let added_objects = setup_test_objects(&pool, organization.id, 2).await;
+
+        admin_user
+            .client
+            .delete(&format!("{{url_path}}/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+
+        let response = admin_user
+            .client
+            .get(&format!("{{url_path}}/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+    }
     {% endif %}
 }

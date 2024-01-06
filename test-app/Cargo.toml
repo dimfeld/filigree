@@ -24,7 +24,7 @@ eyre = "0.6.11"
 filigree = { version = "0.0.1", path = "../filigree" }
 futures = "0.3.30"
 hyper = { version = "1.1.0", features = ["server", "http1", "http2"] }
-reqwest = { version = "0.11.23", features = ["json"] }
+reqwest = { version = "0.11.23", features = ["cookies", "json"] }
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
 sqlx = { version = "0.7.3", features = ["chrono", "postgres"] }

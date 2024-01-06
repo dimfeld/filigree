@@ -8,7 +8,7 @@ use axum::{
 
 use super::{queries, types::*, OrganizationId, OWNER_PERMISSION};
 use crate::{
-    auth::{has_permission, Authed},
+    auth::{has_any_permission, Authed},
     server::ServerState,
     Error,
 };
@@ -73,6 +73,13 @@ mod test {
     use super::*;
     use crate::tests::{start_app, BootstrappedData};
 
+    fn make_create_payload(i: usize) -> OrganizationCreatePayload {
+        OrganizationCreatePayload {
+            name: format!("Test object {i}"),
+            owner: (i > 1).then(|| <crate::models::user::UserId as Default>::default()),
+        }
+    }
+
     async fn setup_test_objects(
         db: &sqlx::PgPool,
         organization_id: OrganizationId,
@@ -83,16 +90,7 @@ mod test {
             .and_then(|i| async move {
                 let id = OrganizationId::new();
                 event!(Level::INFO, %id, "Creating test object {}", i);
-                super::queries::create_raw(
-                    db,
-                    id,
-                    organization_id,
-                    &OrganizationCreatePayload {
-                        name: format!("Test object {i}"),
-                        owner: (i > 1).then(|| <crate::models::user::UserId as Default>::default()),
-                    },
-                )
-                .await
+                super::queries::create_raw(db, id, organization_id, &make_create_payload(i)).await
             })
             .try_collect::<Vec<_>>()
             .await

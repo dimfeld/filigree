@@ -8,6 +8,7 @@ use serde::{
 use super::OrganizationId;
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+
 pub struct Organization {
     pub id: OrganizationId,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -62,6 +63,7 @@ impl Default for Organization {
 }
 
 #[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[cfg_attr(test, derive(Serialize))]
 pub struct OrganizationCreatePayloadAndUpdatePayload {
     pub name: String,
     pub owner: Option<crate::models::user::UserId>,
