@@ -11,9 +11,9 @@
 SELECT
   {{ fields
     | filter(attribute='never_read', value=false)
-    | map(attribute='sql_full_name')
+    | map(attribute='sql_name')
     | join(sep=',') }},
-  _permission AS "_permission!: filigree::auth::ObjectPermission"
+  perm._permission
 FROM
   {{ table }} tb
 JOIN LATERAL (
@@ -26,17 +26,17 @@ JOIN LATERAL (
       read_perm=read_permission,
       write_perm=write_permission
   )}}
-) _permission ON _permission IS NOT NULL
+) perm ON perm._permission IS NOT NULL
 
 WHERE
 {% if not global %}
-   AND organization_id = $1 
+   organization_id = $1 
 {% endif %}
 {% if has_filterable %}
-  AND <filters>
+  AND __insertion_point_filters
 {% endif %}
 
-ORDER BY <order_by>
+ORDER BY __insertion_point_order_by
 {% if not pagination.disable %}
 LIMIT $3
 OFFSET $4

@@ -71,6 +71,7 @@ pub fn create_routes() -> axum::Router<ServerState> {
 #[cfg(test)]
 mod test {
     use futures::{StreamExt, TryStreamExt};
+    use tracing::{event, Level};
 
     use super::*;
     use crate::{
@@ -88,14 +89,16 @@ mod test {
         futures::stream::iter(1..=count)
             .map(Ok)
             .and_then(|i| async move {
+                let id = {{id_type}}::new();
+                event!(Level::INFO, %id, "Creating test object {}", i);
                 super::queries::create_raw(
                     db,
-                    {{id_type}}::new(),
+                    id,
                     organization_id,
                     &{{struct_base}}CreatePayload {
-                        {% for field in fields | filter(attribute="owner_write", value=true) %}
+                        {% for field in fields | filter(attribute="owner_write", value=true) -%}
                         {{field.rust_name}}: 
-                            {% if field.nullable %}(i > 1).then(|| {%endif%}
+                            {%- if field.nullable -%}(i > 1).then(|| {%endif%}
                             {%- if field.base_type == "text" -%}
                                 format!("Test object {i}")
                             {%- elif field.base_type in ["int", "bigint", "float"] -%}
@@ -113,8 +116,8 @@ mod test {
                             {%- else -%}
                                 <{{field.base_rust_type}} as Default>::default()
                             {%- endif -%}
-                            {% if field.nullable %}){%endif%},
-                        {% endfor %}
+                            {%- if field.nullable -%}){%endif%},
+                        {%- endfor %}
                     },
                 )
                 .await
@@ -143,7 +146,7 @@ mod test {
 
         let mut results = admin_user
             .client
-            .get("report")
+            .get("{{url_path}}")
             .send()
             .await
             .unwrap()
@@ -153,20 +156,27 @@ mod test {
             .await
             .unwrap();
 
+        {# Filter out fixed objects that were created in the bootstrapping process, since it makes testing
+        easier. #}
         {% if model_name == "Role" %}
         let fixed_roles = [
             admin_role.to_string(),
             user_role.to_string(),
         ];
         results.retain_mut(|value| { !fixed_roles.iter().any(|i| i == value["id"].as_str().unwrap()) });
+        {% elif model_name == "User" %}
+        let fixed_users = [
+            admin_user.user_id.to_string(),
+            user.user_id.to_string(),
+        ];
+        results.retain_mut(|value| { !fixed_users.iter().any(|i| i == value["id"].as_str().unwrap()) });
         {% endif %}
 
         assert_eq!(results.len(), added_objects.len());
 
-        added_objects.sort_by(|a, b| a.id.cmp(&b.id));
-        results.sort_by(|a, b| a["id"].as_str().unwrap().cmp(&b["id"].as_str().unwrap()));
-
-        for (added, result) in added_objects.iter().zip(results.iter()) {
+        for result in results {
+            let added = added_objects.iter().find(|i| i.id.to_string() == result["id"].as_str().unwrap())
+                .expect("Returned object did not match any of the added objects");
             {% for field in fields | filter (attribute="owner_read", value=true) %}
             assert_eq!(
                 serde_json::to_value(&added.{{field.rust_name}}).unwrap(),

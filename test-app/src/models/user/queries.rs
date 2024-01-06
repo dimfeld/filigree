@@ -7,6 +7,7 @@ use filigree::{
 };
 use serde::Deserialize;
 use sqlx::{query_file, query_file_as, PgExecutor, PgPool};
+use tracing::{event, Level};
 
 use super::{types::*, UserId};
 use crate::{auth::AuthInfo, models::organization::OrganizationId, Error};
@@ -143,25 +144,31 @@ impl ListQueryFilters {
             .min(MAX_PER_PAGE)
             .max(1);
         let offset = self.page.unwrap_or(0) * per_page;
+        event!(Level::DEBUG, %per_page, %offset);
         query = query.bind(per_page as i32).bind(offset as i32);
 
         if !self.id.is_empty() {
+            event!(Level::DEBUG, id = ?self.id);
             query = query.bind(&self.id);
         }
 
         if self.updated_at_lte.is_some() {
+            event!(Level::DEBUG, updated_at_lte = ?self.updated_at_lte);
             query = query.bind(&self.updated_at_lte);
         }
 
         if self.updated_at_gte.is_some() {
+            event!(Level::DEBUG, updated_at_gte = ?self.updated_at_gte);
             query = query.bind(&self.updated_at_gte);
         }
 
         if self.created_at_lte.is_some() {
+            event!(Level::DEBUG, created_at_lte = ?self.created_at_lte);
             query = query.bind(&self.created_at_lte);
         }
 
         if self.created_at_gte.is_some() {
+            event!(Level::DEBUG, created_at_gte = ?self.created_at_gte);
             query = query.bind(&self.created_at_gte);
         }
 
@@ -182,15 +189,16 @@ pub async fn list(
     let order_direction = if descending { "DESC" } else { "ASC" };
 
     let q = q.replace(
-        "<order_by>",
+        "__insertion_point_order_by",
         &format!("{} {}", order_by_field.as_str(), order_direction),
     );
 
-    let q = q.replace("<filters>", &filters.build_where_clause());
+    let q = q.replace("__insertion_point_filters", &filters.build_where_clause());
 
     let mut query = sqlx::query_as::<_, User>(q.as_str());
 
     let actor_ids = auth.actor_ids();
+    event!(Level::DEBUG, organization_id=?auth.organization_id, actor_ids=?actor_ids);
     query = query.bind(&auth.organization_id).bind(&actor_ids);
 
     query = filters.bind_to_query(query);

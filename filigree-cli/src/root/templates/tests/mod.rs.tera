@@ -36,6 +36,7 @@ pub struct BootstrappedData {
 }
 
 pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
+    error_stack::Report::set_color_mode(error_stack::fmt::ColorMode::None);
     filigree::tracing_config::test::init();
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();

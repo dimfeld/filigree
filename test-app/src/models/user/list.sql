@@ -1,12 +1,12 @@
 SELECT
-  id AS "id: UserId",
-  organization_id AS "organization_id: crate::models::organization::OrganizationId",
+  id,
+  organization_id,
   updated_at,
   created_at,
   name,
   email,
   verified,
-  _permission AS "_permission!: filigree::auth::ObjectPermission"
+  perm._permission
 FROM
   users tb
   JOIN LATERAL (
@@ -19,7 +19,7 @@ FROM
         'read'
       ELSE
         NULL
-      END
+      END _permission
     FROM
       permissions
     WHERE
@@ -27,9 +27,9 @@ FROM
       AND actor_id = ANY ($2)
       AND permission IN ('org_admin', 'User::owner', 'User::write', 'User::read')
     GROUP BY
-      permission) _permission ON _permission IS NOT NULL
+      permission) perm ON perm._permission IS NOT NULL
 WHERE
-  AND organization_id = $1
+  organization_id = $1
 ORDER BY
-  < order_by >
+  __insertion_point_order_by
 LIMIT $3 OFFSET $4

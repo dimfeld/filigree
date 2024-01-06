@@ -68,6 +68,7 @@ pub fn create_routes() -> axum::Router<ServerState> {
 #[cfg(test)]
 mod test {
     use futures::{StreamExt, TryStreamExt};
+    use tracing::{event, Level};
 
     use super::*;
     use crate::tests::{start_app, BootstrappedData};
@@ -80,13 +81,14 @@ mod test {
         futures::stream::iter(1..=count)
             .map(Ok)
             .and_then(|i| async move {
+                let id = OrganizationId::new();
+                event!(Level::INFO, %id, "Creating test object {}", i);
                 super::queries::create_raw(
                     db,
-                    OrganizationId::new(),
+                    id,
                     organization_id,
                     &OrganizationCreatePayload {
                         name: format!("Test object {i}"),
-
                         owner: (i > 1).then(|| <crate::models::user::UserId as Default>::default()),
                     },
                 )

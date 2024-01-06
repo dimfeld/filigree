@@ -31,7 +31,7 @@ SELECT
     WHEN bool_or(permission = {{write_perm | to_sql}}) THEN 'write'
     WHEN bool_or(permission = {{read_perm | to_sql}}) THEN 'read'
     ELSE NULL
-  END
+  END _permission
 FROM permissions
 WHERE
     organization_id = {{organization}}
@@ -48,7 +48,7 @@ SELECT
     WHEN bool_or(permission = {{write_perm | to_sql}}) THEN 'write'
     WHEN bool_or(permission = {{read_perm | to_sql}}) THEN 'read'
     ELSE NULL
-  END
+  END _permission
 FROM object_permissions
 WHERE
     organization_id = {{organization}}

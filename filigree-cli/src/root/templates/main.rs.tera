@@ -73,6 +73,7 @@ struct ServeCommand {
 
 
 async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
+    error_stack::Report::set_color_mode(error_stack::fmt::ColorMode::None);
 
     // TODO make this configurable
     configure_tracing(

@@ -76,6 +76,7 @@ pub fn create_routes() -> axum::Router<ServerState> {
 #[cfg(test)]
 mod test {
     use futures::{StreamExt, TryStreamExt};
+    use tracing::{event, Level};
 
     use super::*;
     use crate::{
@@ -91,13 +92,14 @@ mod test {
         futures::stream::iter(1..=count)
             .map(Ok)
             .and_then(|i| async move {
+                let id = RoleId::new();
+                event!(Level::INFO, %id, "Creating test object {}", i);
                 super::queries::create_raw(
                     db,
-                    RoleId::new(),
+                    id,
                     organization_id,
                     &RoleCreatePayload {
                         name: format!("Test object {i}"),
-
                         description: (i > 1).then(|| format!("Test object {i}")),
                     },
                 )
@@ -126,7 +128,7 @@ mod test {
 
         let mut results = admin_user
             .client
-            .get("report")
+            .get("role")
             .send()
             .await
             .unwrap()
@@ -145,10 +147,12 @@ mod test {
 
         assert_eq!(results.len(), added_objects.len());
 
-        added_objects.sort_by(|a, b| a.id.cmp(&b.id));
-        results.sort_by(|a, b| a["id"].as_str().unwrap().cmp(&b["id"].as_str().unwrap()));
+        for result in results {
+            let added = added_objects
+                .iter()
+                .find(|i| i.id.to_string() == result["id"].as_str().unwrap())
+                .expect("Returned object did not match any of the added objects");
 
-        for (added, result) in added_objects.iter().zip(results.iter()) {
             assert_eq!(serde_json::to_value(&added.id).unwrap(), result["id"]);
 
             assert_eq!(

@@ -147,7 +147,7 @@ pub trait AuthInfo: 'static + Send + Sync {
 
 /// The permission level of an object
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, sqlx::Type)]
-#[sqlx(rename_all = "snake_case")]
+#[sqlx(rename_all = "snake_case", type_name = "text")]
 #[serde(rename_all = "snake_case")]
 pub enum ObjectPermission {
     /// The object is read-only

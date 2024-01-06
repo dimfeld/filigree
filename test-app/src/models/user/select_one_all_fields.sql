@@ -19,7 +19,7 @@ FROM
         'read'
       ELSE
         NULL
-      END
+      END _permission
     FROM
       permissions
     WHERE
