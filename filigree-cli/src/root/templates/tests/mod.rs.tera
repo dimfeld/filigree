@@ -5,7 +5,7 @@ use filigree::{
 };
 use futures::future::FutureExt;
 use sqlx::{PgConnection, PgExecutor, PgPool};
-use tracing::{event, Level};
+use tracing::{event, instrument, Level};
 
 use crate::{
     models::{
@@ -42,6 +42,7 @@ pub struct BootstrappedData {
     pub user_role: RoleId,
     pub admin_user: TestUser,
     pub user: TestUser,
+    pub no_roles_user: TestUser,
 }
 
 pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
@@ -90,6 +91,7 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
     (app, bootstrapped_data)
 }
 
+#[instrument(skip(db, base_client))]
 async fn add_test_user(
     db: &mut PgConnection,
     base_client: &TestClient,
@@ -119,6 +121,10 @@ async fn add_test_user(
     .await
     .expect("Creating user");
 
+    crate::users::organization::add_user_to_organization(&mut *db, organization_id, user_id)
+        .await
+        .expect("Adding user to organization");
+
     let key = filigree::auth::api_key::ApiKey {
         api_key_id: key_data.api_key_id,
         organization_id,
@@ -134,7 +140,7 @@ async fn add_test_user(
 
     filigree::users::users::add_user_email_login(&mut *db, user_id, email.clone(), true)
         .await
-        .expect("Adding admin email login");
+        .expect("Adding email login");
 
     TestUser {
         user_id,
@@ -186,6 +192,15 @@ async fn bootstrap_data(pg_pool: &sqlx::PgPool, base_client: &TestClient) -> Boo
     .await
     .expect("Adding user role to regular user");
 
+    let no_roles_user = add_test_user(
+        &mut *tx,
+        base_client,
+        UserId::new(),
+        organization.id,
+        "No Roles User",
+    )
+    .await;
+
     tx.commit().await.unwrap();
 
     BootstrappedData {
@@ -194,5 +209,6 @@ async fn bootstrap_data(pg_pool: &sqlx::PgPool, base_client: &TestClient) -> Boo
         admin_role,
         admin_user,
         user: regular_user,
+        no_roles_user,
     }
 }

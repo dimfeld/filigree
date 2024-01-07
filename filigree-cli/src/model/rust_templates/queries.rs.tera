@@ -248,9 +248,9 @@ pub async fn create_raw(
     Ok(result)
 }
 
-pub async fn update(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}, payload: &{{ struct_base }}UpdatePayload) -> Result<(), error_stack::Report<Error>> {
+pub async fn update(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}, payload: &{{ struct_base }}UpdatePayload) -> Result<bool, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
-    query_file!("{{dir}}/update.sql",
+    let result = query_file!("{{dir}}/update.sql",
         id.as_uuid(),
         auth.organization_id.as_uuid(),
         &actor_ids,
@@ -265,12 +265,12 @@ pub async fn update(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}, p
         .execute(db)
         .await
         .change_context(Error::Db)?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
-pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<(), error_stack::Report<Error>> {
+pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<bool, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
-    query_file!("{{dir}}/delete.sql",
+    let result = query_file!("{{dir}}/delete.sql",
         id.as_uuid(),
         auth.organization_id.as_uuid(),
         &actor_ids
@@ -278,5 +278,5 @@ pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -
         .execute(db)
         .await
         .change_context(Error::Db)?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }

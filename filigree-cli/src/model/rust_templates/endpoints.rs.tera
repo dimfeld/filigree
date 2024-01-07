@@ -41,8 +41,9 @@ async fn update(
     Json(payload): Json<{{ struct_base }}UpdatePayload>,
     ) -> Result<impl IntoResponse, Error> {
 
-    queries::update(&state.db, &auth, id, &payload).await?;
-    Ok(StatusCode::OK)
+    let updated = queries::update(&state.db, &auth, id, &payload).await?;
+    let status = if updated { StatusCode::OK } else { StatusCode::NOT_FOUND };
+    Ok(status)
 }
 
 async fn delete(
@@ -51,9 +52,10 @@ async fn delete(
     Path(id): Path<{{ id_type }}>
     ) -> Result<impl IntoResponse, Error> {
 
-    queries::delete(&state.db, &auth, id).await?;
+    let deleted = queries::delete(&state.db, &auth, id).await?;
 
-    Ok(StatusCode::OK)
+    let status = if deleted { StatusCode::OK } else { StatusCode::NOT_FOUND };
+    Ok(status)
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {
@@ -143,7 +145,10 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
+                no_roles_user,
+                {% if model_name == "User" %}
                 user,
+                {% endif %}
                 {% if model_name == "Role" %}
                 admin_role,
                 user_role,
@@ -178,6 +183,7 @@ mod test {
         let fixed_users = [
             admin_user.user_id.to_string(),
             user.user_id.to_string(),
+            no_roles_user.user_id.to_string(),
         ];
         results.retain_mut(|value| { !fixed_users.iter().any(|i| i == value["id"].as_str().unwrap()) });
         {% endif %}
@@ -208,6 +214,21 @@ mod test {
 
         // TODO Add test for user with only "read" permission and make sure that fields that are
         // owner_read but not user_read are omitted.
+
+
+        let response: Vec<serde_json::Value> = no_roles_user
+            .client
+            .get("{{url_path}}")
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert!(response.is_empty());
     }
 
     #[sqlx::test]
@@ -235,11 +256,7 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
-                user,
-                {% if model_name == "Role" %}
-                admin_role,
-                user_role,
-                {% endif %}
+                no_roles_user,
                 ..
             },
         ) = start_app(pool.clone()).await;
@@ -279,6 +296,15 @@ mod test {
 
         // TODO Add test for user with only "read" permission and make sure that fields that are
         // owner_read but not user_read are omitted.
+
+        let response = no_roles_user
+            .client
+            .get(&format!("{{url_path}}/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
     }
     {% endif %}
 
@@ -290,6 +316,7 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
+                no_roles_user,
                 ..
             },
         ) = start_app(pool.clone()).await;
@@ -362,6 +389,15 @@ mod test {
         {%- endfor %}
         assert_eq!(non_updated["_permission"], "owner");
 
+        let response = no_roles_user
+            .client
+            .put(&format!("{{url_path}}/{}", added_objects[1].id))
+            .json(&update_payload)
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
     }
     {% endif %}
 
@@ -373,13 +409,7 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
-                {% if model_name == "User" -%}
-                user,
-                {%- endif %}
-                {% if model_name == "Role" -%}
-                admin_role,
-                user_role,
-                {%- endif %}
+                no_roles_user,
                 ..
             },
         ) = start_app(pool.clone()).await;
@@ -429,6 +459,15 @@ mod test {
         );
         {%- endfor %}
         assert_eq!(get_result["_permission"], "owner");
+
+        let response = no_roles_user
+            .client
+            .post("{{url_path}}")
+            .json(&create_payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     }
     {% endif %}
 
@@ -440,11 +479,7 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
-                user,
-                {% if model_name == "Role" %}
-                admin_role,
-                user_role,
-                {% endif %}
+                no_roles_user,
                 ..
             },
         ) = start_app(pool.clone()).await;
@@ -466,6 +501,16 @@ mod test {
             .send()
             .await
             .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Delete should not happen without permissions
+        let response = no_roles_user
+            .client
+            .delete(&format!("{{url_path}}/{}", added_objects[0].id))
+            .send()
+            .await
+            .unwrap();
+
         assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
 
         // Make sure other objects still exist

@@ -3,8 +3,8 @@ WITH base_lookup AS (
 ),
 role_lookup AS (
   SELECT role_id, organization_id
-  FROM user_roles
-  JOIN base_lookup USING (user_id, organization_id)
+  FROM base_lookup
+  JOIN user_roles USING (user_id, organization_id)
 ),
 actor_ids AS (
 {% block actor_ids %}
@@ -14,9 +14,12 @@ actor_ids AS (
 {% endblock actor_ids %}
 ),
 permissions AS (
-  SELECT COALESCE(ARRAY_AGG(DISTINCT permission), ARRAY[]::text[]) AS permissions
-  FROM permissions
-  JOIN actor_ids USING (actor_id, organization_id)
+  SELECT COALESCE(
+    ARRAY_AGG(DISTINCT permission) FILTER (WHERE permission IS NOT NULL),
+    ARRAY[]::text[]
+  ) AS permissions
+  FROM actor_ids
+  LEFT JOIN permissions USING (actor_id, organization_id)
 )
 SELECT
   bl.user_id AS "user_id!: crate::models::user::UserId",
@@ -29,4 +32,4 @@ SELECT
   ) AS "roles!: Vec<RoleId>",
   permissions as "permissions!: Vec<String>"
 FROM base_lookup bl
-CROSS JOIN permissions
+LEFT JOIN permissions ON TRUE

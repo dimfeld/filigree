@@ -47,8 +47,13 @@ async fn update(
     Path(id): Path<OrganizationId>,
     Json(payload): Json<OrganizationUpdatePayload>,
 ) -> Result<impl IntoResponse, Error> {
-    queries::update(&state.db, &auth, id, &payload).await?;
-    Ok(StatusCode::OK)
+    let updated = queries::update(&state.db, &auth, id, &payload).await?;
+    let status = if updated {
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    };
+    Ok(status)
 }
 
 async fn delete(
@@ -56,9 +61,14 @@ async fn delete(
     auth: Authed,
     Path(id): Path<OrganizationId>,
 ) -> Result<impl IntoResponse, Error> {
-    queries::delete(&state.db, &auth, id).await?;
+    let deleted = queries::delete(&state.db, &auth, id).await?;
 
-    Ok(StatusCode::OK)
+    let status = if deleted {
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    };
+    Ok(status)
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {

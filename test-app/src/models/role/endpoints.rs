@@ -47,8 +47,13 @@ async fn update(
     Path(id): Path<RoleId>,
     Json(payload): Json<RoleUpdatePayload>,
 ) -> Result<impl IntoResponse, Error> {
-    queries::update(&state.db, &auth, id, &payload).await?;
-    Ok(StatusCode::OK)
+    let updated = queries::update(&state.db, &auth, id, &payload).await?;
+    let status = if updated {
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    };
+    Ok(status)
 }
 
 async fn delete(
@@ -56,9 +61,14 @@ async fn delete(
     auth: Authed,
     Path(id): Path<RoleId>,
 ) -> Result<impl IntoResponse, Error> {
-    queries::delete(&state.db, &auth, id).await?;
+    let deleted = queries::delete(&state.db, &auth, id).await?;
 
-    Ok(StatusCode::OK)
+    let status = if deleted {
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    };
+    Ok(status)
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {
@@ -116,7 +126,7 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
-                user,
+                no_roles_user,
 
                 admin_role,
                 user_role,
@@ -189,6 +199,20 @@ mod test {
 
         // TODO Add test for user with only "read" permission and make sure that fields that are
         // owner_read but not user_read are omitted.
+
+        let response: Vec<serde_json::Value> = no_roles_user
+            .client
+            .get("role")
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert!(response.is_empty());
     }
 
     #[sqlx::test]
@@ -214,10 +238,7 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
-                user,
-
-                admin_role,
-                user_role,
+                no_roles_user,
                 ..
             },
         ) = start_app(pool.clone()).await;
@@ -273,6 +294,15 @@ mod test {
 
         // TODO Add test for user with only "read" permission and make sure that fields that are
         // owner_read but not user_read are omitted.
+
+        let response = no_roles_user
+            .client
+            .get(&format!("role/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
     }
 
     #[sqlx::test]
@@ -282,6 +312,7 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
+                no_roles_user,
                 ..
             },
         ) = start_app(pool.clone()).await;
@@ -373,6 +404,16 @@ mod test {
             "field description"
         );
         assert_eq!(non_updated["_permission"], "owner");
+
+        let response = no_roles_user
+            .client
+            .put(&format!("role/{}", added_objects[1].id))
+            .json(&update_payload)
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
     }
 
     #[sqlx::test]
@@ -382,9 +423,7 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
-
-                admin_role,
-                user_role,
+                no_roles_user,
                 ..
             },
         ) = start_app(pool.clone()).await;
@@ -453,6 +492,15 @@ mod test {
             "field description from get response"
         );
         assert_eq!(get_result["_permission"], "owner");
+
+        let response = no_roles_user
+            .client
+            .post("role")
+            .json(&create_payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     }
 
     #[sqlx::test]
@@ -462,10 +510,7 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
-                user,
-
-                admin_role,
-                user_role,
+                no_roles_user,
                 ..
             },
         ) = start_app(pool.clone()).await;
@@ -487,6 +532,16 @@ mod test {
             .send()
             .await
             .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Delete should not happen without permissions
+        let response = no_roles_user
+            .client
+            .delete(&format!("role/{}", added_objects[0].id))
+            .send()
+            .await
+            .unwrap();
+
         assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
 
         // Make sure other objects still exist

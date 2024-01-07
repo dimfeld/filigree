@@ -56,17 +56,7 @@ mod test {
 
     #[sqlx::test]
     async fn login_with_password_and_logout(db: sqlx::PgPool) {
-        let (
-            app,
-            BootstrappedData {
-                organization,
-                admin_user,
-                user,
-                admin_role,
-                user_role,
-                ..
-            },
-        ) = start_app(db).await;
+        let (app, BootstrappedData { admin_user, .. }) = start_app(db).await;
 
         let client = &app.client;
         let response: serde_json::Value = client
@@ -121,5 +111,35 @@ mod test {
 
         // TODO check explicitly that the session cookie is gone
         // TODO check that adding the session cookie back to the request after logout doesn't work
+    }
+
+    #[sqlx::test]
+    async fn login_with_no_roles_user(db: sqlx::PgPool) {
+        let (app, BootstrappedData { no_roles_user, .. }) = start_app(db).await;
+
+        let client = &app.client;
+        let response: serde_json::Value = client
+            .post("login")
+            .json(&json!({ "email": no_roles_user.email, "password": no_roles_user.password }))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert_eq!(response["message"], "Logged in");
+
+        let response = client
+            .get(&format!("user/{}", no_roles_user.user_id))
+            .send()
+            .await
+            .unwrap();
+        // Should see 404 because user has no roles and hence no permissions, but not
+        // 401 which would indicate that the lack of roles is causing the user lookup query to
+        // fail.
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
     }
 }

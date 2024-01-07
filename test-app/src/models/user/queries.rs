@@ -246,9 +246,9 @@ pub async fn update(
     auth: &AuthInfo,
     id: UserId,
     payload: &UserUpdatePayload,
-) -> Result<(), error_stack::Report<Error>> {
+) -> Result<bool, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
-    query_file!(
+    let result = query_file!(
         "src/models/user/update.sql",
         id.as_uuid(),
         auth.organization_id.as_uuid(),
@@ -260,16 +260,16 @@ pub async fn update(
     .execute(db)
     .await
     .change_context(Error::Db)?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
 pub async fn delete(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: UserId,
-) -> Result<(), error_stack::Report<Error>> {
+) -> Result<bool, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
-    query_file!(
+    let result = query_file!(
         "src/models/user/delete.sql",
         id.as_uuid(),
         auth.organization_id.as_uuid(),
@@ -278,5 +278,5 @@ pub async fn delete(
     .execute(db)
     .await
     .change_context(Error::Db)?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
