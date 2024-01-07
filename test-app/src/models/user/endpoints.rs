@@ -286,8 +286,116 @@ mod test {
     }
 
     #[sqlx::test]
-    #[ignore = "todo"]
-    async fn update_object(_pool: sqlx::PgPool) {}
+    async fn update_object(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let added_objects = setup_test_objects(&pool, organization.id, 2).await;
+
+        let i = 20;
+        let update_payload = UserUpdatePayload {
+            name: format!("Test object {i}"),
+
+            email: format!("Test object {i}"),
+
+            verified: i % 2 == 0,
+        };
+
+        admin_user
+            .client
+            .put(&format!("user/{}", added_objects[1].id))
+            .json(&update_payload)
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+
+        let updated: serde_json::Value = admin_user
+            .client
+            .get(&format!("user/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            updated["name"],
+            serde_json::to_value(&update_payload.name).unwrap(),
+            "field name"
+        );
+        assert_eq!(
+            updated["email"],
+            serde_json::to_value(&update_payload.email).unwrap(),
+            "field email"
+        );
+        assert_eq!(
+            updated["verified"],
+            serde_json::to_value(&update_payload.verified).unwrap(),
+            "field verified"
+        );
+        assert_eq!(updated["_permission"], "owner");
+
+        // Make sure that no other objects were updated
+        let non_updated: serde_json::Value = admin_user
+            .client
+            .get(&format!("user/{}", added_objects[0].id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            non_updated["id"],
+            serde_json::to_value(&added_objects[0].id).unwrap(),
+            "field id"
+        );
+        assert_eq!(
+            non_updated["organization_id"],
+            serde_json::to_value(&added_objects[0].organization_id).unwrap(),
+            "field organization_id"
+        );
+        assert_eq!(
+            non_updated["updated_at"],
+            serde_json::to_value(&added_objects[0].updated_at).unwrap(),
+            "field updated_at"
+        );
+        assert_eq!(
+            non_updated["created_at"],
+            serde_json::to_value(&added_objects[0].created_at).unwrap(),
+            "field created_at"
+        );
+        assert_eq!(
+            non_updated["name"],
+            serde_json::to_value(&added_objects[0].name).unwrap(),
+            "field name"
+        );
+        assert_eq!(
+            non_updated["email"],
+            serde_json::to_value(&added_objects[0].email).unwrap(),
+            "field email"
+        );
+        assert_eq!(
+            non_updated["verified"],
+            serde_json::to_value(&added_objects[0].verified).unwrap(),
+            "field verified"
+        );
+        assert_eq!(non_updated["_permission"], "owner");
+    }
 
     #[sqlx::test]
     async fn delete_object(pool: sqlx::PgPool) {
@@ -319,5 +427,14 @@ mod test {
             .await
             .unwrap();
         assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Make sure other objects still exist
+        let response = admin_user
+            .client
+            .get(&format!("user/{}", added_objects[0].id))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
     }
 }

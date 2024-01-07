@@ -81,28 +81,32 @@ mod test {
         tests::{start_app, BootstrappedData},
     };
 
+    {% macro payload_field_value(field) %}
+        {%- if field.base_type == "text" -%}
+            format!("Test object {i}")
+        {%- elif field.base_type in ["int", "bigint", "float"] -%}
+            i as {{field.base_rust_type}}
+        {%- elif field.base_type == "boolean" -%}
+           i % 2 == 0
+        {%- elif field.base_type == "timestamp" -%}
+            chrono::Utc::now()
+        {%- elif field.base_rust_type == "serde_json::Value" -%}
+            serde_json::json!({ "key": i })
+        {%- elif field.is_custom_rust_type -%}
+            <{{field.base_rust_type}} as Default>::default()
+        {%- elif field.base_type == "uuid" -%}
+            uuid::Uuid::new_v4()
+        {%- else -%}
+            <{{field.base_rust_type}} as Default>::default()
+        {%- endif -%}
+    {% endmacro %}
+
     fn make_create_payload(i: usize) -> {{struct_base}}CreatePayload {
         {{struct_base}}CreatePayload {
             {% for field in fields | filter(attribute="owner_write", value=true) -%}
-            {{field.rust_name}}: 
+            {{field.rust_name}}:
                 {%- if field.nullable -%}(i > 1).then(|| {%endif%}
-                {%- if field.base_type == "text" -%}
-                    format!("Test object {i}")
-                {%- elif field.base_type in ["int", "bigint", "float"] -%}
-                    i as {{field.base_rust_type}}
-                {%- elif field.base_type == "boolean" -%}
-                   i % 2 == 0
-                {%- elif field.base_type == "timestamp" -%}
-                    chrono::Utc::now()
-                {%- elif field.base_rust_type == "serde_json::Value" -%}
-                    serde_json::json!({ "key": i })
-                {%- elif field.is_custom_rust_type -%}
-                    <{{field.base_rust_type}} as Default>::default()
-                {%- elif field.base_type == "uuid" -%}
-                    uuid::Uuid::new_v4()
-                {%- else -%}
-                    <{{field.base_rust_type}} as Default>::default()
-                {%- endif -%}
+                    {{ self::payload_field_value(field=field) }}
                 {%- if field.nullable -%}){%endif%},
             {%- endfor %}
         }
@@ -280,8 +284,85 @@ mod test {
 
     {% if endpoints.update %}
     #[sqlx::test]
-    #[ignore = "todo"]
-    async fn update_object(_pool: sqlx::PgPool) {}
+    async fn update_object(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let added_objects = setup_test_objects(&pool, organization.id, 2).await;
+
+        let i = 20;
+        let update_payload = {{struct_base}}UpdatePayload {
+            {% set uwc = fields | filter (attribute="user_write", value=true) | length -%}
+            {% for field in fields | filter (attribute="owner_write", value=true) -%}
+            {% set uopt = uwc > 0 and not field.user_write %}
+            {% set nullable = field.nullable or uopt %}
+            {{field.rust_name}}:
+                {%- if nullable %} Some({%- endif -%}
+                {{ self::payload_field_value(field=field) }}
+                {%- if nullable %}){% endif -%},
+            {%- endfor %}
+        };
+
+        admin_user
+            .client
+            .put(&format!("{{url_path}}/{}", added_objects[1].id))
+            .json(&update_payload)
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+
+        let updated: serde_json::Value = admin_user
+            .client
+            .get(&format!("{{url_path}}/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        {% for field in fields | filter (attribute="owner_write", value=true) -%}
+        assert_eq!(
+            updated["{{field.rust_name}}"],
+            serde_json::to_value(&update_payload.{{field.rust_name}}).unwrap(),
+            "field {{field.rust_name}}"
+        );
+        {%- endfor %}
+        assert_eq!(updated["_permission"], "owner");
+
+        // Make sure that no other objects were updated
+        let non_updated : serde_json::Value = admin_user
+            .client
+            .get(&format!("{{url_path}}/{}", added_objects[0].id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        {% for field in fields | filter (attribute="owner_read", value=true) -%}
+        assert_eq!(
+            non_updated["{{field.rust_name}}"],
+            serde_json::to_value(&added_objects[0].{{field.rust_name}}).unwrap(),
+            "field {{field.rust_name}}"
+        );
+        {%- endfor %}
+        assert_eq!(non_updated["_permission"], "owner");
+
+    }
     {% endif %}
 
     {% if endpoints.create %}
@@ -292,11 +373,13 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
+                {% if model_name == "User" -%}
                 user,
-                {% if model_name == "Role" %}
+                {%- endif %}
+                {% if model_name == "Role" -%}
                 admin_role,
                 user_role,
-                {% endif %}
+                {%- endif %}
                 ..
             },
         ) = start_app(pool.clone()).await;
@@ -384,6 +467,15 @@ mod test {
             .await
             .unwrap();
         assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Make sure other objects still exist
+        let response = admin_user
+            .client
+            .get(&format!("{{url_path}}/{}", added_objects[0].id))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
     }
     {% endif %}
 }
