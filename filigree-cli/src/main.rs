@@ -14,6 +14,7 @@ use thiserror::Error;
 
 use crate::{config::FullConfig, model::generator::ModelGenerator};
 
+mod add_deps;
 mod auth;
 mod config;
 mod format;
@@ -47,6 +48,8 @@ pub enum Error {
     Render(#[from] tera::Error),
     #[error("Failed to run code formatter")]
     Formatter,
+    #[error("Failed to run cargo")]
+    Cargo,
 }
 
 fn build_models(config: &Config, mut config_models: Vec<Model>) -> Vec<Model> {
@@ -76,7 +79,10 @@ pub fn main() -> Result<(), Report<Error>> {
         crate_name,
         config,
         models: config_models,
+        crate_manifest,
     } = config;
+
+    add_deps::add_deps(&crate_manifest)?;
 
     let renderer = templates::Renderer::new(&config);
 

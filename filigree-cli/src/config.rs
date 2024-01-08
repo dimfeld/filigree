@@ -99,6 +99,7 @@ pub struct FullConfig {
     pub crate_name: String,
     pub config: Config,
     pub models: Vec<Model>,
+    pub crate_manifest: cargo_toml::Manifest,
 }
 
 impl FullConfig {
@@ -126,9 +127,11 @@ impl FullConfig {
             .attach_printable_lazy(|| cargo_toml_path.display().to_string())?;
         let crate_name = manifest
             .package
+            .as_ref()
             .ok_or(Error::ReadConfigFile)
             .attach_printable("Cargo.toml has no crate name")?
-            .name;
+            .name
+            .clone();
 
         let models_glob = dir.join("models/*.toml");
         let models = glob(&models_glob.to_string_lossy())
@@ -143,6 +146,7 @@ impl FullConfig {
             crate_name,
             config,
             models,
+            crate_manifest: manifest,
         })
     }
 }
