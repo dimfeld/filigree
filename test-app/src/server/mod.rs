@@ -166,6 +166,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .route("/healthz", get(health::healthz))
         .merge(crate::models::create_routes())
         .merge(filigree::auth::endpoints::create_routes())
+        .merge(crate::users::users::create_routes())
         .layer(
             ServiceBuilder::new()
                 .layer(panic_handler(production))

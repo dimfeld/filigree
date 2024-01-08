@@ -2,9 +2,9 @@ INSERT INTO users (
   id,
   organization_id,
   password_hash,
+  verified,
   name,
-  email,
-  verified)
+  email)
 VALUES (
   $1,
   $2,

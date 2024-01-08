@@ -94,7 +94,6 @@ mod test {
         UserCreatePayload {
             name: format!("Test object {i}"),
             email: format!("Test object {i}"),
-            verified: i % 2 == 0,
         }
     }
 
@@ -343,8 +342,6 @@ mod test {
             name: format!("Test object {i}"),
 
             email: format!("Test object {i}"),
-
-            verified: i % 2 == 0,
         };
 
         admin_user
@@ -378,11 +375,6 @@ mod test {
             updated["email"],
             serde_json::to_value(&update_payload.email).unwrap(),
             "field email"
-        );
-        assert_eq!(
-            updated["verified"],
-            serde_json::to_value(&update_payload.verified).unwrap(),
-            "field verified"
         );
         assert_eq!(updated["_permission"], "owner");
 

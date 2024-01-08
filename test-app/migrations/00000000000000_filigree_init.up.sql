@@ -15,7 +15,7 @@ CREATE TABLE users (
   name text NOT NULL,
   password_hash text,
   email text UNIQUE NOT NULL,
-  verified boolean NOT NULL
+  verified boolean NOT NULL DEFAULT FALSE
 );
 
 

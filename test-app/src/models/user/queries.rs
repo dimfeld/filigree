@@ -232,7 +232,6 @@ pub async fn create_raw(
         organization_id.as_uuid(),
         &payload.name,
         &payload.email,
-        &payload.verified,
     )
     .fetch_one(db)
     .await
@@ -255,7 +254,6 @@ pub async fn update(
         &actor_ids,
         &payload.name as _,
         &payload.email as _,
-        &payload.verified as _,
     )
     .execute(db)
     .await

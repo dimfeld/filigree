@@ -107,7 +107,6 @@ async fn add_test_user(
     let user_payload = user::UserCreatePayload {
         email: email.clone(),
         name: name.to_string(),
-        verified: true,
         ..Default::default()
     };
 
@@ -117,6 +116,7 @@ async fn add_test_user(
         organization_id,
         user_payload,
         testing::TEST_PASSWORD_HASH.to_string(),
+        true,
     )
     .await
     .expect("Creating user");

@@ -74,7 +74,6 @@ impl Default for User {
 pub struct UserCreatePayloadAndUpdatePayload {
     pub name: String,
     pub email: String,
-    pub verified: bool,
 }
 
 pub type UserCreatePayload = UserCreatePayloadAndUpdatePayload;
@@ -92,10 +91,6 @@ impl UserCreatePayloadAndUpdatePayload {
     pub fn default_email() -> String {
         <String as Default>::default().into()
     }
-
-    pub fn default_verified() -> bool {
-        <bool as Default>::default().into()
-    }
 }
 
 impl Default for UserCreatePayloadAndUpdatePayload {
@@ -103,7 +98,6 @@ impl Default for UserCreatePayloadAndUpdatePayload {
         Self {
             name: Self::default_name(),
             email: Self::default_email(),
-            verified: Self::default_verified(),
         }
     }
 }

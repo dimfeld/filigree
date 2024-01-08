@@ -64,7 +64,8 @@ impl Model {
                     },
                     ModelField {
                         user_access: Access::None,
-                        owner_access: Access::ReadWrite,
+                        owner_access: Access::Read,
+                        default_sql: "false".to_string(),
                         ..simple_model_field("verified", SqlType::Boolean)
                     },
                 ],
