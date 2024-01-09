@@ -1,4 +1,7 @@
+/// An email service that does nothing, for testing and early development
+pub mod noop_service;
 /// ReSend email service support
+#[cfg(feature = "email_resend")]
 pub mod resend;
 
 use async_trait::async_trait;
@@ -19,7 +22,7 @@ pub enum EmailError {
 
 /// A service that can send an email
 #[async_trait]
-pub trait EmailService {
+pub trait EmailService: Send + Sync {
     /// Send an email
     async fn send(&self, email: Email) -> Result<(), EmailError>;
 }
@@ -46,5 +49,16 @@ impl EmailSender {
         }
 
         self.service.send(email).await
+    }
+}
+
+/// Create an [EmailService] given the name of the service and an API key
+#[cfg(feature = "email_provider")]
+pub fn email_service_from_name(name: &str, api_key: String) -> Box<dyn EmailService> {
+    match name {
+        "none" => Box::new(noop_service::NoopEmailService {}),
+        #[cfg(feature = "email_resend")]
+        "resend" => Box::new(resend::ResendEmailService::new(api_key)),
+        _ => panic!("Unknown email service: {}", name),
     }
 }

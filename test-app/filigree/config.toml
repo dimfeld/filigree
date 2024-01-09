@@ -8,4 +8,6 @@ default_auth_scope = "model"
 [database]
 migrate_on_start = true
 
-
+[email]
+provider = "none"
+from = "support@example.com"

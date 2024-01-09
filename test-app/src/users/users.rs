@@ -119,7 +119,7 @@ mod test {
         assert_eq!(response["message"], "Logged in");
 
         let user: serde_json::Value = client
-            .get(&format!("user/{}", admin_user.user_id))
+            .get(&format!("users/{}", admin_user.user_id))
             .send()
             .await
             .unwrap()
@@ -143,7 +143,7 @@ mod test {
         assert_eq!(response["message"], "Logged out");
 
         let anon_response = client
-            .get(&format!("user/{}", admin_user.user_id))
+            .get(&format!("users/{}", admin_user.user_id))
             .send()
             .await
             .unwrap();
@@ -178,7 +178,7 @@ mod test {
         assert_eq!(response["message"], "Logged in");
 
         let response = client
-            .get(&format!("user/{}", no_roles_user.user_id))
+            .get(&format!("users/{}", no_roles_user.user_id))
             .send()
             .await
             .unwrap();

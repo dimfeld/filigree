@@ -44,6 +44,9 @@ pub struct Config {
     /// Configuration for the database
     #[serde(default)]
     pub database: DatabaseConfig,
+
+    /// Configuration for sending emails
+    pub email: EmailConfig,
 }
 
 impl Config {
@@ -92,6 +95,26 @@ impl DatabaseConfig {
     const fn default_max_connections() -> u16 {
         100
     }
+}
+
+/// Configuration for email-related settings
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EmailConfig {
+    /// The email service to use
+    provider: EmailProvider,
+
+    /// The address that emails are sent from, if not otherwise specified.
+    from: String,
+}
+
+/// A choice of email service
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EmailProvider {
+    /// No email service. This can be useful when first starting out a project.
+    None,
+    /// Send emails using Resend
+    Resend,
 }
 
 #[derive(Debug)]

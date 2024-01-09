@@ -73,10 +73,10 @@ async fn delete(
 
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
-        .route("/user", routing::get(list))
-        .route("/user/:id", routing::get(get))
-        .route("/user/:id", routing::put(update))
-        .route("/user/:id", routing::delete(delete))
+        .route("/users", routing::get(list))
+        .route("/users/:id", routing::get(get))
+        .route("/users/:id", routing::put(update))
+        .route("/users/:id", routing::delete(delete))
 }
 
 #[cfg(test)]
@@ -132,7 +132,7 @@ mod test {
 
         let mut results = admin_user
             .client
-            .get("user")
+            .get("users")
             .send()
             .await
             .unwrap()
@@ -210,7 +210,7 @@ mod test {
 
         let response: Vec<serde_json::Value> = no_roles_user
             .client
-            .get("user")
+            .get("users")
             .send()
             .await
             .unwrap()
@@ -255,7 +255,7 @@ mod test {
 
         let result = admin_user
             .client
-            .get(&format!("user/{}", added_objects[1].id))
+            .get(&format!("users/{}", added_objects[1].id))
             .send()
             .await
             .unwrap()
@@ -315,7 +315,7 @@ mod test {
 
         let response = no_roles_user
             .client
-            .get(&format!("user/{}", added_objects[1].id))
+            .get(&format!("users/{}", added_objects[1].id))
             .send()
             .await
             .unwrap();
@@ -346,7 +346,7 @@ mod test {
 
         admin_user
             .client
-            .put(&format!("user/{}", added_objects[1].id))
+            .put(&format!("users/{}", added_objects[1].id))
             .json(&update_payload)
             .send()
             .await
@@ -356,7 +356,7 @@ mod test {
 
         let updated: serde_json::Value = admin_user
             .client
-            .get(&format!("user/{}", added_objects[1].id))
+            .get(&format!("users/{}", added_objects[1].id))
             .send()
             .await
             .unwrap()
@@ -381,7 +381,7 @@ mod test {
         // Make sure that no other objects were updated
         let non_updated: serde_json::Value = admin_user
             .client
-            .get(&format!("user/{}", added_objects[0].id))
+            .get(&format!("users/{}", added_objects[0].id))
             .send()
             .await
             .unwrap()
@@ -430,7 +430,7 @@ mod test {
 
         let response = no_roles_user
             .client
-            .put(&format!("user/{}", added_objects[1].id))
+            .put(&format!("users/{}", added_objects[1].id))
             .json(&update_payload)
             .send()
             .await
@@ -455,7 +455,7 @@ mod test {
 
         admin_user
             .client
-            .delete(&format!("user/{}", added_objects[1].id))
+            .delete(&format!("users/{}", added_objects[1].id))
             .send()
             .await
             .unwrap()
@@ -464,7 +464,7 @@ mod test {
 
         let response = admin_user
             .client
-            .get(&format!("user/{}", added_objects[1].id))
+            .get(&format!("users/{}", added_objects[1].id))
             .send()
             .await
             .unwrap();
@@ -473,7 +473,7 @@ mod test {
         // Delete should not happen without permissions
         let response = no_roles_user
             .client
-            .delete(&format!("user/{}", added_objects[0].id))
+            .delete(&format!("users/{}", added_objects[0].id))
             .send()
             .await
             .unwrap();
@@ -483,7 +483,7 @@ mod test {
         // Make sure other objects still exist
         let response = admin_user
             .client
-            .get(&format!("user/{}", added_objects[0].id))
+            .get(&format!("users/{}", added_objects[0].id))
             .send()
             .await
             .unwrap();

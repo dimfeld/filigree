@@ -1,7 +1,7 @@
 use futures::FutureExt;
 use tokio::signal;
 
-use crate::auth::SessionBackend;
+use crate::{auth::SessionBackend, email::services::EmailSender};
 
 /// Internal state used by the server
 pub struct FiligreeState {
@@ -9,6 +9,8 @@ pub struct FiligreeState {
     pub db: sqlx::PgPool,
     /// User session backend
     pub session_backend: SessionBackend,
+    /// Functionality for sending emails
+    pub email: EmailSender,
 }
 
 /// Create a future which will resolve when receiving SIGINT or SIGTERM

@@ -65,6 +65,10 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
         ),
         session_expiry: ExpiryStyle::AfterIdle(std::time::Duration::from_secs(24 * 60 * 60)),
         require_email_verification: false,
+        email_sender: filigree::email::services::EmailSender::new(
+            "support@example.com".to_string(),
+            Box::new(filigree::email::services::noop_service::NoopEmailService {}),
+        ),
     };
 
     let server = crate::server::create_server(config)

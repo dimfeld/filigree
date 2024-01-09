@@ -73,15 +73,15 @@ async fn delete(
 
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
-        .route("/report", routing::get(list))
-        .route("/report/:id", routing::get(get))
+        .route("/reports", routing::get(list))
+        .route("/reports/:id", routing::get(get))
         .route(
-            "/report",
+            "/reports",
             routing::post(create)
                 .route_layer(has_any_permission(vec!["org_admin", OWNER_PERMISSION])),
         )
-        .route("/report/:id", routing::put(update))
-        .route("/report/:id", routing::delete(delete))
+        .route("/reports/:id", routing::put(update))
+        .route("/reports/:id", routing::delete(delete))
 }
 
 #[cfg(test)]
@@ -136,7 +136,7 @@ mod test {
 
         let mut results = admin_user
             .client
-            .get("report")
+            .get("reports")
             .send()
             .await
             .unwrap()
@@ -198,7 +198,7 @@ mod test {
 
         let response: Vec<serde_json::Value> = no_roles_user
             .client
-            .get("report")
+            .get("reports")
             .send()
             .await
             .unwrap()
@@ -243,7 +243,7 @@ mod test {
 
         let result = admin_user
             .client
-            .get(&format!("report/{}", added_objects[1].id))
+            .get(&format!("reports/{}", added_objects[1].id))
             .send()
             .await
             .unwrap()
@@ -298,7 +298,7 @@ mod test {
 
         let response = no_roles_user
             .client
-            .get(&format!("report/{}", added_objects[1].id))
+            .get(&format!("reports/{}", added_objects[1].id))
             .send()
             .await
             .unwrap();
@@ -331,7 +331,7 @@ mod test {
 
         admin_user
             .client
-            .put(&format!("report/{}", added_objects[1].id))
+            .put(&format!("reports/{}", added_objects[1].id))
             .json(&update_payload)
             .send()
             .await
@@ -341,7 +341,7 @@ mod test {
 
         let updated: serde_json::Value = admin_user
             .client
-            .get(&format!("report/{}", added_objects[1].id))
+            .get(&format!("reports/{}", added_objects[1].id))
             .send()
             .await
             .unwrap()
@@ -371,7 +371,7 @@ mod test {
         // Make sure that no other objects were updated
         let non_updated: serde_json::Value = admin_user
             .client
-            .get(&format!("report/{}", added_objects[0].id))
+            .get(&format!("reports/{}", added_objects[0].id))
             .send()
             .await
             .unwrap()
@@ -420,7 +420,7 @@ mod test {
 
         let response = no_roles_user
             .client
-            .put(&format!("report/{}", added_objects[1].id))
+            .put(&format!("reports/{}", added_objects[1].id))
             .json(&update_payload)
             .send()
             .await
@@ -444,7 +444,7 @@ mod test {
         let create_payload = make_create_payload(10);
         let created_result: serde_json::Value = admin_user
             .client
-            .post("report")
+            .post("reports")
             .json(&create_payload)
             .send()
             .await
@@ -475,7 +475,7 @@ mod test {
         let created_id = created_result["id"].as_str().unwrap();
         let get_result = admin_user
             .client
-            .get(&format!("report/{}", created_id))
+            .get(&format!("reports/{}", created_id))
             .send()
             .await
             .unwrap()
@@ -517,7 +517,7 @@ mod test {
 
         let response = no_roles_user
             .client
-            .post("report")
+            .post("reports")
             .json(&create_payload)
             .send()
             .await
@@ -541,7 +541,7 @@ mod test {
 
         admin_user
             .client
-            .delete(&format!("report/{}", added_objects[1].id))
+            .delete(&format!("reports/{}", added_objects[1].id))
             .send()
             .await
             .unwrap()
@@ -550,7 +550,7 @@ mod test {
 
         let response = admin_user
             .client
-            .get(&format!("report/{}", added_objects[1].id))
+            .get(&format!("reports/{}", added_objects[1].id))
             .send()
             .await
             .unwrap();
@@ -559,7 +559,7 @@ mod test {
         // Delete should not happen without permissions
         let response = no_roles_user
             .client
-            .delete(&format!("report/{}", added_objects[0].id))
+            .delete(&format!("reports/{}", added_objects[0].id))
             .send()
             .await
             .unwrap();
@@ -569,7 +569,7 @@ mod test {
         // Make sure other objects still exist
         let response = admin_user
             .client
-            .get(&format!("report/{}", added_objects[0].id))
+            .get(&format!("reports/{}", added_objects[0].id))
             .send()
             .await
             .unwrap();

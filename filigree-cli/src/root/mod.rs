@@ -19,6 +19,7 @@ pub fn render_files(
     context.insert("crate_name", &crate_name.to_case(Case::Snake));
     context.insert("default_port", &config.default_port);
     context.insert("load_dotenv", &config.dotenv);
+    context.insert("email", &config.email);
     context.insert(
         "env_prefix",
         config.env_prefix.as_deref().unwrap_or_default(),
