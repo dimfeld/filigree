@@ -146,7 +146,7 @@ impl Model {
             "id_type": self.object_id_type(),
             "id_prefix": self.id_prefix(),
             "predefined_object_id": predefined_object_id,
-            "url_path": self.module_name(),
+            "url_path": self.plural().to_lowercase(),
             "has_any_endpoints": self.endpoints.any_enabled(),
             "endpoints": self.endpoints.per_endpoint(),
             "auth_scope": self.auth_scope.unwrap_or(config.default_auth_scope),
