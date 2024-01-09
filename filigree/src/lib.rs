@@ -7,6 +7,8 @@ use serde::Serialize;
 
 /// Authentication and Authorization
 pub mod auth;
+/// Email templates and sending
+pub mod email;
 /// Error handling
 pub mod errors;
 /// A UUIDv7-based type for handling object IDs with a more compact representation.
