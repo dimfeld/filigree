@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use serde::Serialize;
 
 use super::{EmailError, EmailService};
@@ -30,6 +31,7 @@ impl ResendEmailService {
     }
 }
 
+#[async_trait]
 impl EmailService for ResendEmailService {
     async fn send(&self, email: Email) -> Result<(), EmailError> {
         let body = ResendEmailBody {
@@ -75,7 +77,9 @@ struct ResendEmailBody {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     bcc: Vec<String>,
     subject: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
     text: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
     html: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     attachments: Vec<EmailAttachment>,

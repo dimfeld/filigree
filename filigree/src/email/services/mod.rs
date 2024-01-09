@@ -1,6 +1,7 @@
+/// ReSend email service support
 pub mod resend;
 
-use futures::Future;
+use async_trait::async_trait;
 use thiserror::Error;
 
 use super::Email;
@@ -17,7 +18,33 @@ pub enum EmailError {
 }
 
 /// A service that can send an email
+#[async_trait]
 pub trait EmailService {
     /// Send an email
-    fn send(&self, email: Email) -> impl Future<Output = Result<(), EmailError>> + Send;
+    async fn send(&self, email: Email) -> Result<(), EmailError>;
+}
+
+/// A service that manages email sending
+pub struct EmailSender {
+    default_from: String,
+    service: Box<dyn EmailService>,
+}
+
+impl EmailSender {
+    /// Create a new EmailSender
+    pub fn new(default_from: String, service: Box<dyn EmailService>) -> Self {
+        Self {
+            default_from,
+            service,
+        }
+    }
+
+    /// Send an email, filling in any unset fields that have a default
+    pub async fn send(&self, mut email: Email) -> Result<(), EmailError> {
+        if email.from.is_empty() {
+            email.from = self.default_from.clone();
+        }
+
+        self.service.send(email).await
+    }
 }
