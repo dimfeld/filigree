@@ -45,7 +45,7 @@ pub async fn create_new_user_with_prehashed_password(
 ) -> Result<User, Report<Error>> {
     let user = sqlx::query_file_as!(
         User,
-        "{{dir}}/create_user.sql",
+        "src/users/create_user.sql",
         user_id.as_uuid(),
         organization_id.as_uuid(),
         password_hash,

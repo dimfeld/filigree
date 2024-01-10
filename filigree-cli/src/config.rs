@@ -12,6 +12,11 @@ use crate::{
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
+    /// The name of the product/application
+    pub product_name: String,
+    /// The name of the company that makes the product, or your name if you prefer.
+    pub company_name: String,
+
     #[serde(default = "Config::default_port")]
     pub default_port: u16,
 

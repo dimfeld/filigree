@@ -15,14 +15,11 @@ use thiserror::Error;
 use crate::{config::FullConfig, model::generator::ModelGenerator};
 
 mod add_deps;
-mod auth;
 mod config;
 mod format;
 mod model;
 mod root;
-mod server;
 mod templates;
-mod users;
 
 pub struct RenderedFile {
     path: PathBuf,
@@ -97,15 +94,9 @@ pub fn main() -> Result<(), Report<Error>> {
         .map(|m| (m.model.name.clone(), m.context.clone().into_json()))
         .collect::<Vec<_>>();
 
-    let mut auth_files = None;
     let mut model_files = None;
     let mut root_files = None;
-    let mut server_files = None;
-    let mut users_files = None;
     rayon::scope(|s| {
-        s.spawn(|_| {
-            auth_files = Some(auth::render_files(&config, &renderer, &all_model_contexts));
-        });
         s.spawn(|_| {
             model_files = Some(
                 generators
@@ -114,18 +105,18 @@ pub fn main() -> Result<(), Report<Error>> {
                     .collect::<Result<Vec<_>, _>>(),
             );
         });
-        s.spawn(|_| root_files = Some(root::render_files(&crate_name, &config, &renderer)));
-        s.spawn(|_| server_files = Some(server::render_files(&config, &renderer)));
         s.spawn(|_| {
-            users_files = Some(users::render_files(&config, &renderer, &all_model_contexts));
+            root_files = Some(root::render_files(
+                &crate_name,
+                &config,
+                &all_model_contexts,
+                &renderer,
+            ))
         });
     });
 
-    let auth_files = auth_files.expect("auth_files was not set")?;
     let model_files = model_files.expect("model_files was not set")?;
     let root_files = root_files.expect("root_files was not set")?;
-    let server_files = server_files.expect("server_files was not set")?;
-    let users_files = users_files.expect("users_files was not set")?;
 
     let up_migrations = generators
         .iter()
@@ -174,10 +165,7 @@ pub fn main() -> Result<(), Report<Error>> {
 
     let files = root_files
         .into_iter()
-        .chain(auth_files)
         .chain(model_files.into_iter().flatten())
-        .chain(server_files)
-        .chain(users_files)
         .collect::<Vec<_>>();
 
     let mut created_dirs = HashSet::new();

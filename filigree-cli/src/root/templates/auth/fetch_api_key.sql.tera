@@ -1,4 +1,4 @@
-{% extends "auth/fetch_base.sql.tera" %}
+{% extends "root/auth/fetch_base.sql.tera" %}
 {% block base_lookup %}
   SELECT
     api_keys.user_id,

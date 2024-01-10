@@ -72,21 +72,6 @@ impl<'a> Renderer<'a> {
 pub struct RootTemplates;
 
 #[derive(RustEmbed)]
-#[prefix = "server/"]
-#[folder = "$CARGO_MANIFEST_DIR/src/server/templates"]
-pub struct ServerTemplates;
-
-#[derive(RustEmbed)]
-#[prefix = "auth/"]
-#[folder = "$CARGO_MANIFEST_DIR/src/auth/templates"]
-pub struct AuthTemplates;
-
-#[derive(RustEmbed)]
-#[prefix = "users/"]
-#[folder = "$CARGO_MANIFEST_DIR/src/users/templates"]
-pub struct UsersTemplates;
-
-#[derive(RustEmbed)]
 #[prefix = "model/"]
 #[folder = "$CARGO_MANIFEST_DIR/src/model/sql"]
 pub struct ModelSqlTemplates;
@@ -112,11 +97,8 @@ fn create_tera() -> Tera {
     let mut tera = Tera::default();
 
     let template_files = get_files::<RootTemplates>()
-        .chain(get_files::<AuthTemplates>())
         .chain(get_files::<ModelRustTemplates>())
         .chain(get_files::<ModelSqlTemplates>())
-        .chain(get_files::<ServerTemplates>())
-        .chain(get_files::<UsersTemplates>())
         .collect::<Vec<_>>();
     let res = tera.add_raw_templates(template_files);
 
