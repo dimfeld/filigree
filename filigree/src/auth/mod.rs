@@ -9,6 +9,8 @@ pub mod lookup;
 pub mod middleware;
 /// Functions for generating and verifying password hashes
 pub mod password;
+/// Functionalty for passwordless email-based login.
+pub mod passwordless_email;
 mod sessions;
 
 use std::{borrow::Cow, sync::Arc};
@@ -61,20 +63,29 @@ pub enum AuthError {
     /// Generic error to wrap errors from the session backend
     #[error("Session backend error")]
     SessionBackend,
+    /// The email sending service returned an error
+    #[error("Email send failure")]
+    EmailSendFailure,
+    /// Missing or expired token
+    #[error("Missing or expired token")]
+    InvalidToken,
 }
 
 impl HttpError for AuthError {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::InvalidApiKey | Self::Unauthenticated => StatusCode::UNAUTHORIZED,
+            Self::InvalidApiKey | Self::InvalidToken | Self::Unauthenticated => {
+                StatusCode::UNAUTHORIZED
+            }
             Self::NotVerified
             | Self::Disabled
             | Self::MissingPermission(_)
             | Self::FailedPredicate(_) => StatusCode::FORBIDDEN,
             Self::ApiKeyFormat => StatusCode::BAD_REQUEST,
-            Self::Db(_) | Self::PasswordHasherError(_) | Self::SessionBackend => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            Self::Db(_)
+            | Self::EmailSendFailure
+            | Self::PasswordHasherError(_)
+            | Self::SessionBackend => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -82,6 +93,7 @@ impl HttpError for AuthError {
         match self {
             Self::Unauthenticated => "unauthenticated",
             Self::InvalidApiKey => "invalid_api_key",
+            Self::InvalidToken => "invalid_token",
             Self::NotVerified => "not_verified",
             Self::Disabled => "disabled",
             Self::Db(_) => "db",
@@ -90,6 +102,7 @@ impl HttpError for AuthError {
             Self::MissingPermission(_) => "missing_permission",
             Self::FailedPredicate(_) => "failed_authz_condition",
             Self::SessionBackend => "session_backend",
+            Self::EmailSendFailure => "email_send_failure",
         }
     }
 }

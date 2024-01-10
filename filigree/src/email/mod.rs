@@ -15,11 +15,11 @@ pub struct Email {
     #[builder(!default, setter(into, suffix="_vec"),
         via_mutators(init= Vec::new()),
         mutators(
-            fn to(&mut self, to: impl ToString) {
+            pub fn to(&mut self, to: impl ToString) {
                 self.to.push(to.to_string())
             }
 
-            fn to_vec(&mut self, to: Vec<String>) {
+            pub fn to_vec(&mut self, to: Vec<String>) {
                 self.to = to
             }
     ))]
@@ -31,7 +31,7 @@ pub struct Email {
     #[builder(setter(into, suffix="_vec"),
         via_mutators(init = Vec::new()),
         mutators(
-        fn cc(self, cc: impl ToString) {
+        pub fn cc(self, cc: impl ToString) {
             self.cc.push(cc.to_string())
         }
 
@@ -66,11 +66,11 @@ pub struct Email {
     #[builder(
         via_mutators(init = Vec::new()),
         mutators(
-            fn attachment(&mut self, attachment: EmailAttachment) {
+            pub fn attachment(&mut self, attachment: EmailAttachment) {
                 self.attachments.push(attachment)
             }
 
-            fn attachments(&mut self, attachments: Vec<EmailAttachment>) {
+            pub fn attachments(&mut self, attachments: Vec<EmailAttachment>) {
                 self.attachments = attachments
             }
     ))]
@@ -79,7 +79,7 @@ pub struct Email {
     #[builder(
         via_mutators(init = Vec::new()),
         mutators(
-            fn tag(&mut self, tag: impl ToString) {
+            pub fn tag(&mut self, tag: impl ToString) {
                 self.tags.push(tag.to_string())
             }
     ))]
