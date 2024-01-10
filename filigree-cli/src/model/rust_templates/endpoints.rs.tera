@@ -3,7 +3,7 @@ use axum::{Json, extract::{State, Path, Query}, http::StatusCode, response::Into
 
 use crate::{Error, auth::{Authed, has_any_permission}, server::ServerState};
 
-use super::{queries, types::*, {{id_type}}, OWNER_PERMISSION };
+use super::{queries, types::*, {{id_type}}, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION, WRITE_PERMISSION };
 
 async fn get(
     State(state): State<ServerState>,
@@ -60,14 +60,26 @@ async fn delete(
 
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
-        {% if endpoints.list %}.route("/{{ url_path }}", routing::get(list)){% endif %}
-        {% if endpoints.get %}.route("/{{ url_path }}/:id", routing::get(get)){% endif %}
+        {% if endpoints.list %}.route("/{{ url_path }}",
+            routing::get(list)
+                .route_layer(has_any_permission(vec![READ_PERMISSION, "org_admin"])))
+        {% endif %}
+        {% if endpoints.get %}.route("/{{ url_path }}/:id",
+            routing::get(get)
+                .route_layer(has_any_permission(vec![READ_PERMISSION, "org_admin"])))
+        {% endif %}
         {% if endpoints.create %}.route("/{{ url_path }}",
             routing::post(create)
-                .route_layer(has_any_permission(vec!["org_admin", OWNER_PERMISSION]))
-        ){% endif %}
-        {% if endpoints.update %}.route("/{{ url_path }}/:id", routing::put(update)){% endif %}
-        {% if endpoints.delete %}.route("/{{ url_path }}/:id", routing::delete(delete)){% endif %}
+                .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])))
+        {% endif %}
+        {% if endpoints.update %}.route("/{{ url_path }}/:id",
+            routing::put(update)
+                .route_layer(has_any_permission(vec![WRITE_PERMISSION, OWNER_PERMISSION, "org_admin"])))
+        {% endif %}
+        {% if endpoints.delete %}.route("/{{ url_path }}/:id",
+            routing::delete(delete)
+                .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])))
+        {% endif %}
 }
 
 #[cfg(test)]
@@ -215,20 +227,14 @@ mod test {
         // TODO Add test for user with only "read" permission and make sure that fields that are
         // owner_read but not user_read are omitted.
 
-
-        let response: Vec<serde_json::Value> = no_roles_user
+        let response = no_roles_user
             .client
             .get("{{url_path}}")
             .send()
             .await
-            .unwrap()
-            .error_for_status()
-            .unwrap()
-            .json()
-            .await
             .unwrap();
 
-        assert!(response.is_empty());
+        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     }
 
     #[sqlx::test]
@@ -304,7 +310,7 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     }
     {% endif %}
 
@@ -397,7 +403,7 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     }
     {% endif %}
 
@@ -511,7 +517,7 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
 
         // Make sure other objects still exist
         let response = admin_user

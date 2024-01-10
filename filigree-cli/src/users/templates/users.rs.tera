@@ -187,10 +187,9 @@ mod test {
             .send()
             .await
             .unwrap();
-        // Should see 404 because user has no roles and hence no permissions, but not
-        // 401 which would indicate that the lack of roles is causing the user lookup query to
-        // fail.
-        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+        // Should see 403 because user has no roles and hence no permissions, but not
+        // 401 which would indicate some other problem in the auth system.
+        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     }
 
     #[sqlx::test]

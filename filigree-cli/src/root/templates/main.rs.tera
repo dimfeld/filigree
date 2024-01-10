@@ -76,8 +76,7 @@ struct ServeCommand {
         {%- if email.provider == "none" -%}
         , default_value_t = String::from("")
         {%- endif -%}
-        )
-    ]
+        )]
     email_sender_api_token: String,
 
     /// The email address to use as the default sender
