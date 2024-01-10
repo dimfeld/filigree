@@ -1,0 +1,35 @@
+use axum::{Json, response::IntoResponse};
+use serde::Serialize;
+
+use crate::auth::Authed;
+
+#[derive(Debug, Serialize)]
+pub struct PermissionInfo {
+    name: &'static str,
+    description: &'static str,
+    key: &'static str,
+}
+
+pub const PERMISSIONS: &[PermissionInfo] = &[
+{% for model in models %}
+    PermissionInfo {
+        name: "Read {{model.plural}}",
+        description: "List and read {{model.name}} objects",
+        key: "{{model.read_permission}}",
+    },
+    PermissionInfo {
+        name: "Write {{model.plural}}",
+        description: "Write {{model.name}} objects",
+        key: "{{model.write_permission}}",
+    },
+    PermissionInfo {
+        name: "Administer {{model.plural}}",
+        description: "Create and delete {{model.name}} objects",
+        key: "{{model.owner_permission}}",
+    },
+{% endfor %}
+];
+
+pub async fn list_permissions(authed: Authed) -> impl IntoResponse {
+    Json(PERMISSIONS)
+}

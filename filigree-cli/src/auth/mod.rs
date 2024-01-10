@@ -29,11 +29,13 @@ pub fn render_files(
         .find(|(name, _)| name == "Organization")
         .expect("Organization model not found")
         .1;
+    let all_models = models.iter().map(|(_, value)| value).collect::<Vec<_>>();
 
     let mut context = tera::Context::new();
     context.insert("user_model", user_model);
     context.insert("role_model", role_model);
     context.insert("org_model", org_model);
+    context.insert("models", &all_models);
 
     let files = AuthTemplates::iter().collect::<Vec<_>>();
     let dir = PathBuf::from("src");

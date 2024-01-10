@@ -132,6 +132,7 @@ impl Model {
 
         json!({
             "name": self.name,
+            "plural": self.plural(),
             "table": self.table(),
             "indexes": self.indexes,
             "global": self.global,

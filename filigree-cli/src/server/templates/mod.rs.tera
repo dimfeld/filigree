@@ -35,6 +35,7 @@ use tracing::{event, Level};
 use crate::error::Error;
 
 mod health;
+mod meta;
 #[cfg(test)]
 mod tests;
 
@@ -166,8 +167,9 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
 
     let app: Router<ServerState> = Router::new()
         .route("/healthz", get(health::healthz))
-        .merge(crate::models::create_routes())
+        .nest("/meta", meta::create_routes())
         .merge(filigree::auth::endpoints::create_routes())
+        .merge(crate::models::create_routes())
         .merge(crate::users::users::create_routes())
         .layer(
             ServiceBuilder::new()
