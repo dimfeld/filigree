@@ -19,7 +19,6 @@ WHERE
     organization_id = {{organization}}
     AND actor_id = ANY({{actor_ids}})
     AND permission in ('org_admin', {{owner_perm | to_sql}}, {{user_perm | to_sql}} )
-GROUP BY permission
 {% endmacro permissions_lookup %}
 
 {% macro global_permissions_value(actor_ids, organization, owner_perm, write_perm, read_perm) %}
@@ -37,7 +36,6 @@ WHERE
     organization_id = {{organization}}
     AND actor_id = ANY({{actor_ids}})
     AND permission in ('org_admin', {{owner_perm | to_sql}}, {{write_perm | to_sql}}, {{read_perm | to_sql}} )
-GROUP BY permission
 {% endmacro permissions_value %}
 
 {% macro object_permissions_value(actor_ids, organization, object_id, owner_perm, write_perm, read_perm, extra_fields="") %}
@@ -55,7 +53,6 @@ WHERE
     AND actor_id = ANY({{actor_ids}})
     AND object_id = {{object_id}}
     AND permission in ('org_admin', {{owner_perm | to_sql}}, {{write_perm | to_sql}}, {{read_perm | to_sql}} )
-GROUP BY permission
 {% endmacro object_permissions_clause %}
 
 {% macro permissions_value(auth_scope, organization, actor_ids, object_id, owner_perm, write_perm, read_perm) %}
