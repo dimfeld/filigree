@@ -158,9 +158,7 @@ mod test {
                 organization,
                 admin_user,
                 no_roles_user,
-                {% if model_name == "User" %}
                 user,
-                {% endif %}
                 {% if model_name == "Role" %}
                 admin_role,
                 user_role,
@@ -171,7 +169,7 @@ mod test {
 
         let added_objects = setup_test_objects(&pool, organization.id, 3).await;
 
-        let mut results = admin_user
+        let results = admin_user
             .client
             .get("{{url_path}}")
             .send()
@@ -190,14 +188,18 @@ mod test {
             admin_role.to_string(),
             user_role.to_string(),
         ];
-        results.retain_mut(|value| { !fixed_roles.iter().any(|i| i == value["id"].as_str().unwrap()) });
+        let results = results.into_iter().filter(|value| {
+            !fixed_roles.iter().any(|i| i == value["id"].as_str().unwrap())
+        }).collect::<Vec<_>>();
         {% elif model_name == "User" %}
         let fixed_users = [
             admin_user.user_id.to_string(),
             user.user_id.to_string(),
             no_roles_user.user_id.to_string(),
         ];
-        results.retain_mut(|value| { !fixed_users.iter().any(|i| i == value["id"].as_str().unwrap()) });
+        let results = results.into_iter().filter(|value| {
+            !fixed_users.iter().any(|i| i == value["id"].as_str().unwrap())
+        }).collect::<Vec<_>>();
         {% endif %}
 
         assert_eq!(results.len(), added_objects.len());
@@ -224,8 +226,59 @@ mod test {
             {%- endfor %}
         }
 
-        // TODO Add test for user with only "read" permission and make sure that fields that are
-        // owner_read but not user_read are omitted.
+        let results = user
+            .client
+            .get("{{url_path}}")
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<Vec<serde_json::Value>>()
+            .await
+            .unwrap();
+
+        {% if model_name == "Role" %}
+        let fixed_roles = [
+            admin_role.to_string(),
+            user_role.to_string(),
+        ];
+        let results = results.into_iter().filter(|value| {
+            !fixed_roles.iter().any(|i| i == value["id"].as_str().unwrap())
+        }).collect::<Vec<_>>();
+        {% elif model_name == "User" %}
+        let fixed_users = [
+            admin_user.user_id.to_string(),
+            user.user_id.to_string(),
+            no_roles_user.user_id.to_string(),
+        ];
+        let results = results.into_iter().filter(|value| {
+            !fixed_users.iter().any(|i| i == value["id"].as_str().unwrap())
+        }).collect::<Vec<_>>();
+        {% endif %}
+
+        for result in results {
+            let added = added_objects.iter().find(|i| i.id.to_string() == result["id"].as_str().unwrap())
+                .expect("Returned object did not match any of the added objects");
+            {% for field in fields | filter (attribute="user_read", value=true) -%}
+            assert_eq!(
+                result["{{field.rust_name}}"],
+                serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
+                "field {{field.rust_name}}"
+            );
+            {%- endfor %}
+            assert_eq!(result["_permission"], "write");
+
+            // Check that we don't return any fields which are supposed to be omitted.
+            {% for field in fields | filter (attribute="user_read", value=false) -%}
+            assert_eq!(
+                result.get("{{field.rust_name}}"),
+                None,
+                "field {{field.rust_name}} should be omitted"
+            );
+            {%- endfor %}
+        }
+
 
         let response = no_roles_user
             .client
@@ -262,6 +315,7 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
+                user,
                 no_roles_user,
                 ..
             },
@@ -300,8 +354,36 @@ mod test {
         );
         {%- endfor %}
 
-        // TODO Add test for user with only "read" permission and make sure that fields that are
-        // owner_read but not user_read are omitted.
+        let result = user
+            .client
+            .get(&format!("{{url_path}}/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+
+        let added = &added_objects[1];
+        {% for field in fields | filter (attribute="user_read", value=true) -%}
+        assert_eq!(
+            result["{{field.rust_name}}"],
+            serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
+            "field {{field.rust_name}}"
+        );
+        {%- endfor %}
+        assert_eq!(result["_permission"], "write");
+
+        // Check that we don't return any fields which are supposed to be omitted.
+        {% for field in fields | filter (attribute="user_read", value=false) -%}
+        assert_eq!(
+            result.get("{{field.rust_name}}"),
+            None,
+            "field {{field.rust_name}} should be omitted"
+        );
+        {%- endfor %}
 
         let response = no_roles_user
             .client
