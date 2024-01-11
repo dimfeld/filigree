@@ -136,7 +136,9 @@ impl ExpiryStyle {
 pub struct SessionBackend {
     /// The database connection pool
     pub db: PgPool,
+    /// Session cookie managemeent
     pub cookies: SessionCookieBuilder,
+    /// How to calculate the expiration date for a session
     pub expiry_style: ExpiryStyle,
 }
 

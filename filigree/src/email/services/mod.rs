@@ -3,6 +3,8 @@ pub mod noop_service;
 /// ReSend email service support
 #[cfg(feature = "email_resend")]
 pub mod resend;
+/// An email sender for tests, which doesn't send the emails but does save the content for later
+/// inspection.
 pub mod test_service;
 
 use async_trait::async_trait;
@@ -14,6 +16,7 @@ use super::{templates::EmailTemplate, Email};
 /// Errors returned from an [EmailService]
 #[derive(Debug, Error)]
 pub enum EmailError {
+    /// Error while rendering an email template
     #[error("Template render error")]
     Rendering,
     /// Email failed to send, without more detail

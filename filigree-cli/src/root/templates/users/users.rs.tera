@@ -110,7 +110,7 @@ mod test {
 
         let client = &app.client;
         let response: serde_json::Value = client
-            .post("login")
+            .post("auth/login")
             .json(&json!({ "email": admin_user.email, "password": admin_user.password }))
             .send()
             .await
@@ -136,7 +136,7 @@ mod test {
         assert_eq!(user["name"], "Admin");
 
         let response: serde_json::Value = client
-            .post("logout")
+            .post("auth/logout")
             .send()
             .await
             .unwrap()
@@ -169,7 +169,7 @@ mod test {
 
         let client = &app.client;
         let response: serde_json::Value = client
-            .post("login")
+            .post("auth/login")
             .json(&json!({ "email": no_roles_user.email, "password": no_roles_user.password }))
             .send()
             .await

@@ -6,11 +6,15 @@ use tower::{Layer, Service};
 
 use super::{get_auth_info, AuthError, AuthInfo};
 
+/// Check if the user has a particular set of permissions. This mostly exists to allow
+/// [has_permission], [has_any_permission], and [has_all_permissions] to share the same
+/// service and layer code.
 pub trait PermissionChecker<INFO: AuthInfo>: Clone + Send + Sync + 'static {
     /// Perform the check, and return a missing permission if the check fails.
     fn check(&self, info: &INFO) -> Result<(), Cow<'static, str>>;
 }
 
+/// Check that the user has a particular permission.
 #[derive(Debug)]
 pub struct CheckOnePermission<INFO: AuthInfo> {
     perm: Cow<'static, str>,
@@ -35,6 +39,7 @@ impl<INFO: AuthInfo> Clone for CheckOnePermission<INFO> {
     }
 }
 
+/// Check that the user has all of the given permissions.
 #[derive(Debug)]
 pub struct CheckAllPermissions<INFO: AuthInfo> {
     perms: Vec<Cow<'static, str>>,
@@ -62,6 +67,7 @@ impl<INFO: AuthInfo> Clone for CheckAllPermissions<INFO> {
     }
 }
 
+/// Check that the user has any of the given permissions.
 #[derive(Debug)]
 pub struct CheckAnyPermission<INFO: AuthInfo> {
     perms: Vec<Cow<'static, str>>,

@@ -1,6 +1,7 @@
 /// Functions for working with API keys
 pub mod api_key;
 mod check_middleware;
+/// HTTP endpoints for authentication
 pub mod endpoints;
 mod extractors;
 /// A Request extension for lazy lookup of user auth info

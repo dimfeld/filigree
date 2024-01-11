@@ -42,6 +42,6 @@ where
     T: Send + Sync + Clone + 'static,
 {
     Router::new()
-        .route("/login", axum::routing::post(password_login))
-        .route("/logout", axum::routing::post(logout))
+        .route("/auth/login", axum::routing::post(password_login))
+        .route("/auth/logout", axum::routing::post(logout))
 }

@@ -455,6 +455,9 @@ mod test {
         {%- endfor %}
         assert_eq!(updated["_permission"], "owner");
 
+        // TODO Test that owner can not write fields which are not writable by anyone.
+        // TODO Test that user can not update fields which are writable by owner but not user
+
         // Make sure that no other objects were updated
         let non_updated : serde_json::Value = admin_user
             .client
@@ -495,7 +498,6 @@ mod test {
         let (
             _app,
             BootstrappedData {
-                organization,
                 admin_user,
                 no_roles_user,
                 ..
