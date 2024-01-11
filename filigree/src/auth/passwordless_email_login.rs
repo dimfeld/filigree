@@ -1,21 +1,19 @@
-use std::sync::Arc;
-
 use chrono::TimeZone;
 use error_stack::{Report, ResultExt};
 use tower_cookies::Cookies;
 use uuid::Uuid;
 
 use super::{AuthError, UserId};
-use crate::{email::Email, server::FiligreeState};
+use crate::server::FiligreeState;
 
-/// Generate a new passwordless login token and send the email with the token to the user.
-pub async fn request_passwordless_login(
-    state: Arc<FiligreeState>,
-    base_url: String,
+/// Generate a new passwordless login token.
+pub async fn setup_passwordless_login(
+    state: &FiligreeState,
     email: String,
-) -> Result<(), Report<AuthError>> {
+) -> Result<Uuid, Report<AuthError>> {
     let token = Uuid::new_v4();
 
+    // TODO get the user name here too if we have it
     let result = sqlx::query!(
         "UPDATE email_logins
             SET passwordless_login_token = $2,
@@ -31,26 +29,15 @@ pub async fn request_passwordless_login(
     let found_email = result.rows_affected() > 0;
 
     if !found_email {
-        return Ok(());
+        Err(AuthError::Unauthenticated)?;
     }
 
-    state.email.send(Email::builder()
-        .html(format!(r##"<a href="{base_url}/api/passwordless_login?email={email}&token={token}">Click here to login</a>"##))
-        .to(email)
-        .subject("Passwordless login")
-        // TODO Real url here
-        .tag("passwordless_login")
-        .build()
-    )
-        .await
-        .change_context(AuthError::EmailSendFailure)?;
-
-    Ok(())
+    Ok(token)
 }
 
 /// Given a token from an email, log in the user.
 pub async fn perform_passwordless_login(
-    state: Arc<FiligreeState>,
+    state: &FiligreeState,
     cookies: &Cookies,
     email: String,
     token: Uuid,

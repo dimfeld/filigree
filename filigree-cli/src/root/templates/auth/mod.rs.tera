@@ -5,6 +5,7 @@ use filigree::auth::{AuthError, OrganizationId, PermissionChecker, RoleId, Sessi
 use sqlx::{query_file_as, PgPool};
 use uuid::Uuid;
 
+pub mod passwordless_login;
 pub mod permissions;
 
 pub type Authed = filigree::auth::Authed<AuthInfo>;

@@ -6,7 +6,7 @@ use filigree::{
 };
 use tracing::{event, Level};
 
-use {{crate_name}}::{Error, db, server, util_cmd};
+use {{crate_name}}::{Error, db, emails, server, util_cmd};
 
 
 #[derive(Parser)]
@@ -127,6 +127,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     );
     let email_sender = filigree::email::services::EmailSender::new(
         cmd.email_default_from_address,
+        emails::create_tera(),
         email_service,
     );
 

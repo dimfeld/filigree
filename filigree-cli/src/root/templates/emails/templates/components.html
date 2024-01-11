@@ -1,0 +1,19 @@
+{% raw %}
+{% macro button(text, url, classes=' ') %}
+<table class="button {{classes}}">
+  <tbody>
+    <tr>
+      <td>
+        <table>
+          <tbody>
+            <tr>
+              <td><a href="{{url | safe}}">{{text}}</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  </tbody>
+</table>
+{% endmacro button %}
+{% endraw %}

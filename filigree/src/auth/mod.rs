@@ -10,7 +10,7 @@ pub mod middleware;
 /// Functions for generating and verifying password hashes
 pub mod password;
 /// Functionalty for passwordless email-based login.
-pub mod passwordless_email;
+pub mod passwordless_email_login;
 mod sessions;
 
 use std::{borrow::Cow, sync::Arc};
@@ -69,6 +69,13 @@ pub enum AuthError {
     /// Missing or expired token
     #[error("Missing or expired token")]
     InvalidToken,
+}
+
+impl AuthError {
+    /// Return true if this error is [AuthError::Unauthenticated]
+    pub fn is_unauthenticated(&self) -> bool {
+        matches!(self, Self::Unauthenticated)
+    }
 }
 
 impl HttpError for AuthError {

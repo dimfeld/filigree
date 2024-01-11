@@ -3,15 +3,19 @@ pub mod noop_service;
 /// ReSend email service support
 #[cfg(feature = "email_resend")]
 pub mod resend;
+pub mod test_service;
 
 use async_trait::async_trait;
+use error_stack::Report;
 use thiserror::Error;
 
-use super::Email;
+use super::{templates::EmailTemplate, Email};
 
 /// Errors returned from an [EmailService]
 #[derive(Debug, Error)]
 pub enum EmailError {
+    #[error("Template render error")]
+    Rendering,
     /// Email failed to send, without more detail
     #[error("Generic failure")]
     Failed,
@@ -30,14 +34,20 @@ pub trait EmailService: Send + Sync {
 /// A service that manages email sending
 pub struct EmailSender {
     default_from: String,
+    templates: tera::Tera,
     service: Box<dyn EmailService>,
 }
 
 impl EmailSender {
     /// Create a new EmailSender
-    pub fn new(default_from: String, service: Box<dyn EmailService>) -> Self {
+    pub fn new(
+        default_from: String,
+        templates: tera::Tera,
+        service: Box<dyn EmailService>,
+    ) -> Self {
         Self {
             default_from,
+            templates,
             service,
         }
     }
@@ -49,6 +59,20 @@ impl EmailSender {
         }
 
         self.service.send(email).await
+    }
+
+    /// Render an email template and send the email.
+    pub async fn send_template(
+        &self,
+        to: String,
+        template: impl EmailTemplate,
+    ) -> Result<(), Report<EmailError>> {
+        let email = template
+            .into_email(&self.templates, to)?
+            .from(self.default_from.clone())
+            .build();
+        self.send(email).await?;
+        Ok(())
     }
 }
 

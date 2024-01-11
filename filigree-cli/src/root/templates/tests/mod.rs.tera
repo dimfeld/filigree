@@ -67,6 +67,7 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
         require_email_verification: false,
         email_sender: filigree::email::services::EmailSender::new(
             "support@example.com".to_string(),
+            crate::emails::create_tera(),
             Box::new(filigree::email::services::noop_service::NoopEmailService {}),
         ),
     };
