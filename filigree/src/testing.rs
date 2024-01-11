@@ -31,6 +31,14 @@ impl TestClient {
         }
     }
 
+    /// Create a new TestClient from this one that uses the given client
+    pub fn with_custom_client(&self, client: reqwest::Client) -> TestClient {
+        TestClient {
+            base: self.base.clone(),
+            client,
+        }
+    }
+
     /// Create a new TestClient from this one that passes the given API key
     /// as a Bearer token.
     pub fn with_api_key(&self, api_key: &str) -> TestClient {

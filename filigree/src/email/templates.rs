@@ -1,7 +1,8 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, error::Error as _};
 
 use error_stack::{Report, ResultExt};
 use serde::Serialize;
+use thiserror::Error;
 
 use super::{services::EmailError, EmailBuilder};
 
@@ -19,7 +20,7 @@ pub trait EmailTemplate {
     fn subject(&self) -> String;
 
     /// Render plaintext and HTML for an email
-    fn render(&self, renderer: &tera::Tera) -> Result<EmailContent, tera::Error>;
+    fn render(&self, renderer: &tera::Tera) -> Result<EmailContent, TeraError>;
 
     /// Tags for this email
     fn tags(&self) -> Vec<String> {
@@ -43,13 +44,18 @@ pub trait EmailTemplate {
     }
 }
 
+/// Wrap a [tera::Error] and display the error source.
+#[derive(Error, Debug)]
+#[error("{0}{}", .0.source().map(|e| format!("\n{e}")).unwrap_or_default())]
+pub struct TeraError(#[from] tera::Error);
+
 /// A helper function for [EmailTemplate] implementors to render a text and html template
 pub fn render_template_pair(
     tera: &tera::Tera,
     data: &impl Serialize,
     html_path: &str,
     text_path: &str,
-) -> Result<EmailContent, tera::Error> {
+) -> Result<EmailContent, TeraError> {
     let context = tera::Context::from_serialize(data)?;
     let html = tera.render(html_path, &context)?;
     let text = tera.render(text_path, &context)?;
@@ -62,7 +68,6 @@ pub fn create_templates(
     templates: impl Iterator<Item = (Cow<'static, str>, rust_embed::EmbeddedFile)>,
 ) -> tera::Tera {
     let templates = templates
-        .filter(|(name, _)| name.ends_with(".html") || name.ends_with(".txt"))
         .map(|(name, data)| {
             let data = match data.data {
                 Cow::Borrowed(b) => Cow::Borrowed(std::str::from_utf8(b).unwrap()),
