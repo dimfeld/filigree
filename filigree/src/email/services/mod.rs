@@ -6,7 +6,7 @@ pub mod resend;
 pub mod test_service;
 
 use async_trait::async_trait;
-use error_stack::Report;
+use error_stack::{Report, ResultExt};
 use thiserror::Error;
 
 use super::{templates::EmailTemplate, Email};
@@ -53,12 +53,22 @@ impl EmailSender {
     }
 
     /// Send an email, filling in any unset fields that have a default
-    pub async fn send(&self, mut email: Email) -> Result<(), EmailError> {
+    pub async fn send(&self, mut email: Email) -> Result<(), Report<EmailError>> {
         if email.from.is_empty() {
             email.from = self.default_from.clone();
         }
 
-        self.service.send(email).await
+        if !email.html.is_empty() {
+            let inliner = css_inline::CSSInliner::options()
+                .load_remote_stylesheets(false)
+                .build();
+            email.html = inliner
+                .inline(&email.html)
+                .change_context(EmailError::Rendering)?;
+        }
+
+        self.service.send(email).await?;
+        Ok(())
     }
 
     /// Render an email template and send the email.

@@ -1,3 +1,4 @@
+use error_stack::Report;
 use serde::Serialize;
 
 use self::services::{EmailError, EmailSender};
@@ -170,7 +171,7 @@ impl EmailBuilder {
     }
 
     /// Send the email to the configured email service
-    pub async fn send(self, sender: &EmailSender) -> Result<(), EmailError> {
+    pub async fn send(self, sender: &EmailSender) -> Result<(), Report<EmailError>> {
         sender.send(self.email).await
     }
 

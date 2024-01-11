@@ -60,26 +60,13 @@ pub fn render_template_pair(
 /// Create a Tera instance from a set of templates, inlining CSS stylesheets on HTML pages.
 pub fn create_templates(
     templates: impl Iterator<Item = (Cow<'static, str>, rust_embed::EmbeddedFile)>,
-    css: Cow<'static, [u8]>,
 ) -> tera::Tera {
-    let css = std::str::from_utf8(css.as_ref()).unwrap();
-    let inliner = css_inline::CSSInliner::options()
-        .load_remote_stylesheets(false)
-        .extra_css(Some(css.into()))
-        .build();
-
     let templates = templates
         .filter(|(name, _)| name.ends_with(".html") || name.ends_with(".txt"))
         .map(|(name, data)| {
             let data = match data.data {
                 Cow::Borrowed(b) => Cow::Borrowed(std::str::from_utf8(b).unwrap()),
                 Cow::Owned(s) => Cow::Owned(String::from_utf8(s).unwrap()),
-            };
-
-            let data = if name.ends_with(".html") {
-                Cow::from(inliner.inline(&data).unwrap())
-            } else {
-                data
             };
 
             (name, data)

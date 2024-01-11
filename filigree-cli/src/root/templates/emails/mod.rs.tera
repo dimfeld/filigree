@@ -10,12 +10,11 @@ use uuid::Uuid;
 pub struct RootTemplates;
 
 pub fn create_tera() -> tera::Tera {
-    let css = RootTemplates::get("style.css").unwrap().data;
     let files = RootTemplates::iter().map(|filename| {
         let data = RootTemplates::get(filename.as_ref()).unwrap();
         (filename, data)
     });
-    create_templates(files, css)
+    create_templates(files)
 }
 
 #[derive(Debug, Serialize)]
