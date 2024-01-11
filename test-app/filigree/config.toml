@@ -1,9 +1,13 @@
-formatter.sql = ["pg_format"]
-formatter.rust = ["rustfmt", "+nightly"]
+product_name = "Filigree Test App"
+company_name = "Daniel Imfeld"
+
 
 dotenv = true
 default_auth_scope = "model"
 
+[formatter]
+rust = ["rustfmt", "+nightly"]
+sql = ["pg_format"]
 
 [database]
 migrate_on_start = true

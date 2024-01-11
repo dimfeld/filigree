@@ -89,11 +89,13 @@ CREATE TABLE api_keys (
 CREATE TABLE email_logins (
   email text PRIMARY KEY,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
+  verified bool NOT NULL,
   reset_token uuid,
   reset_expires_at timestamptz,
-  verified bool NOT NULL,
   verify_token uuid,
-  verify_expires_at timestamptz
+  verify_expires_at timestamptz,
+  passwordless_login_token uuid,
+  passwordless_login_expires_at timestamptz
 );
 
 CREATE INDEX ON email_logins (user_id);

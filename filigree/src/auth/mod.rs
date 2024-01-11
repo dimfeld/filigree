@@ -178,3 +178,12 @@ pub enum ObjectPermission {
     /// The user has ownership-level permissions
     Owner,
 }
+
+/// The result of a login, with an optional place to redirect to
+#[derive(Debug, Serialize)]
+pub struct LoginResult {
+    /// A message to show to the user
+    pub message: Cow<'static, str>,
+    /// Where to go next
+    pub redirect_to: Option<String>,
+}
