@@ -1,0 +1,6 @@
+{% raw %}
+{% block content %}{% endblock content %}
+{% endraw %}
+
+-----
+{{ product_name }} by {{ company_name }}
