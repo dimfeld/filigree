@@ -1,6 +1,7 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use tracing::{event, Level};
 
 use super::{EmailError, EmailService};
 use crate::email::Email;
@@ -9,14 +10,14 @@ use crate::email::Email;
 /// checking.
 pub struct TestEmailService {
     /// The emails that have been sent
-    pub emails: Mutex<Vec<Email>>,
+    pub emails: Arc<Mutex<Vec<Email>>>,
 }
 
 impl TestEmailService {
     /// Create a new TestEmailService
     pub fn new() -> Self {
         Self {
-            emails: Mutex::new(vec![]),
+            emails: Arc::new(Mutex::new(vec![])),
         }
     }
 }
@@ -24,7 +25,7 @@ impl TestEmailService {
 #[async_trait]
 impl EmailService for TestEmailService {
     async fn send(&self, email: Email) -> Result<(), EmailError> {
-        println!("Sending email: {:?}", email);
+        event!(Level::INFO, ?email, "Sending email");
         self.emails.lock().unwrap().push(email);
         Ok(())
     }

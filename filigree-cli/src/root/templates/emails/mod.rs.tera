@@ -1,9 +1,9 @@
-use filigree::email::templates::{
-    create_templates, render_template_pair, EmailContent, EmailTemplate,
-};
+use filigree::email::templates::create_templates;
 use rust_embed::RustEmbed;
-use serde::Serialize;
-use uuid::Uuid;
+
+mod passwordless_login;
+
+pub use passwordless_login::*;
 
 #[derive(RustEmbed)]
 #[folder = "src/emails/templates"]
@@ -15,32 +15,4 @@ pub fn create_tera() -> tera::Tera {
         (filename, data)
     });
     create_templates(files)
-}
-
-#[derive(Debug, Serialize)]
-pub struct PasswordlessLoginRequestTemplate {
-    pub user_name: Option<String>,
-    pub base_url: String,
-    pub email: String,
-    pub token: Uuid,
-    pub redirect_to: Option<String>,
-}
-
-impl EmailTemplate for PasswordlessLoginRequestTemplate {
-    fn subject(&self) -> String {
-        "Log in to {{product_name}}".to_string()
-    }
-
-    fn render(&self, renderer: &tera::Tera) -> Result<EmailContent, tera::Error> {
-        render_template_pair(
-            renderer,
-            self,
-            "passwordless_login.html",
-            "passwordless_login.txt",
-        )
-    }
-
-    fn tags(&self) -> Vec<String> {
-        vec!["passwordless_login".to_string()]
-    }
 }

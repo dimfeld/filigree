@@ -48,8 +48,9 @@ struct ServeCommand {
     #[clap(long, env = "{{env_prefix}}COOKIE_SAME_SITE", value_enum, default_value_t = SameSiteArg::Strict)]
     cookie_same_site: SameSiteArg,
 
-    #[clap(long, env = "{{env_prefix}}COOKIE_INSECURE")]
-    cookie_insecure: bool,
+    /// Set if the site is being accessed over HTTP
+    #[clap(long, env = "{{env_prefix}}INSECURE")]
+    insecure: bool,
 
     /// Session expiry time, in days
     #[clap(long, env = "{{env_prefix}}SESSION_EXPIRY", default_value_t = 7)]
@@ -119,7 +120,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     db::run_migrations(&pg_pool).await?;
     {% endif %}
 
-    let secure_cookies = !cmd.cookie_insecure;
+    let secure_cookies = !cmd.insecure;
 
     let email_service = filigree::email::services::email_service_from_name(
         &cmd.email_sender_service,
@@ -135,6 +136,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         env: cmd.env,
         host: cmd.host,
         port: cmd.port,
+        insecure: cmd.insecure,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),
         require_email_verification: cmd.require_email_verification,
         cookie_configuration: SessionCookieBuilder::new(secure_cookies, cmd.cookie_same_site),
