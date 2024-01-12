@@ -71,7 +71,14 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
             tower_cookies::cookie::SameSite::Strict,
         ),
         session_expiry: ExpiryStyle::AfterIdle(std::time::Duration::from_secs(24 * 60 * 60)),
-        require_email_verification: false,
+        new_user_flags: filigree::server::NewUserFlags{
+            {# new user flags #}
+            require_email_verification: {{ users.require_email_verification}},
+            allow_public_signup: {{users.allow_public_signup}},
+            allow_invite_to_same_org: {{users.allow_invite_to_same_org}},
+            allow_invite_to_new_org: {{users.allow_invite_to_new_org}},
+            same_org_invites_require_email_verification: {{users.same_org_invites_require_email_verification}},
+        },
         email_sender: filigree::email::services::EmailSender::new(
             "support@example.com".to_string(),
             crate::emails::create_tera(),
@@ -128,7 +135,7 @@ async fn add_test_user(
         user_id,
         organization_id,
         user_payload,
-        testing::TEST_PASSWORD_HASH.to_string(),
+        Some(testing::TEST_PASSWORD_HASH.to_string()),
         true,
     )
     .await

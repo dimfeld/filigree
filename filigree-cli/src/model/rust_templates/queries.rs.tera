@@ -4,7 +4,7 @@ use filigree::{
     sql::{BindingOperator, FilterBuilder}
 };
 use serde::Deserialize;
-use sqlx::{PgExecutor, PgPool, query_file, query_file_as};
+use sqlx::{PgExecutor, query_file, query_file_as};
 use tracing::{event, Level};
 
 use std::str::FromStr;

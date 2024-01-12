@@ -1015,6 +1015,7 @@ dependencies = [
  "filigree",
  "futures",
  "hyper 1.1.0",
+ "percent-encoding",
  "reqwest",
  "rust-embed",
  "serde",

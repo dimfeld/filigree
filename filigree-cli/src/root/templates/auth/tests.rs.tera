@@ -91,7 +91,7 @@ async fn login_with_wrong_password(db: sqlx::PgPool) {
     let (app, BootstrappedData { admin_user, .. }) = start_app(db).await;
 
     let client = &app.client;
-    let response: serde_json::Value = client
+    let response = client
         .post("auth/login")
         .json(&json!({ "email": admin_user.email, "password": "wrong" }))
         .send()

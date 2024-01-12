@@ -60,7 +60,7 @@ async fn update_password(
 
     let hashed = super::password::new_hash(request.password).await?;
 
-    sqlx::query!(
+    let result = sqlx::query!(
         "WITH sel AS (
             SELECT user_id, (reset_token = $2 AND reset_expires_at > now()) AS matches
             FROM email_logins
@@ -82,6 +82,10 @@ async fn update_password(
     )
     .execute(&state.db)
     .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AuthError::InvalidToken);
+    }
 
     Ok(())
 }

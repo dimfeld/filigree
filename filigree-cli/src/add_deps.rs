@@ -17,6 +17,7 @@ const DEPS: &[DepVersion] = &[
     ("filigree", "0.0.1", &[]),
     ("futures", "0.3.30", &[]),
     ("hyper", "1.1.0", &["server", "http1", "http2"]),
+    ("percent-encoding", "2.3.1", &[]),
     ("reqwest", "0.11.23", &["cookies", "json"]),
     ("rust-embed", "8.1.0", &[]),
     ("serde", "1.0.193", &["derive"]),

@@ -30,6 +30,6 @@ pub const PERMISSIONS: &[PermissionInfo] = &[
 {% endfor %}
 ];
 
-pub async fn list_permissions(authed: Authed) -> impl IntoResponse {
+pub async fn list_permissions(_authed: Authed) -> impl IntoResponse {
     Json(PERMISSIONS)
 }

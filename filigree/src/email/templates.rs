@@ -57,6 +57,16 @@ pub fn render_template_pair(
     text_path: &str,
 ) -> Result<EmailContent, TeraError> {
     let context = tera::Context::from_serialize(data)?;
+    render_template_pair_with_context(tera, &context, html_path, text_path)
+}
+
+/// A helper function for [EmailTemplate] implementors to render a text and html template
+pub fn render_template_pair_with_context(
+    tera: &tera::Tera,
+    context: &tera::Context,
+    html_path: &str,
+    text_path: &str,
+) -> Result<EmailContent, TeraError> {
     let html = tera.render(html_path, &context)?;
     let text = tera.render(text_path, &context)?;
 

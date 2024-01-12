@@ -13,5 +13,5 @@ sql = ["pg_format"]
 migrate_on_start = true
 
 [email]
-provider = "none"
+provider = "resend"
 from = "support@example.com"
