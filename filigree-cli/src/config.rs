@@ -68,7 +68,7 @@ impl Config {
     }
 }
 
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, serde_derive_default::Default, Debug)]
 pub struct DatabaseConfig {
     /// If true, migrations will be run automatically when starting the application
     #[serde(default)]
@@ -79,23 +79,21 @@ pub struct DatabaseConfig {
     /// provider that may charge you for resources incurred by holding open an idle
     /// connection, but you may want a higher value for better responsiveness
     /// when this is not a consideration.
-    #[serde(default = "DatabaseConfig::default_min_connections")]
+    #[serde(default = "default_min_connections")]
     pub min_connections: u16,
 
     /// The maximum number of connections in the database pool.
     /// Defaults to 100
-    #[serde(default = "DatabaseConfig::default_max_connections")]
+    #[serde(default = "default_max_connections")]
     pub max_connections: u16,
 }
 
-impl DatabaseConfig {
-    const fn default_min_connections() -> u16 {
-        0
-    }
+const fn default_min_connections() -> u16 {
+    0
+}
 
-    const fn default_max_connections() -> u16 {
-        100
-    }
+const fn default_max_connections() -> u16 {
+    100
 }
 
 /// Configuration for email-related settings
@@ -118,7 +116,7 @@ pub enum EmailProvider {
     Resend,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, serde_derive_default::Default, Serialize, Deserialize)]
 pub struct UsersConfig {
     /// If true, require that users verify their email address after registering.
     /// Defaults to true.

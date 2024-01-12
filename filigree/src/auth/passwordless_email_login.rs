@@ -119,7 +119,7 @@ pub async fn check_signup_request(
     let result = sqlx::query!(
         "DELETE FROM user_invites
         WHERE email=$1 AND organization_id IS NULL
-        RETURNING organization_id, token, token_expires_at",
+        RETURNING token, token_expires_at",
         email
     )
     .fetch_optional(&state.db)

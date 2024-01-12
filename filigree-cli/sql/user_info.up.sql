@@ -67,6 +67,7 @@ CREATE TABLE user_invites (
   invited_by uuid,
   -- The organization that the user will be added to. NULL indicates a new organization.
   organization_id uuid,
-  invite_sent_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (email, organization_id)
+  invite_sent_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE UNIQUE INDEX ON user_invites (email, organization_id) NULLS NOT DISTINCT;

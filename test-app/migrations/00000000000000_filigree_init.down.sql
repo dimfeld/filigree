@@ -13,6 +13,8 @@ DROP TABLE roles;
 DROP TABLE reports;
 
 
+DROP TABLE user_invites;
+
 DROP TABLE oauth_logins;
 
 DROP TABLE email_logins;

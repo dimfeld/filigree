@@ -69,7 +69,8 @@ async fn get_current_user_endpoint(
     State(state): State<ServerState>,
     authed: Authed,
 ) -> Result<impl IntoResponse, Error> {
-    // TODO This probably should be a more custom query
+    // TODO This probably should be a more custom query, include organization info and permissions
+    // and such, and work even if the user doesn't have the User:read permission.
     let user = crate::models::user::queries::get(&state.db, &authed, authed.user_id).await?;
 
     Ok(Json(user))

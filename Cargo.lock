@@ -993,6 +993,7 @@ dependencies = [
  "rust-embed",
  "semver",
  "serde",
+ "serde_derive_default",
  "serde_json",
  "tera",
  "thiserror",
@@ -2922,6 +2923,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.39",
+]
+
+[[package]]
+name = "serde_derive_default"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afb2522c2a87137bf6c2b3493127fed12877ef1b9476f074d6664edc98acd8a7"
+dependencies = [
+ "quote",
+ "regex",
+ "syn 2.0.39",
+ "thiserror",
 ]
 
 [[package]]
