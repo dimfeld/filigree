@@ -35,19 +35,31 @@ use tracing::{event, Level};
 use crate::error::Error;
 
 mod health;
+mod meta;
 #[cfg(test)]
 mod tests;
 
 /// Shared state used by the server
-#[derive(FromRef)]
 pub struct ServerStateInner {
     /// If the app is running in production mode. This should be used sparingly as there should be
     /// a minimum of difference between production and development to prevent bugs.
     pub production: bool,
+    /// If the app is being hosted on plain HTTP
+    pub insecure: bool,
     /// State for internal filigree endpoints
     pub filigree: Arc<FiligreeState>,
     /// The Postgres database connection pool
     pub db: PgPool,
+}
+
+impl ServerStateInner {
+    pub fn site_scheme(&self) -> &'static str {
+        if self.insecure {
+            "http"
+        } else {
+            "https"
+        }
+    }
 }
 
 impl std::ops::Deref for ServerStateInner {
@@ -134,13 +146,16 @@ pub struct Config {
     pub host: String,
     /// The port to bind to
     pub port: u16,
+    /// True if the site is being hosted on plain HTTP. This should only be set in a development
+    /// or testing environment.
+    pub insecure: bool,
     /// How long to wait before timing out a request
     pub request_timeout: std::time::Duration,
     pub pg_pool: PgPool,
 
     pub cookie_configuration: SessionCookieBuilder,
     pub session_expiry: ExpiryStyle,
-    pub require_email_verification: bool,
+    pub new_user_flags: filigree::server::NewUserFlags,
     pub email_sender: filigree::email::services::EmailSender,
 }
 
@@ -153,12 +168,14 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         filigree: Arc::new(FiligreeState {
             db: config.pg_pool.clone(),
             email: config.email_sender,
+            new_user_flags: config.new_user_flags,
             session_backend: SessionBackend::new(
                 config.pg_pool.clone(),
                 config.cookie_configuration,
                 config.session_expiry,
             ),
         }),
+        insecure: config.insecure,
         db: config.pg_pool.clone(),
     }));
 
@@ -166,9 +183,11 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
 
     let app: Router<ServerState> = Router::new()
         .route("/healthz", get(health::healthz))
-        .merge(crate::models::create_routes())
+        .nest("/meta", meta::create_routes())
         .merge(filigree::auth::endpoints::create_routes())
+        .merge(crate::models::create_routes())
         .merge(crate::users::users::create_routes())
+        .merge(crate::auth::create_routes())
         .layer(
             ServiceBuilder::new()
                 .layer(panic_handler(production))

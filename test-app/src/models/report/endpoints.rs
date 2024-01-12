@@ -6,7 +6,10 @@ use axum::{
     routing, Json,
 };
 
-use super::{queries, types::*, ReportId, OWNER_PERMISSION};
+use super::{
+    queries, types::*, ReportId, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION,
+    WRITE_PERMISSION,
+};
 use crate::{
     auth::{has_any_permission, Authed},
     server::ServerState,
@@ -73,15 +76,32 @@ async fn delete(
 
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
-        .route("/reports", routing::get(list))
-        .route("/reports/:id", routing::get(get))
+        .route(
+            "/reports",
+            routing::get(list).route_layer(has_any_permission(vec![READ_PERMISSION, "org_admin"])),
+        )
+        .route(
+            "/reports/:id",
+            routing::get(get).route_layer(has_any_permission(vec![READ_PERMISSION, "org_admin"])),
+        )
         .route(
             "/reports",
             routing::post(create)
-                .route_layer(has_any_permission(vec!["org_admin", OWNER_PERMISSION])),
+                .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
         )
-        .route("/reports/:id", routing::put(update))
-        .route("/reports/:id", routing::delete(delete))
+        .route(
+            "/reports/:id",
+            routing::put(update).route_layer(has_any_permission(vec![
+                WRITE_PERMISSION,
+                OWNER_PERMISSION,
+                "org_admin",
+            ])),
+        )
+        .route(
+            "/reports/:id",
+            routing::delete(delete)
+                .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
+        )
 }
 
 #[cfg(test)]
@@ -128,13 +148,14 @@ mod test {
                 organization,
                 admin_user,
                 no_roles_user,
+                user,
                 ..
             },
         ) = start_app(pool.clone()).await;
 
         let added_objects = setup_test_objects(&pool, organization.id, 3).await;
 
-        let mut results = admin_user
+        let results = admin_user
             .client
             .get("reports")
             .send()
@@ -193,10 +214,7 @@ mod test {
             // Check that we don't return any fields which are supposed to be omitted.
         }
 
-        // TODO Add test for user with only "read" permission and make sure that fields that are
-        // owner_read but not user_read are omitted.
-
-        let response: Vec<serde_json::Value> = no_roles_user
+        let results = user
             .client
             .get("reports")
             .send()
@@ -204,11 +222,58 @@ mod test {
             .unwrap()
             .error_for_status()
             .unwrap()
-            .json()
+            .json::<Vec<serde_json::Value>>()
             .await
             .unwrap();
 
-        assert!(response.is_empty());
+        for result in results {
+            let added = added_objects
+                .iter()
+                .find(|i| i.id.to_string() == result["id"].as_str().unwrap())
+                .expect("Returned object did not match any of the added objects");
+            assert_eq!(
+                result["id"],
+                serde_json::to_value(&added.id).unwrap(),
+                "field id"
+            );
+            assert_eq!(
+                result["organization_id"],
+                serde_json::to_value(&added.organization_id).unwrap(),
+                "field organization_id"
+            );
+            assert_eq!(
+                result["updated_at"],
+                serde_json::to_value(&added.updated_at).unwrap(),
+                "field updated_at"
+            );
+            assert_eq!(
+                result["created_at"],
+                serde_json::to_value(&added.created_at).unwrap(),
+                "field created_at"
+            );
+            assert_eq!(
+                result["title"],
+                serde_json::to_value(&added.title).unwrap(),
+                "field title"
+            );
+            assert_eq!(
+                result["description"],
+                serde_json::to_value(&added.description).unwrap(),
+                "field description"
+            );
+            assert_eq!(
+                result["ui"],
+                serde_json::to_value(&added.ui).unwrap(),
+                "field ui"
+            );
+            assert_eq!(result["_permission"], "write");
+
+            // Check that we don't return any fields which are supposed to be omitted.
+        }
+
+        let response = no_roles_user.client.get("reports").send().await.unwrap();
+
+        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     }
 
     #[sqlx::test]
@@ -234,6 +299,7 @@ mod test {
             BootstrappedData {
                 organization,
                 admin_user,
+                user,
                 no_roles_user,
                 ..
             },
@@ -293,8 +359,57 @@ mod test {
 
         // Check that we don't return any fields which are supposed to be omitted.
 
-        // TODO Add test for user with only "read" permission and make sure that fields that are
-        // owner_read but not user_read are omitted.
+        let result = user
+            .client
+            .get(&format!("reports/{}", added_objects[1].id))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+
+        let added = &added_objects[1];
+        assert_eq!(
+            result["id"],
+            serde_json::to_value(&added.id).unwrap(),
+            "field id"
+        );
+        assert_eq!(
+            result["organization_id"],
+            serde_json::to_value(&added.organization_id).unwrap(),
+            "field organization_id"
+        );
+        assert_eq!(
+            result["updated_at"],
+            serde_json::to_value(&added.updated_at).unwrap(),
+            "field updated_at"
+        );
+        assert_eq!(
+            result["created_at"],
+            serde_json::to_value(&added.created_at).unwrap(),
+            "field created_at"
+        );
+        assert_eq!(
+            result["title"],
+            serde_json::to_value(&added.title).unwrap(),
+            "field title"
+        );
+        assert_eq!(
+            result["description"],
+            serde_json::to_value(&added.description).unwrap(),
+            "field description"
+        );
+        assert_eq!(
+            result["ui"],
+            serde_json::to_value(&added.ui).unwrap(),
+            "field ui"
+        );
+        assert_eq!(result["_permission"], "write");
+
+        // Check that we don't return any fields which are supposed to be omitted.
 
         let response = no_roles_user
             .client
@@ -303,7 +418,7 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     }
 
     #[sqlx::test]
@@ -368,6 +483,9 @@ mod test {
         );
         assert_eq!(updated["_permission"], "owner");
 
+        // TODO Test that owner can not write fields which are not writable by anyone.
+        // TODO Test that user can not update fields which are writable by owner but not user
+
         // Make sure that no other objects were updated
         let non_updated: serde_json::Value = admin_user
             .client
@@ -426,7 +544,7 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     }
 
     #[sqlx::test]
@@ -434,7 +552,6 @@ mod test {
         let (
             _app,
             BootstrappedData {
-                organization,
                 admin_user,
                 no_roles_user,
                 ..
@@ -564,7 +681,7 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
 
         // Make sure other objects still exist
         let response = admin_user

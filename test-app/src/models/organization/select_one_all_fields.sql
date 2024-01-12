@@ -24,8 +24,7 @@ FROM
     WHERE
       organization_id = $2
       AND actor_id = ANY ($3)
-      AND permission IN ('org_admin', 'Organization::owner', 'Organization::write', 'Organization::read')
-    GROUP BY
-      permission) _permission ON _permission IS NOT NULL
+      AND permission IN ('org_admin', 'Organization::owner', 'Organization::write', 'Organization::read'))
+	_permission ON _permission IS NOT NULL
 WHERE
   tb.id = $1

@@ -25,9 +25,8 @@ FROM
     WHERE
       organization_id = $1
       AND actor_id = ANY ($2)
-      AND permission IN ('org_admin', 'Report::owner', 'Report::write', 'Report::read')
-    GROUP BY
-      permission) perm ON perm._permission IS NOT NULL
+      AND permission IN ('org_admin', 'Report::owner', 'Report::write', 'Report::read')) perm ON
+	perm._permission IS NOT NULL
 WHERE
   organization_id = $1
 ORDER BY

@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use error_stack::Report;
 use filigree::{
     auth::{api_key::ApiKeyData, ExpiryStyle, SessionBackend, SessionCookieBuilder},
@@ -24,6 +26,7 @@ pub struct TestApp {
     pub base_url: String,
     pub pg_pool: PgPool,
     pub server_task: tokio::task::JoinHandle<Result<(), Report<Error>>>,
+    pub sent_emails: Arc<Mutex<Vec<filigree::email::Email>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -53,10 +56,14 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
     // Make the shutdown future resolve to () so the type matches what Axum expects.
     let shutdown_rx = shutdown_rx.map(|_| ());
 
+    let email_service = filigree::email::services::test_service::TestEmailService::new();
+    let sent_emails = email_service.emails.clone();
+
     let config = crate::server::Config {
         env: "test".into(),
         host: "127.0.0.1".into(),
         port: 0, // Bind to random port
+        insecure: true,
         request_timeout: std::time::Duration::from_secs(30),
         pg_pool: pg_pool.clone(),
         cookie_configuration: SessionCookieBuilder::new(
@@ -64,10 +71,17 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
             tower_cookies::cookie::SameSite::Strict,
         ),
         session_expiry: ExpiryStyle::AfterIdle(std::time::Duration::from_secs(24 * 60 * 60)),
-        require_email_verification: false,
+        new_user_flags: filigree::server::NewUserFlags {
+            require_email_verification: true,
+            allow_public_signup: true,
+            allow_invite_to_same_org: true,
+            allow_invite_to_new_org: true,
+            same_org_invites_require_email_verification: true,
+        },
         email_sender: filigree::email::services::EmailSender::new(
             "support@example.com".to_string(),
-            Box::new(filigree::email::services::noop_service::NoopEmailService {}),
+            crate::emails::create_tera(),
+            Box::new(email_service),
         ),
     };
 
@@ -89,6 +103,7 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
         client: test_client,
         base_url,
         server_task,
+        sent_emails,
         pg_pool,
     };
 
@@ -119,7 +134,7 @@ async fn add_test_user(
         user_id,
         organization_id,
         user_payload,
-        testing::TEST_PASSWORD_HASH.to_string(),
+        Some(testing::TEST_PASSWORD_HASH.to_string()),
         true,
     )
     .await

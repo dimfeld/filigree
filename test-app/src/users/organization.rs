@@ -14,7 +14,16 @@ use crate::{
 
 const ADMIN_DEFAULT_PERMISSIONS: &[&str] = &["org_admin"];
 // TODO This needs all the models, create permissions, etc.
-const USER_DEFAULT_PERMISSIONS: &[&str] = &["Organization:read", "User:read", "Role:read"];
+const USER_DEFAULT_PERMISSIONS: &[&str] = &[
+    "User::read",
+    "User::write",
+    "Organization::read",
+    "Organization::write",
+    "Role::read",
+    "Role::write",
+    "Report::read",
+    "Report::write",
+];
 
 pub struct CreatedOrganization {
     pub organization: Organization,

@@ -4,7 +4,7 @@ use filigree::{
     auth::{SameSiteArg, SessionCookieBuilder},
     tracing_config::{configure_tracing, teardown_tracing, TracingExportConfig},
 };
-use filigree_test_app::{db, server, util_cmd, Error};
+use filigree_test_app::{db, emails, server, util_cmd, Error};
 use tracing::{event, Level};
 
 #[derive(Parser)]
@@ -46,8 +46,9 @@ struct ServeCommand {
     #[clap(long, env = "COOKIE_SAME_SITE", value_enum, default_value_t = SameSiteArg::Strict)]
     cookie_same_site: SameSiteArg,
 
-    #[clap(long, env = "COOKIE_INSECURE")]
-    cookie_insecure: bool,
+    /// Set if the site is being accessed over HTTP
+    #[clap(long, env = "INSECURE")]
+    insecure: bool,
 
     /// Session expiry time, in days
     #[clap(long, env = "SESSION_EXPIRY", default_value_t = 7)]
@@ -60,23 +61,40 @@ struct ServeCommand {
     /// Create no more than this many connections to the database.
     #[clap(long, env = "DB_MAX_CONNECTIONS", default_value_t = 100)]
     db_max_connections: u32,
-
-    /// Require the user to verify their email before activating their account.
-    #[clap(env = "REQUIRE_EMAIL_VERIFICATION", default_value_t = true)]
-    require_email_verification: bool,
-
     /// The email service to use
-    #[clap(env="EMAIL_SENDER_SERVICE", default_value_t = String::from("none"))]
+    #[clap(env="EMAIL_SENDER_SERVICE", default_value_t = String::from("resend"))]
     email_sender_service: String,
 
     /// The API token for the email sending service
-    #[clap(env="EMAIL_SENDER_API_TOKEN", default_value_t = String::from(""))
-    ]
+    #[clap(env = "EMAIL_SENDER_API_TOKEN")]
     email_sender_api_token: String,
 
     /// The email address to use as the default sender
     #[clap(env="EMAIL_DEFAULT_FROM_ADDRESS", default_value_t = String::from("support@example.com"))]
     email_default_from_address: String,
+
+    /// Require the user to verify their email before activating their account.
+    #[clap(env = "REQUIRE_EMAIL_VERIFICATION", default_value_t = true)]
+    require_email_verification: bool,
+
+    /// Allow users to sign up themselves
+    #[clap(env = "ALLOW_PUBLIC_SIGNUP", default_value_t = true)]
+    allow_public_signup: bool,
+
+    /// Allow users to invite people to their team
+    #[clap(env = "ALLOW_INVITE_TO_SAME_ORG", default_value_t = true)]
+    allow_invite_to_same_org: bool,
+
+    /// Allow users to invite people to the app, in their own new team
+    #[clap(env = "ALLOW_INVITE_TO_NEW_ORG", default_value_t = true)]
+    allow_invite_to_new_org: bool,
+
+    /// Require email verification when inviting a user to the same org
+    #[clap(
+        env = "SAME_ORG_INVITES_REQUIRE_EMAIL_VERIFICATION",
+        default_value_t = true
+    )]
+    same_org_invites_require_email_verification: bool,
     // tracing endpoint (if any)
     // honeycomb team
     // honeycomb dataset
@@ -110,26 +128,37 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
 
     db::run_migrations(&pg_pool).await?;
 
-    let secure_cookies = !cmd.cookie_insecure;
+    let secure_cookies = !cmd.insecure;
 
     let email_service = filigree::email::services::email_service_from_name(
         &cmd.email_sender_service,
         cmd.email_sender_api_token,
     );
-    let email_sender =
-        filigree::email::services::EmailSender::new(cmd.email_default_from_address, email_service);
+    let email_sender = filigree::email::services::EmailSender::new(
+        cmd.email_default_from_address,
+        emails::create_tera(),
+        email_service,
+    );
 
     let server = server::create_server(server::Config {
         env: cmd.env,
         host: cmd.host,
         port: cmd.port,
+        insecure: cmd.insecure,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),
-        require_email_verification: cmd.require_email_verification,
         cookie_configuration: SessionCookieBuilder::new(secure_cookies, cmd.cookie_same_site),
         session_expiry: filigree::auth::ExpiryStyle::AfterIdle(std::time::Duration::from_secs(
             cmd.session_expiry * 24 * 60 * 60,
         )),
         email_sender,
+        new_user_flags: filigree::server::NewUserFlags {
+            require_email_verification: cmd.require_email_verification,
+            allow_public_signup: cmd.allow_public_signup,
+            allow_invite_to_same_org: cmd.allow_invite_to_same_org,
+            allow_invite_to_new_org: cmd.allow_invite_to_new_org,
+            same_org_invites_require_email_verification: cmd
+                .same_org_invites_require_email_verification,
+        },
         pg_pool,
     })
     .await?;

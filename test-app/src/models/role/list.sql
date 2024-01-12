@@ -24,9 +24,8 @@ FROM
     WHERE
       organization_id = $1
       AND actor_id = ANY ($2)
-      AND permission IN ('org_admin', 'Role::owner', 'Role::write', 'Role::read')
-    GROUP BY
-      permission) perm ON perm._permission IS NOT NULL
+      AND permission IN ('org_admin', 'Role::owner', 'Role::write', 'Role::read')) perm ON
+	perm._permission IS NOT NULL
 WHERE
   organization_id = $1
 ORDER BY

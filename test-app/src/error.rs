@@ -3,7 +3,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use error_stack::Report;
-use filigree::errors::HttpError;
+use filigree::{auth::AuthError, errors::HttpError};
 use thiserror::Error;
 
 /// The top-level error type from the platform
@@ -40,6 +40,8 @@ pub enum Error {
     MissingPermission(&'static str),
     #[error("Auth subsystem error")]
     AuthSubsystem,
+    #[error("Login failure")]
+    Login,
 }
 
 impl From<Report<Error>> for Error {
@@ -48,8 +50,25 @@ impl From<Report<Error>> for Error {
     }
 }
 
+impl Error {
+    /// If this Error contains a Report<Error>, find an inner HttpError whose error data we may want to use.
+    fn find_downstack_error(&self) -> Option<&AuthError> {
+        let Error::WrapReport(report) = self else {
+            return None;
+        };
+
+        // Currently this only applies to AuthError. Other errors don't need to pass through their
+        // codes to the user.
+        report.downcast_ref::<AuthError>()
+    }
+}
+
 impl HttpError for Error {
     fn error_kind(&self) -> &'static str {
+        if let Some(e) = self.find_downstack_error() {
+            return e.error_kind();
+        }
+
         match self {
             Error::WrapReport(e) => e.current_context().error_kind(),
             Error::DbInit => "db_init",
@@ -61,11 +80,16 @@ impl HttpError for Error {
             Error::ScheduledTask => "scheduled_task",
             Error::Filter => "invalid_filter",
             Error::AuthSubsystem => "auth",
+            Error::Login => "auth",
             Error::MissingPermission(_) => "missing_permission",
         }
     }
 
     fn status_code(&self) -> StatusCode {
+        if let Some(e) = self.find_downstack_error() {
+            return e.status_code();
+        }
+
         match self {
             Error::WrapReport(e) => e.current_context().status_code(),
             Error::DbInit => StatusCode::INTERNAL_SERVER_ERROR,
@@ -78,6 +102,7 @@ impl HttpError for Error {
             Error::Filter => StatusCode::BAD_REQUEST,
             Error::AuthSubsystem => StatusCode::INTERNAL_SERVER_ERROR,
             Error::MissingPermission(_) => StatusCode::FORBIDDEN,
+            Error::Login => StatusCode::UNAUTHORIZED,
         }
     }
 

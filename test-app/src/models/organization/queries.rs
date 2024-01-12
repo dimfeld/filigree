@@ -6,7 +6,7 @@ use filigree::{
     sql::{BindingOperator, FilterBuilder},
 };
 use serde::Deserialize;
-use sqlx::{query_file, query_file_as, PgExecutor, PgPool};
+use sqlx::{query_file, query_file_as, PgExecutor};
 use tracing::{event, Level};
 
 use super::{types::*, OrganizationId};

@@ -7,9 +7,7 @@ WITH permissions AS (
   WHERE
     organization_id = $2
     AND actor_id = ANY ($3)
-    AND permission IN ('org_admin', 'User::owner', 'User::write')
-  GROUP BY
-    permission)
+    AND permission IN ('org_admin', 'User::owner', 'User::write'))
 UPDATE
   users
 SET

@@ -1,9 +1,18 @@
 use std::borrow::Cow;
 
 use async_trait::async_trait;
+use axum::routing::{self, Router};
 use filigree::auth::{AuthError, OrganizationId, PermissionChecker, RoleId, SessionKey, UserId};
 use sqlx::{query_file_as, PgPool};
 use uuid::Uuid;
+
+use crate::server::ServerState;
+
+pub mod password_management;
+pub mod passwordless_login;
+pub mod permissions;
+#[cfg(test)]
+mod tests;
 
 pub type Authed = filigree::auth::Authed<AuthInfo>;
 
@@ -108,4 +117,20 @@ where
     F: Fn(&AuthInfo) -> bool + Clone,
 {
     filigree::auth::has_auth_predicate(message.into(), f)
+}
+
+pub fn create_routes() -> Router<ServerState> {
+    Router::new()
+        .route(
+            "/auth/email_login",
+            routing::post(passwordless_login::request_passwordless_login),
+        )
+        .route(
+            "/auth/email_login",
+            routing::get(passwordless_login::process_passwordless_login_token),
+        )
+        .route(
+            "/auth/request_password_reset",
+            routing::post(password_management::start_password_reset),
+        )
 }

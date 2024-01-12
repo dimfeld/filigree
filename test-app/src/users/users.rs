@@ -29,7 +29,7 @@ pub async fn create_new_user(
         user_id,
         organization_id,
         payload,
-        password_hash,
+        Some(password_hash),
         preverified,
     )
     .await
@@ -40,7 +40,7 @@ pub async fn create_new_user_with_prehashed_password(
     user_id: UserId,
     organization_id: OrganizationId,
     payload: UserCreatePayload,
-    password_hash: String,
+    password_hash: Option<String>,
     preverified: bool,
 ) -> Result<User, Report<Error>> {
     let user = sqlx::query_file_as!(
@@ -60,17 +60,18 @@ pub async fn create_new_user_with_prehashed_password(
     Ok(user)
 }
 
-pub async fn get_current_user(
+async fn get_current_user_endpoint(
     State(state): State<ServerState>,
     authed: Authed,
 ) -> Result<impl IntoResponse, Error> {
-    // TODO This probably should be a more custom query
+    // TODO This probably should be a more custom query, include organization info and permissions
+    // and such, and work even if the user doesn't have the User:read permission.
     let user = crate::models::user::queries::get(&state.db, &authed, authed.user_id).await?;
 
     Ok(Json(user))
 }
 
-pub async fn update_current_user(
+async fn update_current_user_endpoint(
     State(state): State<ServerState>,
     authed: Authed,
     Json(body): Json<crate::models::user::UserUpdatePayload>,
@@ -89,104 +90,13 @@ pub async fn update_current_user(
 
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
-        .route("/self", routing::get(get_current_user))
-        .route("/self", routing::put(update_current_user))
+        .route("/self", routing::get(get_current_user_endpoint))
+        .route("/self", routing::put(update_current_user_endpoint))
 }
 
 #[cfg(test)]
 mod test {
-    use serde_json::json;
-
     use crate::tests::{start_app, BootstrappedData};
-
-    #[sqlx::test]
-    async fn login_with_password_and_logout(db: sqlx::PgPool) {
-        let (app, BootstrappedData { admin_user, .. }) = start_app(db).await;
-
-        let client = &app.client;
-        let response: serde_json::Value = client
-            .post("login")
-            .json(&json!({ "email": admin_user.email, "password": admin_user.password }))
-            .send()
-            .await
-            .unwrap()
-            .error_for_status()
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
-
-        assert_eq!(response["message"], "Logged in");
-
-        let user: serde_json::Value = client
-            .get(&format!("users/{}", admin_user.user_id))
-            .send()
-            .await
-            .unwrap()
-            .error_for_status()
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
-        assert_eq!(user["name"], "Admin");
-
-        let response: serde_json::Value = client
-            .post("logout")
-            .send()
-            .await
-            .unwrap()
-            .error_for_status()
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
-        assert_eq!(response["message"], "Logged out");
-
-        let anon_response = client
-            .get(&format!("users/{}", admin_user.user_id))
-            .send()
-            .await
-            .unwrap();
-
-        assert_eq!(
-            anon_response.status(),
-            reqwest::StatusCode::UNAUTHORIZED,
-            "Authed requests should not work after logout"
-        );
-
-        // TODO check explicitly that the session cookie is gone
-        // TODO check that adding the session cookie back to the request after logout doesn't work
-    }
-
-    #[sqlx::test]
-    async fn login_with_no_roles_user(db: sqlx::PgPool) {
-        let (app, BootstrappedData { no_roles_user, .. }) = start_app(db).await;
-
-        let client = &app.client;
-        let response: serde_json::Value = client
-            .post("login")
-            .json(&json!({ "email": no_roles_user.email, "password": no_roles_user.password }))
-            .send()
-            .await
-            .unwrap()
-            .error_for_status()
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
-
-        assert_eq!(response["message"], "Logged in");
-
-        let response = client
-            .get(&format!("users/{}", no_roles_user.user_id))
-            .send()
-            .await
-            .unwrap();
-        // Should see 404 because user has no roles and hence no permissions, but not
-        // 401 which would indicate that the lack of roles is causing the user lookup query to
-        // fail.
-        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
-    }
 
     #[sqlx::test]
     async fn get_current_user(db: sqlx::PgPool) {
