@@ -110,6 +110,28 @@ pub async fn login_with_password(
     Ok(())
 }
 
+/// Create a password reset token
+pub async fn create_reset_token(db: &sqlx::PgPool, email: &str) -> Result<Uuid, AuthError> {
+    let token = Uuid::new_v4();
+
+    let result = sqlx::query!(
+        "UPDATE email_logins
+        SET reset_token = $2,
+            reset_expires_at = now() + '1 hour'::interval
+        WHERE email = $1",
+        email,
+        &token
+    )
+    .execute(db)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AuthError::Unauthenticated);
+    }
+
+    Ok(token)
+}
+
 #[cfg(all(test, any(feature = "test_slow", feature = "test_password")))]
 mod tests {
     use super::*;

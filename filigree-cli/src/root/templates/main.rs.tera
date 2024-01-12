@@ -63,11 +63,6 @@ struct ServeCommand {
     /// Create no more than this many connections to the database.
     #[clap(long, env="{{env_prefix}}DB_MAX_CONNECTIONS", default_value_t = {{db.max_connections}})]
     db_max_connections: u32,
-
-    /// Require the user to verify their email before activating their account.
-    #[clap(env="{{env_prefix}}REQUIRE_EMAIL_VERIFICATION", default_value_t = {{require_email_verification}})]
-    require_email_verification: bool,
-
     /// The email service to use
     #[clap(env="{{env_prefix}}EMAIL_SENDER_SERVICE", default_value_t = String::from("{{email.provider}}"))]
     email_sender_service: String,
@@ -83,6 +78,28 @@ struct ServeCommand {
     /// The email address to use as the default sender
     #[clap(env="{{env_prefix}}EMAIL_DEFAULT_FROM_ADDRESS", default_value_t = String::from("{{email.from}}"))]
     email_default_from_address: String,
+
+
+    /// Require the user to verify their email before activating their account.
+    #[clap(env="{{env_prefix}}REQUIRE_EMAIL_VERIFICATION", default_value_t = {{users.require_email_verification}})]
+    require_email_verification: bool,
+
+    /// Allow users to sign up themselves
+    #[clap(env="{{env_prefix}}ALLOW_PUBLIC_SIGNUP", default_value_t = {{users.allow_public_signup}})]
+    allow_public_signup: bool,
+
+    /// Allow users to invite people to their team
+    #[clap(env="{{env_prefix}}ALLOW_INVITE_TO_SAME_ORG", default_value_t = {{users.allow_invite_to_same_org}})]
+    allow_invite_to_same_org: bool,
+
+    /// Allow users to invite people to the app, in their own new team
+    #[clap(env="{{env_prefix}}ALLOW_INVITE_TO_NEW_ORG", default_value_t = {{users.allow_invite_to_new_org}})]
+    allow_invite_to_new_org: bool,
+
+    /// Require email verification when inviting a user to the same org
+    #[clap(env="{{env_prefix}}SAME_ORG_INVITES_REQUIRE_EMAIL_VERIFICATION", default_value_t = {{users.same_org_invites_require_email_verification}})]
+    same_org_invites_require_email_verification: bool,
+
 
     // tracing endpoint (if any)
     // honeycomb team
@@ -138,12 +155,18 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         port: cmd.port,
         insecure: cmd.insecure,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),
-        require_email_verification: cmd.require_email_verification,
         cookie_configuration: SessionCookieBuilder::new(secure_cookies, cmd.cookie_same_site),
         session_expiry: filigree::auth::ExpiryStyle::AfterIdle(
             std::time::Duration::from_secs(cmd.session_expiry * 24 * 60 * 60),
         ),
         email_sender,
+        new_user_flags: filigree::server::NewUserFlags{
+            require_email_verification: cmd.require_email_verification,
+            allow_public_signup: cmd.allow_public_signup,
+            allow_invite_to_same_org: cmd.allow_invite_to_same_org,
+            allow_invite_to_new_org: cmd.allow_invite_to_new_org,
+            same_org_invites_require_email_verification: cmd.same_org_invites_require_email_verification,
+        },
         pg_pool,
     })
     .await?;

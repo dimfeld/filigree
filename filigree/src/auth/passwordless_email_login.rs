@@ -42,30 +42,39 @@ pub async fn perform_passwordless_login(
     email: String,
     token: Uuid,
 ) -> Result<(), Report<AuthError>> {
+    // Get the token, and unconditionally clear it.
     let result = sqlx::query!(
-        r##"UPDATE email_logins
-            SET passwordless_login_token = null
-            WHERE email = $1
-                AND passwordless_login_token = $2
-            RETURNING user_id AS "user_id: UserId", passwordless_login_expires_at"##,
+        r##"
+        UPDATE email_logins upd
+        SET passwordless_login_token = null,
+            passwordless_login_expires_at = null
+        -- self-join since it lets us get the token even while we clear it in the UPDATE
+        FROM email_logins old
+        WHERE old.email = upd.email
+            AND upd.email = $1
+            AND upd.passwordless_login_token IS NOT NULL
+        RETURNING old.user_id AS "user_id: UserId",
+            (old.passwordless_login_token = $2 AND old.passwordless_login_expires_at > now()) AS valid
+        "##,
         email,
         token
     )
     .fetch_optional(&state.db)
     .await
-    .map_err(AuthError::from)?
-    .ok_or(AuthError::InvalidToken)?;
+    .map_err(AuthError::from)?;
 
-    let expiration = result
-        .passwordless_login_expires_at
-        .unwrap_or_else(|| chrono::Utc.timestamp_micros(0).unwrap());
-    if expiration < chrono::Utc::now() {
+    let user = result
+        .as_ref()
+        .filter(|r| r.valid.unwrap_or(false))
+        .map(|r| r.user_id);
+
+    let Some(user_id) = user else {
         return Err(Report::new(AuthError::InvalidToken));
-    }
+    };
 
     state
         .session_backend
-        .create_session(cookies, &result.user_id)
+        .create_session(cookies, &user_id)
         .await
         .change_context(AuthError::SessionBackend)?;
 

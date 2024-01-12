@@ -3,7 +3,7 @@
 
 use std::borrow::Cow;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Authentication and Authorization
 pub mod auth;
@@ -38,4 +38,11 @@ impl<'a> Message<'a> {
             message: message.into(),
         }
     }
+}
+
+/// A request body that only contains an email
+#[derive(Debug, Deserialize, Serialize)]
+pub struct EmailBody {
+    /// The email address
+    pub email: String,
 }

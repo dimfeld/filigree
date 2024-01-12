@@ -8,8 +8,11 @@ use uuid::Uuid;
 
 use crate::server::ServerState;
 
+pub mod password_management;
 pub mod passwordless_login;
 pub mod permissions;
+#[cfg(test)]
+mod tests;
 
 pub type Authed = filigree::auth::Authed<AuthInfo>;
 
@@ -125,5 +128,9 @@ pub fn create_routes() -> Router<ServerState> {
         .route(
             "/auth/email_login",
             routing::get(passwordless_login::process_passwordless_login_token),
+        )
+        .route(
+            "/auth/request_password_reset",
+            routing::post(password_management::start_password_reset),
         )
 }

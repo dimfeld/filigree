@@ -26,6 +26,7 @@ pub struct Config {
     // /// The SQL dialect to use. Defaults to postgresql
     // #[serde(default = "Config::default_sql_dialect")]
     // pub sql_dialect: SqlDialect,
+    /// TODO put this in a models config, along with the create permission setting
     /// The auth scope for models that don't specify a different one.
     pub default_auth_scope: ModelAuthScope,
     // TODO implement this
@@ -41,17 +42,16 @@ pub struct Config {
     #[serde(default)]
     pub dotenv: bool,
 
-    /// If true, require that users verify their email address after registering.
-    /// Defaults to true.
-    #[serde(default = "Config::default_require_email_verification")]
-    pub require_email_verification: bool,
-
     /// Configuration for the database
     #[serde(default)]
     pub database: DatabaseConfig,
 
     /// Configuration for sending emails
     pub email: EmailConfig,
+
+    /// Configuration for user behavior
+    #[serde(default)]
+    pub users: UsersConfig,
 }
 
 impl Config {
@@ -61,10 +61,6 @@ impl Config {
 
     pub const fn default_sql_dialect() -> SqlDialect {
         SqlDialect::Postgresql
-    }
-
-    const fn default_require_email_verification() -> bool {
-        true
     }
 
     const fn default_port() -> u16 {
@@ -120,6 +116,38 @@ pub enum EmailProvider {
     None,
     /// Send emails using Resend
     Resend,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct UsersConfig {
+    /// If true, require that users verify their email address after registering.
+    /// Defaults to true.
+    #[serde(default = "true_t")]
+    pub require_email_verification: bool,
+
+    /// Configure who is able to create new user accounts. Defaults to public signup
+    /// Defaults to true.
+    #[serde(default = "true_t")]
+    pub allow_public_signup: bool,
+
+    /// Allow inviting users to the same organization
+    /// Defaults to true.
+    #[serde(default = "true_t")]
+    pub allow_invite_to_same_org: bool,
+
+    /// When inviting new users to join your organization, require them to verify their email first.
+    /// Defaults to true.
+    #[serde(default = "true_t")]
+    pub same_org_invites_require_email_verification: bool,
+
+    /// Allow inviting users to be placed in a new organization
+    /// Defaults to true.
+    #[serde(default = "true_t")]
+    pub allow_invite_to_new_org: bool,
+}
+
+const fn true_t() -> bool {
+    true
 }
 
 #[derive(Debug)]

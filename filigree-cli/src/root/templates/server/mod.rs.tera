@@ -155,7 +155,7 @@ pub struct Config {
 
     pub cookie_configuration: SessionCookieBuilder,
     pub session_expiry: ExpiryStyle,
-    pub require_email_verification: bool,
+    pub new_user_flags: filigree::server::NewUserFlags,
     pub email_sender: filigree::email::services::EmailSender,
 }
 
@@ -168,6 +168,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         filigree: Arc::new(FiligreeState {
             db: config.pg_pool.clone(),
             email: config.email_sender,
+            new_user_flags: config.new_user_flags,
             session_backend: SessionBackend::new(
                 config.pg_pool.clone(),
                 config.cookie_configuration,

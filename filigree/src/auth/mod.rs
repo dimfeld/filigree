@@ -70,6 +70,8 @@ pub enum AuthError {
     /// Missing or expired token
     #[error("Missing or expired token")]
     InvalidToken,
+    #[error("Passwords do not match")]
+    PasswordMismatch,
 }
 
 impl AuthError {
@@ -89,7 +91,7 @@ impl HttpError for AuthError {
             | Self::Disabled
             | Self::MissingPermission(_)
             | Self::FailedPredicate(_) => StatusCode::FORBIDDEN,
-            Self::ApiKeyFormat => StatusCode::BAD_REQUEST,
+            Self::ApiKeyFormat | Self::PasswordMismatch => StatusCode::BAD_REQUEST,
             Self::Db(_)
             | Self::EmailSendFailure
             | Self::PasswordHasherError(_)
@@ -105,6 +107,7 @@ impl HttpError for AuthError {
             Self::NotVerified => "not_verified",
             Self::Disabled => "disabled",
             Self::Db(_) => "db",
+            Self::PasswordMismatch => "password_mismatch",
             Self::ApiKeyFormat => "invalid_api_key",
             Self::PasswordHasherError(_) => "password_hash_internal",
             Self::MissingPermission(_) => "missing_permission",
