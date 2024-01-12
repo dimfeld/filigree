@@ -72,7 +72,6 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
         ),
         session_expiry: ExpiryStyle::AfterIdle(std::time::Duration::from_secs(24 * 60 * 60)),
         new_user_flags: filigree::server::NewUserFlags {
-            require_email_verification: true,
             allow_public_signup: true,
             allow_invite_to_same_org: true,
             allow_invite_to_new_org: true,

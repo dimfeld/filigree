@@ -331,6 +331,7 @@ mod test {
 
     #[sqlx::test]
     async fn passwordless_login_new_user(db: sqlx::PgPool) {
+        // TODO This assumes public_sign_up is enabled.
         let (app, BootstrappedData { organization, .. }) = start_app(db.clone()).await;
 
         let client = app.client.clone();

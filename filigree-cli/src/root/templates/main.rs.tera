@@ -79,11 +79,6 @@ struct ServeCommand {
     #[clap(env="{{env_prefix}}EMAIL_DEFAULT_FROM_ADDRESS", default_value_t = String::from("{{email.from}}"))]
     email_default_from_address: String,
 
-
-    /// Require the user to verify their email before activating their account.
-    #[clap(env="{{env_prefix}}REQUIRE_EMAIL_VERIFICATION", default_value_t = {{users.require_email_verification}})]
-    require_email_verification: bool,
-
     /// Allow users to sign up themselves
     #[clap(env="{{env_prefix}}ALLOW_PUBLIC_SIGNUP", default_value_t = {{users.allow_public_signup}})]
     allow_public_signup: bool,
@@ -161,7 +156,6 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         ),
         email_sender,
         new_user_flags: filigree::server::NewUserFlags{
-            require_email_verification: cmd.require_email_verification,
             allow_public_signup: cmd.allow_public_signup,
             allow_invite_to_same_org: cmd.allow_invite_to_same_org,
             allow_invite_to_new_org: cmd.allow_invite_to_new_org,

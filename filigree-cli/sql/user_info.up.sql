@@ -63,7 +63,7 @@ CREATE TABLE user_invites (
   token_expires_at timestamptz NOT NULL,
   -- The person's name, if known.
   name text,
-  -- The user that send the invite
+  -- The user that sent the invite
   invited_by uuid,
   -- The organization that the user will be added to. NULL indicates a new organization.
   organization_id uuid,

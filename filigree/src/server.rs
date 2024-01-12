@@ -18,8 +18,6 @@ pub struct FiligreeState {
 
 /// Flags controlling new user behavior
 pub struct NewUserFlags {
-    /// Require users to verify their email address before they can use the site.
-    pub require_email_verification: bool,
     /// Allow anyone to sign up
     pub allow_public_signup: bool,
     /// Allow inviting users to join your own organization

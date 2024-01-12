@@ -118,11 +118,6 @@ pub enum EmailProvider {
 
 #[derive(Debug, serde_derive_default::Default, Serialize, Deserialize)]
 pub struct UsersConfig {
-    /// If true, require that users verify their email address after registering.
-    /// Defaults to true.
-    #[serde(default = "true_t")]
-    pub require_email_verification: bool,
-
     /// Configure who is able to create new user accounts. Defaults to public signup
     /// Defaults to true.
     #[serde(default = "true_t")]
