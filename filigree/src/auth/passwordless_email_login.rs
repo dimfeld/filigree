@@ -6,11 +6,17 @@ use uuid::Uuid;
 use super::{AuthError, UserId};
 use crate::server::FiligreeState;
 
+#[derive(Debug)]
+pub struct PasswordlessLoginRequestAnswer {
+    pub token: Uuid,
+    pub new_user: bool,
+}
+
 /// Generate a new passwordless login token.
 pub async fn setup_passwordless_login(
     state: &FiligreeState,
     email: String,
-) -> Result<Uuid, Report<AuthError>> {
+) -> Result<PasswordlessLoginRequestAnswer, Report<AuthError>> {
     let token = Uuid::new_v4();
 
     // TODO get the user name here too if we have it
@@ -28,11 +34,33 @@ pub async fn setup_passwordless_login(
 
     let found_email = result.rows_affected() > 0;
 
-    if !found_email {
-        Err(AuthError::Unauthenticated)?;
-    }
+    if found_email {
+        Ok(PasswordlessLoginRequestAnswer {
+            token,
+            new_user: false,
+        })
+    } else if state.new_user_flags.allow_public_signup {
+        sqlx::query!(
+            "INSERT INTO user_invites (email, organization_id, token, token_expires_at)
+                VALUES ($1, NULL, $2, now() + interval '1 hour')
+                ON CONFLICT(email, organization_id)
+                DO UPDATE SET invite_sent_at = now(),
+                    token = $2,
+                    token_expires_at = now() + interval '1 hour'",
+            email,
+            token
+        )
+        .execute(&state.db)
+        .await
+        .map_err(AuthError::from)?;
 
-    Ok(token)
+        Ok(PasswordlessLoginRequestAnswer {
+            token,
+            new_user: true,
+        })
+    } else {
+        Err(Report::from(AuthError::Unauthenticated))
+    }
 }
 
 /// Given a token from an email, log in the user.
@@ -77,6 +105,31 @@ pub async fn perform_passwordless_login(
         .create_session(cookies, &user_id)
         .await
         .change_context(AuthError::SessionBackend)?;
+
+    Ok(())
+}
+
+/// Accept a signup request. This only verifies the invite, and doesn't actually add the
+/// user to the application.
+pub async fn check_signup_request(
+    state: &FiligreeState,
+    email: &str,
+    token: Uuid,
+) -> Result<(), Report<AuthError>> {
+    let result = sqlx::query!(
+        "DELETE FROM user_invites
+        WHERE email=$1 AND organization_id IS NULL
+        RETURNING organization_id, token, token_expires_at",
+        email
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(AuthError::from)?
+    .ok_or(AuthError::InvalidToken)?;
+
+    if result.token != token || result.token_expires_at < chrono::Utc::now() {
+        return Err(Report::new(AuthError::InvalidToken));
+    }
 
     Ok(())
 }

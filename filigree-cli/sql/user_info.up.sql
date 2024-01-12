@@ -56,3 +56,17 @@ CREATE TABLE oauth_logins (
 );
 
 CREATE INDEX ON oauth_logins (user_id);
+
+CREATE TABLE user_invites (
+  email text NOT NULL,
+  token uuid NOT NULL,
+  token_expires_at timestamptz NOT NULL,
+  -- The person's name, if known.
+  name text,
+  -- The user that send the invite
+  invited_by uuid,
+  -- The organization that the user will be added to. NULL indicates a new organization.
+  organization_id uuid,
+  invite_sent_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (email, organization_id)
+);
