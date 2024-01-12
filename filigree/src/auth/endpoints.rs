@@ -62,7 +62,7 @@ async fn update_password(
 
     let result = sqlx::query!(
         "WITH sel AS (
-            SELECT user_id, (reset_token = $2 AND reset_expires_at > now()) AS matches
+            SELECT user_id, (reset_token IS NOT DISTINCT FROM $2 AND reset_expires_at > now()) AS matches
             FROM email_logins
             WHERE email = $1
         ),
@@ -70,7 +70,7 @@ async fn update_password(
             -- Always clear the token
             UPDATE email_logins
             SET reset_token = null, reset_expires_at = null
-            WHERE email = $1
+            WHERE email = $1 AND reset_token IS NOT NULL
         )
         UPDATE users
         SET password_hash = $3
