@@ -40,8 +40,6 @@ CREATE TABLE email_logins (
   verified bool NOT NULL,
   reset_token uuid,
   reset_expires_at timestamptz,
-  verify_token uuid,
-  verify_expires_at timestamptz,
   passwordless_login_token uuid,
   passwordless_login_expires_at timestamptz
 );

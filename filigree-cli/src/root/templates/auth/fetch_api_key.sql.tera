@@ -3,13 +3,11 @@
   SELECT
     api_keys.user_id,
     -- API key always uses the organization the key was created with,
-    -- regardless of the users currently-chosen org
+    -- regardless of the currently-chosen org in the user object.
     api_keys.organization_id,
     api_keys.inherits_user_permissions,
-    om.active,
-    users.verified
+    om.active
   FROM api_keys
-  JOIN users ON users.id = api_keys.user_id
   JOIN organization_members om
     ON om.user_id = api_keys.user_id
     AND om.organization_id = api_keys.organization_id

@@ -4,7 +4,6 @@ INSERT INTO {{user_model.table}}
   id,
   organization_id,
   password_hash,
-  verified,
   {{ fields
     | filter(attribute='owner_write', value=true)
     | map(attribute='sql_name')
@@ -14,10 +13,10 @@ INSERT INTO {{user_model.table}}
 VALUES
 
 (
-  $1, $2, $3, $4
+  $1, $2, $3
 
 {% for field in fields | filter(attribute='owner_write', value=true) %}
-  , ${{loop.index + 4}}
+  , ${{loop.index + 3}}
 {% endfor %}
 )
 RETURNING

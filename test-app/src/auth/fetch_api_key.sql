@@ -2,14 +2,12 @@ WITH base_lookup AS (
   SELECT
     api_keys.user_id,
     -- API key always uses the organization the key was created with,
-    -- regardless of the users currently-chosen org
+    -- regardless of the currently-chosen org in the user object.
     api_keys.organization_id,
     api_keys.inherits_user_permissions,
-    om.active,
-    users.verified
+    om.active
   FROM
     api_keys
-    JOIN users ON users.id = api_keys.user_id
     JOIN organization_members om ON om.user_id = api_keys.user_id
       AND om.organization_id = api_keys.organization_id
   WHERE
@@ -62,7 +60,6 @@ SELECT
   bl.user_id AS "user_id!: crate::models::user::UserId",
   bl.organization_id AS "organization_id!: crate::models::organization::OrganizationId",
   bl.active,
-  bl.verified,
   COALESCE((
     SELECT
       ARRAY_AGG(role_id) FILTER (WHERE role_id IS NOT NULL)

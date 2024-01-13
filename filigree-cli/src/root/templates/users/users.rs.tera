@@ -18,7 +18,6 @@ pub async fn create_new_user(
     organization_id: OrganizationId,
     payload: UserCreatePayload,
     password_plaintext: String,
-    preverified: bool,
 ) -> Result<User, Report<Error>> {
     let password_hash = filigree::auth::password::new_hash(password_plaintext)
         .await
@@ -30,7 +29,6 @@ pub async fn create_new_user(
         organization_id,
         payload,
         Some(password_hash),
-        preverified,
     )
     .await
 }
@@ -41,7 +39,6 @@ pub async fn create_new_user_with_prehashed_password(
     organization_id: OrganizationId,
     payload: UserCreatePayload,
     password_hash: Option<String>,
-    preverified: bool,
 ) -> Result<User, Report<Error>> {
     let user = sqlx::query_file_as!(
         User,
@@ -49,7 +46,6 @@ pub async fn create_new_user_with_prehashed_password(
         user_id.as_uuid(),
         organization_id.as_uuid(),
         password_hash,
-        preverified,
         {% for field in user_model.fields | filter(attribute="owner_write", value=true) %}
             {%- if field.nullable -%}
                 payload.{{field.rust_name}}.as_ref(){% if field.is_custom_rust_type %} as _{% endif %},
@@ -156,6 +152,5 @@ mod test {
 
         assert_eq!(user_info["name"], "Not Admin");
         assert_eq!(user_info["email"], "another-email@example.com");
-        assert_eq!(user_info["verified"], true);
     }
 }

@@ -212,11 +212,6 @@ mod test {
                 serde_json::to_value(&added.email).unwrap(),
                 "field email"
             );
-            assert_eq!(
-                result["verified"],
-                serde_json::to_value(&added.verified).unwrap(),
-                "field verified"
-            );
             assert_eq!(result["_permission"], "owner");
 
             // Check that we don't return any fields which are supposed to be omitted.
@@ -295,11 +290,6 @@ mod test {
                 result.get("password_hash"),
                 None,
                 "field password_hash should be omitted"
-            );
-            assert_eq!(
-                result.get("verified"),
-                None,
-                "field verified should be omitted"
             );
         }
 
@@ -382,11 +372,6 @@ mod test {
             serde_json::to_value(&added.email).unwrap(),
             "field email"
         );
-        assert_eq!(
-            result["verified"],
-            serde_json::to_value(&added.verified).unwrap(),
-            "field verified"
-        );
         assert_eq!(result["_permission"], "owner");
 
         // Check that we don't return any fields which are supposed to be omitted.
@@ -446,11 +431,6 @@ mod test {
             result.get("password_hash"),
             None,
             "field password_hash should be omitted"
-        );
-        assert_eq!(
-            result.get("verified"),
-            None,
-            "field verified should be omitted"
         );
 
         let response = no_roles_user
@@ -563,11 +543,6 @@ mod test {
             non_updated["email"],
             serde_json::to_value(&added_objects[0].email).unwrap(),
             "field email"
-        );
-        assert_eq!(
-            non_updated["verified"],
-            serde_json::to_value(&added_objects[0].verified).unwrap(),
-            "field verified"
         );
         assert_eq!(non_updated["_permission"], "owner");
 

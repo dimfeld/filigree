@@ -3,8 +3,7 @@
   SELECT
     sess.user_id,
     users.organization_id,
-    om.active,
-    users.verified
+    om.active
   FROM user_sessions sess
   JOIN users ON sess.user_id = users.id
   JOIN organization_members om ON users.id = om.user_id AND users.organization_id = om.organization_id

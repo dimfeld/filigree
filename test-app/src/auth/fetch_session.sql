@@ -2,8 +2,7 @@ WITH base_lookup AS (
   SELECT
     sess.user_id,
     users.organization_id,
-    om.active,
-    users.verified
+    om.active
   FROM
     user_sessions sess
     JOIN users ON sess.user_id = users.id
@@ -46,7 +45,6 @@ SELECT
   bl.user_id AS "user_id!: crate::models::user::UserId",
   bl.organization_id AS "organization_id!: crate::models::organization::OrganizationId",
   bl.active,
-  bl.verified,
   COALESCE((
     SELECT
       ARRAY_AGG(role_id) FILTER (WHERE role_id IS NOT NULL)

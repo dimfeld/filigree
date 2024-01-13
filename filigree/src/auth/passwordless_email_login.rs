@@ -1,4 +1,3 @@
-use chrono::TimeZone;
 use error_stack::{Report, ResultExt};
 use tower_cookies::Cookies;
 use uuid::Uuid;
@@ -6,9 +5,12 @@ use uuid::Uuid;
 use super::{AuthError, UserId};
 use crate::server::FiligreeState;
 
+/// A successful result of creating a login token
 #[derive(Debug)]
 pub struct PasswordlessLoginRequestAnswer {
+    /// The login token
     pub token: Uuid,
+    /// If this token is for a new user or not.
     pub new_user: bool,
 }
 
@@ -75,7 +77,9 @@ pub async fn perform_passwordless_login(
         r##"
         UPDATE email_logins upd
         SET passwordless_login_token = null,
-            passwordless_login_expires_at = null
+            passwordless_login_expires_at = null,
+            verified = upd.verified OR
+                (upd.passwordless_login_token = $2 AND upd.passwordless_login_expires_at > now())
         -- self-join since it lets us get the token even while we clear it in the UPDATE
         FROM email_logins old
         WHERE old.email = upd.email

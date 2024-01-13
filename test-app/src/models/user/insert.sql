@@ -15,5 +15,4 @@ RETURNING
   created_at,
   name,
   email,
-  verified,
   'owner' AS "_permission!: filigree::auth::ObjectPermission"

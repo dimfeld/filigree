@@ -5,7 +5,6 @@ SELECT
   created_at,
   name,
   email,
-  verified,
   perm._permission
 FROM
   users tb

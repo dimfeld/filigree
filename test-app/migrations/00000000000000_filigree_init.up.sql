@@ -14,8 +14,7 @@ CREATE TABLE users (
   created_at timestamptz NOT NULL DEFAULT now(),
   name text NOT NULL,
   password_hash text,
-  email text UNIQUE NOT NULL,
-  verified boolean NOT NULL DEFAULT FALSE
+  email text UNIQUE NOT NULL
 );
 
 
@@ -92,8 +91,6 @@ CREATE TABLE email_logins (
   verified bool NOT NULL,
   reset_token uuid,
   reset_expires_at timestamptz,
-  verify_token uuid,
-  verify_expires_at timestamptz,
   passwordless_login_token uuid,
   passwordless_login_expires_at timestamptz
 );

@@ -58,7 +58,7 @@ pub struct EmailAndPassword {
     password: String,
 }
 
-/// Look up a user, verify the password, and check that the user is verified.
+/// Look up a user and verify the password, and check that the user is verified.
 pub async fn lookup_user_from_email_and_password(
     db: &PgPool,
     email_and_password: EmailAndPassword,

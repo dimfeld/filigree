@@ -135,7 +135,6 @@ async fn add_test_user(
         organization_id,
         user_payload,
         Some(testing::TEST_PASSWORD_HASH.to_string()),
-        true,
     )
     .await
     .expect("Creating user");

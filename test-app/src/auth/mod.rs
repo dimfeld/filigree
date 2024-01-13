@@ -21,7 +21,6 @@ pub struct AuthInfo {
     pub user_id: UserId,
     pub organization_id: OrganizationId,
     pub active: bool,
-    pub verified: bool,
     pub roles: Vec<RoleId>,
     pub permissions: Vec<String>,
 }
@@ -40,8 +39,6 @@ impl filigree::auth::AuthInfo for AuthInfo {
     fn check_valid(&self) -> Result<(), AuthError> {
         if !self.active {
             Err(AuthError::Disabled)
-        } else if !self.verified {
-            Err(AuthError::NotVerified)
         } else {
             Ok(())
         }

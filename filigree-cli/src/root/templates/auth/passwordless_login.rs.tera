@@ -110,7 +110,7 @@ async fn accept_new_user_invite(
         create_new_organization(&mut *tx, "My Organization".to_string(), user_id).await?;
 
     let new_user = UserCreatePayload {
-        email,
+        email: email.clone(),
         ..Default::default()
     };
 
@@ -120,9 +120,12 @@ async fn accept_new_user_invite(
         created_org.organization.id,
         new_user,
         None,
-        true,
     )
     .await?;
+
+    filigree::users::users::add_user_email_login(&mut *tx, user_id, email, true)
+        .await
+        .change_context(Error::Db)?;
 
     tx.commit().await.change_context(Error::Db)?;
 
