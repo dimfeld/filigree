@@ -1,0 +1,17 @@
+[package]
+name = "sql-migration-sim"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+license = "MIT OR Apache-2.0"
+description = "Parse and simulate SQL DML statements"
+repository = "https://github.com/dimfeld/filigree"
+homepage = "https://github.com/dimfeld/filigree"
+documentation = "https://docs.rs/sql-migration-sim"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+error-stack = "0.4.1"
+sqlparser = "0.41.0"
+thiserror = "1.0.56"

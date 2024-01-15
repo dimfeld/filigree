@@ -2,6 +2,7 @@
 members = [
   "filigree",
   "filigree-cli",
+  "sql-migration-sim",
   "test-app"
 ]
 resolver = "2"
