@@ -3,7 +3,7 @@
 //!
 //! ## Example
 //!
-//! ```rust
+//! ```
 //! use sql_migration_sim::{Schema, Error, ast::DataType};
 //!
 //! let mut schema = Schema::new();
@@ -40,9 +40,11 @@
 //! ```
 //!
 
-#[warn(missing_docs)]
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
+#![warn(missing_docs)]
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 use sqlparser::ast::{
     AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
@@ -50,8 +52,9 @@ use sqlparser::ast::{
 };
 pub use sqlparser::{ast, dialect::Dialect};
 
+/// A column in a database table
 #[derive(Debug)]
-pub struct Column(ColumnDef);
+pub struct Column(pub ColumnDef);
 
 impl Deref for Column {
     type Target = ColumnDef;
@@ -68,10 +71,12 @@ impl DerefMut for Column {
 }
 
 impl Column {
+    /// The name of the column
     pub fn name(&self) -> &str {
         self.name.value.as_str()
     }
 
+    /// Whether the column is nullable or not
     pub fn not_null(&self) -> bool {
         self.options
             .iter()
@@ -85,40 +90,58 @@ impl Column {
     }
 }
 
+/// A table in the database
 pub struct Table {
+    /// The name of the table
     pub name: String,
+    /// The columns in the table
     pub columns: Vec<Column>,
 }
 
+/// A view in the database
 pub struct View {
+    /// The name of the view
     pub name: String,
+    /// The columns in the view
     pub columns: Vec<String>,
 }
 
-pub struct Schema {
-    dialect: Box<dyn Dialect>,
-    pub tables: HashMap<String, Table>,
-    pub views: HashMap<String, View>,
-}
-
+/// Errors that can occur while parsing SQL and updating the schema
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Encountered an ALTER TABLE statement on a nonexistent table.
     #[error("Attempted to alter a table {0} that does not exist")]
     AlteredMissingTable(String),
+    /// Encountered an ALTER COLUMN statement on a nonexistent column.
     #[error("Attempted to alter a column {0} that does not exist in table {1}")]
     AlteredMissingColumn(String, String),
+    /// Attempted to create a table that already exists
     #[error("Attempted to create table {0} that already exists")]
     TableAlreadyExists(String),
+    /// Attempted to create a column that already exists
     #[error("Attempted to create column {0} that already exists in table {1}")]
     ColumnAlreadyExists(String, String),
+    /// The SQL parser encountered an error
     #[error("SQL Parse Error {0}")]
     Parse(#[from] sqlparser::parser::ParserError),
+    /// Error reading a file
     #[error("Failed to read file {filename}")]
     File {
+        /// The underlying error
         #[source]
         source: std::io::Error,
+        /// The name of the file on which the error occurred
         filename: String,
     },
+}
+
+/// The database schema, built from parsing one or more SQL statements.
+pub struct Schema {
+    dialect: Box<dyn Dialect>,
+    /// The tables in the schema
+    pub tables: HashMap<String, Table>,
+    /// The views in the schema
+    pub views: HashMap<String, View>,
 }
 
 impl Schema {
@@ -153,8 +176,13 @@ impl Schema {
         Ok(())
     }
 
-    fn create_view(&mut self, name: String, columns: Vec<String>) -> Result<(), Error> {
-        if self.views.contains_key(&name) {
+    fn create_view(
+        &mut self,
+        name: String,
+        or_replace: bool,
+        columns: Vec<String>,
+    ) -> Result<(), Error> {
+        if !or_replace && self.views.contains_key(&name) {
             return Err(Error::TableAlreadyExists(name));
         }
 
@@ -306,9 +334,15 @@ impl Schema {
                     }
                 }
             }
-            Statement::CreateView { name, columns, .. } => {
+            Statement::CreateView {
+                name,
+                columns,
+                or_replace,
+                ..
+            } => {
                 self.create_view(
                     name.to_string(),
+                    or_replace,
                     columns.into_iter().map(|c| c.value).collect(),
                 )?;
             }
@@ -335,6 +369,7 @@ impl Schema {
         Ok(())
     }
 
+    /// Apply one or more SQL statements to the schema
     pub fn apply_sql(&mut self, sql: &str) -> Result<(), Error> {
         sqlparser::parser::Parser::new(self.dialect.as_ref())
             .try_with_sql(sql)?
@@ -343,6 +378,7 @@ impl Schema {
             .try_for_each(|statement| self.apply_statement(statement))
     }
 
+    /// Read a SQL file and apply its contents to the schema
     pub fn apply_file(&mut self, filename: &str) -> Result<(), Error> {
         let contents = std::fs::read_to_string(filename).map_err(|e| Error::File {
             source: e,
