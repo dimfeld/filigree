@@ -77,11 +77,11 @@ impl std::str::FromStr for OrderByField {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = match s {
-            {% for field in fields  %}
-            {% if field.sortable != "none" %}
+            {% for field in fields -%}
+            {%- if field.sortable != "none" -%}
             "{{field.sql_name}}" => OrderByField::{{field.pascal_case_name}},
-            {% endif %}
-            {% endfor %}
+            {%- endif -%}
+            {%- endfor %}
             _ => return Err(OrderByError::InvalidField),
         };
 
@@ -134,6 +134,7 @@ impl ListQueryFilters {
         {% endif %}
         let mut bindings = FilterBuilder::new({{ start_binding }});
 
+
         {% for field in fields | filter(attribute="filterable", value="exact") %}
             if !self.{{field.rust_name}}.is_empty() {
                 bindings.add_vec("{{field.sql_name}}", &self.{{field.rust_name}});
@@ -149,7 +150,9 @@ impl ListQueryFilters {
             }
         {% endfor %}
 
-        bindings.to_string()
+        let query = bindings.to_string();
+        event!(Level::DEBUG, %query);
+        query
     }
 
     fn bind_to_query<'a, T>(&'a self, mut query: QueryAs<'a, T>) -> QueryAs<'a, T> {

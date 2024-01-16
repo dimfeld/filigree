@@ -4,7 +4,7 @@
 {% set has_filterable = false %}
 {% for field in fields %}
   {% if field.filterable != 'none' %}
-    {% set has_filterable = true %}
+    {% set_global has_filterable = true %}
   {% endif %}
 {% endfor %}
 

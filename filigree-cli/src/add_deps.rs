@@ -9,6 +9,7 @@ type DepVersion = (&'static str, &'static str, &'static [&'static str]);
 const DEPS: &[DepVersion] = &[
     ("async-trait", "0.1.75", &[]),
     ("axum", "0.7.3", &["tokio", "http1", "http2", "macros"]),
+    ("axum-extra", "0.9.2", &["query"]),
     ("chrono", "0.4.31", &[]),
     ("clap", "4.4.11", &["env", "derive"]),
     ("dotenvy", "0.15.7", &[]),
