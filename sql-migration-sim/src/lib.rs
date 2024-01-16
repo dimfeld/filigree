@@ -4,7 +4,7 @@
 //! ## Example
 //!
 //! ```rust
-//! use sql_migration_sim::{Schema, Error};
+//! use sql_migration_sim::{Schema, Error, ast::DataType};
 //!
 //! fn main() -> Result<(), error_stack::Report<Error>> {
 //!     let mut schema = Schema::new();
@@ -25,10 +25,9 @@
 //!
 //!
 //!     let result = schema.tables.get("ships").unwrap();
-//!     println!("{:#?}", result.columns);
 //!     assert_eq!(result.columns.len(), 4);
 //!     assert_eq!(result.columns[0].name(), "id");
-//!     assert!(matches!(result.columns[0].data_type, sqlparser::ast::DataType::BigInt(_)));
+//!     assert!(matches!(result.columns[0].data_type, DataType::BigInt(_)));
 //!     assert_eq!(result.columns[0].not_null(), true);
 //!     assert_eq!(result.columns[1].name(), "name");
 //!     assert_eq!(result.columns[1].not_null(), true);
@@ -47,13 +46,11 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
 use error_stack::{Report, ResultExt};
-use sqlparser::{
-    ast::{
-        AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
-        ObjectType, Statement,
-    },
-    dialect::Dialect,
+use sqlparser::ast::{
+    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
+    ObjectType, Statement,
 };
+pub use sqlparser::{ast, dialect::Dialect};
 
 #[derive(Debug)]
 pub struct Column(ColumnDef);
