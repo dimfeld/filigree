@@ -1,4 +1,50 @@
+//! This library is meant to parse multiple related SQL migration files, and calculate the final
+//! schema that resutls from running them in order.
+//!
+//! ## Example
+//!
+//! ```rust
+//! use sql_migration_sim::{Schema, Error};
+//!
+//! fn main() -> Result<(), error_stack::Report<Error>> {
+//!     let mut schema = Schema::new();
+//!
+//!     let create_statement = r##"CREATE TABLE ships (
+//!        id BIGINT PRIMARY KEY,
+//!        name TEXT NOT NULL,
+//!        mast_count INT not null
+//!     );"##;
+//!
+//!     let alter = r##"
+//!         ALTER TABLE ships ALTER COLUMN mast_count DROP NOT NULL;
+//!         ALTER TABLE ships ADD COLUMN has_motor BOOLEAN NOT NULL;
+//!         "##;
+//!
+//!     schema.apply_sql(create_statement)?;
+//!     schema.apply_sql(alter)?;
+//!
+//!
+//!     let result = schema.tables.get("ships").unwrap();
+//!     println!("{:#?}", result.columns);
+//!     assert_eq!(result.columns.len(), 4);
+//!     assert_eq!(result.columns[0].name(), "id");
+//!     assert!(matches!(result.columns[0].data_type, sqlparser::ast::DataType::BigInt(_)));
+//!     assert_eq!(result.columns[0].not_null(), true);
+//!     assert_eq!(result.columns[1].name(), "name");
+//!     assert_eq!(result.columns[1].not_null(), true);
+//!     assert_eq!(result.columns[2].name(), "mast_count");
+//!     assert_eq!(result.columns[2].not_null(), false);
+//!     assert_eq!(result.columns[3].name(), "has_motor");
+//!     assert_eq!(result.columns[3].not_null(), true);
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+
+#[warn(missing_docs)]
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 
 use error_stack::{Report, ResultExt};
 use sqlparser::{
@@ -9,9 +55,44 @@ use sqlparser::{
     dialect::Dialect,
 };
 
+#[derive(Debug)]
+pub struct Column(ColumnDef);
+
+impl Deref for Column {
+    type Target = ColumnDef;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Column {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Column {
+    pub fn name(&self) -> &str {
+        self.name.value.as_str()
+    }
+
+    pub fn not_null(&self) -> bool {
+        self.options
+            .iter()
+            .find_map(|o| match o.option {
+                ColumnOption::Null => Some(false),
+                ColumnOption::NotNull => Some(true),
+                ColumnOption::Unique { is_primary } => is_primary.then_some(true),
+                _ => None,
+            })
+            .unwrap_or(false)
+    }
+}
+
 pub struct Table {
     pub name: String,
-    pub columns: Vec<ColumnDef>,
+    pub columns: Vec<Column>,
 }
 
 pub struct View {
@@ -62,7 +143,13 @@ impl Schema {
             return Err(Error::TableAlreadyExists(name));
         }
 
-        self.tables.insert(name.clone(), Table { name, columns });
+        self.tables.insert(
+            name.clone(),
+            Table {
+                name,
+                columns: columns.into_iter().map(Column).collect(),
+            },
+        );
 
         Ok(())
     }
@@ -102,7 +189,7 @@ impl Schema {
                                 table.columns.iter().find(|c| c.name == column_def.name);
 
                             if existing_column.is_none() {
-                                table.columns.push(column_def);
+                                table.columns.push(Column(column_def));
                             } else if !if_not_exists {
                                 return Err(Report::new(Error::ColumnAlreadyExists(
                                     column_def.name.value,
