@@ -6,38 +6,37 @@
 //! ```rust
 //! use sql_migration_sim::{Schema, Error, ast::DataType};
 //!
-//! fn main() -> Result<(), error_stack::Report<Error>> {
-//!     let mut schema = Schema::new();
+//! let mut schema = Schema::new();
 //!
-//!     let create_statement = r##"CREATE TABLE ships (
-//!        id BIGINT PRIMARY KEY,
-//!        name TEXT NOT NULL,
-//!        mast_count INT not null
-//!     );"##;
+//! let create_statement = r##"CREATE TABLE ships (
+//!    id BIGINT PRIMARY KEY,
+//!    name TEXT NOT NULL,
+//!    mast_count INT not null
+//! );"##;
 //!
-//!     let alter = r##"
-//!         ALTER TABLE ships ALTER COLUMN mast_count DROP NOT NULL;
-//!         ALTER TABLE ships ADD COLUMN has_motor BOOLEAN NOT NULL;
-//!         "##;
+//! let alter = r##"
+//!     ALTER TABLE ships ALTER COLUMN mast_count DROP NOT NULL;
+//!     ALTER TABLE ships ADD COLUMN has_motor BOOLEAN NOT NULL;
+//!     "##;
 //!
-//!     schema.apply_sql(create_statement)?;
-//!     schema.apply_sql(alter)?;
+//! schema.apply_sql(create_statement)?;
+//! schema.apply_sql(alter)?;
 //!
 //!
-//!     let result = schema.tables.get("ships").unwrap();
-//!     assert_eq!(result.columns.len(), 4);
-//!     assert_eq!(result.columns[0].name(), "id");
-//!     assert!(matches!(result.columns[0].data_type, DataType::BigInt(_)));
-//!     assert_eq!(result.columns[0].not_null(), true);
-//!     assert_eq!(result.columns[1].name(), "name");
-//!     assert_eq!(result.columns[1].not_null(), true);
-//!     assert_eq!(result.columns[2].name(), "mast_count");
-//!     assert_eq!(result.columns[2].not_null(), false);
-//!     assert_eq!(result.columns[3].name(), "has_motor");
-//!     assert_eq!(result.columns[3].not_null(), true);
+//! let result = schema.tables.get("ships").unwrap();
+//! assert_eq!(result.columns.len(), 4);
+//! assert_eq!(result.columns[0].name(), "id");
+//! assert!(matches!(result.columns[0].data_type, DataType::BigInt(_)));
+//! assert_eq!(result.columns[0].not_null(), true);
+//! assert_eq!(result.columns[1].name(), "name");
+//! assert_eq!(result.columns[1].not_null(), true);
+//! assert_eq!(result.columns[2].name(), "mast_count");
+//! assert_eq!(result.columns[2].not_null(), false);
+//! assert_eq!(result.columns[3].name(), "has_motor");
+//! assert_eq!(result.columns[3].not_null(), true);
 //!
-//!     Ok(())
-//! }
+//! # Ok::<(), Error>(())
+//!
 //! ```
 //!
 
@@ -45,7 +44,6 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-use error_stack::{Report, ResultExt};
 use sqlparser::ast::{
     AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
     ObjectType, Statement,
@@ -113,10 +111,14 @@ pub enum Error {
     TableAlreadyExists(String),
     #[error("Attempted to create column {0} that already exists in table {1}")]
     ColumnAlreadyExists(String, String),
-    #[error("SQL Parse Error")]
-    Parse,
-    #[error("Failed to read file")]
-    File,
+    #[error("SQL Parse Error {0}")]
+    Parse(#[from] sqlparser::parser::ParserError),
+    #[error("Failed to read file {filename}")]
+    File {
+        #[source]
+        source: std::io::Error,
+        filename: String,
+    },
 }
 
 impl Schema {
@@ -161,7 +163,7 @@ impl Schema {
         Ok(())
     }
 
-    fn apply_statement(&mut self, statement: Statement) -> Result<(), Report<Error>> {
+    fn apply_statement(&mut self, statement: Statement) -> Result<(), Error> {
         match statement {
             Statement::CreateTable { name, columns, .. } => {
                 self.create_table(name.to_string(), columns)?;
@@ -188,10 +190,10 @@ impl Schema {
                             if existing_column.is_none() {
                                 table.columns.push(Column(column_def));
                             } else if !if_not_exists {
-                                return Err(Report::new(Error::ColumnAlreadyExists(
+                                return Err(Error::ColumnAlreadyExists(
                                     column_def.name.value,
                                     name.clone(),
-                                )));
+                                ));
                             }
                         }
 
@@ -333,22 +335,20 @@ impl Schema {
         Ok(())
     }
 
-    pub fn apply_sql(&mut self, sql: &str) -> Result<(), Report<Error>> {
+    pub fn apply_sql(&mut self, sql: &str) -> Result<(), Error> {
         sqlparser::parser::Parser::new(self.dialect.as_ref())
-            .try_with_sql(sql)
-            .change_context(Error::Parse)?
-            .parse_statements()
-            .change_context(Error::Parse)?
+            .try_with_sql(sql)?
+            .parse_statements()?
             .into_iter()
             .try_for_each(|statement| self.apply_statement(statement))
     }
 
-    pub fn apply_file(&mut self, filename: &str) -> Result<(), Report<Error>> {
-        let contents = std::fs::read_to_string(filename)
-            .change_context(Error::File)
-            .attach_printable_lazy(|| filename.to_string())?;
+    pub fn apply_file(&mut self, filename: &str) -> Result<(), Error> {
+        let contents = std::fs::read_to_string(filename).map_err(|e| Error::File {
+            source: e,
+            filename: filename.to_string(),
+        })?;
 
         self.apply_sql(&contents)
-            .attach_printable_lazy(|| filename.to_string())
     }
 }

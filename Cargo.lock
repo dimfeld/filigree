@@ -3127,7 +3127,6 @@ dependencies = [
 name = "sql-migration-sim"
 version = "0.1.0"
 dependencies = [
- "error-stack",
  "sqlparser",
  "thiserror",
 ]
