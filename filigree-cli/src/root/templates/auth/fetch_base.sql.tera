@@ -13,6 +13,7 @@ actor_ids AS (
   SELECT role_id as actor_id, organization_id FROM role_lookup
 {% endblock actor_ids %}
 ),
+{% block extra_ctes %}{% endblock extra_ctes %}
 permissions AS (
   SELECT COALESCE(
     ARRAY_AGG(DISTINCT permission) FILTER (WHERE permission IS NOT NULL),

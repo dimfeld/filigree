@@ -179,7 +179,10 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         db: config.pg_pool.clone(),
     }));
 
-    let auth_queries = Arc::new(crate::auth::AuthQueries::new(config.pg_pool));
+    let auth_queries = Arc::new(crate::auth::AuthQueries::new(
+        config.pg_pool,
+        config.session_expiry,
+    ));
 
     let app: Router<ServerState> = Router::new()
         .route("/healthz", get(health::healthz))

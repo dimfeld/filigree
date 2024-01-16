@@ -2,7 +2,9 @@ use std::borrow::Cow;
 
 use async_trait::async_trait;
 use axum::routing::{self, Router};
-use filigree::auth::{AuthError, OrganizationId, PermissionChecker, RoleId, SessionKey, UserId};
+use filigree::auth::{
+    AuthError, ExpiryStyle, OrganizationId, PermissionChecker, RoleId, SessionKey, UserId,
+};
 use sqlx::{query_file_as, PgPool};
 use uuid::Uuid;
 
@@ -51,11 +53,15 @@ impl filigree::auth::AuthInfo for AuthInfo {
 
 pub struct AuthQueries {
     db: PgPool,
+    session_expiry_style: filigree::auth::ExpiryStyle,
 }
 
 impl AuthQueries {
-    pub fn new(db: PgPool) -> Self {
-        Self { db }
+    pub fn new(db: PgPool, session_expiry_style: filigree::auth::ExpiryStyle) -> Self {
+        Self {
+            db,
+            session_expiry_style,
+        }
     }
 }
 
@@ -77,14 +83,29 @@ impl filigree::auth::AuthQueries for AuthQueries {
         &self,
         session_key: &SessionKey,
     ) -> Result<Option<AuthInfo>, sqlx::Error> {
-        query_file_as!(
-            AuthInfo,
-            "src/auth/fetch_session.sql",
-            session_key.session_id.as_uuid(),
-            &session_key.hash
-        )
-        .fetch_optional(&self.db)
-        .await
+        match self.session_expiry_style {
+            ExpiryStyle::FromCreation(_) => {
+                query_file_as!(
+                    AuthInfo,
+                    "src/auth/fetch_session.sql",
+                    session_key.session_id.as_uuid(),
+                    &session_key.hash
+                )
+                .fetch_optional(&self.db)
+                .await
+            }
+            ExpiryStyle::AfterIdle(duration) => {
+                query_file_as!(
+                    AuthInfo,
+                    "src/auth/fetch_and_touch_session.sql",
+                    session_key.session_id.as_uuid(),
+                    &session_key.hash,
+                    duration.as_secs() as i32
+                )
+                .fetch_optional(&self.db)
+                .await
+            }
+        }
     }
 }
 

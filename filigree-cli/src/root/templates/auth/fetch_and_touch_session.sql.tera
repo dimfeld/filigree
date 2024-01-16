@@ -1,0 +1,26 @@
+{% extends "root/auth/fetch_base.sql.tera" %}
+{% block base_lookup %}
+  SELECT
+    sess.id AS session_id,
+    sess.user_id,
+    users.organization_id,
+    om.active
+  FROM user_sessions sess
+  JOIN users ON sess.user_id = users.id
+  JOIN organization_members om ON users.id = om.user_id AND users.organization_id = om.organization_id
+  WHERE sess.id = $1
+    AND sess.hash = $2
+    AND expires_at > now()
+  LIMIT 1
+{% endblock base_lookup %}
+
+{% block extra_ctes %}
+update_session_expiry AS (
+  UPDATE user_sessions
+  SET expires_at = now() + make_interval(secs => $3)
+  FROM base_lookup bl
+  WHERE bl.session_id = user_sessions.id
+    -- Only update the time if it would really make a difference. Prevents tons of database writes
+    AND expires_at + make_interval(secs => $3) > (expires_at + '1 hour'::interval)
+),
+{% endblock extra_ctes %}

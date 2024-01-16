@@ -53,7 +53,7 @@ struct ServeCommand {
     insecure: bool,
 
     /// Session expiry time, in days
-    #[clap(long, env = "{{env_prefix}}SESSION_EXPIRY", default_value_t = 7)]
+    #[clap(long, env = "{{env_prefix}}SESSION_EXPIRY", default_value_t = 14)]
     session_expiry: u64,
 
     /// Maintain at least this many connections to the database.

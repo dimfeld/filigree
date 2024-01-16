@@ -113,7 +113,7 @@ impl Default for SessionCookieBuilder {
 }
 
 /// How session expiration should be calculated
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum ExpiryStyle {
     /// Always expire the session at a fixed duration after it is created
     FromCreation(std::time::Duration),
