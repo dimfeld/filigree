@@ -1,4 +1,6 @@
+use async_trait::async_trait;
 use reqwest::header::HeaderMap;
+use tracing::{event, Level};
 use uuid::Uuid;
 
 use crate::auth::UserId;
@@ -93,4 +95,26 @@ fn new_client_builder() -> reqwest::ClientBuilder {
     reqwest::ClientBuilder::new()
         .cookie_store(true)
         .timeout(std::time::Duration::from_secs(30))
+}
+
+/// Extensions for reqwest::Response
+#[async_trait]
+pub trait ResponseExt {
+    /// If the response is an error, log it. This can be used in place of [error_for_status].
+    async fn log_error(self) -> Result<reqwest::Response, reqwest::Error>;
+}
+
+#[async_trait]
+impl ResponseExt for reqwest::Response {
+    async fn log_error(self) -> Result<reqwest::Response, reqwest::Error> {
+        if let Err(e) = self.error_for_status_ref() {
+            let status = self.status().as_u16();
+            let url = self.url().clone();
+            let text = self.text().await.unwrap_or_default();
+            event!(Level::ERROR, url=%url, %status, response=%text);
+            Err(e)
+        } else {
+            Ok(self)
+        }
+    }
 }
