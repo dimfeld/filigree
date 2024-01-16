@@ -57,7 +57,7 @@ pub fn render_files(
     let files = RootTemplates::iter().collect::<Vec<_>>();
     let mut output = files
         .into_par_iter()
-        .filter(|file| file != "root/build.rs.tera")
+        .filter(|file| file != "root/build.rs.tera" && file != "root/auth/fetch_base.sql.tera")
         .map(|file| {
             let filename = file.strip_prefix("root/").unwrap();
             let filename = filename.strip_suffix(".tera").unwrap_or(filename);

@@ -17,6 +17,7 @@ use crate::{config::FullConfig, model::generator::ModelGenerator};
 mod add_deps;
 mod config;
 mod format;
+mod merge_files;
 mod model;
 mod root;
 mod templates;
@@ -77,6 +78,7 @@ pub fn main() -> Result<(), Report<Error>> {
         config,
         models: config_models,
         crate_manifest,
+        merge_tracker,
     } = config;
 
     add_deps::add_deps(&crate_manifest)?;
@@ -179,17 +181,41 @@ pub fn main() -> Result<(), Report<Error>> {
                         format!("Unable to create directory {}", dir.display())
                     })?;
                 created_dirs.insert(dir);
+
+                let gen_cache_dir = merge_tracker.base_generated_path.join(&dir);
+
+                std::fs::create_dir_all(&gen_cache_dir)
+                    .change_context(Error::WriteFile)
+                    .attach_printable_lazy(|| {
+                        format!("Unable to create directory {}", dir.display())
+                    })?;
             }
         }
     }
 
-    files
+    let merge_files = files
         .into_par_iter()
-        .try_for_each(|file| {
-            // eprintln!("Writing file {}", path.display());
-            std::fs::write(&file.path, &file.contents)
-                .attach_printable_lazy(|| file.path.display().to_string())
-        })
+        .map(|f| merge_tracker.from_rendered_file(f))
+        .collect::<Vec<_>>();
+
+    let mut conflict_files = merge_files
+        .iter()
+        .filter(|f| f.merged.conflicts)
+        .map(|f| &f.output_path)
+        .collect::<Vec<_>>();
+    conflict_files.sort();
+
+    if !conflict_files.is_empty() {
+        println!("=== Files with conflicts");
+
+        for path in conflict_files {
+            println!("{}", path.display());
+        }
+    }
+
+    merge_files
+        .into_par_iter()
+        .try_for_each(|file| file.write())
         .change_context(Error::WriteFile)?;
 
     let mut model_mod_context = tera::Context::new();
@@ -207,9 +233,9 @@ pub fn main() -> Result<(), Report<Error>> {
         "model/main_mod.rs.tera",
         &model_mod_context,
     )?;
-    std::fs::write(&model_mod.path, model_mod.contents)
-        .attach_printable_lazy(|| model_mod.path.display().to_string())
-        .change_context(Error::WriteFile)?;
+
+    let models_output = merge_tracker.from_rendered_file(model_mod);
+    models_output.write().change_context(Error::WriteFile)?;
 
     Ok(())
 }

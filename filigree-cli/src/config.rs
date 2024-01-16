@@ -6,6 +6,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
     format::Formatters,
+    merge_files::MergeTracker,
     model::{Model, ModelAuthScope, SqlDialect},
     Error,
 };
@@ -149,6 +150,7 @@ pub struct FullConfig {
     pub config: Config,
     pub models: Vec<Model>,
     pub crate_manifest: cargo_toml::Manifest,
+    pub merge_tracker: MergeTracker,
 }
 
 impl FullConfig {
@@ -167,10 +169,9 @@ impl FullConfig {
 
         let config = Config::from_path(&config_file_path)?;
 
-        let cargo_toml_path = dir
-            .parent()
-            .ok_or(Error::ReadConfigFile)?
-            .join("Cargo.toml");
+        let crate_base_dir = dir.parent().ok_or(Error::ReadConfigFile)?;
+
+        let cargo_toml_path = crate_base_dir.join("Cargo.toml");
         let manifest = cargo_toml::Manifest::from_path(&cargo_toml_path)
             .change_context(Error::ReadConfigFile)
             .attach_printable_lazy(|| cargo_toml_path.display().to_string())?;
@@ -196,6 +197,7 @@ impl FullConfig {
             config,
             models,
             crate_manifest: manifest,
+            merge_tracker: MergeTracker::new(dir.join(".generated"), crate_base_dir.to_path_buf()),
         })
     }
 }
