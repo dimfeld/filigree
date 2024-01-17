@@ -9,10 +9,7 @@ use error_stack::{Report, ResultExt};
 use glob::glob;
 use itertools::Itertools;
 use sql_migration_sim::{
-    ast::{
-        AlterColumnOperation, AlterTableOperation, ColumnOption, DataType, Ident, ObjectName,
-        Statement,
-    },
+    ast::{AlterColumnOperation, AlterTableOperation, Ident, ObjectName, Statement},
     Column, Schema, Table,
 };
 
@@ -129,7 +126,37 @@ pub fn resolve_migration(
             .join("\n")
     });
 
-    // TODO Alter tables that exist on both sides.
+    let models_by_table = migrations
+        .iter()
+        .filter_map(|m| {
+            let model = m.source.model?;
+            Some((model.table(), model))
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut up_changes = vec![];
+    let mut down_changes = vec![];
+
+    for (table_name, new_table) in &new_schema.tables {
+        let Some(old_table) = existing_schema.tables.get(table_name) else {
+            continue;
+        };
+
+        let model = models_by_table.get(table_name).map(|m| *m);
+        let changes = diff_table(model, old_table, new_table);
+
+        up_changes.extend(
+            changes
+                .iter()
+                .map(|c| TableChangeUpMigration(c).to_string()),
+        );
+        down_changes.extend(
+            changes
+                .iter()
+                .rev()
+                .map(|c| TableChangeDownMigration(c, old_table).to_string()),
+        );
+    }
 
     let drop_tables_migration = tables_to_drop
         .iter()
@@ -141,6 +168,7 @@ pub fn resolve_migration(
     let up_migration = create_migration
         .chain(drop_tables_migration)
         .chain(drop_indices_migration)
+        .chain(up_changes)
         .join("\n\n");
 
     let down_migration = tables_to_create
@@ -151,6 +179,7 @@ pub fn resolve_migration(
                 .iter()
                 .map(|name| format!("DROP INDEX {name};")),
         )
+        .chain(down_changes)
         .join("\n\n");
 
     Ok(SingleMigration {
@@ -159,6 +188,22 @@ pub fn resolve_migration(
         up: up_migration.into(),
         down: down_migration.into(),
     })
+}
+
+struct TableChangeUpMigration<'a>(&'a TableChange);
+
+impl<'a> Display for TableChangeUpMigration<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.up(f)
+    }
+}
+
+struct TableChangeDownMigration<'a>(&'a TableChange, &'a Table);
+
+impl<'a> Display for TableChangeDownMigration<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.down(f, self.1)
+    }
 }
 
 enum TableChange {
@@ -182,8 +227,8 @@ enum TableChange {
     },
 }
 
-impl Display for TableChange {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl TableChange {
+    fn up(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TableChange::AddColumn { table, column } => {
                 let statement = Statement::AlterTable {
@@ -253,11 +298,122 @@ impl Display for TableChange {
             }
         }
     }
+
+    fn down(&self, f: &mut std::fmt::Formatter<'_>, old_table: &Table) -> std::fmt::Result {
+        match self {
+            TableChange::AddColumn { table, column } => {
+                let statement = Statement::AlterTable {
+                    name: table.clone(),
+                    if_exists: true,
+                    only: false,
+                    operations: vec![AlterTableOperation::DropColumn {
+                        if_exists: true,
+                        cascade: true,
+                        column_name: column.name.clone(),
+                    }],
+                };
+
+                write!(f, "{statement};\n")
+            }
+            // TODO need old column information for this (although the up was destructive anyway)
+            TableChange::RemoveColumn { .. } => Ok(()),
+            TableChange::RenameColumn {
+                table,
+                old_name,
+                new_name,
+            } => {
+                let statement = Statement::AlterTable {
+                    name: table.clone(),
+                    if_exists: true,
+                    only: false,
+                    operations: vec![AlterTableOperation::RenameColumn {
+                        old_column_name: new_name.clone(),
+                        new_column_name: old_name.clone(),
+                    }],
+                };
+
+                write!(f, "{statement};\n")
+            }
+            TableChange::AlterColumn {
+                table,
+                column_name,
+                changes,
+            } => {
+                for op in changes {
+                    if let Some(op) = opposite_alter_op(column_name, op, old_table) {
+                        let statement = Statement::AlterTable {
+                            name: table.clone(),
+                            if_exists: true,
+                            only: false,
+                            operations: vec![AlterTableOperation::AlterColumn {
+                                column_name: column_name.clone(),
+                                op,
+                            }],
+                        };
+
+                        write!(f, "{statement};\n")?;
+                    }
+                }
+
+                Ok(())
+            }
+        }
+    }
 }
 
-struct AlterColumnOperations {
-    name: String,
-    changes: Vec<AlterColumnOperation>,
+fn opposite_alter_op(
+    column_name: &Ident,
+    op: &AlterColumnOperation,
+    old_table: &Table,
+) -> Option<AlterColumnOperation> {
+    match op {
+        AlterColumnOperation::SetNotNull => Some(AlterColumnOperation::DropNotNull),
+        AlterColumnOperation::DropNotNull => Some(AlterColumnOperation::SetNotNull),
+        AlterColumnOperation::SetDefault { .. } => {
+            let default_value = old_table
+                .columns
+                .iter()
+                .find(|c| &c.name == column_name)
+                .and_then(|c| c.default_value());
+            if let Some(default_value) = default_value {
+                Some(AlterColumnOperation::SetDefault {
+                    value: default_value.clone(),
+                })
+            } else {
+                Some(AlterColumnOperation::DropDefault)
+            }
+        }
+        AlterColumnOperation::DropDefault => {
+            let default_value = old_table
+                .columns
+                .iter()
+                .find(|c| &c.name == column_name)
+                .and_then(|c| c.default_value());
+            if let Some(default_value) = default_value {
+                Some(AlterColumnOperation::SetDefault {
+                    value: default_value.clone(),
+                })
+            } else {
+                None
+            }
+        }
+        AlterColumnOperation::SetDataType { .. } => {
+            let data_type = old_table
+                .columns
+                .iter()
+                .find(|c| &c.name == column_name)
+                .map(|c| &c.data_type);
+
+            if let Some(data_type) = data_type {
+                Some(AlterColumnOperation::SetDataType {
+                    data_type: data_type.clone(),
+                    using: None,
+                })
+            } else {
+                None
+            }
+        }
+    }
 }
 
 fn diff_table(model: Option<&Model>, old_table: &Table, new_table: &Table) -> Vec<TableChange> {
@@ -295,9 +451,6 @@ fn diff_table(model: Option<&Model>, old_table: &Table, new_table: &Table) -> Ve
     // Look for new or altered columns
     for column in &new_table.columns {
         let column_name = column.name();
-        let model_field =
-            model.and_then(|m| m.fields.iter().find(|f| f.sql_field_name() == column_name));
-
         let matching_column = old_columns.get(column_name).or_else(|| {
             fields_previous_names
                 .get(column_name)
@@ -305,6 +458,14 @@ fn diff_table(model: Option<&Model>, old_table: &Table, new_table: &Table) -> Ve
         });
 
         if let Some(matching_column) = matching_column {
+            if matching_column.name() != column_name {
+                changes.push(TableChange::RenameColumn {
+                    table: new_table.name.clone(),
+                    old_name: matching_column.name.clone(),
+                    new_name: column.name.clone(),
+                })
+            }
+
             let operations = diff_column(matching_column, column);
             if !operations.is_empty() {
                 changes.push(TableChange::AlterColumn {

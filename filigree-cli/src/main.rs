@@ -54,6 +54,8 @@ pub enum Error {
     Formatter,
     #[error("Failed to run cargo")]
     Cargo,
+    #[error("Input error")]
+    Input,
 }
 
 fn build_models(config: &Config, mut config_models: Vec<Model>) -> Vec<Model> {
@@ -164,8 +166,40 @@ pub fn main() -> Result<(), Report<Error>> {
             )
         })?;
 
-    // TODO write the output from here
-    resolve_migration(&migrations_dir, migrations)?;
+    let migration = resolve_migration(&migrations_dir, migrations)?;
+
+    if !migration.up.is_empty() {
+        let timestamp = chrono::Utc::now().format("%Y%m%d%H%M%S");
+
+        let migration_name = dialoguer::Input::<String>::new()
+            .with_prompt("Enter a name for the migration")
+            .interact_text()
+            .change_context(Error::Input)?;
+
+        let migration_name = migration_name
+            .chars()
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '.' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>();
+
+        let up_filename = format!("{timestamp}_{migration_name}.up.sql");
+        let down_filename = format!("{timestamp}_{migration_name}.down.sql");
+
+        std::fs::write(migrations_dir.join(&up_filename), migration.up.as_bytes())
+            .change_context(Error::WriteFile)
+            .attach_printable(up_filename)?;
+        std::fs::write(
+            migrations_dir.join(&down_filename),
+            migration.down.as_bytes(),
+        )
+        .change_context(Error::WriteFile)
+        .attach_printable(down_filename)?;
+    }
 
     let files = root_files
         .into_iter()
