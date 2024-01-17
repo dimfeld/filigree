@@ -137,6 +137,7 @@ pub fn main() -> Result<(), Report<Error>> {
             let result = SingleMigration {
                 up: String::from_utf8(up).unwrap().into(),
                 down: String::from_utf8(down).unwrap().into(),
+                model: Some(&gen.model),
                 name: gen.model.table(),
             };
 

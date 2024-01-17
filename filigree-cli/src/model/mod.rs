@@ -175,6 +175,7 @@ impl Model {
                 default_rust: String::new(),
                 never_read: false,
                 fixed: true,
+                previous_name: None,
                 references: Some(ModelFieldReference::new(
                     "organizations",
                     "id",
@@ -201,6 +202,7 @@ impl Model {
                 default_rust: String::new(),
                 never_read: false,
                 fixed: true,
+                previous_name: None,
             }),
             org_field,
             Some(ModelField {
@@ -220,6 +222,7 @@ impl Model {
                 default_rust: String::new(),
                 never_read: false,
                 fixed: true,
+                previous_name: None,
             }),
             Some(ModelField {
                 name: "created_at".to_string(),
@@ -238,6 +241,7 @@ impl Model {
                 default_rust: String::new(),
                 never_read: false,
                 fixed: true,
+                previous_name: None,
             }),
         ]
         .into_iter()

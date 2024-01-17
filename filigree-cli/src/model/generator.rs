@@ -44,9 +44,10 @@ impl<'a> ModelGenerator<'a> {
         context
     }
 
-    pub fn fixed_migrations() -> (Vec<SingleMigration>, Vec<SingleMigration>) {
+    pub fn fixed_migrations() -> (Vec<SingleMigration<'static>>, Vec<SingleMigration<'static>>) {
         let before_up = vec![SingleMigration {
             name: "delete_log".to_string(),
+            model: None,
             up: Cow::from(include_str!("../../sql/delete_log.up.sql")),
             down: Cow::from(include_str!("../../sql/delete_log.down.sql")),
         }];
@@ -54,16 +55,19 @@ impl<'a> ModelGenerator<'a> {
         let after_up = vec![
             SingleMigration {
                 name: "user_info".to_string(),
+                model: None,
                 up: Cow::from(include_str!("../../sql/user_info.up.sql")),
                 down: Cow::from(include_str!("../../sql/user_info.down.sql")),
             },
             SingleMigration {
                 name: "permissions".to_string(),
+                model: None,
                 up: Cow::from(include_str!("../../sql/create_permissions.up.sql")),
                 down: Cow::from(include_str!("../../sql/create_permissions.down.sql")),
             },
             SingleMigration {
                 name: "object_permissions".to_string(),
+                model: None,
                 up: Cow::from(include_str!("../../sql/create_object_permissions.up.sql")),
                 down: Cow::from(include_str!("../../sql/create_object_permissions.down.sql")),
             },

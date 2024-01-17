@@ -43,7 +43,6 @@
 #![warn(missing_docs)]
 use std::{
     collections::HashMap,
-    fmt::Display,
     ops::{Deref, DerefMut},
     path::Path,
 };
@@ -55,7 +54,7 @@ use sqlparser::ast::{
 pub use sqlparser::{ast, dialect};
 
 /// A column in a database table
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Column(pub ColumnDef);
 
 impl Deref for Column {
@@ -103,17 +102,31 @@ impl Column {
 /// A table in the database
 pub struct Table {
     /// The name of the table
-    pub name: String,
+    pub name: ObjectName,
     /// The columns in the table
     pub columns: Vec<Column>,
+}
+
+impl Table {
+    /// The name of the table
+    pub fn name(&self) -> String {
+        self.name.to_string()
+    }
 }
 
 /// A view in the database
 pub struct View {
     /// The name of the view
-    pub name: String,
+    pub name: ObjectName,
     /// The columns in the view
     pub columns: Vec<String>,
+}
+
+impl View {
+    /// The name of the view
+    pub fn name(&self) -> String {
+        self.name.to_string()
+    }
 }
 
 /// Errors that can occur while parsing SQL and updating the schema
@@ -176,13 +189,14 @@ impl Schema {
         }
     }
 
-    fn create_table(&mut self, name: String, columns: Vec<ColumnDef>) -> Result<(), Error> {
-        if self.tables.contains_key(&name) {
-            return Err(Error::TableAlreadyExists(name));
+    fn create_table(&mut self, name: ObjectName, columns: Vec<ColumnDef>) -> Result<(), Error> {
+        let name_str = name.to_string();
+        if self.tables.contains_key(&name_str) {
+            return Err(Error::TableAlreadyExists(name_str));
         }
 
         self.tables.insert(
-            name.clone(),
+            name_str,
             Table {
                 name,
                 columns: columns.into_iter().map(Column).collect(),
@@ -194,15 +208,16 @@ impl Schema {
 
     fn create_view(
         &mut self,
-        name: String,
+        name: ObjectName,
         or_replace: bool,
         columns: Vec<String>,
     ) -> Result<(), Error> {
-        if !or_replace && self.views.contains_key(&name) {
-            return Err(Error::TableAlreadyExists(name));
+        let name_str = name.to_string();
+        if !or_replace && self.views.contains_key(&name_str) {
+            return Err(Error::TableAlreadyExists(name_str));
         }
 
-        self.views.insert(name.clone(), View { name, columns });
+        self.views.insert(name_str, View { name, columns });
 
         Ok(())
     }
@@ -272,13 +287,13 @@ impl Schema {
                     .ok_or_else(|| Error::AlteredMissingTable(name.to_string()))?;
 
                 let (schema, _) = object_schema_and_name(&name_ident);
-                let new_table_name = name_with_schema(schema, &new_table_name);
+                let (_, new_table_name) = object_schema_and_name(&new_table_name);
+                let new_table_name = name_with_schema(schema.cloned(), new_table_name.clone());
 
-                table.name = new_table_name.clone();
+                let new_name_str = new_table_name.to_string();
+                table.name = new_table_name;
 
-                // TODO this probably doesn't properly handle tables that are in a
-                // non-default schema
-                self.tables.insert(new_table_name, table);
+                self.tables.insert(new_name_str, table);
             }
 
             AlterTableOperation::AlterColumn { column_name, op } => {
@@ -292,7 +307,10 @@ impl Schema {
                     .iter_mut()
                     .find(|c| c.name == column_name)
                     .ok_or_else(|| {
-                        Error::AlteredMissingColumn(table.name.clone(), column_name.value.clone())
+                        Error::AlteredMissingColumn(
+                            table.name.to_string(),
+                            column_name.value.clone(),
+                        )
                     })?;
 
                 match op {
@@ -350,7 +368,7 @@ impl Schema {
     pub fn apply_statement(&mut self, statement: Statement) -> Result<(), Error> {
         match statement {
             Statement::CreateTable { name, columns, .. } => {
-                self.create_table(name.to_string(), columns)?;
+                self.create_table(name, columns)?;
             }
             Statement::AlterTable {
                 name: name_ident,
@@ -369,7 +387,7 @@ impl Schema {
                 ..
             } => {
                 self.create_view(
-                    name.to_string(),
+                    name,
                     or_replace,
                     columns.into_iter().map(|c| c.value).collect(),
                 )?;
@@ -401,8 +419,10 @@ impl Schema {
                 // For now we ignore indexes without names.
                 if let Some(name) = name {
                     let (schema, _) = object_schema_and_name(&table_name);
-                    let full_name = name_with_schema(schema, &name);
-                    self.indices.insert(full_name, table_name.to_string());
+                    let (_, name) = object_schema_and_name(&name);
+                    let full_name = name_with_schema(schema.cloned(), name.clone());
+                    self.indices
+                        .insert(full_name.to_string(), table_name.to_string());
                 }
             }
 
@@ -413,8 +433,9 @@ impl Schema {
                     };
 
                     let (schema, _) = object_schema_and_name(&name);
-                    let new_name = name_with_schema(schema, index_name);
-                    self.indices.insert(new_name, table_name);
+                    let (_, index_name) = object_schema_and_name(&index_name);
+                    let new_name = name_with_schema(schema.cloned(), index_name.clone());
+                    self.indices.insert(new_name.to_string(), table_name);
                 }
             },
             _ => {}
@@ -449,11 +470,11 @@ impl Schema {
     }
 }
 
-fn name_with_schema(schema: Option<impl Display>, name: impl Display) -> String {
+fn name_with_schema(schema: Option<Ident>, name: Ident) -> ObjectName {
     if let Some(schema) = schema {
-        format!("{schema}.{name}")
+        ObjectName(vec![schema, name])
     } else {
-        name.to_string()
+        ObjectName(vec![name])
     }
 }
 

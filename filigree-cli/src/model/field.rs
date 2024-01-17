@@ -11,6 +11,10 @@ pub struct ModelField {
     /// The name of the field
     pub name: String,
 
+    /// If this field was renamed, this is the old name of the field. This helps with
+    /// creating migrations, so that the column can be renamed instead of deleted and recreated.
+    pub previous_name: Option<String>,
+
     /// The SQL type for this field.
     #[serde(rename = "type")]
     pub typ: SqlType,
@@ -105,6 +109,10 @@ impl ModelField {
 
     pub fn sql_field_name(&self) -> String {
         self.name.to_case(Case::Snake)
+    }
+
+    pub fn previous_sql_field_name(&self) -> Option<String> {
+        self.previous_name.as_ref().map(|s| s.to_case(Case::Snake))
     }
 
     pub fn qualified_sql_field_name(&self) -> String {

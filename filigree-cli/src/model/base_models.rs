@@ -22,6 +22,7 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
         references: None,
         never_read: false,
         fixed: false,
+        previous_name: None,
     }
 }
 
