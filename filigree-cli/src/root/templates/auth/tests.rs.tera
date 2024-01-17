@@ -16,7 +16,7 @@ pub fn extract_token_from_email(email: &filigree::email::Email) -> &str {
 #[cfg(feature = "test_password")]
 #[sqlx::test]
 async fn login_with_password_and_logout(db: sqlx::PgPool) {
-    let (app, BootstrappedData { admin_user, .. }) = start_app(db).await;
+    let (app, BootstrappedData { admin_user, .. }) = start_app(db.clone()).await;
 
     let client = &app.client;
     let response: serde_json::Value = client
@@ -33,6 +33,17 @@ async fn login_with_password_and_logout(db: sqlx::PgPool) {
 
     assert_eq!(response["message"], "Logged in");
 
+    let expires = sqlx::query_scalar!(
+        "UPDATE user_sessions
+        SET expires_at = now() + '1 minute'::interval
+        WHERE user_id = $1
+        RETURNING expires_at",
+        admin_user.user_id.as_uuid()
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+
     let user: serde_json::Value = client
         .get(&format!("users/{}", admin_user.user_id))
         .send()
@@ -44,6 +55,21 @@ async fn login_with_password_and_logout(db: sqlx::PgPool) {
         .await
         .unwrap();
     assert_eq!(user["name"], "Admin");
+
+    let new_expires = sqlx::query_scalar!(
+        "SELECT expires_at
+        FROM user_sessions
+        WHERE user_id = $1",
+        admin_user.user_id.as_uuid()
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+
+    assert!(
+        new_expires > expires,
+        "session expiration should have been updated"
+    );
 
     let response: serde_json::Value = client
         .post("auth/logout")
