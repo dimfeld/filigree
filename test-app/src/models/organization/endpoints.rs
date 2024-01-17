@@ -1,10 +1,11 @@
 #![allow(unused_imports, dead_code)]
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing, Json,
 };
+use axum_extra::extract::Query;
 
 use super::{
     queries, types::*, OrganizationId, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION,
@@ -80,6 +81,7 @@ pub fn create_routes() -> axum::Router<ServerState> {
 
 #[cfg(test)]
 mod test {
+    use filigree::testing::ResponseExt;
     use futures::{StreamExt, TryStreamExt};
     use tracing::{event, Level};
 

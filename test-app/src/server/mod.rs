@@ -27,7 +27,7 @@ use tower_http::{
     compression::CompressionLayer,
     request_id::MakeRequestUuid,
     timeout::TimeoutLayer,
-    trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+    trace::{DefaultMakeSpan, DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer},
     ServiceBuilderExt,
 };
 use tracing::{event, Level};
@@ -202,7 +202,8 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                     TraceLayer::new_for_http()
                         .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
                         .on_response(DefaultOnResponse::new().level(Level::INFO))
-                        .on_request(DefaultOnRequest::new().level(Level::INFO)),
+                        .on_request(DefaultOnRequest::new().level(Level::INFO))
+                        .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
                 )
                 .layer(TimeoutLayer::new(config.request_timeout))
                 .layer(CompressionLayer::new())

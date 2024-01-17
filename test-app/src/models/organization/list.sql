@@ -27,6 +27,7 @@ FROM
       AND permission IN ('org_admin', 'Organization::owner', 'Organization::write', 'Organization::read')) perm ON
 	perm._permission IS NOT NULL
 WHERE
+  AND __insertion_point_filters
 ORDER BY
   __insertion_point_order_by
 LIMIT $3 OFFSET $4

@@ -69,9 +69,7 @@ impl std::str::FromStr for OrderByField {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = match s {
             "updated_at" => OrderByField::UpdatedAt,
-
             "created_at" => OrderByField::CreatedAt,
-
             _ => return Err(OrderByError::InvalidField),
         };
 
@@ -128,7 +126,9 @@ impl ListQueryFilters {
             bindings.add_option("created_at", &self.created_at_gte, BindingOperator::Gte);
         }
 
-        bindings.to_string()
+        let query = bindings.to_string();
+        event!(Level::DEBUG, %query);
+        query
     }
 
     fn bind_to_query<'a, T>(&'a self, mut query: QueryAs<'a, T>) -> QueryAs<'a, T> {

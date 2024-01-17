@@ -1,8 +1,9 @@
 use axum::{
-    extract::{Host, Query, State},
+    extract::{Host, State},
     response::IntoResponse,
     Json,
 };
+use axum_extra::extract::Query;
 use error_stack::ResultExt;
 use filigree::auth::{
     passwordless_email_login::{

@@ -28,6 +28,7 @@ FROM
 	perm._permission IS NOT NULL
 WHERE
   organization_id = $1
+  AND __insertion_point_filters
 ORDER BY
   __insertion_point_order_by
 LIMIT $3 OFFSET $4

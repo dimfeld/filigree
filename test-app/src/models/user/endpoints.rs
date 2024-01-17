@@ -1,10 +1,11 @@
 #![allow(unused_imports, dead_code)]
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing, Json,
 };
+use axum_extra::extract::Query;
 
 use super::{
     queries, types::*, UserId, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION,
@@ -101,6 +102,7 @@ pub fn create_routes() -> axum::Router<ServerState> {
 
 #[cfg(test)]
 mod test {
+    use filigree::testing::ResponseExt;
     use futures::{StreamExt, TryStreamExt};
     use tracing::{event, Level};
 
@@ -155,7 +157,8 @@ mod test {
             .send()
             .await
             .unwrap()
-            .error_for_status()
+            .log_error()
+            .await
             .unwrap()
             .json::<Vec<serde_json::Value>>()
             .await
@@ -228,7 +231,8 @@ mod test {
             .send()
             .await
             .unwrap()
-            .error_for_status()
+            .log_error()
+            .await
             .unwrap()
             .json::<Vec<serde_json::Value>>()
             .await
@@ -299,8 +303,38 @@ mod test {
     }
 
     #[sqlx::test]
-    #[ignore = "todo"]
-    async fn list_fetch_specific_ids(_pool: sqlx::PgPool) {}
+    async fn list_fetch_specific_ids(pool: sqlx::PgPool) {
+        let (
+            _app,
+            BootstrappedData {
+                organization, user, ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let added_objects = setup_test_objects(&pool, organization.id, 3).await;
+
+        let results = user
+            .client
+            .get("users")
+            .query(&[("id", added_objects[0].id), ("id", added_objects[2].id)])
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<Vec<serde_json::Value>>()
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert!(results
+            .iter()
+            .any(|o| o["id"] == added_objects[0].id.to_string()));
+        assert!(results
+            .iter()
+            .any(|o| o["id"] == added_objects[2].id.to_string()));
+    }
 
     #[sqlx::test]
     #[ignore = "todo"]
@@ -335,7 +369,8 @@ mod test {
             .send()
             .await
             .unwrap()
-            .error_for_status()
+            .log_error()
+            .await
             .unwrap()
             .json::<serde_json::Value>()
             .await
@@ -387,7 +422,8 @@ mod test {
             .send()
             .await
             .unwrap()
-            .error_for_status()
+            .log_error()
+            .await
             .unwrap()
             .json::<serde_json::Value>()
             .await
@@ -471,7 +507,8 @@ mod test {
             .send()
             .await
             .unwrap()
-            .error_for_status()
+            .log_error()
+            .await
             .unwrap();
 
         let updated: serde_json::Value = admin_user
@@ -480,7 +517,8 @@ mod test {
             .send()
             .await
             .unwrap()
-            .error_for_status()
+            .log_error()
+            .await
             .unwrap()
             .json()
             .await
@@ -508,7 +546,8 @@ mod test {
             .send()
             .await
             .unwrap()
-            .error_for_status()
+            .log_error()
+            .await
             .unwrap()
             .json()
             .await
@@ -577,7 +616,8 @@ mod test {
             .send()
             .await
             .unwrap()
-            .error_for_status()
+            .log_error()
+            .await
             .unwrap();
 
         let response = admin_user

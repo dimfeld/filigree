@@ -1,8 +1,9 @@
 use axum::{
-    extract::{Host, Query, State},
+    extract::{Host, State},
     response::{IntoResponse, Redirect},
     Json,
 };
+use axum_extra::extract::Query;
 use error_stack::{Report, ResultExt};
 use filigree::{
     auth::{password::create_reset_token, AuthError},
