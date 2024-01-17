@@ -2,20 +2,20 @@ use std::sync::{Arc, Mutex};
 
 use error_stack::Report;
 use filigree::{
-    auth::{api_key::ApiKeyData, ExpiryStyle, SessionBackend, SessionCookieBuilder},
+    auth::{api_key::ApiKeyData, ExpiryStyle, SessionCookieBuilder},
     testing::{self, TestClient},
 };
 use futures::future::FutureExt;
-use sqlx::{PgConnection, PgExecutor, PgPool};
+use sqlx::{PgConnection, PgPool};
 use tracing::{event, instrument, Level};
 
 use crate::{
     models::{
-        organization::{self, Organization, OrganizationId},
-        role::{self, RoleId},
+        organization::{Organization, OrganizationId},
+        role::RoleId,
         user::{self, UserId},
     },
-    users::organization::{create_new_organization, CreatedOrganization},
+    users::organization::CreatedOrganization,
     Error,
 };
 
