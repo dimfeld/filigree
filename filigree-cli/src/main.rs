@@ -19,6 +19,7 @@ mod add_deps;
 mod config;
 mod format;
 mod merge_files;
+mod migrations;
 mod model;
 mod root;
 mod state;
@@ -42,6 +43,8 @@ pub enum Error {
     Config,
     #[error("Failed to read configuration file")]
     ReadConfigFile,
+    #[error("Failed to read migration files")]
+    ReadMigrationFiles,
     #[error("Failed to write file")]
     WriteFile,
     #[error("{0}{}", .0.source().map(|e| format!("\n{e}")).unwrap_or_default())]

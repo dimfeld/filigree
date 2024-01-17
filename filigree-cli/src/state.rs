@@ -22,7 +22,7 @@ impl State {
         serde_json::from_slice(&data).ok()
     }
 
-    pub fn update_from_config(&mut self, config: &Config) {
+    pub fn update_from_config(&mut self, _config: &Config) {
         // Update background jobs once there is config for them
     }
 

@@ -1,5 +1,5 @@
 //! This library is meant to parse multiple related SQL migration files, and calculate the final
-//! schema that resutls from running them in order.
+//! schema that results from running them in order.
 //!
 //! ## Example
 //!
@@ -45,6 +45,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
     ops::{Deref, DerefMut},
+    path::Path,
 };
 
 use sqlparser::ast::{
@@ -421,10 +422,10 @@ impl Schema {
     }
 
     /// Read a SQL file and apply its contents to the schema
-    pub fn apply_file(&mut self, filename: &str) -> Result<(), Error> {
+    pub fn apply_file(&mut self, filename: &Path) -> Result<(), Error> {
         let contents = std::fs::read_to_string(filename).map_err(|e| Error::File {
             source: e,
-            filename: filename.to_string(),
+            filename: filename.display().to_string(),
         })?;
 
         self.apply_sql(&contents)
