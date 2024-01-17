@@ -9,6 +9,7 @@ use clap::Parser;
 use config::Config;
 use error_stack::{Report, ResultExt};
 use merge_files::MergeTracker;
+use migrations::{resolve_migration, SingleMigration};
 use model::Model;
 use rayon::prelude::*;
 use thiserror::Error;
@@ -128,15 +129,28 @@ pub fn main() -> Result<(), Report<Error>> {
     let model_files = model_files.expect("model_files was not set")?;
     let root_files = root_files.expect("root_files was not set")?;
 
-    let up_migrations = generators
+    let model_migrations = generators
         .iter()
-        .map(|gen| gen.render_up_migration())
+        .map(|gen| {
+            let up = gen.render_up_migration()?;
+            let down = gen.render_down_migration()?;
+            let result = SingleMigration {
+                up: String::from_utf8(up).unwrap().into(),
+                down: String::from_utf8(down).unwrap().into(),
+                name: gen.model.table(),
+            };
+
+            Ok::<_, Report<Error>>(result)
+        })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let down_migrations = generators
-        .iter()
-        .map(|gen| gen.render_down_migration())
-        .collect::<Result<Vec<_>, _>>()?;
+    let (first_fixed_migrations, last_fixed_migrations) = ModelGenerator::fixed_migrations();
+
+    let migrations = first_fixed_migrations
+        .into_iter()
+        .chain(model_migrations.into_iter())
+        .chain(last_fixed_migrations.into_iter())
+        .collect::<Vec<_>>();
 
     let migrations_dir = crate_base_dir.join("migrations");
 
@@ -149,29 +163,8 @@ pub fn main() -> Result<(), Report<Error>> {
             )
         })?;
 
-    // TODO This works once but we don't want to change the initial migration after it's been
-    // created.
-    let up_migration_path = migrations_dir.join("00000000000000_filigree_init.up.sql");
-    let (before_up, after_up) = ModelGenerator::fixed_up_migration_files();
-    write_vecs(
-        &up_migration_path,
-        before_up,
-        &up_migrations,
-        after_up,
-        b"\n\n",
-    )
-    .change_context(Error::WriteFile)?;
-
-    let down_migration_path = migrations_dir.join("00000000000000_filigree_init.down.sql");
-    let (before_down, after_down) = ModelGenerator::fixed_down_migration_files();
-    write_vecs(
-        &down_migration_path,
-        before_down,
-        &down_migrations,
-        after_down,
-        b"\n\n",
-    )
-    .change_context(Error::WriteFile)?;
+    // TODO write the output from here
+    resolve_migration(&migrations_dir, migrations)?;
 
     let files = root_files
         .into_iter()

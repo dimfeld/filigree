@@ -42,7 +42,7 @@
 
 #![warn(missing_docs)]
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt::Display,
     ops::{Deref, DerefMut},
     path::Path,
@@ -52,7 +52,7 @@ use sqlparser::ast::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
     ColumnOptionDef, Ident, ObjectName, ObjectType, Statement,
 };
-pub use sqlparser::{ast, dialect::Dialect};
+pub use sqlparser::{ast, dialect};
 
 /// A column in a database table
 #[derive(Debug)]
@@ -131,6 +131,9 @@ pub enum Error {
     /// Attempted to create a column that already exists
     #[error("Attempted to create column {0} that already exists in table {1}")]
     ColumnAlreadyExists(String, String),
+    /// Attempted to rename an index that doesn't exist
+    #[error("Attempted to rename index {0} that does not exist")]
+    RenameMissingIndex(String),
     /// The SQL parser encountered an error
     #[error("SQL Parse Error {0}")]
     Parse(#[from] sqlparser::parser::ParserError),
@@ -147,13 +150,13 @@ pub enum Error {
 
 /// The database schema, built from parsing one or more SQL statements.
 pub struct Schema {
-    dialect: Box<dyn Dialect>,
+    dialect: Box<dyn dialect::Dialect>,
     /// The tables in the schema
     pub tables: HashMap<String, Table>,
     /// The views in the schema
     pub views: HashMap<String, View>,
-    /// The names of created indexes
-    pub indices: HashSet<String>,
+    /// The created indices. The key is the index name and the value is the table the index is on.
+    pub indices: HashMap<String, String>,
 }
 
 impl Schema {
@@ -163,12 +166,12 @@ impl Schema {
     }
 
     /// Create a new [Schema] that parses with the given SQL dialect
-    pub fn new_with_dialect<D: Dialect>(dialect: D) -> Self {
+    pub fn new_with_dialect<D: dialect::Dialect>(dialect: D) -> Self {
         let dialect = Box::new(dialect);
         Self {
             tables: HashMap::new(),
             views: HashMap::new(),
-            indices: HashSet::new(),
+            indices: HashMap::new(),
             dialect,
         }
     }
@@ -204,7 +207,147 @@ impl Schema {
         Ok(())
     }
 
-    fn apply_statement(&mut self, statement: Statement) -> Result<(), Error> {
+    fn handle_alter_table(
+        &mut self,
+        name: &str,
+        name_ident: &ObjectName,
+        operation: AlterTableOperation,
+    ) -> Result<(), Error> {
+        match operation {
+            AlterTableOperation::AddColumn {
+                if_not_exists,
+                column_def,
+                ..
+            } => {
+                let table = self
+                    .tables
+                    .get_mut(name)
+                    .ok_or_else(|| Error::AlteredMissingTable(name.to_string()))?;
+
+                let existing_column = table.columns.iter().find(|c| c.name == column_def.name);
+
+                if existing_column.is_none() {
+                    table.columns.push(Column(column_def));
+                } else if !if_not_exists {
+                    return Err(Error::ColumnAlreadyExists(
+                        column_def.name.value,
+                        name.to_string(),
+                    ));
+                }
+            }
+
+            AlterTableOperation::DropColumn { column_name, .. } => {
+                let table = self
+                    .tables
+                    .get_mut(name)
+                    .ok_or_else(|| Error::AlteredMissingTable(name.to_string()))?;
+                table.columns.retain(|c| c.name != column_name);
+            }
+
+            AlterTableOperation::RenameColumn {
+                old_column_name,
+                new_column_name,
+            } => {
+                let table = self
+                    .tables
+                    .get_mut(name)
+                    .ok_or_else(|| Error::AlteredMissingTable(name.to_string()))?;
+
+                let column = table
+                    .columns
+                    .iter_mut()
+                    .find(|c| c.name == old_column_name)
+                    .ok_or_else(|| {
+                        Error::AlteredMissingColumn(old_column_name.value.clone(), name.to_string())
+                    })?;
+                column.name = new_column_name;
+            }
+
+            AlterTableOperation::RenameTable {
+                table_name: new_table_name,
+            } => {
+                let mut table = self
+                    .tables
+                    .remove(name)
+                    .ok_or_else(|| Error::AlteredMissingTable(name.to_string()))?;
+
+                let (schema, _) = object_schema_and_name(&name_ident);
+                let new_table_name = name_with_schema(schema, &new_table_name);
+
+                table.name = new_table_name.clone();
+
+                // TODO this probably doesn't properly handle tables that are in a
+                // non-default schema
+                self.tables.insert(new_table_name, table);
+            }
+
+            AlterTableOperation::AlterColumn { column_name, op } => {
+                let table = self
+                    .tables
+                    .get_mut(name)
+                    .ok_or_else(|| Error::AlteredMissingTable(name.to_string()))?;
+
+                let column = table
+                    .columns
+                    .iter_mut()
+                    .find(|c| c.name == column_name)
+                    .ok_or_else(|| {
+                        Error::AlteredMissingColumn(table.name.clone(), column_name.value.clone())
+                    })?;
+
+                match op {
+                    AlterColumnOperation::SetNotNull => {
+                        if column
+                            .options
+                            .iter()
+                            .find(|o| o.option == ColumnOption::NotNull)
+                            .is_none()
+                        {
+                            column.options.push(ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::NotNull,
+                            });
+                        }
+
+                        column.options.retain(|o| o.option != ColumnOption::Null);
+                    }
+                    AlterColumnOperation::DropNotNull => {
+                        column.options.retain(|o| o.option != ColumnOption::NotNull);
+                    }
+                    AlterColumnOperation::SetDefault { value } => {
+                        if let Some(default_option) = column
+                            .options
+                            .iter_mut()
+                            .find(|o| matches!(o.option, ColumnOption::Default(_)))
+                        {
+                            default_option.option = ColumnOption::Default(value);
+                        } else {
+                            column.options.push(ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Default(value),
+                            })
+                        }
+                    }
+                    AlterColumnOperation::DropDefault => {
+                        column
+                            .options
+                            .retain(|o| !matches!(o.option, ColumnOption::Default(_)));
+                    }
+
+                    AlterColumnOperation::SetDataType { data_type, .. } => {
+                        column.data_type = data_type
+                    }
+                }
+            }
+
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    /// Apply a parsed statement to the schema
+    pub fn apply_statement(&mut self, statement: Statement) -> Result<(), Error> {
         match statement {
             Statement::CreateTable { name, columns, .. } => {
                 self.create_table(name.to_string(), columns)?;
@@ -216,142 +359,7 @@ impl Schema {
             } => {
                 let name = name_ident.to_string();
                 for operation in operations {
-                    match operation {
-                        AlterTableOperation::AddColumn {
-                            if_not_exists,
-                            column_def,
-                            ..
-                        } => {
-                            let table = self
-                                .tables
-                                .get_mut(&name)
-                                .ok_or_else(|| Error::AlteredMissingTable(name.clone()))?;
-
-                            let existing_column =
-                                table.columns.iter().find(|c| c.name == column_def.name);
-
-                            if existing_column.is_none() {
-                                table.columns.push(Column(column_def));
-                            } else if !if_not_exists {
-                                return Err(Error::ColumnAlreadyExists(
-                                    column_def.name.value,
-                                    name.clone(),
-                                ));
-                            }
-                        }
-
-                        AlterTableOperation::DropColumn { column_name, .. } => {
-                            let table = self
-                                .tables
-                                .get_mut(&name)
-                                .ok_or_else(|| Error::AlteredMissingTable(name.clone()))?;
-                            table.columns.retain(|c| c.name != column_name);
-                        }
-
-                        AlterTableOperation::RenameColumn {
-                            old_column_name,
-                            new_column_name,
-                        } => {
-                            let table = self
-                                .tables
-                                .get_mut(&name)
-                                .ok_or_else(|| Error::AlteredMissingTable(name.clone()))?;
-
-                            let column = table
-                                .columns
-                                .iter_mut()
-                                .find(|c| c.name == old_column_name)
-                                .ok_or_else(|| {
-                                    Error::AlteredMissingColumn(
-                                        old_column_name.value.clone(),
-                                        name.clone(),
-                                    )
-                                })?;
-                            column.name = new_column_name;
-                        }
-
-                        AlterTableOperation::RenameTable {
-                            table_name: new_table_name,
-                        } => {
-                            let mut table = self
-                                .tables
-                                .remove(&name)
-                                .ok_or_else(|| Error::AlteredMissingTable(name.clone()))?;
-
-                            let (schema, _) = object_schema_and_name(&name_ident);
-                            let new_table_name = name_with_schema(schema, &new_table_name);
-
-                            table.name = new_table_name.clone();
-
-                            // TODO this probably doesn't properly handle tables that are in a
-                            // non-default schema
-                            self.tables.insert(new_table_name, table);
-                        }
-
-                        AlterTableOperation::AlterColumn { column_name, op } => {
-                            let table = self
-                                .tables
-                                .get_mut(&name)
-                                .ok_or_else(|| Error::AlteredMissingTable(name.clone()))?;
-
-                            let column = table
-                                .columns
-                                .iter_mut()
-                                .find(|c| c.name == column_name)
-                                .ok_or_else(|| {
-                                Error::AlteredMissingColumn(
-                                    table.name.clone(),
-                                    column_name.value.clone(),
-                                )
-                            })?;
-
-                            match op {
-                                AlterColumnOperation::SetNotNull => {
-                                    if column
-                                        .options
-                                        .iter()
-                                        .find(|o| o.option == ColumnOption::NotNull)
-                                        .is_none()
-                                    {
-                                        column.options.push(ColumnOptionDef {
-                                            name: None,
-                                            option: ColumnOption::NotNull,
-                                        });
-                                    }
-
-                                    column.options.retain(|o| o.option != ColumnOption::Null);
-                                }
-                                AlterColumnOperation::DropNotNull => {
-                                    column.options.retain(|o| o.option != ColumnOption::NotNull);
-                                }
-                                AlterColumnOperation::SetDefault { value } => {
-                                    if let Some(default_option) = column
-                                        .options
-                                        .iter_mut()
-                                        .find(|o| matches!(o.option, ColumnOption::Default(_)))
-                                    {
-                                        default_option.option = ColumnOption::Default(value);
-                                    } else {
-                                        column.options.push(ColumnOptionDef {
-                                            name: None,
-                                            option: ColumnOption::Default(value),
-                                        })
-                                    }
-                                }
-                                AlterColumnOperation::DropDefault => {
-                                    column
-                                        .options
-                                        .retain(|o| !matches!(o.option, ColumnOption::Default(_)));
-                                }
-
-                                AlterColumnOperation::SetDataType { data_type, .. } => {
-                                    column.data_type = data_type
-                                }
-                            }
-                        }
-
-                        _ => {}
-                    }
+                    self.handle_alter_table(&name, &name_ident, operation)?;
                 }
             }
             Statement::CreateView {
@@ -394,16 +402,19 @@ impl Schema {
                 if let Some(name) = name {
                     let (schema, _) = object_schema_and_name(&table_name);
                     let full_name = name_with_schema(schema, &name);
-                    self.indices.insert(full_name);
+                    self.indices.insert(full_name, table_name.to_string());
                 }
             }
 
             Statement::AlterIndex { name, operation } => match operation {
                 AlterIndexOperation::RenameIndex { index_name } => {
-                    self.indices.remove(&name.to_string());
+                    let Some(table_name) = self.indices.remove(&name.to_string()) else {
+                        return Err(Error::RenameMissingIndex(name.to_string()));
+                    };
+
                     let (schema, _) = object_schema_and_name(&name);
                     let new_name = name_with_schema(schema, index_name);
-                    self.indices.insert(new_name);
+                    self.indices.insert(new_name, table_name);
                 }
             },
             _ => {}
@@ -412,11 +423,17 @@ impl Schema {
         Ok(())
     }
 
-    /// Apply one or more SQL statements to the schema
-    pub fn apply_sql(&mut self, sql: &str) -> Result<(), Error> {
+    /// Parse some SQL into a list of statements
+    pub fn parse_sql(&self, sql: &str) -> Result<Vec<Statement>, Error> {
         sqlparser::parser::Parser::new(self.dialect.as_ref())
             .try_with_sql(sql)?
-            .parse_statements()?
+            .parse_statements()
+            .map_err(Error::from)
+    }
+
+    /// Apply one or more SQL statements to the schema
+    pub fn apply_sql(&mut self, sql: &str) -> Result<(), Error> {
+        self.parse_sql(sql)?
             .into_iter()
             .try_for_each(|statement| self.apply_statement(statement))
     }
@@ -504,8 +521,8 @@ mod test {
             )
             .unwrap();
 
-        assert!(schema.indices.contains("idx_name"));
-        assert!(schema.indices.contains("sch.idx_name_2"));
+        assert_eq!(schema.indices.get("idx_name").unwrap(), "ships");
+        assert_eq!(schema.indices.get("sch.idx_name_2").unwrap(), "sch.ships");
     }
 
     #[test]

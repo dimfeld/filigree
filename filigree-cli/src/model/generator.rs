@@ -1,4 +1,4 @@
-use std::{ops::Deref, path::PathBuf};
+use std::{borrow::Cow, ops::Deref, path::PathBuf};
 
 use error_stack::{Report, ResultExt};
 use rayon::prelude::*;
@@ -6,6 +6,7 @@ use rayon::prelude::*;
 use super::Model;
 use crate::{
     config::Config,
+    migrations::SingleMigration,
     templates::{ModelRustTemplates, ModelSqlTemplates, Renderer},
     Error, RenderedFile,
 };
@@ -43,29 +44,32 @@ impl<'a> ModelGenerator<'a> {
         context
     }
 
-    pub fn fixed_up_migration_files() -> (String, String) {
-        let before_up = [include_str!("../../sql/delete_log.up.sql")].join("\n\n");
+    pub fn fixed_migrations() -> (Vec<SingleMigration>, Vec<SingleMigration>) {
+        let before_up = vec![SingleMigration {
+            name: "delete_log".to_string(),
+            up: Cow::from(include_str!("../../sql/delete_log.up.sql")),
+            down: Cow::from(include_str!("../../sql/delete_log.down.sql")),
+        }];
 
-        let after_up = [
-            include_str!("../../sql/user_info.up.sql"),
-            include_str!("../../sql/create_permissions.up.sql"),
-            include_str!("../../sql/create_object_permissions.up.sql"),
-        ]
-        .join("\n\n");
+        let after_up = vec![
+            SingleMigration {
+                name: "user_info".to_string(),
+                up: Cow::from(include_str!("../../sql/user_info.up.sql")),
+                down: Cow::from(include_str!("../../sql/user_info.down.sql")),
+            },
+            SingleMigration {
+                name: "permissions".to_string(),
+                up: Cow::from(include_str!("../../sql/create_permissions.up.sql")),
+                down: Cow::from(include_str!("../../sql/create_permissions.down.sql")),
+            },
+            SingleMigration {
+                name: "object_permissions".to_string(),
+                up: Cow::from(include_str!("../../sql/create_object_permissions.up.sql")),
+                down: Cow::from(include_str!("../../sql/create_object_permissions.down.sql")),
+            },
+        ];
 
         (before_up, after_up)
-    }
-
-    pub fn fixed_down_migration_files() -> (String, String) {
-        let before_down = [include_str!("../../sql/delete_log.down.sql")].join("\n\n");
-        let after_down = [
-            include_str!("../../sql/user_info.down.sql"),
-            include_str!("../../sql/create_permissions.down.sql"),
-            include_str!("../../sql/create_object_permissions.down.sql"),
-        ]
-        .join("\n\n");
-
-        (before_down, after_down)
     }
 
     pub fn render_up_migration(&self) -> Result<Vec<u8>, Report<Error>> {

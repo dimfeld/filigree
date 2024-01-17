@@ -20,7 +20,7 @@ CREATE TABLE organization_members (
   PRIMARY KEY (organization_id, user_id)
 );
 
-CREATE INDEX ON user_sessions (user_id);
+CREATE INDEX user_sessions_user_id ON user_sessions (user_id);
 
 CREATE TABLE api_keys (
   api_key_id uuid PRIMARY KEY,
@@ -44,7 +44,7 @@ CREATE TABLE email_logins (
   passwordless_login_expires_at timestamptz
 );
 
-CREATE INDEX ON email_logins (user_id);
+CREATE INDEX email_logins_user_id ON email_logins (user_id);
 
 CREATE TABLE oauth_logins (
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
@@ -53,7 +53,7 @@ CREATE TABLE oauth_logins (
   PRIMARY KEY (user_id, oauth_provider, oauth_account_id)
 );
 
-CREATE INDEX ON oauth_logins (user_id);
+CREATE INDEX oauth_logins_user_id ON oauth_logins (user_id);
 
 CREATE TABLE user_invites (
   email text NOT NULL,
@@ -68,4 +68,4 @@ CREATE TABLE user_invites (
   invite_sent_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX ON user_invites (email, organization_id) NULLS NOT DISTINCT;
+CREATE UNIQUE INDEX user_invites_email_org ON user_invites (email, organization_id) NULLS NOT DISTINCT;
