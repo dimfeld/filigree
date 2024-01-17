@@ -8,6 +8,7 @@ use std::{
 use clap::Parser;
 use config::Config;
 use error_stack::{Report, ResultExt};
+use merge_files::MergeTracker;
 use model::Model;
 use rayon::prelude::*;
 use thiserror::Error;
@@ -20,6 +21,7 @@ mod format;
 mod merge_files;
 mod model;
 mod root;
+mod state;
 mod templates;
 
 pub struct RenderedFile {
@@ -78,8 +80,11 @@ pub fn main() -> Result<(), Report<Error>> {
         config,
         models: config_models,
         crate_manifest,
-        merge_tracker,
+        state_dir,
+        crate_base_dir,
+        state,
     } = config;
+    let merge_tracker = MergeTracker::new(state_dir.clone(), crate_base_dir.clone());
 
     add_deps::add_deps(&crate_manifest)?;
 
@@ -130,7 +135,7 @@ pub fn main() -> Result<(), Report<Error>> {
         .map(|gen| gen.render_down_migration())
         .collect::<Result<Vec<_>, _>>()?;
 
-    let migrations_dir = PathBuf::from("migrations");
+    let migrations_dir = crate_base_dir.join("migrations");
 
     std::fs::create_dir_all(&migrations_dir)
         .change_context(Error::WriteFile)

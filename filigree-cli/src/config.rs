@@ -6,8 +6,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
     format::Formatters,
-    merge_files::MergeTracker,
     model::{Model, ModelAuthScope, SqlDialect},
+    state::State,
     Error,
 };
 
@@ -149,8 +149,10 @@ pub struct FullConfig {
     pub crate_name: String,
     pub config: Config,
     pub models: Vec<Model>,
+    pub state_dir: PathBuf,
+    pub crate_base_dir: PathBuf,
     pub crate_manifest: cargo_toml::Manifest,
-    pub merge_tracker: MergeTracker,
+    pub state: State,
 }
 
 impl FullConfig {
@@ -169,7 +171,7 @@ impl FullConfig {
 
         let config = Config::from_path(&config_file_path)?;
 
-        let crate_base_dir = dir.parent().ok_or(Error::ReadConfigFile)?;
+        let crate_base_dir = dir.parent().ok_or(Error::ReadConfigFile)?.to_path_buf();
 
         let cargo_toml_path = crate_base_dir.join("Cargo.toml");
         let manifest = cargo_toml::Manifest::from_path(&cargo_toml_path)
@@ -192,12 +194,23 @@ impl FullConfig {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
+        let state_dir = dir.join(".state");
+
+        let mut state = State::from_dir(&state_dir);
+        state.update_from_config(&config);
+        state
+            .save(&state_dir)
+            .change_context(Error::WriteFile)
+            .attach_printable("Saving state JSON")?;
+
         Ok(FullConfig {
             crate_name,
             config,
             models,
+            state_dir,
+            crate_base_dir,
             crate_manifest: manifest,
-            merge_tracker: MergeTracker::new(dir.join(".generated"), crate_base_dir.to_path_buf()),
+            state,
         })
     }
 }
