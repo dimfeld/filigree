@@ -3140,7 +3140,7 @@ dependencies = [
 
 [[package]]
 name = "sql-migration-sim"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "sqlparser",
  "thiserror",

@@ -42,13 +42,14 @@
 
 #![warn(missing_docs)]
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
+    fmt::Display,
     ops::{Deref, DerefMut},
 };
 
 use sqlparser::ast::{
-    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
-    ObjectType, Statement,
+    AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
+    ColumnOptionDef, Ident, ObjectName, ObjectType, Statement,
 };
 pub use sqlparser::{ast, dialect::Dialect};
 
@@ -87,6 +88,14 @@ impl Column {
                 _ => None,
             })
             .unwrap_or(false)
+    }
+
+    /// Returns the default value of the column
+    pub fn default_value(&self) -> Option<&ast::Expr> {
+        self.options.iter().find_map(|o| match &o.option {
+            ColumnOption::Default(expr) => Some(expr),
+            _ => None,
+        })
     }
 }
 
@@ -142,6 +151,8 @@ pub struct Schema {
     pub tables: HashMap<String, Table>,
     /// The views in the schema
     pub views: HashMap<String, View>,
+    /// The names of created indexes
+    pub indices: HashSet<String>,
 }
 
 impl Schema {
@@ -156,6 +167,7 @@ impl Schema {
         Self {
             tables: HashMap::new(),
             views: HashMap::new(),
+            indices: HashSet::new(),
             dialect,
         }
     }
@@ -197,9 +209,11 @@ impl Schema {
                 self.create_table(name.to_string(), columns)?;
             }
             Statement::AlterTable {
-                name, operations, ..
+                name: name_ident,
+                operations,
+                ..
             } => {
-                let name = name.to_string();
+                let name = name_ident.to_string();
                 for operation in operations {
                     match operation {
                         AlterTableOperation::AddColumn {
@@ -258,11 +272,16 @@ impl Schema {
                         AlterTableOperation::RenameTable {
                             table_name: new_table_name,
                         } => {
-                            let new_table_name = new_table_name.to_string();
-                            let mut table = self.tables.remove(&name).ok_or_else(|| {
-                                Error::AlteredMissingTable(new_table_name.clone())
-                            })?;
+                            let mut table = self
+                                .tables
+                                .remove(&name)
+                                .ok_or_else(|| Error::AlteredMissingTable(name.clone()))?;
+
+                            let (schema, _) = object_schema_and_name(&name_ident);
+                            let new_table_name = name_with_schema(schema, &new_table_name);
+
                             table.name = new_table_name.clone();
+
                             // TODO this probably doesn't properly handle tables that are in a
                             // non-default schema
                             self.tables.insert(new_table_name, table);
@@ -359,10 +378,33 @@ impl Schema {
                         ObjectType::View => {
                             self.views.remove(&name);
                         }
+                        ObjectType::Index => {
+                            self.indices.remove(&name);
+                        }
                         _ => {}
                     }
                 }
             }
+
+            Statement::CreateIndex {
+                name, table_name, ..
+            } => {
+                // For now we ignore indexes without names.
+                if let Some(name) = name {
+                    let (schema, _) = object_schema_and_name(&table_name);
+                    let full_name = name_with_schema(schema, &name);
+                    self.indices.insert(full_name);
+                }
+            }
+
+            Statement::AlterIndex { name, operation } => match operation {
+                AlterIndexOperation::RenameIndex { index_name } => {
+                    self.indices.remove(&name.to_string());
+                    let (schema, _) = object_schema_and_name(&name);
+                    let new_name = name_with_schema(schema, index_name);
+                    self.indices.insert(new_name);
+                }
+            },
             _ => {}
         }
 
@@ -386,5 +428,178 @@ impl Schema {
         })?;
 
         self.apply_sql(&contents)
+    }
+}
+
+fn name_with_schema(schema: Option<impl Display>, name: impl Display) -> String {
+    if let Some(schema) = schema {
+        format!("{schema}.{name}")
+    } else {
+        name.to_string()
+    }
+}
+
+fn object_schema_and_name(name: &ObjectName) -> (Option<&Ident>, &Ident) {
+    if name.0.len() == 2 {
+        (Some(&name.0[0]), &name.0[1])
+    } else {
+        (None, &name.0[0])
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use sqlparser::{ast::DataType, dialect};
+
+    use super::*;
+
+    const CREATE: &str = r##"
+    CREATE TABLE ships (
+        id BIGINT PRIMARY KEY,
+        name TEXT NOT NULL,
+        mast_count INT not null
+    );"##;
+
+    const CREATE_WITH_SCHEMA: &str = r##"
+    CREATE TABLE sch.ships (
+        id BIGINT PRIMARY KEY,
+        name TEXT NOT NULL,
+        mast_count INT not null
+    );"##;
+
+    #[test]
+    fn rename_table() {
+        let mut schema = Schema::new();
+        schema.apply_sql(CREATE).unwrap();
+        schema
+            .apply_sql("ALTER TABLE ships RENAME TO ships_2;")
+            .unwrap();
+
+        assert!(schema.tables.contains_key("ships_2"));
+        assert!(!schema.tables.contains_key("ships"));
+    }
+
+    #[test]
+    fn rename_table_with_schema() {
+        let mut schema = Schema::new();
+        schema.apply_sql(CREATE_WITH_SCHEMA).unwrap();
+        schema
+            .apply_sql("ALTER TABLE sch.ships RENAME TO ships_2;")
+            .unwrap();
+
+        assert!(schema.tables.contains_key("sch.ships_2"));
+        assert!(!schema.tables.contains_key("sch.ships"));
+    }
+
+    #[test]
+    fn create_index() {
+        let mut schema = Schema::new();
+        schema
+            .apply_sql(
+                "
+            CREATE INDEX idx_name ON ships(name);
+            CREATE INDEX idx_name_2 ON sch.ships(name);
+        ",
+            )
+            .unwrap();
+
+        assert!(schema.indices.contains("idx_name"));
+        assert!(schema.indices.contains("sch.idx_name_2"));
+    }
+
+    #[test]
+    fn drop_index() {
+        let mut schema = Schema::new();
+        schema
+            .apply_sql("CREATE INDEX idx_name ON sch.ships(name);")
+            .unwrap();
+
+        schema.apply_sql("DROP INDEX sch.idx_name;").unwrap();
+
+        assert!(schema.indices.is_empty());
+    }
+
+    #[test]
+    fn add_column() {
+        let mut schema = Schema::new();
+        schema.apply_sql(CREATE).unwrap();
+        schema
+            .apply_sql("ALTER TABLE ships ADD COLUMN has_motor BOOLEAN NOT NULL;")
+            .unwrap();
+        assert!(schema.tables["ships"].columns[3].name() == "has_motor");
+    }
+
+    #[test]
+    fn drop_column() {
+        let mut schema = Schema::new();
+        schema.apply_sql(CREATE).unwrap();
+        schema
+            .apply_sql("ALTER TABLE ships DROP COLUMN name;")
+            .unwrap();
+        assert!(schema.tables["ships"].columns.len() == 2);
+        assert!(schema.tables["ships"]
+            .columns
+            .iter()
+            .find(|c| c.name() == "name")
+            .is_none());
+    }
+
+    #[test]
+    fn rename_column() {
+        let mut schema = Schema::new();
+        schema.apply_sql(CREATE).unwrap();
+        schema
+            .apply_sql("ALTER TABLE ships RENAME COLUMN mast_count TO mast_count_2;")
+            .unwrap();
+        assert!(schema.tables["ships"].columns[2].name() == "mast_count_2");
+    }
+
+    #[test]
+    fn alter_column_change_nullable() {
+        let mut schema = Schema::new_with_dialect(dialect::PostgreSqlDialect {});
+        schema.apply_sql(CREATE).unwrap();
+        schema
+            .apply_sql("ALTER TABLE ships ALTER COLUMN mast_count DROP NOT NULL")
+            .unwrap();
+        assert!(!schema.tables["ships"].columns[2].not_null());
+
+        schema
+            .apply_sql("ALTER TABLE ships ALTER COLUMN mast_count SET NOT NULL")
+            .unwrap();
+        assert!(schema.tables["ships"].columns[2].not_null());
+    }
+
+    #[test]
+    fn alter_column_default() {
+        let mut schema = Schema::new_with_dialect(dialect::PostgreSqlDialect {});
+        schema.apply_sql(CREATE).unwrap();
+        schema
+            .apply_sql("ALTER TABLE ships ALTER COLUMN mast_count SET DEFAULT 2")
+            .unwrap();
+        assert_eq!(
+            schema.tables["ships"].columns[2]
+                .default_value()
+                .unwrap()
+                .to_string(),
+            "2"
+        );
+
+        schema
+            .apply_sql("ALTER TABLE ships ALTER COLUMN mast_count DROP DEFAULT")
+            .unwrap();
+        assert!(schema.tables["ships"].columns[2].default_value().is_none());
+    }
+
+    #[test]
+    fn alter_column_data_type() {
+        let mut schema = Schema::new_with_dialect(dialect::PostgreSqlDialect {});
+        schema.apply_sql(CREATE).unwrap();
+        schema
+            .apply_sql(
+                "ALTER TABLE ships ALTER COLUMN mast_count TYPE JSON USING(mast_count::json);",
+            )
+            .unwrap();
+        println!("{:?}", schema.tables["ships"].columns[2]);
+        assert!(schema.tables["ships"].columns[2].data_type == DataType::JSON);
     }
 }
