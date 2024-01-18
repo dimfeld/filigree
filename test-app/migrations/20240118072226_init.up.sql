@@ -6,7 +6,6 @@ CREATE TABLE delete_log (
   deleted_at timestamptz NOT NULL DEFAULT now()
 );
 
-
 CREATE TABLE users (
   id uuid NOT NULL PRIMARY KEY,
   organization_id uuid NOT NULL,
@@ -17,7 +16,6 @@ CREATE TABLE users (
   email text UNIQUE NOT NULL
 );
 
-
 CREATE TABLE organizations (
   id uuid NOT NULL PRIMARY KEY,
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -27,7 +25,6 @@ CREATE TABLE organizations (
   active boolean NOT NULL DEFAULT TRUE
 );
 
-
 CREATE TABLE roles (
   id uuid NOT NULL PRIMARY KEY,
   organization_id uuid NOT NULL,
@@ -36,7 +33,6 @@ CREATE TABLE roles (
   name text NOT NULL,
   description text
 );
-
 
 CREATE TABLE reports (
   id uuid NOT NULL PRIMARY KEY,
@@ -48,7 +44,6 @@ CREATE TABLE reports (
   ui jsonb NOT NULL
 );
 
-
 CREATE TABLE user_roles (
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
@@ -59,11 +54,10 @@ CREATE TABLE user_roles (
 CREATE TABLE user_sessions (
   id uuid PRIMARY KEY,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  hash uuid NOT NULL,
+  hash UUID NOT NULL,
   expires_at timestamptz NOT NULL
 );
 
--- A list of users and what organizations they belong to. Users can potentially be in more than one organization.
 CREATE TABLE organization_members (
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
@@ -71,11 +65,11 @@ CREATE TABLE organization_members (
   PRIMARY KEY (organization_id, user_id)
 );
 
-CREATE INDEX ON user_sessions (user_id);
+CREATE INDEX user_sessions_user_id ON user_sessions (user_id);
 
 CREATE TABLE api_keys (
   api_key_id uuid PRIMARY KEY,
-  hash bytea NOT NULL,
+  hash BYTEA NOT NULL,
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
   user_id uuid REFERENCES users (id) ON DELETE CASCADE,
   inherits_user_permissions bool NOT NULL DEFAULT FALSE,
@@ -84,7 +78,6 @@ CREATE TABLE api_keys (
   expires_at timestamptz NOT NULL
 );
 
--- Methods for a user to log in.
 CREATE TABLE email_logins (
   email text PRIMARY KEY,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
@@ -95,7 +88,7 @@ CREATE TABLE email_logins (
   passwordless_login_expires_at timestamptz
 );
 
-CREATE INDEX ON email_logins (user_id);
+CREATE INDEX email_logins_user_id ON email_logins (user_id);
 
 CREATE TABLE oauth_logins (
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
@@ -104,32 +97,26 @@ CREATE TABLE oauth_logins (
   PRIMARY KEY (user_id, oauth_provider, oauth_account_id)
 );
 
-CREATE INDEX ON oauth_logins (user_id);
+CREATE INDEX oauth_logins_user_id ON oauth_logins (user_id);
 
 CREATE TABLE user_invites (
   email text NOT NULL,
   token uuid NOT NULL,
   token_expires_at timestamptz NOT NULL,
-  -- The person's name, if known.
   name text,
-  -- The user that sent the invite
   invited_by uuid,
-  -- The organization that the user will be added to. NULL indicates a new organization.
   organization_id uuid,
   invite_sent_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX ON user_invites (email, organization_id) NULLS NOT DISTINCT;
-
+CREATE UNIQUE INDEX user_invites_email_org ON user_invites (email, organization_id) NULLS NOT DISTINCT;
 
 CREATE TABLE permissions (
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
-  -- user or role
   actor_id uuid NOT NULL,
   permission text NOT NULL,
   PRIMARY KEY (organization_id, actor_id, permission)
 );
-
 
 CREATE TABLE object_permissions (
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,

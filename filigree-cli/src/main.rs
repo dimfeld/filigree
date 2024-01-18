@@ -1,9 +1,4 @@
-use std::{
-    collections::HashSet,
-    error::Error as _,
-    io::{BufWriter, Write},
-    path::{Path, PathBuf},
-};
+use std::{collections::HashSet, error::Error as _, path::PathBuf};
 
 use clap::Parser;
 use config::Config;
@@ -190,15 +185,19 @@ pub fn main() -> Result<(), Report<Error>> {
         let up_filename = format!("{timestamp}_{migration_name}.up.sql");
         let down_filename = format!("{timestamp}_{migration_name}.down.sql");
 
-        std::fs::write(migrations_dir.join(&up_filename), migration.up.as_bytes())
+        let up = config
+            .formatter
+            .run_formatter(&up_filename, migration.up.into_owned().into_bytes())?;
+        let down = config
+            .formatter
+            .run_formatter(&down_filename, migration.down.into_owned().into_bytes())?;
+
+        std::fs::write(migrations_dir.join(&up_filename), &up)
             .change_context(Error::WriteFile)
             .attach_printable(up_filename)?;
-        std::fs::write(
-            migrations_dir.join(&down_filename),
-            migration.down.as_bytes(),
-        )
-        .change_context(Error::WriteFile)
-        .attach_printable(down_filename)?;
+        std::fs::write(migrations_dir.join(&down_filename), &down)
+            .change_context(Error::WriteFile)
+            .attach_printable(down_filename)?;
     }
 
     let files = root_files
@@ -273,29 +272,5 @@ pub fn main() -> Result<(), Report<Error>> {
     let models_output = merge_tracker.from_rendered_file(model_mod);
     models_output.write().change_context(Error::WriteFile)?;
 
-    Ok(())
-}
-
-fn write_vecs(
-    path: &Path,
-    before: String,
-    data: &[Vec<u8>],
-    after: String,
-    sep: &[u8],
-) -> Result<(), std::io::Error> {
-    let file = std::fs::File::create(path)?;
-    let mut writer = BufWriter::new(file);
-
-    writer.write_all(before.as_bytes())?;
-
-    for item in data.iter() {
-        writer.write_all(sep)?;
-        writer.write_all(item)?;
-    }
-
-    writer.write_all(sep)?;
-    writer.write_all(after.as_bytes())?;
-
-    writer.flush()?;
     Ok(())
 }

@@ -10,7 +10,7 @@ use glob::glob;
 use itertools::Itertools;
 use sql_migration_sim::{
     ast::{AlterColumnOperation, AlterTableOperation, Ident, ObjectName, Statement},
-    Column, Schema, Table,
+    Column, Schema, SchemaObjectType, Table,
 };
 
 use crate::{model::Model, Error};
@@ -34,7 +34,8 @@ pub fn read_existing_migrations(migrations_dir: &Path) -> Result<Schema, Report<
     for file in files {
         schema
             .apply_file(&file)
-            .change_context(Error::ReadMigrationFiles)?;
+            .change_context(Error::ReadMigrationFiles)
+            .attach_printable_lazy(|| file.display().to_string())?;
     }
 
     Ok(schema)
@@ -88,9 +89,9 @@ pub fn resolve_migration(
         .iter()
         .filter(|t| !new_schema.tables.contains_key(t.0))
         .map(|t| t.0.clone())
-        .collect::<Vec<_>>();
+        .collect::<HashSet<_>>();
 
-    let indexes_to_create = new_schema
+    let indices_to_create = new_schema
         .indices
         .iter()
         .filter(|i| !existing_schema.indices.contains_key(i.0))
@@ -103,10 +104,10 @@ pub fn resolve_migration(
         .filter(|(index, table)| {
             !new_schema.indices.contains_key(index.as_str())
                 // If we're dropping the table then it implicitly drops the indexes too
-                && !tables_to_drop.contains(table)
+                && !tables_to_drop.contains(table.as_str())
         })
         .map(|i| i.0.clone())
-        .collect::<Vec<_>>();
+        .collect::<HashSet<_>>();
 
     let create_migration = migrations.iter().map(|m| {
         m.statements
@@ -118,7 +119,7 @@ pub fn resolve_migration(
                         return true;
                     };
 
-                    indexes_to_create.contains(&name.to_string())
+                    indices_to_create.contains(&name.to_string())
                 }
                 _ => false,
             })
@@ -158,35 +159,54 @@ pub fn resolve_migration(
         );
     }
 
-    let drop_tables_migration = tables_to_drop
+    let up_drop_migration = existing_schema
+        .creation_order
         .iter()
-        .map(|name| format!("DROP TABLE {name};"));
-    let drop_indices_migration = indices_to_drop
-        .iter()
-        .map(|name| format!("DROP INDEX {name};"));
+        // TODO Would be better to topologically sort the tables according to foreign keys but
+        // plain reverse order will usually be correct.
+        .rev()
+        .filter(|o| match o.object_type {
+            SchemaObjectType::Table => tables_to_drop.contains(&o.name),
+            SchemaObjectType::Index => indices_to_drop.contains(&o.name),
+            _ => false,
+        })
+        .map(|o| {
+            format!(
+                "DROP {obj_type} {name};",
+                obj_type = o.object_type,
+                name = o.name
+            )
+        });
 
-    let up_migration = create_migration
-        .chain(drop_tables_migration)
-        .chain(drop_indices_migration)
+    let up_migration = up_drop_migration
+        .chain(create_migration)
         .chain(up_changes)
         .join("\n\n");
 
-    let down_migration = tables_to_create
+    let down_migration = new_schema
+        .creation_order
         .iter()
-        .map(|name| format!("DROP TABLE {name};"))
-        .chain(
-            indexes_to_create
-                .iter()
-                .map(|name| format!("DROP INDEX {name};")),
-        )
+        .rev()
+        .filter(|o| match o.object_type {
+            SchemaObjectType::Table => tables_to_create.contains(&o.name),
+            SchemaObjectType::Index => indices_to_create.contains(&o.name),
+            _ => false,
+        })
+        .map(|o| {
+            format!(
+                "DROP {obj_type} {name};",
+                obj_type = o.object_type,
+                name = o.name
+            )
+        })
         .chain(down_changes)
         .join("\n\n");
 
     Ok(SingleMigration {
         name: "migrations".into(),
         model: None,
-        up: up_migration.into(),
-        down: down_migration.into(),
+        up: up_migration.trim().to_string().into(),
+        down: down_migration.trim().to_string().into(),
     })
 }
 
@@ -413,6 +433,7 @@ fn opposite_alter_op(
                 None
             }
         }
+        _ => None,
     }
 }
 
