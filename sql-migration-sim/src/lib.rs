@@ -84,7 +84,7 @@ impl Column {
             .find_map(|o| match o.option {
                 ColumnOption::Null => Some(false),
                 ColumnOption::NotNull => Some(true),
-                ColumnOption::Unique { is_primary } => is_primary.then_some(true),
+                ColumnOption::Unique { is_primary, .. } => is_primary.then_some(true),
                 _ => None,
             })
             .unwrap_or(false)
@@ -170,6 +170,28 @@ pub struct Schema {
     pub views: HashMap<String, View>,
     /// The created indices. The key is the index name and the value is the table the index is on.
     pub indices: HashMap<String, String>,
+    /// References to the schema objects, in the order they were created.
+    pub creation_order: Vec<ObjectNameAndType>,
+}
+
+/// An object and its type
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectNameAndType {
+    /// The name of the object
+    pub name: String,
+    /// The type of object this is
+    pub object_type: SchemaObjectType,
+}
+
+/// The type of an object in the [Schema]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SchemaObjectType {
+    /// A SQL table
+    Table,
+    /// A view
+    View,
+    /// An index
+    Index,
 }
 
 impl Schema {
@@ -185,6 +207,7 @@ impl Schema {
             tables: HashMap::new(),
             views: HashMap::new(),
             indices: HashMap::new(),
+            creation_order: Vec::new(),
             dialect,
         }
     }
@@ -196,12 +219,17 @@ impl Schema {
         }
 
         self.tables.insert(
-            name_str,
+            name_str.clone(),
             Table {
                 name,
                 columns: columns.into_iter().map(Column).collect(),
             },
         );
+
+        self.creation_order.push(ObjectNameAndType {
+            name: name_str,
+            object_type: SchemaObjectType::Table,
+        });
 
         Ok(())
     }
@@ -217,7 +245,12 @@ impl Schema {
             return Err(Error::TableAlreadyExists(name_str));
         }
 
-        self.views.insert(name_str, View { name, columns });
+        self.views.insert(name_str.clone(), View { name, columns });
+
+        self.creation_order.push(ObjectNameAndType {
+            name: name_str,
+            object_type: SchemaObjectType::View,
+        });
 
         Ok(())
     }
@@ -293,7 +326,15 @@ impl Schema {
                 let new_name_str = new_table_name.to_string();
                 table.name = new_table_name;
 
-                self.tables.insert(new_name_str, table);
+                self.tables.insert(new_name_str.clone(), table);
+                // Update the name in creation_order to match
+                if let Some(i) = self
+                    .creation_order
+                    .iter_mut()
+                    .find(|o| o.name == name && o.object_type == SchemaObjectType::Table)
+                {
+                    i.name = new_name_str;
+                }
             }
 
             AlterTableOperation::AlterColumn { column_name, op } => {
@@ -355,6 +396,7 @@ impl Schema {
                     AlterColumnOperation::SetDataType { data_type, .. } => {
                         column.data_type = data_type
                     }
+                    _ => {}
                 }
             }
 
@@ -401,12 +443,21 @@ impl Schema {
                     match object_type {
                         ObjectType::Table => {
                             self.tables.remove(&name);
+                            self.creation_order.retain(|c| {
+                                c.object_type != SchemaObjectType::Table || c.name != name
+                            });
                         }
                         ObjectType::View => {
                             self.views.remove(&name);
+                            self.creation_order.retain(|c| {
+                                c.object_type != SchemaObjectType::View || c.name != name
+                            });
                         }
                         ObjectType::Index => {
                             self.indices.remove(&name);
+                            self.creation_order.retain(|c| {
+                                c.object_type != SchemaObjectType::Index || c.name != name
+                            });
                         }
                         _ => {}
                     }
@@ -423,21 +474,36 @@ impl Schema {
                     let full_name = name_with_schema(schema.cloned(), name.clone());
                     self.indices
                         .insert(full_name.to_string(), table_name.to_string());
+                    self.creation_order.push(ObjectNameAndType {
+                        name: full_name.to_string(),
+                        object_type: SchemaObjectType::Index,
+                    });
                 }
             }
 
-            Statement::AlterIndex { name, operation } => match operation {
-                AlterIndexOperation::RenameIndex { index_name } => {
-                    let Some(table_name) = self.indices.remove(&name.to_string()) else {
-                        return Err(Error::RenameMissingIndex(name.to_string()));
-                    };
+            Statement::AlterIndex { name, operation } => {
+                match operation {
+                    AlterIndexOperation::RenameIndex { index_name } => {
+                        let Some(table_name) = self.indices.remove(&name.to_string()) else {
+                            return Err(Error::RenameMissingIndex(name.to_string()));
+                        };
 
-                    let (schema, _) = object_schema_and_name(&name);
-                    let (_, index_name) = object_schema_and_name(&index_name);
-                    let new_name = name_with_schema(schema.cloned(), index_name.clone());
-                    self.indices.insert(new_name.to_string(), table_name);
+                        let (schema, _) = object_schema_and_name(&name);
+                        let (_, index_name) = object_schema_and_name(&index_name);
+                        let new_name = name_with_schema(schema.cloned(), index_name.clone());
+                        let new_name = new_name.to_string();
+                        let old_name = name.to_string();
+                        self.indices.insert(new_name.clone(), table_name);
+
+                        // Update the name in creation_order to match
+                        if let Some(i) = self.creation_order.iter_mut().find(|o| {
+                            o.name == old_name && o.object_type == SchemaObjectType::Index
+                        }) {
+                            i.name = new_name;
+                        }
+                    }
                 }
-            },
+            }
             _ => {}
         }
 
@@ -516,6 +582,13 @@ mod test {
 
         assert!(schema.tables.contains_key("ships_2"));
         assert!(!schema.tables.contains_key("ships"));
+        assert_eq!(
+            schema.creation_order,
+            vec![ObjectNameAndType {
+                name: "ships_2".to_string(),
+                object_type: SchemaObjectType::Table
+            }]
+        );
     }
 
     #[test]
@@ -528,6 +601,31 @@ mod test {
 
         assert!(schema.tables.contains_key("sch.ships_2"));
         assert!(!schema.tables.contains_key("sch.ships"));
+        assert_eq!(
+            schema.creation_order,
+            vec![ObjectNameAndType {
+                name: "sch.ships_2".to_string(),
+                object_type: SchemaObjectType::Table
+            }]
+        );
+    }
+
+    #[test]
+    fn drop_table() {
+        let mut schema = Schema::new();
+        schema.apply_sql(CREATE).unwrap();
+        schema.apply_sql(CREATE_WITH_SCHEMA).unwrap();
+        schema.apply_sql("DROP TABLE ships").unwrap();
+
+        assert!(!schema.tables.contains_key("ships"));
+        assert!(schema.tables.contains_key("sch.ships"));
+        assert_eq!(
+            schema.creation_order,
+            vec![ObjectNameAndType {
+                name: "sch.ships".to_string(),
+                object_type: SchemaObjectType::Table
+            }]
+        );
     }
 
     #[test]
@@ -544,11 +642,25 @@ mod test {
 
         assert_eq!(schema.indices.get("idx_name").unwrap(), "ships");
         assert_eq!(schema.indices.get("sch.idx_name_2").unwrap(), "sch.ships");
+        assert_eq!(
+            schema.creation_order,
+            vec![
+                ObjectNameAndType {
+                    name: "idx_name".to_string(),
+                    object_type: SchemaObjectType::Index
+                },
+                ObjectNameAndType {
+                    name: "sch.idx_name_2".to_string(),
+                    object_type: SchemaObjectType::Index
+                },
+            ]
+        );
     }
 
     #[test]
     fn drop_index() {
         let mut schema = Schema::new();
+        schema.apply_sql(CREATE).unwrap();
         schema
             .apply_sql("CREATE INDEX idx_name ON sch.ships(name);")
             .unwrap();
@@ -556,6 +668,13 @@ mod test {
         schema.apply_sql("DROP INDEX sch.idx_name;").unwrap();
 
         assert!(schema.indices.is_empty());
+        assert_eq!(
+            schema.creation_order,
+            vec![ObjectNameAndType {
+                name: "ships".to_string(),
+                object_type: SchemaObjectType::Table
+            }]
+        );
     }
 
     #[test]

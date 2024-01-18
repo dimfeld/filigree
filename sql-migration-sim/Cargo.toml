@@ -12,5 +12,6 @@ documentation = "https://docs.rs/sql-migration-sim"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sqlparser = "0.41.0"
+# sqlparser = "0.41.0"
+sqlparser = { path = "../../sqlparser-rs" }
 thiserror = "1.0.56"
