@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use convert_case::{Case, Casing};
 use error_stack::Report;
+use itertools::Itertools;
 use rayon::prelude::*;
 
 use crate::{
@@ -20,12 +21,19 @@ pub fn render_files(
     context.insert("company_name", &config.company_name);
     context.insert("product_name", &config.product_name);
     context.insert("crate_name", &crate_name.to_case(Case::Snake));
-    context.insert("default_port", &config.default_port);
-    context.insert("load_dotenv", &config.dotenv);
     context.insert("email", &config.email);
+    context.insert("server", &config.server);
+
+    let server_hosts = config
+        .server
+        .hosts
+        .iter()
+        .map(|host| format!(r##""{host}".to_string()"##))
+        .join(", ");
+    context.insert("server_hosts", &server_hosts);
     context.insert(
         "env_prefix",
-        config.env_prefix.as_deref().unwrap_or_default(),
+        config.server.env_prefix.as_deref().unwrap_or_default(),
     );
     context.insert("users", &config.users);
     context.insert("db", &config.database);

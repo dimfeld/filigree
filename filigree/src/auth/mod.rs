@@ -19,6 +19,7 @@ use std::{borrow::Cow, sync::Arc};
 use async_trait::async_trait;
 use axum::{http::StatusCode, response::IntoResponse};
 pub use check_middleware::*;
+use clap::ValueEnum;
 pub use extractors::*;
 use serde::{Deserialize, Serialize};
 pub use sessions::*;
@@ -70,6 +71,7 @@ pub enum AuthError {
     /// Missing or expired token
     #[error("Missing or expired token")]
     InvalidToken,
+    /// Password and confirmation value do not match when updating password
     #[error("Passwords do not match")]
     PasswordMismatch,
 }
@@ -189,4 +191,17 @@ pub struct LoginResult {
     pub message: Cow<'static, str>,
     /// Where to go next
     pub redirect_to: Option<String>,
+}
+
+/// Cross-origin Resource Sharing (CORS) configuration
+#[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, ValueEnum)]
+pub enum CorsSetting {
+    /// Don't configure CORS at all, which prevents any cross-origin request from being accepted
+    /// if nothing else in the request chain (e.g. a reverse proxy) sets the Access-Control headers.
+    #[default]
+    None,
+    /// Allow cross-origin requests from any host in the `hosts` list
+    AllowHostList,
+    /// Allow all hosts to access /api routes. Cookies are still not permitted.
+    AllowAll,
 }

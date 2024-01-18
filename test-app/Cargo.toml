@@ -24,6 +24,7 @@ error-stack = "0.4.1"
 eyre = "0.6.11"
 filigree = { version = "0.0.1", path = "../filigree" }
 futures = "0.3.30"
+http = "1.0.0"
 hyper = { version = "1.1.0", features = ["server", "http1", "http2"] }
 percent-encoding = "2.3.1"
 reqwest = { version = "0.11.23", features = ["cookies", "json"] }
@@ -36,7 +37,7 @@ thiserror = "1.0.52"
 tokio = { version = "1.35.1", features = ["full"] }
 tower = "0.4.13"
 tower-cookies = "0.10.0"
-tower-http = { version = "0.5.0", features = ["full"] }
+tower-http = { version = "0.5.1", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["chrono"] }
 uuid = "1.6.1"

@@ -1,9 +1,11 @@
 product_name = "Filigree Test App"
 company_name = "Daniel Imfeld"
 
-
-dotenv = true
 default_auth_scope = "model"
+
+[server]
+dotenv = true
+hosts = ["localhost"]
 
 [formatter]
 rust = ["rustfmt", "+nightly"]

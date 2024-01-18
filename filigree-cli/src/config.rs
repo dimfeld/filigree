@@ -18,8 +18,7 @@ pub struct Config {
     /// The name of the company that makes the product, or your name if you prefer.
     pub company_name: String,
 
-    #[serde(default = "Config::default_port")]
-    pub default_port: u16,
+    pub server: ServerConfig,
 
     #[serde(default)]
     pub formatter: Formatters,
@@ -34,15 +33,6 @@ pub struct Config {
     // /// Set to true to enable project-based object organization
     // #[serde(default)]
     // pub use_projects: bool,
-    /// A prefix that will be used for all environment variable names when reading server
-    /// configuration. Defaults to no prefix.
-    /// e.g. setting env_prefix to "FOO_" will read the database URL from "FOO_DATABASE_URL"
-    pub env_prefix: Option<String>,
-
-    /// If set, the generated application will load .env files when it starts
-    #[serde(default)]
-    pub dotenv: bool,
-
     /// Configuration for the database
     #[serde(default)]
     pub database: DatabaseConfig,
@@ -63,10 +53,33 @@ impl Config {
     pub const fn default_sql_dialect() -> SqlDialect {
         SqlDialect::Postgresql
     }
+}
 
-    const fn default_port() -> u16 {
-        7823
-    }
+#[derive(Serialize, Deserialize, serde_derive_default::Default, Debug)]
+pub struct ServerConfig {
+    /// If set, the generated application will load .env files when it starts
+    #[serde(default)]
+    pub dotenv: bool,
+
+    /// The default port that the server should listen on
+    #[serde(default = "default_port")]
+    pub default_port: u16,
+
+    /// The hosts that the server should assume are pointing to it.
+    pub hosts: Vec<String>,
+
+    /// A prefix that will be used for all environment variable names when reading server
+    /// configuration. Defaults to no prefix.
+    /// e.g. setting env_prefix to "FOO_" will read the database URL from "FOO_DATABASE_URL"
+    pub env_prefix: Option<String>,
+
+    /// How to configure CORS for the API routes
+    #[serde(default)]
+    pub api_cors: filigree::auth::CorsSetting,
+}
+
+const fn default_port() -> u16 {
+    7823
 }
 
 #[derive(Serialize, Deserialize, serde_derive_default::Default, Debug)]

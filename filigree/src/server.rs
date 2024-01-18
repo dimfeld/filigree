@@ -11,6 +11,8 @@ pub struct FiligreeState {
     pub session_backend: SessionBackend,
     /// Functionality for sending emails
     pub email: EmailSender,
+    /// A list of hosts that the server is listening on
+    pub hosts: Vec<String>,
 
     /// Control behavior around adding new users
     pub new_user_flags: NewUserFlags,

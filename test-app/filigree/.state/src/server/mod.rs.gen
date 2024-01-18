@@ -12,12 +12,13 @@ use std::{
     future::Future,
     net::{IpAddr, SocketAddr},
     sync::Arc,
+    time::Duration,
 };
 
 use axum::{extract::FromRef, routing::get, Router};
 use error_stack::{Report, ResultExt};
 use filigree::{
-    auth::{ExpiryStyle, SessionBackend, SessionCookieBuilder},
+    auth::{CorsSetting, ExpiryStyle, SessionBackend, SessionCookieBuilder},
     errors::{panic_handler, ObfuscateErrorLayer, ObfuscateErrorLayerSettings},
     server::FiligreeState,
 };
@@ -25,6 +26,7 @@ use sqlx::PgPool;
 use tower::ServiceBuilder;
 use tower_http::{
     compression::CompressionLayer,
+    cors::CorsLayer,
     request_id::MakeRequestUuid,
     timeout::TimeoutLayer,
     trace::{DefaultMakeSpan, DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer},
@@ -157,11 +159,22 @@ pub struct Config {
     pub session_expiry: ExpiryStyle,
     pub new_user_flags: filigree::server::NewUserFlags,
     pub email_sender: filigree::email::services::EmailSender,
+
+    pub hosts: Vec<String>,
+    pub api_cors: filigree::auth::CorsSetting,
 }
 
 /// Create the server and return it, ready to run.
 pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
     let production = config.env != "development" && !cfg!(debug_assertions);
+
+    let host_values = config
+        .hosts
+        .iter()
+        .map(|h| h.parse::<http::header::HeaderValue>())
+        .collect::<Result<Vec<_>, _>>()
+        .change_context(Error::ServerStart)
+        .attach_printable("Unable to parse hosts list")?;
 
     let state = ServerState(Arc::new(ServerStateInner {
         production,
@@ -169,6 +182,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             db: config.pg_pool.clone(),
             email: config.email_sender,
             new_user_flags: config.new_user_flags,
+            hosts: config.hosts,
             session_backend: SessionBackend::new(
                 config.pg_pool.clone(),
                 config.cookie_configuration,
@@ -183,6 +197,15 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         config.pg_pool,
         config.session_expiry,
     ));
+
+    let api_cors_layer = match config.api_cors {
+        CorsSetting::None => CorsLayer::new(),
+        CorsSetting::AllowAll => CorsLayer::permissive().max_age(Duration::from_secs(60 * 60)),
+        CorsSetting::AllowHostList => CorsLayer::new()
+            .allow_origin(host_values)
+            .allow_methods(tower_http::cors::Any)
+            .max_age(Duration::from_secs(60 * 60)),
+    };
 
     let api_routes: Router<ServerState> = Router::new()
         .route("/healthz", get(health::healthz))
@@ -206,6 +229,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                         .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
                 )
                 .layer(TimeoutLayer::new(config.request_timeout))
+                .layer(api_cors_layer)
                 .layer(CompressionLayer::new())
                 .layer(tower_cookies::CookieManagerLayer::new())
                 .set_x_request_id(MakeRequestUuid)

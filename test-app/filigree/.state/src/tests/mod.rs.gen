@@ -66,6 +66,8 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
         insecure: true,
         request_timeout: std::time::Duration::from_secs(30),
         pg_pool: pg_pool.clone(),
+        api_cors: filigree::auth::CorsSetting::default(),
+        hosts: vec!["localhost".to_string()],
         cookie_configuration: SessionCookieBuilder::new(
             false,
             tower_cookies::cookie::SameSite::Strict,

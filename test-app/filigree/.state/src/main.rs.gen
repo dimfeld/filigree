@@ -1,7 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 use error_stack::{Report, ResultExt};
 use filigree::{
-    auth::{SameSiteArg, SessionCookieBuilder},
+    auth::{CorsSetting, SameSiteArg, SessionCookieBuilder},
     tracing_config::{configure_tracing, teardown_tracing, TracingExportConfig},
 };
 use filigree_test_app::{db, emails, server, util_cmd, Error};
@@ -91,6 +91,14 @@ struct ServeCommand {
         default_value_t = true
     )]
     same_org_invites_require_email_verification: bool,
+
+    /// The hosts that this server can be reached from
+    #[clap(env = "HOSTS")]
+    hosts: Option<Vec<String>>,
+
+    /// CORS configuration
+    #[clap(env="API_CORS", value_enum, default_value_t = CorsSetting::None)]
+    api_cors: CorsSetting,
     // tracing endpoint (if any)
     // honeycomb team
     // honeycomb dataset
@@ -136,6 +144,8 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         email_service,
     );
 
+    let hosts = cmd.hosts.unwrap_or_else(|| vec!["localhost".to_string()]);
+
     let server = server::create_server(server::Config {
         env: cmd.env,
         host: cmd.host,
@@ -147,6 +157,8 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
             cmd.session_expiry * 24 * 60 * 60,
         )),
         email_sender,
+        hosts,
+        api_cors: cmd.api_cors,
         new_user_flags: filigree::server::NewUserFlags {
             allow_public_signup: cmd.allow_public_signup,
             allow_invite_to_same_org: cmd.allow_invite_to_same_org,

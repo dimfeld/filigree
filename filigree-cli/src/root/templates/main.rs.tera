@@ -1,7 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 use error_stack::{Report, ResultExt};
 use filigree::{
-    auth::{SameSiteArg, SessionCookieBuilder},
+    auth::{CorsSetting, SameSiteArg, SessionCookieBuilder},
     tracing_config::{configure_tracing, teardown_tracing, TracingExportConfig}
 };
 use tracing::{event, Level};
@@ -34,7 +34,7 @@ struct ServeCommand {
     host: String,
 
     /// The TCP port to listen on
-    #[clap(long, env = "{{env_prefix}}PORT", default_value_t = {{default_port}})]
+    #[clap(long, env = "{{env_prefix}}PORT", default_value_t = {{server.default_port}})]
     port: u16,
 
     /// The environment in which this server is running
@@ -95,6 +95,14 @@ struct ServeCommand {
     #[clap(env="{{env_prefix}}SAME_ORG_INVITES_REQUIRE_EMAIL_VERIFICATION", default_value_t = {{users.same_org_invites_require_email_verification}})]
     same_org_invites_require_email_verification: bool,
 
+    /// The hosts that this server can be reached from
+    #[clap(env="{{env_prefix}}HOSTS")]
+    hosts: Option<Vec<String>>,
+
+    /// CORS configuration
+    #[clap(env="{{env_prefix}}API_CORS", value_enum, default_value_t = CorsSetting::{{server.api_cors}})]
+    api_cors: CorsSetting,
+
 
     // tracing endpoint (if any)
     // honeycomb team
@@ -102,6 +110,7 @@ struct ServeCommand {
     // jaeger service name
     // jaeger endpoint
 }
+
 
 
 async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
@@ -144,6 +153,8 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         email_service,
     );
 
+    let hosts = cmd.hosts.unwrap_or_else(|| vec![{{server_hosts}}]);
+
     let server = server::create_server(server::Config {
         env: cmd.env,
         host: cmd.host,
@@ -155,6 +166,8 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
             std::time::Duration::from_secs(cmd.session_expiry * 24 * 60 * 60),
         ),
         email_sender,
+        hosts,
+        api_cors: cmd.api_cors,
         new_user_flags: filigree::server::NewUserFlags{
             allow_public_signup: cmd.allow_public_signup,
             allow_invite_to_same_org: cmd.allow_invite_to_same_org,
@@ -178,7 +191,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), Report<Error>> {
-    {% if load_dotenv -%}
+    {% if server.dotenv -%}
     dotenvy::dotenv().ok();
     {%- endif %}
     let cli = Cli::parse();
