@@ -88,7 +88,7 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
         .await
         .expect("creating server");
 
-    let base_url = format!("http://{}:{}", server.host, server.port);
+    let base_url = format!("http://{}:{}/api", server.host, server.port);
     let test_client = TestClient::new(base_url.clone());
 
     let bootstrapped_data = bootstrap_data(&pg_pool, &test_client).await;

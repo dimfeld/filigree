@@ -184,7 +184,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         config.session_expiry,
     ));
 
-    let app: Router<ServerState> = Router::new()
+    let api_routes: Router<ServerState> = Router::new()
         .route("/healthz", get(health::healthz))
         .nest("/meta", meta::create_routes())
         .merge(filigree::auth::endpoints::create_routes())
@@ -215,7 +215,9 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                 .into_inner(),
         );
 
-    let app: Router<()> = app.with_state(state.clone());
+    let api_routes: Router<()> = api_routes.with_state(state.clone());
+
+    let app = Router::new().nest("/api", api_routes);
 
     let bind_ip = config
         .host
