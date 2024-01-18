@@ -82,10 +82,12 @@ pub fn main() -> Result<(), Report<Error>> {
         models: config_models,
         crate_manifest,
         state_dir,
-        crate_base_dir,
+        api_dir,
+        web_dir,
         state,
     } = config;
-    let merge_tracker = MergeTracker::new(state_dir.clone(), crate_base_dir.clone());
+    let api_merge_tracker = MergeTracker::new(state_dir.join("api"), api_dir.clone());
+    let web_merge_tracker = MergeTracker::new(state_dir.join("web"), web_dir.clone());
 
     add_deps::add_deps(&crate_manifest)?;
 
@@ -150,7 +152,7 @@ pub fn main() -> Result<(), Report<Error>> {
         .chain(last_fixed_migrations.into_iter())
         .collect::<Vec<_>>();
 
-    let migrations_dir = crate_base_dir.join("migrations");
+    let migrations_dir = api_dir.join("migrations");
 
     std::fs::create_dir_all(&migrations_dir)
         .change_context(Error::WriteFile)
@@ -200,38 +202,54 @@ pub fn main() -> Result<(), Report<Error>> {
             .attach_printable(down_filename)?;
     }
 
-    let files = root_files
+    let api_files = root_files
         .into_iter()
         .chain(model_files.into_iter().flatten())
         .collect::<Vec<_>>();
+    // TODO
+    let web_files: Vec<RenderedFile> = vec![];
 
-    let mut created_dirs = HashSet::new();
-    for file in &files {
-        let parent = file.path.parent();
-        if let Some(dir) = parent {
-            if !created_dirs.contains(&dir) {
-                std::fs::create_dir_all(&dir)
-                    .change_context(Error::WriteFile)
-                    .attach_printable_lazy(|| {
-                        format!("Unable to create directory {}", dir.display())
-                    })?;
-                created_dirs.insert(dir);
+    let filesets = [
+        (api_files, &api_dir, &api_merge_tracker),
+        (web_files, &web_dir, &web_merge_tracker),
+    ];
 
-                let gen_cache_dir = merge_tracker.base_generated_path.join(&dir);
-
-                std::fs::create_dir_all(&gen_cache_dir)
-                    .change_context(Error::WriteFile)
-                    .attach_printable_lazy(|| {
-                        format!("Unable to create directory {}", dir.display())
-                    })?;
-            }
-        }
-    }
-
-    let merge_files = files
+    let merge_files = filesets
         .into_par_iter()
-        .map(|f| merge_tracker.from_rendered_file(f))
-        .collect::<Vec<_>>();
+        .map(|(files, base_dir, merge_tracker)| {
+            let mut created_dirs = HashSet::new();
+            for file in &files {
+                let parent = file.path.parent();
+                if let Some(dir) = parent {
+                    if !created_dirs.contains(&dir) {
+                        std::fs::create_dir_all(&base_dir.join(dir))
+                            .change_context(Error::WriteFile)
+                            .attach_printable_lazy(|| {
+                                format!("Unable to create directory {}", dir.display())
+                            })?;
+                        created_dirs.insert(dir);
+
+                        let gen_cache_dir = merge_tracker.base_generated_path.join(&dir);
+
+                        std::fs::create_dir_all(&gen_cache_dir)
+                            .change_context(Error::WriteFile)
+                            .attach_printable_lazy(|| {
+                                format!("Unable to create directory {}", dir.display())
+                            })?;
+                    }
+                }
+            }
+
+            let merge_files = files
+                .into_par_iter()
+                .map(|f| merge_tracker.from_rendered_file(f))
+                .collect::<Vec<_>>();
+
+            Ok::<_, Report<Error>>(merge_files)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let merge_files = merge_files.into_iter().flatten().collect::<Vec<_>>();
 
     let mut conflict_files = merge_files
         .iter()
@@ -269,7 +287,7 @@ pub fn main() -> Result<(), Report<Error>> {
         &model_mod_context,
     )?;
 
-    let models_output = merge_tracker.from_rendered_file(model_mod);
+    let models_output = api_merge_tracker.from_rendered_file(model_mod);
     models_output.write().change_context(Error::WriteFile)?;
 
     Ok(())

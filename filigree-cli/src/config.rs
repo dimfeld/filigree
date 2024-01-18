@@ -18,6 +18,16 @@ pub struct Config {
     /// The name of the company that makes the product, or your name if you prefer.
     pub company_name: String,
 
+    /// The directory containing the Rust API, relative to the directory containing the `filigree`
+    /// directory.
+    /// Defaults to "."
+    #[serde(default = "Config::default_api_dir")]
+    pub api_dir: PathBuf,
+    /// The directory containing the web UI, relative to the directory containing the `filigree`
+    /// directory. Defaults to "./web"
+    #[serde(default = "Config::default_web_dir")]
+    pub web_dir: PathBuf,
+
     pub server: ServerConfig,
 
     #[serde(default)]
@@ -48,6 +58,14 @@ pub struct Config {
 impl Config {
     fn from_path(path: &Path) -> Result<Self, Report<Error>> {
         read_toml(path)
+    }
+
+    pub fn default_api_dir() -> PathBuf {
+        ".".into()
+    }
+
+    pub fn default_web_dir() -> PathBuf {
+        "./web".into()
     }
 
     pub const fn default_sql_dialect() -> SqlDialect {
@@ -163,9 +181,10 @@ pub struct FullConfig {
     pub config: Config,
     pub models: Vec<Model>,
     pub state_dir: PathBuf,
-    pub crate_base_dir: PathBuf,
     pub crate_manifest: cargo_toml::Manifest,
     pub state: State,
+    pub api_dir: PathBuf,
+    pub web_dir: PathBuf,
 }
 
 impl FullConfig {
@@ -184,9 +203,11 @@ impl FullConfig {
 
         let config = Config::from_path(&config_file_path)?;
 
-        let crate_base_dir = dir.parent().ok_or(Error::ReadConfigFile)?.to_path_buf();
+        let base_dir = dir.parent().ok_or(Error::ReadConfigFile)?.to_path_buf();
+        let api_dir = base_dir.join(&config.api_dir);
+        let web_dir = base_dir.join(&config.web_dir);
 
-        let cargo_toml_path = crate_base_dir.join("Cargo.toml");
+        let cargo_toml_path = api_dir.join("Cargo.toml");
         let manifest = cargo_toml::Manifest::from_path(&cargo_toml_path)
             .change_context(Error::ReadConfigFile)
             .attach_printable_lazy(|| cargo_toml_path.display().to_string())?;
@@ -221,7 +242,8 @@ impl FullConfig {
             config,
             models,
             state_dir,
-            crate_base_dir,
+            api_dir,
+            web_dir,
             crate_manifest: manifest,
             state,
         })
