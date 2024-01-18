@@ -47,6 +47,8 @@ use std::{
     path::Path,
 };
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use sqlparser::ast::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
     ColumnOptionDef, Ident, ObjectName, ObjectType, Statement,
@@ -54,6 +56,7 @@ use sqlparser::ast::{
 pub use sqlparser::{ast, dialect};
 
 /// A column in a database table
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
 pub struct Column(pub ColumnDef);
 
@@ -100,6 +103,8 @@ impl Column {
 }
 
 /// A table in the database
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Table {
     /// The name of the table
     pub name: ObjectName,
@@ -115,6 +120,8 @@ impl Table {
 }
 
 /// A view in the database
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct View {
     /// The name of the view
     pub name: ObjectName,
@@ -162,8 +169,12 @@ pub enum Error {
 }
 
 /// The database schema, built from parsing one or more SQL statements.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 pub struct Schema {
-    dialect: Box<dyn dialect::Dialect>,
+    #[cfg_attr(feature = "serde", serde(skip, default = "default_dialect"))]
+    /// The SQL dialect used for pasing
+    pub dialect: Box<dyn dialect::Dialect>,
     /// The tables in the schema
     pub tables: HashMap<String, Table>,
     /// The views in the schema
@@ -174,7 +185,13 @@ pub struct Schema {
     pub creation_order: Vec<ObjectNameAndType>,
 }
 
+#[cfg(feature = "serde")]
+fn default_dialect() -> Box<dyn dialect::Dialect> {
+    Box::new(dialect::GenericDialect {})
+}
+
 /// An object and its type
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObjectNameAndType {
     /// The name of the object
@@ -184,6 +201,8 @@ pub struct ObjectNameAndType {
 }
 
 /// The type of an object in the [Schema]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchemaObjectType {
     /// A SQL table
@@ -192,6 +211,16 @@ pub enum SchemaObjectType {
     View,
     /// An index
     Index,
+}
+
+impl std::fmt::Display for SchemaObjectType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SchemaObjectType::Table => write!(f, "table"),
+            SchemaObjectType::View => write!(f, "view"),
+            SchemaObjectType::Index => write!(f, "index"),
+        }
+    }
 }
 
 impl Schema {
