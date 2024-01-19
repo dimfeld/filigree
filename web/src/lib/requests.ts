@@ -24,6 +24,11 @@ export interface ClientOptions {
   /** Customize the retry behavior. Pass a number to define the maxium number of retries, or a {@link RetryOptions}
    * to fully customize the retry settings. */
   retry?: number | RetryOptions;
+  /** If false or omitted, throw an error on any 4xx or 5xx status code (after retries, if applicable).
+   * If true, failed responses are returned to the user.
+   * If an array, failed responses with status codes in the array are returned to the user, and other failure codes
+   * throw an error. */
+  tolerateFailure?: boolean | number[];
   /** Hooks to customize request and response handling. */
   hooks?: {
     /** Called before a request is made. Here you can customize the existing Request or return a whole new Request or
@@ -44,7 +49,7 @@ export interface ClientOptions {
 export type BeforeRequestHook = (
   request: RequestInput,
   options: RequestOptions
-) => Request | Response | undefined;
+) => Request | RequestInput | Response | undefined;
 
 export interface BeforeRetryHookOptions {
   request: RequestInput;
@@ -212,6 +217,7 @@ export class HttpError extends Error {
 async function wrapRetry(
   options: RequestOptions,
   retryOptions: RetryOptions | number | undefined,
+  tolerateFailure: boolean | number[],
   signal: AbortSignal,
   method: HttpMethod,
   timeout: number | undefined,
@@ -268,7 +274,7 @@ async function wrapRetry(
     } catch (e) {
       // fetch threw an error, which means we didn't even get to the point of receiving a response
       // Usually a network error, invalid host, etc.
-      if (canRetry) {
+      if (canRetry && !signal.aborted) {
         continue;
       } else {
         throw e;
@@ -280,7 +286,12 @@ async function wrapRetry(
       throw new TimeoutError(request);
     }
 
-    if (!canRetry || !statusCodes.includes(response.status)) {
+    if (
+      !canRetry ||
+      !statusCodes.includes(response.status) ||
+      tolerateFailure === true ||
+      (Array.isArray(tolerateFailure) && tolerateFailure.includes(response.status))
+    ) {
       return { response, request };
     }
 
@@ -394,25 +405,28 @@ export function mergeRetryOptions(
   }
 }
 
-export function makeClient(clientOptions: ClientOptions) {
+export function makeClient(clientOptions: ClientOptions = {}) {
   let { prefixUrl: baseUrl, timeout: defaultTimeout, hooks, headers: headerOption } = clientOptions;
   const fixedHeaders = new Headers(headerOption);
-  fixedHeaders.set('Accept', 'application/json');
+  if (!fixedHeaders.has('Accept')) {
+    fixedHeaders.set('Accept', 'application/json');
+  }
 
   if (baseUrl?.endsWith('/')) {
     baseUrl = baseUrl.slice(0, -1);
   }
 
   const client = (options: RequestOptions) => {
+    const tolerateFailure = options.tolerateFailure ?? clientOptions.tolerateFailure ?? false;
     let abort = options.abort ?? new AbortController();
 
     let qs = makeSearchParams(options.query);
     let url = makeUrl(baseUrl, options.url, qs);
 
     let headers = new Headers(fixedHeaders);
-    updateHeaders(headers, headerOption);
+    updateHeaders(headers, options.headers);
 
-    let autoDetectContentType = !headers.has('Content-Type');
+    let autoDetectContentType = !headers.has('content-type');
     let body: BodyInit | undefined;
     if (options.body) {
       body = options.body;
@@ -444,17 +458,21 @@ export function makeClient(clientOptions: ClientOptions) {
       let req: RequestInput = {
         url,
         method,
-        signal: abort.signal,
+        headers,
         body,
+        signal: abort.signal,
       };
 
       for (let hook of beforeRequestHooks) {
         let hookResult = hook(req, options);
-        if (hookResult instanceof Request) {
+        if (hookResult instanceof Response) {
+          return { request: req, response: hookResult };
+        } else if (
+          hookResult instanceof Request ||
+          (hookResult && typeof hookResult === 'object')
+        ) {
           req = hookResult;
           break;
-        } else if (hookResult instanceof Response) {
-          return { request: req, response: hookResult };
         }
       }
 
@@ -465,6 +483,7 @@ export function makeClient(clientOptions: ClientOptions) {
       let { request, response: res } = await wrapRetry(
         options,
         options.retry ?? clientOptions.retry,
+        tolerateFailure,
         abort.signal,
         method,
         timeout,
@@ -480,11 +499,11 @@ export function makeClient(clientOptions: ClientOptions) {
         }
       }
 
-      if (res.status < 400 || options.tolerateFailure === true) {
+      if (res.status < 400 || tolerateFailure === true) {
         return res;
       }
 
-      if (Array.isArray(options.tolerateFailure) && options.tolerateFailure.includes(res.status)) {
+      if (Array.isArray(tolerateFailure) && tolerateFailure.includes(res.status)) {
         return res;
       }
 

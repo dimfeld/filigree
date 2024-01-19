@@ -7,6 +7,7 @@ import {
   HttpError,
   TimeoutError,
   RateLimitError,
+  type RequestInput,
 } from './requests.js';
 import sorter from 'sorters';
 
@@ -104,15 +105,10 @@ describe('updateHeaders', () => {
 });
 
 describe('client', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  function createClient(clientOptions: ClientOptions, response?: () => Response) {
+  function createClient(
+    clientOptions: ClientOptions,
+    response?: (url: string, req: RequestInput) => Response
+  ) {
     let fetch = vi.fn(response ?? (() => new Response('{}', { status: 200 })));
     let client = makeClient(clientOptions);
     return { fetch, client };
@@ -180,24 +176,37 @@ describe('client', () => {
   });
 
   test('timeout', async () => {
-    let retryHook = vi.fn();
-    let { client, fetch } = createClient(
-      { timeout: 20, hooks: { beforeRetry: [retryHook] } },
-      // Promise that never resolves
-      () => new Promise(() => {})
-    );
+    vi.useFakeTimers();
 
-    let currrentTime = Date.now();
-    let promise = client({ url: '/abc', fetch }).catch((e) => e);
-    vi.runAllTimers();
-    let result = await promise;
-    expect(result).instanceOf(TimeoutError);
-    let passed = Date.now() - currrentTime;
-    expect(passed).closeTo(20000, 500, 'timeout check');
-    expect(retryHook).not.toHaveBeenCalled();
+    try {
+      let retryHook = vi.fn();
+      let { client, fetch } = createClient(
+        { timeout: 20, hooks: { beforeRetry: [retryHook] } },
+        // Promise that never resolves
+        () => new Promise(() => {})
+      );
+
+      let currrentTime = Date.now();
+      let promise = client({ url: '/abc', fetch }).catch((e) => e);
+      vi.runAllTimers();
+      let result = await promise;
+      expect(result).instanceOf(TimeoutError);
+      let passed = Date.now() - currrentTime;
+      expect(passed).closeTo(20000, 500, 'timeout check');
+      expect(retryHook).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   describe('retry', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
     test('retry works on next try', async () => {
       let beforeRetry = vi.fn();
       let { client, fetch } = createClient({ hooks: { beforeRetry: [beforeRetry] } });
@@ -372,25 +381,324 @@ describe('client', () => {
     });
   });
 
-  test.skip('tolerateFailure');
-  test.skip('tolerateFailure on specific error codes');
-  test.skip('pass abort controller');
-  test.skip('call abort');
-  test.skip('json body');
-  test.skip('form data body');
-  test.skip('URLSearchParams body');
-  test.skip('pass in content-type');
-  test.skip('call json to extract JSON');
-  test.skip('call text to extract text');
-  describe('hooks', () => {
-    test.skip('beforeRequest modifies Request');
-    test.skip('beforeRequest returns new Request');
-    test.skip('beforeRequest returns Response');
+  test('tolerateFailure', async () => {
+    let { client, fetch } = createClient(
+      { tolerateFailure: true },
+      () => new Response('', { status: 500 })
+    );
+    let result = await client({ url: '/abc', fetch });
+    expect(result.status).eq(500);
+  });
 
-    test.skip('beforeRetry not called when no retries occur');
-    test.skip('beforeRetry alters Request');
-    test.skip('beforeError');
-    test.skip('afterResponse');
-    test.skip('afterResponse returns new Response');
+  test('tolerateFailure on specific error codes', async () => {
+    let { client, fetch } = createClient(
+      { tolerateFailure: [500] },
+      () => new Response('', { status: 500 })
+    );
+
+    let result = await client({ url: '/abc', fetch });
+    expect(result.status).eq(500);
+
+    fetch.mockImplementationOnce(() => new Response('', { status: 404 }));
+    result = await client({ url: '/abc', fetch }).catch((e) => e);
+    expect(result).instanceOf(HttpError);
+  });
+
+  test('pass abort controller', async () => {
+    let { client, fetch } = createClient({}, (_url, { signal }) => {
+      return new Promise<Response>((resolve, reject) => {
+        signal?.throwIfAborted();
+        signal?.addEventListener('abort', () => {
+          reject(signal.reason);
+        });
+      });
+    });
+
+    let abort = new AbortController();
+    let promise = client({ url: '/abc', fetch, abort });
+    promise.abort();
+    let result = await promise.catch((e) => e);
+
+    expect(result.name).eq('AbortError');
+    expect(abort.signal.aborted).eq(true);
+  });
+
+  test('implicit AbortController', async () => {
+    let { client, fetch } = createClient({}, (_url, { signal }) => {
+      return new Promise<Response>((resolve, reject) => {
+        signal?.throwIfAborted();
+        signal?.addEventListener('abort', () => {
+          reject(signal.reason);
+        });
+      });
+    });
+
+    let promise = client({ url: '/abc', fetch });
+    promise.abort();
+    let result = await promise.catch((e) => e);
+
+    expect(result.name).eq('AbortError');
+  });
+
+  test('json body', async () => {
+    let { client, fetch } = createClient();
+    let result = await client({
+      url: '/abc',
+      method: 'POST',
+      fetch,
+      json: { foo: 'bar' },
+    });
+    expect(result.status).eq(200);
+
+    let req = fetch.mock.calls[0][1];
+    expect(req.headers?.get('Content-Type')).eq('application/json');
+    expect(req.body).eq(JSON.stringify({ foo: 'bar' }));
+  });
+
+  test('form data body', async () => {
+    let { client, fetch } = createClient({}, () => new Response('{}', { status: 200 }));
+    let body = new FormData();
+    body.set('foo', 'bar');
+    body.set('apple', 'orange');
+    let result = await client({
+      url: '/abc',
+      method: 'POST',
+      fetch,
+      body,
+    });
+    expect(result.status).eq(200);
+
+    let req = fetch.mock.calls[0][1];
+    expect(req.headers?.get('Content-Type')).eq('multipart/form-data');
+    expect(req.body).instanceOf(FormData);
+  });
+
+  test('URLSearchParams body', async () => {
+    let { client, fetch } = createClient({}, () => new Response('{}', { status: 200 }));
+    let body = new URLSearchParams();
+    body.set('foo', 'bar');
+    body.set('apple', 'orange');
+    let result = await client({
+      url: '/abc',
+      method: 'POST',
+      fetch,
+      body,
+    });
+    expect(result.status).eq(200);
+
+    let req = fetch.mock.calls[0][1];
+    expect(req.headers?.get('Content-Type')).eq('application/x-www-form-urlencoded');
+    expect(req.body).instanceOf(URLSearchParams);
+  });
+
+  test('pass in content-type', async () => {
+    let { client, fetch } = createClient({}, () => new Response('{}', { status: 200 }));
+    let body = new URLSearchParams();
+    body.set('foo', 'bar');
+    body.set('apple', 'orange');
+    let result = await client({
+      url: '/abc',
+      method: 'POST',
+      headers: {
+        'content-type': 'text/plain',
+      },
+      fetch,
+      body,
+    });
+    expect(result.status).eq(200);
+
+    let req = fetch.mock.calls[0][1];
+    expect(req.headers?.get('Content-Type')).eq('text/plain');
+  });
+
+  test('call json to extract JSON', async () => {
+    let { client, fetch } = createClient({}, () => new Response('{"foo":"bar"}', { status: 200 }));
+    let result = await client({
+      url: '/abc',
+      fetch,
+    }).json();
+
+    expect(result).toEqual({ foo: 'bar' });
+  });
+
+  test('call text to extract text', async () => {
+    let { client, fetch } = createClient({}, () => new Response('{"foo":"bar"}', { status: 200 }));
+    let result = await client({
+      url: '/abc',
+      fetch,
+    }).text();
+
+    expect(result).toEqual('{"foo":"bar"}');
+  });
+
+  describe('hooks', () => {
+    test('beforeRequest modifies Request', async () => {
+      let { client, fetch } = createClient(
+        {
+          hooks: {
+            beforeRequest: [
+              (request) => {
+                request.headers.set('foo', 'bar');
+              },
+            ],
+          },
+        },
+        () => new Response('{}', { status: 200 })
+      );
+
+      let result = await client({
+        url: '/abc',
+        fetch,
+      });
+
+      const called = fetch.mock.calls[0][1];
+      expect(called.headers?.get('foo')).toEqual('bar');
+    });
+
+    test('beforeRequest returns new RequestInput', async () => {
+      let { client, fetch } = createClient(
+        {
+          hooks: {
+            beforeRequest: [
+              (request) => {
+                return {
+                  url: '/def',
+                };
+              },
+            ],
+          },
+        },
+        () => new Response('{}', { status: 200 })
+      );
+
+      await client({
+        url: '/abc',
+        fetch,
+      });
+
+      const called = fetch.mock.calls[0][1];
+      expect(called).toEqual({ url: '/def' });
+    });
+
+    test('beforeRequest returns new Request', async () => {
+      let { client, fetch } = createClient(
+        {
+          hooks: {
+            beforeRequest: [
+              (request) => {
+                return new Request('https://example.com');
+              },
+            ],
+          },
+        },
+        () => new Response('{}', { status: 200 })
+      );
+
+      await client({
+        url: '/abc',
+        fetch,
+      });
+
+      const called = fetch.mock.calls[0][0];
+      expect(called).instanceOf(Request);
+      expect(called.url).toEqual('https://example.com/');
+    });
+
+    test('beforeRequest returns Response', async () => {
+      let { client, fetch } = createClient(
+        {
+          hooks: {
+            beforeRequest: [
+              (request) => {
+                return new Response('Ok', { status: 202 });
+              },
+            ],
+          },
+        },
+        () => new Response('{}', { status: 200 })
+      );
+
+      let result = await client({
+        url: '/abc',
+        fetch,
+      });
+
+      expect(fetch).not.toHaveBeenCalled();
+      expect(result.status).toEqual(202);
+    });
+
+    test('beforeRetry not called when no retries occur', async () => {
+      let beforeRetry = vi.fn();
+      let { client, fetch } = createClient({ hooks: { beforeRetry: [beforeRetry] } });
+
+      let promise = client({ url: '/abc', fetch }).catch((e) => e);
+      await vi.advanceTimersByTimeAsync(50000);
+      let response = await promise;
+      expect(response.status).eq(200);
+
+      expect(fetch.mock.calls).length(1);
+      expect(beforeRetry.mock.calls).length(0);
+    });
+
+    test('beforeRetry alters Request', async () => {
+      let { client, fetch } = createClient({
+        hooks: {
+          beforeRetry: [
+            ({ request }) => {
+              request.url = '/def';
+            },
+          ],
+        },
+      });
+      fetch.mockImplementationOnce(() => new Response('{}', { status: 500 }));
+
+      let promise = client({ url: '/abc', fetch }).catch((e) => e);
+      await vi.advanceTimersByTimeAsync(50000);
+      let response = await promise;
+      expect(response.status).eq(200);
+
+      expect(fetch.mock.calls).length(2);
+      expect(fetch.mock.calls[0][0]).eq('/abc');
+      expect(fetch.mock.calls[1][0]).eq('/def');
+    });
+
+    test('beforeError', async () => {
+      vi.useFakeTimers();
+
+      try {
+        let beforeError = vi.fn();
+        let { client, fetch } = createClient(
+          { hooks: { beforeError: [beforeError] } },
+          () => new Response('{}', { status: 500 })
+        );
+
+        let promise = client({ url: '/abc', fetch }).catch((e) => e);
+        await vi.advanceTimersByTimeAsync(50000);
+        await promise;
+        expect(beforeError.mock.calls).length(1);
+        expect(beforeError.mock.calls[0][0]).instanceOf(HttpError);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test('afterResponse', async () => {
+      let afterResponse = vi.fn();
+      let { client, fetch } = createClient({ hooks: { afterResponse: [afterResponse] } });
+      await client({ url: '/abc', fetch });
+
+      expect(afterResponse.mock.calls).length(1);
+      expect(afterResponse.mock.calls[0][0].url).toEqual('/abc');
+      expect(afterResponse.mock.calls[0][2]).instanceof(Response);
+    });
+
+    test('afterResponse returns new Response', async () => {
+      let { client, fetch } = createClient({
+        hooks: { afterResponse: [() => new Response('Ok', { status: 202 })] },
+      });
+      let response = await client({ url: '/abc', fetch });
+
+      expect(response.status).toEqual(202);
+    });
   });
 });
