@@ -15,26 +15,39 @@ export type HttpMethod =
   | 'CONNECT';
 
 export interface ClientOptions {
-  prefixUrl: string;
-  /** The default timeout to use for requests */
+  /** A URL to prepend to all requests with relative URLs. */
+  prefixUrl?: string;
+  /** The default timeout to use for requests, in seconds */
   timeout?: number;
+  /** Headers to pass with every request. */
   headers?: HeadersInit;
+  /** Customize the retry behavior. Pass a number to define the maxium number of retries, or a {@link RetryOptions}
+   * to fully customize the retry settings. */
   retry?: number | RetryOptions;
+  /** Hooks to customize request and response handling. */
   hooks?: {
+    /** Called before a request is made. Here you can customize the existing Request or return a whole new Request or
+     * Response. When returning a Response, the fetch API will not be called, and instead the Response will be returned
+     * directly to the caller. */
     beforeRequest?: BeforeRequestHook[];
+    /** Called before a retry is done. Here you can customize the Request before it is sent. This function may return a
+     * Promise, to allow behavior such as fetching a new access token before retrying. */
     beforeRetry?: BeforeRetryHook[];
+    /** Called when an HttpError occurs. */
     beforeError?: BeforeErrorHook[];
+    /** Called with the Response returned from the fetch call. This can be used to inspect or modify the Response, or replace it
+     * completely. */
     afterResponse?: AfterResponseHook[];
   };
 }
 
 export type BeforeRequestHook = (
-  request: Request,
+  request: RequestInput,
   options: RequestOptions
 ) => Request | Response | undefined;
 
 export interface BeforeRetryHookOptions {
-  request: Request;
+  request: RequestInput;
   options: RequestOptions;
   response?: Response;
   retryCount: number;
@@ -44,7 +57,7 @@ export type BeforeRetryHook = (options: BeforeRetryHookOptions) => void | Promis
 export type BeforeErrorHook = (error: HttpError) => void | HttpError;
 
 export type AfterResponseHook = (
-  request: Request,
+  request: RequestInput,
   options: RequestOptions,
   response: Response
 ) => void | Response | Promise<void | Response>;
@@ -54,6 +67,10 @@ export type SearchParamsInit =
   | Record<string, string | number | boolean | (string | number | boolean)[]>
   | [string, string][]
   | URLSearchParams;
+
+/** A type that is similar to a Request, but can be constructed in Node.js without having an absolute URL. This is
+ * useful for SvelteKit where it's common to pass a relative URL to its overridden fetch function. */
+export type RequestInput = Request | (RequestInit & { url: string | URL });
 
 export interface RetryOptions {
   limit?: number;
@@ -65,15 +82,30 @@ export interface RetryOptions {
 }
 
 export interface RequestOptions {
+  /** An alternate `fetch` function to use. This should be passed in when calling the client from SvelteKit load
+   * functions, for example. */
   fetch?: typeof fetch;
+  /** The URL to send the request to. If a relative URL, it will be appended to the prefix URL used when creating the
+   * client.. */
   url: string | URL;
+  /** The HTTP method to pass with this request. If omitted, the method will be GET. */
   method?: HttpMethod;
+  /** Headers to pass with this request. */
   headers?: HeadersInit;
+  /** The timeout, in seconds, for this request. */
   timeout?: number;
+  /** An object to serialize and place into the body. */
   json?: object;
+  /** The body to send with the request. If sending json, use the `json` option instead. */
   body?: BodyInit;
+  /** An abort controller to use for the request. If omitted, a new one will be created, so {@link FetchPromise.abort()} will still
+   * work. */
   abort?: AbortController;
+  /** The query string to append to the URL. If this is present, the passed-in URL should not already have a query
+   * string. */
   query?: SearchParamsInit;
+  /** Customize the retry behavior. Pass a number to define the maxium number of retries, or a {@link RetryOptions}
+   * to fully customize the retry settings. */
   retry?: number | RetryOptions;
   /** If false or omitted, throw an error on any 4xx or 5xx status code (after retries, if applicable).
    * If true, failed responses are returned to the user.
@@ -82,17 +114,22 @@ export interface RequestOptions {
   tolerateFailure?: boolean | number[];
 }
 
-function makeUrl(baseUrl: string, url: string | URL, searchParams: URLSearchParams) {
+function makeUrl(baseUrl: string | undefined, url: string | URL, searchParams: URLSearchParams) {
   searchParams.sort();
   let qs = searchParams.toString();
 
-  if (url instanceof URL || url.startsWith('/') || url.includes('://')) {
-    let result = new URL(url, baseUrl);
+  if (url instanceof URL || url.includes('://')) {
+    let result = new URL(url);
     result.search = qs;
     return result;
   } else {
     let search = qs ? `?${qs}` : '';
-    return `${baseUrl}/${url}${search}`;
+    let hasSlash = url.startsWith('/');
+    if (hasSlash || !baseUrl) {
+      return `${url}${search}`;
+    } else {
+      return `${baseUrl}/${url}${search}`;
+    }
   }
 }
 
@@ -142,18 +179,18 @@ function sleep(time: number, signal: AbortSignal): Promise<typeof TIMEOUT> {
 }
 
 export class TimeoutError extends Error {
-  request: Request;
-  constructor(request: Request) {
+  request: RequestInput;
+  constructor(request: RequestInput) {
     super('Timed out');
     this.request = request;
   }
 }
 
 export class RateLimitError extends Error {
-  request: Request;
+  request: RequestInput;
   response: Response;
   retryAfter: number;
-  constructor(seconds: number, request: Request, response: Response) {
+  constructor(seconds: number, request: RequestInput, response: Response) {
     super(`Rate limit exceeded, can retry in ${seconds} seconds`);
     this.request = request;
     this.response = response;
@@ -162,10 +199,10 @@ export class RateLimitError extends Error {
 }
 
 export class HttpError extends Error {
-  request: Request;
+  request: RequestInput;
   response: Response;
 
-  constructor(request: Request, response: Response) {
+  constructor(request: RequestInput, response: Response) {
     super(`Request failed with status code ${response.status}`);
     this.request = request;
     this.response = response;
@@ -180,8 +217,8 @@ async function wrapRetry(
   timeout: number | undefined,
   hooks: BeforeRetryHook[] | undefined,
   thisFetch: typeof fetch,
-  makeRequest: () => { request: Request; response: Response | null }
-): Promise<{ request: Request; response: Response }> {
+  makeRequest: () => { request: RequestInput; response: Response | null }
+): Promise<{ request: RequestInput; response: Response }> {
   const limit =
     typeof retryOptions === 'number' ? retryOptions : retryOptions?.limit ?? DEFAULT_RETRY_LIMIT;
   retryOptions = typeof retryOptions === 'object' ? retryOptions : {};
@@ -207,7 +244,7 @@ async function wrapRetry(
 
     const request = mr.request;
 
-    const canRetry = canRetryMethod && currentTry <= limit;
+    const canRetry = canRetryMethod && currentTry < limit;
 
     if (currentTry > 0) {
       for (let retryHook of hooks ?? []) {
@@ -220,7 +257,8 @@ async function wrapRetry(
       }
     }
 
-    let fetchPromise = thisFetch(request);
+    let fetchPromise =
+      request instanceof Request ? thisFetch(request) : thisFetch(request.url, request);
     let response: Response | typeof TIMEOUT | undefined;
     lastResponse = undefined;
     try {
@@ -252,9 +290,9 @@ async function wrapRetry(
 
     // Honor the Retry-After header if present.
     let retryAfterHeader = response.headers.get('Retry-After');
-    let retryAfter = Number(retryAfterHeader);
+    let retryAfter = Number(retryAfterHeader) * 1000;
     if (Number.isNaN(retryAfter) && retryAfterHeader) {
-      retryAfter = (Date.parse(retryAfterHeader) - Date.now()) / 1000;
+      retryAfter = Date.parse(retryAfterHeader) - Date.now();
     }
 
     let sleepTime: number | undefined;
@@ -276,7 +314,7 @@ async function wrapRetry(
       sleepTime = sleepTime ?? Math.min(delay(currentTry + 1), backoffLimit);
     }
 
-    await sleep(sleepTime * 1000, signal);
+    await sleep(sleepTime, signal);
 
     currentTry += 1;
   }
@@ -294,8 +332,8 @@ export interface Client {
 }
 
 function iterateHeadersInit(
-  init: HeadersInit | undefined,
-  cb: (key: string, value: string) => void
+  init: Headers | [string, string | undefined][] | Record<string, string | undefined> | undefined,
+  cb: (key: string, value: string | undefined) => void
 ) {
   if (init instanceof Headers) {
     for (let [key, value] of init.entries()) {
@@ -312,7 +350,7 @@ function iterateHeadersInit(
   }
 }
 
-function updateHeaders(existing: Headers, newValue: HeadersInit | undefined) {
+export function updateHeaders(existing: Headers, newValue: HeadersInit | undefined) {
   iterateHeadersInit(newValue, (key, value) => {
     if (value === undefined) {
       existing.delete(key);
@@ -322,15 +360,48 @@ function updateHeaders(existing: Headers, newValue: HeadersInit | undefined) {
   });
 }
 
+export function mergeRetryOptions(
+  base: number | RetryOptions | undefined,
+  other: number | RetryOptions | undefined
+): RetryOptions | number | undefined {
+  if (other === undefined) {
+    return base;
+  } else if (base === undefined) {
+    return other;
+  } else if (typeof other === 'number') {
+    if (typeof base === 'object') {
+      return {
+        ...base,
+        limit: other,
+      };
+    } else {
+      return other;
+    }
+  } else if (typeof base === 'number') {
+    if (typeof other === 'object') {
+      return {
+        limit: base,
+        ...other,
+      };
+    } else {
+      return base;
+    }
+  } else {
+    return {
+      ...base,
+      ...other,
+    };
+  }
+}
+
 export function makeClient(clientOptions: ClientOptions) {
-  const {
-    prefixUrl: baseUrl,
-    timeout: defaultTimeout,
-    hooks,
-    headers: headerOption,
-  } = clientOptions;
+  let { prefixUrl: baseUrl, timeout: defaultTimeout, hooks, headers: headerOption } = clientOptions;
   const fixedHeaders = new Headers(headerOption);
   fixedHeaders.set('Accept', 'application/json');
+
+  if (baseUrl?.endsWith('/')) {
+    baseUrl = baseUrl.slice(0, -1);
+  }
 
   const client = (options: RequestOptions) => {
     let abort = options.abort ?? new AbortController();
@@ -370,11 +441,12 @@ export function makeClient(clientOptions: ClientOptions) {
 
     const beforeRequestHooks = hooks?.beforeRequest ?? [];
     function makeRequest() {
-      let req = new Request(url, {
+      let req: RequestInput = {
+        url,
         method,
         signal: abort.signal,
         body,
-      });
+      };
 
       for (let hook of beforeRequestHooks) {
         let hookResult = hook(req, options);
@@ -389,7 +461,7 @@ export function makeClient(clientOptions: ClientOptions) {
       return { request: req, response: null };
     }
 
-    async function runRequest() {
+    async function runRequest(): Promise<Response> {
       let { request, response: res } = await wrapRetry(
         options,
         options.retry ?? clientOptions.retry,
@@ -402,7 +474,7 @@ export function makeClient(clientOptions: ClientOptions) {
       );
 
       for (let hook of clientOptions.hooks?.afterResponse ?? []) {
-        let hookResult = await hook(request, options, res);
+        let hookResult = await hook(request, options, res.clone());
         if (hookResult) {
           res = hookResult;
         }
@@ -438,7 +510,9 @@ export function makeClient(clientOptions: ClientOptions) {
     let headers = new Headers(fixedHeaders);
     updateHeaders(headers, newOptions.headers);
 
-    return makeClient({ ...clientOptions, ...newOptions, headers });
+    let retry = mergeRetryOptions(clientOptions.retry, newOptions.retry);
+
+    return makeClient({ ...clientOptions, ...newOptions, headers, retry });
   };
 
   client.create = makeClient;
