@@ -3,6 +3,7 @@ use argon2::{
     Argon2,
 };
 use error_stack::{Report, ResultExt};
+use schemars::JsonSchema;
 use serde::Deserialize;
 use sqlx::PgPool;
 use tower_cookies::Cookies;
@@ -52,7 +53,7 @@ pub async fn verify_password(password: String, hash_str: String) -> Result<(), A
 }
 
 /// An email and password to attempt login
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct EmailAndPassword {
     email: String,
     password: String,

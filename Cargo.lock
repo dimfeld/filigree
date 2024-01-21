@@ -1050,6 +1050,7 @@ dependencies = [
  "async-trait",
  "axum 0.7.3",
  "axum-extra",
+ "axum-jsonschema",
  "base64",
  "chrono",
  "clap",

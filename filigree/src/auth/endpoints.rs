@@ -4,8 +4,9 @@ use axum::{
     extract::{FromRef, State},
     response::IntoResponse,
     routing::Router,
-    Json,
 };
+use axum_jsonschema::Json;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tower_cookies::Cookies;
 use uuid::Uuid;
@@ -38,7 +39,7 @@ async fn logout(
 }
 
 /// Request a password reset.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct UpdatePasswordRequest {
     /// The email for which the password is being reset
     pub email: String,

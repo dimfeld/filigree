@@ -3,6 +3,7 @@
 
 use std::borrow::Cow;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Authentication and Authorization
@@ -41,7 +42,7 @@ impl<'a> Message<'a> {
 }
 
 /// A request body that only contains an email
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct EmailBody {
     /// The email address
     pub email: String,
