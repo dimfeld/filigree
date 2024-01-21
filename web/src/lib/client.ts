@@ -335,6 +335,9 @@ export interface FetchPromise extends Promise<Response> {
   abort(): void;
   text(): Promise<string>;
   json<T>(): Promise<T>;
+  arrayBuffer(): Promise<ArrayBuffer>;
+  blob(): Promise<Blob>;
+  formData(): Promise<FormData>;
 }
 
 export interface Client {
@@ -426,22 +429,13 @@ export function makeClient(clientOptions: ClientOptions = {}) {
     let headers = new Headers(fixedHeaders);
     updateHeaders(headers, options.headers);
 
-    let autoDetectContentType = !headers.has('content-type');
     let body: BodyInit | undefined;
     if (options.body) {
       body = options.body;
-
-      if (autoDetectContentType) {
-        if (body instanceof FormData) {
-          headers.set('Content-Type', 'multipart/form-data');
-        } else if (body instanceof URLSearchParams) {
-          headers.set('Content-Type', 'application/x-www-form-urlencoded');
-        }
-      }
     } else if (options.json) {
       body = JSON.stringify(options.json);
-      if (autoDetectContentType) {
-        headers.set('Content-Type', 'application/json');
+      if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json;charset=UTF-8');
       }
     }
 
@@ -520,8 +514,11 @@ export function makeClient(clientOptions: ClientOptions = {}) {
 
     const promise = runRequest() as FetchPromise;
     promise.abort = () => abort.abort();
-    promise.text = () => promise.then((r) => r.text());
+    promise.arrayBuffer = () => promise.then((r) => r.arrayBuffer());
+    promise.blob = () => promise.then((r) => r.blob());
+    promise.formData = () => promise.then((res) => res.formData());
     promise.json = <T>() => promise.then((res) => res.json() as Promise<T>);
+    promise.text = () => promise.then((r) => r.text());
     return promise;
   };
 

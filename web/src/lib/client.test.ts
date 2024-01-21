@@ -8,7 +8,7 @@ import {
   TimeoutError,
   RateLimitError,
   type RequestInput,
-} from './requests.js';
+} from './client.js';
 import sorter from 'sorters';
 
 describe('mergeRetryOptions', () => {
@@ -451,7 +451,7 @@ describe('client', () => {
     expect(result.status).eq(200);
 
     let req = fetch.mock.calls[0][1];
-    expect(req.headers?.get('Content-Type')).eq('application/json');
+    expect(req.headers?.get('Content-Type')).eq('application/json;charset=UTF-8');
     expect(req.body).eq(JSON.stringify({ foo: 'bar' }));
   });
 
@@ -469,7 +469,6 @@ describe('client', () => {
     expect(result.status).eq(200);
 
     let req = fetch.mock.calls[0][1];
-    expect(req.headers?.get('Content-Type')).eq('multipart/form-data');
     expect(req.body).instanceOf(FormData);
   });
 
@@ -487,28 +486,25 @@ describe('client', () => {
     expect(result.status).eq(200);
 
     let req = fetch.mock.calls[0][1];
-    expect(req.headers?.get('Content-Type')).eq('application/x-www-form-urlencoded');
     expect(req.body).instanceOf(URLSearchParams);
   });
 
   test('pass in content-type', async () => {
     let { client, fetch } = createClient({}, () => new Response('{}', { status: 200 }));
-    let body = new URLSearchParams();
-    body.set('foo', 'bar');
-    body.set('apple', 'orange');
     let result = await client({
       url: '/abc',
       method: 'POST',
       headers: {
-        'content-type': 'text/plain',
+        'content-type': 'application/almost-json',
       },
       fetch,
-      body,
+      json: { a: 5 },
     });
     expect(result.status).eq(200);
 
     let req = fetch.mock.calls[0][1];
-    expect(req.headers?.get('Content-Type')).eq('text/plain');
+    expect(req.body).eq(JSON.stringify({ a: 5 }));
+    expect(req.headers?.get('Content-Type')).eq('application/almost-json');
   });
 
   test('call json to extract JSON', async () => {
