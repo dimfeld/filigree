@@ -42,6 +42,9 @@ pub enum Error {
     AuthSubsystem,
     #[error("Login failure")]
     Login,
+    /// An invalid Host header was passed
+    #[error("Invalid host")]
+    InvalidHostHeader,
 }
 
 impl From<Report<Error>> for Error {
@@ -82,6 +85,7 @@ impl HttpError for Error {
             Error::AuthSubsystem => "auth",
             Error::Login => "auth",
             Error::MissingPermission(_) => "missing_permission",
+            Error::InvalidHostHeader => "invalid_host_header",
         }
     }
 
@@ -103,6 +107,10 @@ impl HttpError for Error {
             Error::AuthSubsystem => StatusCode::INTERNAL_SERVER_ERROR,
             Error::MissingPermission(_) => StatusCode::FORBIDDEN,
             Error::Login => StatusCode::UNAUTHORIZED,
+            // This isn't really an internal server error, but if we get an unexpected Host header
+            // then something may be wrong security-wise, so don't give any clues. Returning a
+            // 500 will cause the error obfucation middleware to remove the details.
+            Error::InvalidHostHeader => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 

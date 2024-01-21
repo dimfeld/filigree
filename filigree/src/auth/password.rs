@@ -55,7 +55,9 @@ pub async fn verify_password(password: String, hash_str: String) -> Result<(), A
 /// An email and password to attempt login
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct EmailAndPassword {
+    #[validate(email)]
     email: String,
+    #[validate(length(min = 1))]
     password: String,
 }
 

@@ -45,5 +45,6 @@ impl<'a> Message<'a> {
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct EmailBody {
     /// The email address
+    #[validate(email)]
     pub email: String,
 }

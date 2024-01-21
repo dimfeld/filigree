@@ -42,12 +42,15 @@ async fn logout(
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct UpdatePasswordRequest {
     /// The email for which the password is being reset
+    #[validate(email)]
     pub email: String,
     /// The reset password token.
     pub token: Uuid,
     /// The new password to set
+    #[validate(length(min = 1))]
     pub password: String,
     /// Another copy of the new password, to ensure that it's correct
+    #[validate(length(min = 1))]
     pub confirm: String,
 }
 

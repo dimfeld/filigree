@@ -18,6 +18,34 @@ pub struct FiligreeState {
     pub new_user_flags: NewUserFlags,
 }
 
+impl FiligreeState {
+    /// Check if a host is in the allowed list. If so, return the host. If not, return
+    /// the first host in the list inside an `Err`.
+    pub fn host_is_allowed<'a>(&'a self, host: &'a str) -> Result<&'a str, &'a str> {
+        if self.hosts.is_empty() {
+            return Ok(host);
+        }
+
+        let allowed = self.hosts.iter().any(|h| {
+            if h.starts_with("*.") {
+                host.ends_with(h)
+            } else {
+                host == h
+            }
+        });
+
+        if allowed {
+            Ok(host)
+        } else {
+            let mut default_host = self.hosts[0].as_str();
+            if default_host.starts_with("*.") {
+                default_host = &default_host[2..];
+            }
+            Err(default_host)
+        }
+    }
+}
+
 /// Flags controlling new user behavior
 pub struct NewUserFlags {
     /// Allow anyone to sign up
