@@ -14,6 +14,8 @@ pub mod email;
 pub mod errors;
 /// A UUIDv7-based type for handling object IDs with a more compact representation.
 pub mod object_id;
+/// Request Handling and Validation
+pub mod requests;
 /// Utilities for running an HTTP server
 pub mod server;
 /// Utilities for working with SQL queries
@@ -25,8 +27,6 @@ pub mod testing;
 pub mod tracing_config;
 /// Manage users, roles, and related data
 pub mod users;
-/// Input Validation
-pub mod validate;
 
 /// A simple structure for sending back a message-only response
 #[derive(Serialize, Debug)]
