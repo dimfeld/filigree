@@ -25,6 +25,8 @@ pub mod testing;
 pub mod tracing_config;
 /// Manage users, roles, and related data
 pub mod users;
+/// Input Validation
+pub mod validate;
 
 /// A simple structure for sending back a message-only response
 #[derive(Serialize, Debug)]
