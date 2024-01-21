@@ -5,6 +5,7 @@ use base64::{
     engine::{general_purpose::URL_SAFE_NO_PAD, GeneralPurpose},
     Engine,
 };
+use schemars::JsonSchema;
 use sqlx::{postgres::PgTypeInfo, Database};
 use thiserror::Error;
 use uuid::Uuid;
@@ -54,6 +55,24 @@ pub trait ObjectIdPrefix:
 /// UUID v7 so that the output will be lexicographically sortable.
 #[derive(Hash, PartialOrd, Ord, Eq)]
 pub struct ObjectId<PREFIX: ObjectIdPrefix>(pub Uuid, PhantomData<PREFIX>);
+
+impl<PREFIX: ObjectIdPrefix> JsonSchema for ObjectId<PREFIX> {
+    fn schema_name() -> String {
+        format!("ObjectId<{}>", PREFIX::prefix())
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        String::json_schema(gen)
+    }
+
+    fn is_referenceable() -> bool {
+        false
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        format!(concat!(module_path!(), "::ObjectId<{}>"), PREFIX::prefix()).into()
+    }
+}
 
 impl<PREFIX: ObjectIdPrefix> Clone for ObjectId<PREFIX> {
     fn clone(&self) -> Self {

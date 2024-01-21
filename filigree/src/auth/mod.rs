@@ -21,6 +21,7 @@ use axum::{http::StatusCode, response::IntoResponse};
 pub use check_middleware::*;
 use clap::ValueEnum;
 pub use extractors::*;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 pub use sessions::*;
 use thiserror::Error;
@@ -172,7 +173,7 @@ pub trait AuthInfo: 'static + Send + Sync {
 }
 
 /// The permission level of an object
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, sqlx::Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, sqlx::Type)]
 #[sqlx(rename_all = "snake_case", type_name = "text")]
 #[serde(rename_all = "snake_case")]
 pub enum ObjectPermission {

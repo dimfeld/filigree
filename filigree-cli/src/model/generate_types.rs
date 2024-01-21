@@ -48,6 +48,13 @@ impl<'a> ModelGenerator<'a> {
                 .push(suffix);
         }
 
+        let owner_and_user_different_access =
+            model.all_fields().any(|f| f.owner_read() && !f.user_read());
+        context.insert(
+            "owner_and_user_different_access",
+            &owner_and_user_different_access,
+        );
+
         let structs = grouped_fields
             .into_iter()
             .map(

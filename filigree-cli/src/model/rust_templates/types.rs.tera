@@ -11,7 +11,7 @@ use serde::{
 
 {% for struct in structs %}
 
-#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 {% if struct.name != struct_base -%}
 #[cfg_attr(test, derive(Serialize))]
 {%- endif %}
@@ -65,7 +65,9 @@ impl Serialize for {{struct_base}} {
     where
         S: Serializer,
     {
+        {% if owner_and_user_different_access %}
         if self._permission == ObjectPermission::Owner {
+        {% endif %}
             {% set view_fields = fields | filter(attribute="owner_read", value=true) %}
             let mut state = serializer.serialize_struct("{{struct_base}}", {{ view_fields | length + 1 }})?;
             {% for field in view_fields -%}
@@ -73,6 +75,7 @@ impl Serialize for {{struct_base}} {
             {%- endfor %}
             state.serialize_field("_permission", &self._permission)?;
             state.end()
+        {% if owner_and_user_different_access %}
         } else {
             {% set view_fields = fields | filter(attribute="user_read", value=true) %}
             let mut state = serializer.serialize_struct("{{struct_base}}", {{ view_fields | length + 1 }})?;
@@ -82,6 +85,7 @@ impl Serialize for {{struct_base}} {
             state.serialize_field("_permission", &self._permission)?;
             state.end()
         }
+        {% endif %}
     }
 }
 
