@@ -12,7 +12,7 @@ use jsonschema::{
 };
 use schemars::{
     gen::{SchemaGenerator, SchemaSettings},
-    schema::RootSchema,
+    schema::{InstanceType, RootSchema, Schema, SingleOrVec},
     JsonSchema,
 };
 
@@ -20,9 +20,105 @@ thread_local! {
     static SCHEMAS: RefCell<Schemas> = RefCell::new(Schemas::new());
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+struct CoerceTo {
+    number: bool,
+    boolean: bool,
+}
+
+impl CoerceTo {
+    fn from_instance_types(t: &SingleOrVec<InstanceType>) -> Self {
+        Self {
+            number: t.contains(&InstanceType::Number),
+            boolean: t.contains(&InstanceType::Boolean),
+        }
+    }
+
+    fn into_option(self) -> Option<Self> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self)
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        !(self.number || self.boolean)
+    }
+
+    /// Try to coerce a string value to a number
+    fn coerce_to_number(&self, input: &mut serde_json::Value) {
+        match input {
+            serde_json::Value::String(s) => {
+                if s.contains('.') {
+                    let n = s.parse::<f64>().ok().and_then(serde_json::Number::from_f64);
+                    if let Some(number) = n {
+                        *input = serde_json::Value::Number(number);
+                    }
+                } else {
+                    let n = s.parse::<i64>().ok();
+                    if let Some(number) = n {
+                        *input = serde_json::Value::Number(number.into());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Coerce from string to boolean, accounting for values that come from forms
+    fn coerce_to_boolean(&self, input: &mut serde_json::Value) {
+        match input {
+            serde_json::Value::String(s) => {
+                let value = match s.as_str() {
+                    "true" => true,
+                    "on" => true,
+                    "false" => false,
+                    "" => false,
+                    _ => {
+                        return;
+                    }
+                };
+
+                *input = serde_json::Value::Bool(value);
+            }
+            _ => {}
+        }
+    }
+
+    fn coerce(&self, input: &mut serde_json::Value) {
+        if self.number {
+            self.coerce_to_number(input);
+        }
+
+        if self.boolean {
+            self.coerce_to_boolean(input);
+        }
+    }
+}
+
+struct FieldInfo {
+    name: String,
+    required: bool,
+    array: bool,
+    coerce: CoerceTo,
+}
+
+impl FieldInfo {
+    fn coerce_none(&self) -> Option<serde_json::Value> {
+        if !self.required {
+            return None;
+        }
+
+        self.coerce
+            .boolean
+            .then_some(serde_json::Value::Bool(false))
+    }
+}
+
 struct SchemaInfo {
     schema: JSONSchema,
-    array_fields: Vec<String>,
+    coerce_fields: Vec<FieldInfo>,
 }
 
 struct Schemas {
@@ -41,6 +137,7 @@ impl Schemas {
     }
 }
 
+/// Errors returned from JSON schema validation
 pub type SchemaErrors = VecDeque<OutputUnit<ErrorDescription>>;
 
 /// Validate a JSON value against a JSON schema
@@ -49,7 +146,7 @@ pub type SchemaErrors = VecDeque<OutputUnit<ErrorDescription>>;
 /// self-describing, such as `application/x-www-form-urlencoded`.
 pub fn validate<T: JsonSchema + 'static>(
     input: &mut serde_json::Value,
-    coerce_arrays: bool,
+    coerce_values: bool,
 ) -> Result<(), SchemaErrors> {
     SCHEMAS.with(|sch| {
         let sch = &mut *sch.borrow_mut();
@@ -58,23 +155,29 @@ pub fn validate<T: JsonSchema + 'static>(
             .entry(TypeId::of::<T>())
             .or_insert_with(|| compile_schema(sch.generator.root_schema_for::<T>()));
 
-        if coerce_arrays {
+        if coerce_values {
             // The format this was serialized from can't distinguish between singletons and single element
             // arrays, so coerce them according to the schema.
-            for field in &schema.array_fields {
-                let Some(data) = input.get_mut(field) else {
-                    continue;
-                };
-
-                match data {
-                    serde_json::Value::Array(_) => {}
-                    // Assuming that nobody intentionally passes [null]
-                    serde_json::Value::Null => {}
-                    // Wrap everything else in an array
-                    _ => {
-                        let v = data.take();
-                        *data = serde_json::Value::Array(vec![v]);
+            for field in &schema.coerce_fields {
+                if let Some(data) = input.get_mut(&field.name) {
+                    match data {
+                        serde_json::Value::Array(a) => {
+                            for v in a {
+                                field.coerce.coerce(v);
+                            }
+                        }
+                        serde_json::Value::Null => {}
+                        // Wrap everything else in an array
+                        _ => {
+                            field.coerce.coerce(data);
+                            if field.array {
+                                let v = data.take();
+                                *data = serde_json::Value::Array(vec![v]);
+                            }
+                        }
                     }
+                } else if let Some(none_value) = field.coerce_none() {
+                    input[field.name.clone()] = none_value;
                 }
             }
         }
@@ -87,18 +190,52 @@ pub fn validate<T: JsonSchema + 'static>(
 }
 
 fn compile_schema(input: RootSchema) -> SchemaInfo {
-    let array_fields = input
+    let coerce_fields = input
         .schema
         .object
         .as_ref()
-        .map(|o| {
-            o.properties
+        .map(|root| {
+            root.properties
                 .iter()
-                .filter(|(_, s)| match s {
-                    schemars::schema::Schema::Object(o) => o.array.is_some(),
-                    _ => false,
+                .filter_map(|(name, s)| match s {
+                    Schema::Object(o) => {
+                        let required = root.required.contains(name);
+                        let (is_array, coerce_to) = o
+                            .instance_type
+                            .as_ref()
+                            .map(|t| {
+                                let string = t.contains(&InstanceType::String);
+                                if string {
+                                    return (false, CoerceTo::default());
+                                }
+                                let c = CoerceTo::from_instance_types(t);
+                                if !c.is_empty() || !t.contains(&InstanceType::Array) {
+                                    (false, c)
+                                } else {
+                                    let coerce_to = o
+                                        .array
+                                        .as_ref()
+                                        .and_then(|a| a.items.as_ref())
+                                        .and_then(get_coerce_type_from_array_items)
+                                        .unwrap_or_else(CoerceTo::default);
+                                    (true, coerce_to)
+                                }
+                            })
+                            .unwrap_or((false, CoerceTo::default()));
+
+                        if is_array || !coerce_to.is_empty() {
+                            Some(FieldInfo {
+                                name: name.to_string(),
+                                required,
+                                array: is_array,
+                                coerce: coerce_to,
+                            })
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
                 })
-                .map(|(k, _)| k.clone())
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
@@ -110,6 +247,29 @@ fn compile_schema(input: RootSchema) -> SchemaInfo {
 
     SchemaInfo {
         schema,
-        array_fields,
+        coerce_fields,
     }
 }
+
+fn get_coerce_type_from_array_items(items: &SingleOrVec<Schema>) -> Option<CoerceTo> {
+    match items {
+        SingleOrVec::Single(schema) => get_coerce_type_from_schema(schema),
+        SingleOrVec::Vec(schemas) => schemas.iter().find_map(get_coerce_type_from_schema),
+    }
+}
+
+fn get_coerce_type_from_schema(schema: &Schema) -> Option<CoerceTo> {
+    match schema {
+        Schema::Object(o) => o.instance_type.as_ref().and_then(|t| {
+            if t.contains(&InstanceType::String) {
+                return None;
+            }
+
+            CoerceTo::from_instance_types(t).into_option()
+        }),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod test {}

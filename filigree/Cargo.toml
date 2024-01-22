@@ -65,3 +65,6 @@ email_provider = []
 email_resend = ["email_provider"]
 test_slow = []
 test_password = []
+
+[dev-dependencies]
+indoc = "2.0.4"

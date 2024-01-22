@@ -16,9 +16,7 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
-use self::json_schema::SchemaErrors;
-
-pub mod json_schema;
+use super::{file::FileUpload, json_schema::SchemaErrors, ContentType};
 
 #[derive(Debug)]
 pub enum FormOrJsonRejection {
@@ -29,6 +27,7 @@ pub enum FormOrJsonRejection {
     MultipartField(MultipartError),
     HtmlForm(serde_html_form::de::Error),
     Serde(serde_path_to_error::Error<serde_json::Error>),
+    MissingData,
     UnknownContentType,
 }
 
@@ -73,6 +72,7 @@ impl IntoResponse for FormOrJsonRejection {
             FormOrJsonRejection::UnknownContentType => {
                 (StatusCode::BAD_REQUEST, "Unknown content type").into_response()
             }
+            FormOrJsonRejection::MissingData => todo!(),
         }
     }
 }
@@ -90,86 +90,36 @@ where
     type Rejection = FormOrJsonRejection;
 
     async fn from_request(req: Request<Body>, _state: &S) -> Result<Self, Self::Rejection> {
-        let content_type = req
-            .headers()
-            .get("content-type")
-            .and_then(|value| value.to_str().ok())
-            // Try JSON if there is no content-type, to accomodate curl and similar
-            .unwrap_or("application/json");
+        let content_type = ContentType::new(
+            req.headers()
+                .get("content-type")
+                .and_then(|value| value.to_str().ok())
+                // Try JSON if there is no content-type, to accomodate lazy curl and similar
+                .unwrap_or("application/json"),
+        );
 
-        let (mut value, coerce_arrays) = if content_type.starts_with("application/json") {
+        let (mut value, coerce_arrays) = if content_type.is_json() {
             let value = Json::<serde_json::Value>::from_request(req, _state)
                 .await
                 .map(|json| FormOrJson(json.0))
                 .map_err(FormOrJsonRejection::Json)?
                 .0;
             (value, false)
-        } else if content_type.starts_with("application/x-www-form-urlencoded") {
+        } else if content_type.is_form() {
             let value = Form::<serde_json::Value>::from_request(req, _state)
                 .await
                 .map_err(FormOrJsonRejection::Form)?
                 .0;
             (value, true)
-        } else if content_type.starts_with("multipart/form-data") {
-            let value = parse_multipart(req).await?;
-            (value, true)
         } else {
             return Err(FormOrJsonRejection::UnknownContentType);
         };
 
-        json_schema::validate::<T>(&mut value, coerce_arrays)
+        super::json_schema::validate::<T>(&mut value, coerce_arrays)
             .map_err(FormOrJsonRejection::Validation)?;
 
         serde_path_to_error::deserialize(value)
             .map(FormOrJson)
             .map_err(FormOrJsonRejection::Serde)
     }
-}
-
-async fn parse_multipart(req: Request<Body>) -> Result<serde_json::Value, FormOrJsonRejection> {
-    let mut output = json!({});
-    let mut multipart = Multipart::from_request(req, &())
-        .await
-        .map_err(FormOrJsonRejection::Multipart)?;
-
-    while let Some(field) = multipart.next_field().await? {
-        let content_type = field.content_type().unwrap_or("text/plain");
-        match content_type {
-            "application/x-www-form-urlencoded" => {
-                let data = field.bytes().await?;
-                let json_value: serde_json::value::Map<String, serde_json::Value> =
-                    serde_html_form::from_bytes(&data)?;
-                for (key, value) in json_value {
-                    output[key] = value;
-                }
-            }
-            _ => {
-                let name = field.name().map(|s| s.to_string());
-                if let Some(name) = name {
-                    let filename = field.file_name().map(|s| s.to_string());
-                    let data = field.bytes().await?;
-
-                    let file = json!({
-                        "filename": filename,
-                        "data": Vec::from(data)
-                    });
-
-                    match output.get_mut(&name) {
-                        Some(serde_json::Value::Array(a)) => {
-                            a.push(file);
-                        }
-                        Some(v) => {
-                            let old = v.take();
-                            *v = json!([old, file]);
-                        }
-                        None => {
-                            output[name] = file;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(output)
 }
