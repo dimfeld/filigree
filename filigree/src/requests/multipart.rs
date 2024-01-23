@@ -1,19 +1,16 @@
-use std::fmt::Debug;
+use std::marker::PhantomData;
 
-use async_trait::async_trait;
 use axum::{
     body::Body,
     extract::{FromRequest, Request},
 };
+use axum_extra::extract::multipart::Field;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
-use super::{
-    file::{FileData, FileUpload},
-    urlencoded::value_from_urlencoded,
-    ContentType, Rejection,
-};
+use super::file::{FileData, FileUpload};
+use crate::extract::Rejection;
 
 fn coerce_and_push_array(output: &mut serde_json::Value, key: String, value: serde_json::Value) {
     match output.get_mut(&key) {
@@ -30,102 +27,160 @@ fn coerce_and_push_array(output: &mut serde_json::Value, key: String, value: ser
     }
 }
 
+enum MultipartField {
+    File(Field),
+    Data(String, String),
+}
+
+async fn handle_multipart_field(field: Field) -> Result<MultipartField, Rejection> {
+    let value = if field.file_name().is_some() {
+        // If there's a file name, it's always a file.
+        MultipartField::File(field)
+    } else if let Some(name) = field.name() {
+        let name = name.to_string();
+        let data = field.text().await?;
+        MultipartField::Data(name, data)
+    } else {
+        // If it doesn't have a filename or a name, it's probably a weird submission of a file.
+        // Let the caller figure out if that's valid or not in this case.
+        MultipartField::File(field)
+    };
+
+    Ok(value)
+}
+
 /// Parse a multipart form submission into the specified type and a list of files uploaded with it.
-pub async fn parse_multipart(
-    req: Request<Body>,
-) -> Result<(serde_json::Value, Vec<FileUpload>), Rejection> {
-    let mut output = json!({});
+pub async fn parse_multipart<T>(req: Request<Body>) -> Result<(T, Vec<FileUpload>), Rejection>
+where
+    T: DeserializeOwned + JsonSchema + Send + Sync + 'static,
+{
     let mut files = Vec::new();
 
-    let mut multipart = axum_extra::extract::multipart::Multipart::from_request(req, &())
+    let multipart = axum_extra::extract::Multipart::from_request(req, &())
         .await
         .map_err(Rejection::Multipart)?;
 
-    while let Some(field) = multipart.next_field().await? {
-        let content_type = ContentType::new(field.content_type().unwrap_or_default());
+    let mut processor = MultipartProcessor::<T>::from(multipart);
 
-        if let Some(filename) = field.file_name() {
-            // If there's a file name, it's always a file.
-            let content_type = content_type.to_string();
-            let name = field.name().map(|s| s.to_string()).unwrap_or_default();
-            let filename = filename.to_string();
-            let data = field.bytes().await?;
+    while let Some(field) = processor.next_file().await? {
+        let content_type = field.content_type().unwrap_or_default().to_string();
+        let name = field.name().map(|s| s.to_string()).unwrap_or_default();
+        let filename = field.file_name().unwrap_or_default().to_string();
+        let data = field.bytes().await?;
 
-            files.push(FileUpload {
-                name,
-                filename,
-                content_type,
-                data: FileData(Vec::from(data)),
-            });
-        } else if content_type.is_form() {
-            let field_name = field.name().map(|s| s.to_string());
-            let data = field.bytes().await?;
-            let val = value_from_urlencoded(&data);
-            if let Some(name) = field_name {
-                output[name] = val;
-            } else {
-                output = val;
-            }
-        } else if content_type.is_json() {
-            let field_name = field.name().map(|s| s.to_string());
-            let data = field.bytes().await?;
-            let mut jd = serde_json::Deserializer::from_slice(&data);
-            let val = serde_path_to_error::deserialize(&mut jd).map_err(Rejection::Serde)?;
-            if let Some(name) = field_name {
-                output[name] = val;
-            } else {
-                output = val;
-            }
-        } else if let Some(name) = field.name() {
-            let name = name.to_string();
-            let data = field.text().await?;
-            coerce_and_push_array(&mut output, name, json!(data));
-        }
+        files.push(FileUpload {
+            name,
+            filename,
+            content_type,
+            data: FileData(Vec::from(data)),
+        });
     }
+
+    let output = processor.finish().await?;
 
     Ok((output, files))
 }
 
-/// Extract a multipart form submission and perform JSON schema validation.
-/// The `data` field contains all the non-file submissions, and the uploaded files
-/// are placed in the `files` field.
-pub struct Multipart<T>
+/// Iterate over a multipart submission, returning the files for processing
+/// and accumulating the other fields encountered on the way. When done, call
+/// [finish] to validate and deserialize the accumulated non-file fields.
+///
+/// ```ignore
+/// # use axum::{extract::{ FromRequest, Request}, RequestExt};
+/// # use filigree::{requests::{multipart::MultipartProcessor}, extract::Rejection};
+/// # #[derive(serde::Deserialize, schemars::JsonSchema)]
+/// # struct T {}
+/// # async fn example(req: Request) -> Result<(), Rejection> {
+/// let multipart = axum_extra::extract::Multipart::from_request(req, &())
+///     .await?;
+///
+/// let mut processor = MultipartProcessor::from(multipart);
+///
+/// while let Some(field) = processor.next_file().await? {
+///     let content_type = field.content_type().unwrap_or_default().to_string();
+///     let name = field.name().map(|s| s.to_string()).unwrap_or_default();
+///     let filename = field.file_name().unwrap_or_default().to_string();
+///
+///     // Upload the file or do something with it here.
+/// }
+///
+/// // And get the rest of the form info.
+/// let output: T = processor.finish().await?;
+/// # Ok::<_, Rejection>(())
+/// # }
+/// ```
+pub struct MultipartProcessor<T>
 where
-    T: DeserializeOwned + JsonSchema + Debug + Send + Sync + 'static,
+    T: DeserializeOwned + JsonSchema + Send + Sync + 'static,
 {
-    /// The non-file data
-    pub data: T,
-    /// The files attached to the request.
-    pub files: Vec<FileUpload>,
+    multipart: axum_extra::extract::Multipart,
+    data: serde_json::Value,
+    _marker: PhantomData<T>,
 }
 
-#[async_trait]
-impl<S, T> FromRequest<S> for Multipart<T>
+impl<T> MultipartProcessor<T>
 where
-    S: Send + Sync,
-    T: DeserializeOwned + JsonSchema + Debug + Send + Sync + 'static,
+    T: DeserializeOwned + JsonSchema + Send + Sync + 'static,
 {
-    type Rejection = Rejection;
+    /// Iterate over the fields in the multipart form, returning the next file field
+    /// and internally accumulating the other fields encountered on the way.
+    pub async fn next_file(&mut self) -> Result<Option<Field>, Rejection> {
+        while let Some(field) = self.multipart.next_field().await? {
+            match handle_multipart_field(field).await? {
+                MultipartField::File(field) => {
+                    return Ok(Some(field));
+                }
+                MultipartField::Data(key, value) => {
+                    coerce_and_push_array(&mut self.data, key, json!(value));
+                }
+            }
+        }
 
-    async fn from_request(req: Request<Body>, _: &S) -> Result<Self, Self::Rejection> {
-        let (mut data, files) = parse_multipart(req).await?;
+        Ok(None)
+    }
 
-        super::json_schema::validate::<T>(&mut data, true).map_err(Rejection::Validation)?;
+    /// Finish parsing the multipart form into the specified type, and return
+    /// the deserialized, non-file fields.
+    pub async fn finish(mut self) -> Result<T, Rejection> {
+        while let Some(field) = self.multipart.next_field().await? {
+            match handle_multipart_field(field).await? {
+                MultipartField::File(_) => {
+                    // Ignoring any other files the user didn't handle with [next_file].
+                }
+                MultipartField::Data(key, value) => {
+                    coerce_and_push_array(&mut self.data, key, json!(value));
+                }
+            }
+        }
 
-        let data = serde_path_to_error::deserialize(data).map_err(Rejection::Serde)?;
+        crate::requests::json_schema::validate::<T>(&mut self.data, true)
+            .map_err(Rejection::Validation)?;
 
-        Ok(Self { data, files })
+        serde_path_to_error::deserialize(self.data).map_err(Rejection::Serde)
+    }
+}
+
+impl<T> From<axum_extra::extract::Multipart> for MultipartProcessor<T>
+where
+    T: DeserializeOwned + JsonSchema + Send + Sync + 'static,
+{
+    fn from(multipart: axum_extra::extract::Multipart) -> Self {
+        Self {
+            multipart,
+            data: json!({}),
+            _marker: PhantomData,
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
     use indoc::indoc;
+    use serde::Deserialize;
 
     use super::*;
 
-    #[tokio::test]
-    async fn parse_multipart() {
+    fn get_req() -> hyper::Request<axum::body::Body> {
         let body = indoc! {r##"
             --fieldB
             Content-Disposition: form-data; name="name"
@@ -150,19 +205,63 @@ mod test {
         .replace("\n", "\r\n");
         println!("{}", body);
 
-        let data = hyper::Request::builder()
+        hyper::Request::builder()
             .header("content-type", "multipart/form-data; boundary=fieldB")
             .header("content-length", body.len())
             .body(axum::body::Body::from(body))
-            .unwrap();
+            .unwrap()
+    }
 
-        let (value, files) = super::parse_multipart(data).await.unwrap();
+    #[tokio::test]
+    async fn parse_multipart_jsonvalue() {
+        let data = get_req();
+        let (value, files) = super::parse_multipart::<serde_json::Value>(data)
+            .await
+            .unwrap();
         assert_eq!(
             value,
             json!({
                 "name": "test",
                 "agreed": "on"
             })
+        );
+
+        assert_eq!(
+            files,
+            vec![
+                (FileUpload {
+                    name: "file1".to_string(),
+                    filename: "a.txt".to_string(),
+                    content_type: "text/plain".to_string(),
+                    data: FileData(Vec::from("Some text".as_bytes()))
+                }),
+                (FileUpload {
+                    name: "file2".to_string(),
+                    filename: "a.html".to_string(),
+                    content_type: "text/html".to_string(),
+                    data: FileData(Vec::from("<b>Some html</b>".as_bytes()))
+                }),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn parse_multipart_serde() {
+        #[derive(Deserialize, JsonSchema, Debug, PartialEq, Eq)]
+        struct Data {
+            name: String,
+            agreed: bool,
+        }
+
+        let data = get_req();
+        let (value, files) = super::parse_multipart::<Data>(data).await.unwrap();
+
+        assert_eq!(
+            value,
+            Data {
+                name: "test".to_string(),
+                agreed: true
+            }
         );
 
         assert_eq!(

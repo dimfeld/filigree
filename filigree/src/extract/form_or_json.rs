@@ -4,14 +4,13 @@ use async_trait::async_trait;
 use axum::{
     body::Body,
     extract::{FromRequest, Request},
-    Json,
+    Json, RequestExt,
 };
-use axum_extra::extract::Form;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 
-use super::{ContentType, Rejection};
-use crate::requests::urlencoded::value_from_urlencoded;
+use super::Rejection;
+use crate::requests::{urlencoded::value_from_urlencoded, ContentType};
 
 /// Extract a body from either JSON or form submission, and perform JSON schema validation.
 #[derive(Debug)]
@@ -55,7 +54,7 @@ where
                 .0;
             (value, false)
         } else if content_type.is_form() {
-            let bytes = axum::body::to_bytes(req.into_body(), 1048576)
+            let bytes = axum::body::to_bytes(req.into_limited_body(), usize::MAX)
                 .await
                 .map_err(Rejection::ReadBody)?;
             let value = value_from_urlencoded(&bytes);
@@ -64,7 +63,7 @@ where
             return Err(Rejection::UnknownContentType);
         };
 
-        super::json_schema::validate::<T>(&mut value, coerce_arrays)
+        crate::requests::json_schema::validate::<T>(&mut value, coerce_arrays)
             .map_err(Rejection::Validation)?;
 
         serde_path_to_error::deserialize(value)
