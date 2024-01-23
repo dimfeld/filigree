@@ -56,7 +56,7 @@ typed-builder = "0.18.0"
 uuid = { version = "1.6.1", features = ["v7"] }
 
 [features]
-default = ["test_password", "tracing", "tracing_honeycomb", "tracing_jaeger", "email_resend"]
+default = ["tracing", "tracing_honeycomb", "tracing_jaeger", "email_resend"]
 tracing = ["dep:log", "dep:tracing-subscriber", "dep:tracing-error", "dep:tracing-log"]
 opentelemetry = ["tracing", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
 tracing_honeycomb = ["tracing", "opentelemetry", "dep:tonic", "dep:opentelemetry-otlp"]

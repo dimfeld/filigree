@@ -14,6 +14,9 @@ use crate::requests::{file::FileUpload, multipart::parse_multipart};
 /// Extract a multipart form submission and perform JSON schema validation.
 /// The `data` field contains all the non-file submissions, and the uploaded files
 /// are placed in the `files` field.
+///
+/// This extractor buffers all the uploaded files. If you prefer to process them as streams,
+/// use [MultipartProcessor] instead..
 pub struct Multipart<T>
 where
     T: DeserializeOwned + JsonSchema + Debug + Send + Sync + 'static,

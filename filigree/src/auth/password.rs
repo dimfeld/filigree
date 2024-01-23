@@ -135,17 +135,25 @@ pub async fn create_reset_token(db: &sqlx::PgPool, email: &str) -> Result<Uuid, 
     Ok(token)
 }
 
-#[cfg(all(test, any(feature = "test_slow", feature = "test_password")))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
     #[tokio::test]
+    #[cfg_attr(
+        not(any(feature = "test_slow", feature = "test_password")),
+        ignore = "slow password test"
+    )]
     async fn good_password() -> Result<(), AuthError> {
         let hash = new_hash("abcdef".into()).await?;
         verify_password("abcdef".to_string(), hash).await
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        not(any(feature = "test_slow", feature = "test_password")),
+        ignore = "slow password test"
+    )]
     async fn bad_password() -> Result<(), AuthError> {
         let hash = new_hash("abcdef".into()).await?;
         verify_password("abcdefg".to_string(), hash)
@@ -156,6 +164,10 @@ mod tests {
 
     /// Test that the salt actually results in a different hash every time.
     #[tokio::test]
+    #[cfg_attr(
+        not(any(feature = "test_slow", feature = "test_password")),
+        ignore = "slow password test"
+    )]
     async fn unique_password_salt() {
         let p1 = new_hash("abc".into()).await.unwrap();
         let p2 = new_hash("abc".into()).await.unwrap();

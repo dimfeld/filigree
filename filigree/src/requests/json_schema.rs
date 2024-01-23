@@ -324,7 +324,11 @@ fn compile_schema(input: RootSchema) -> SchemaInfo {
 }
 
 /// When there are multiple subschemas for a field, combine the coercion info from them all.
-fn get_coerce_type_from_subschemas(ss: &[Schema], array: bool) -> Option<CoerceTo> {
+fn get_coerce_type_from_subschemas(ss: &Option<Vec<Schema>>, array: bool) -> Option<CoerceTo> {
+    let Some(ss) = ss.as_deref() else {
+        return None;
+    };
+
     let mut ct = CoerceTo::default();
 
     for schema in ss {
@@ -354,14 +358,8 @@ fn get_coerce_type_from_schema_object(o: &SchemaObject, array: bool) -> Option<C
         .and_then(|t| CoerceTo::from_instance_types(t, array).into_option())
         .or_else(|| {
             o.subschemas.as_ref().and_then(|ss| {
-                ss.any_of
-                    .as_deref()
-                    .and_then(|s| get_coerce_type_from_subschemas(s, array))
-                    .or_else(|| {
-                        ss.one_of
-                            .as_deref()
-                            .and_then(|s| get_coerce_type_from_subschemas(s, array))
-                    })
+                get_coerce_type_from_subschemas(&ss.any_of, array)
+                    .or_else(|| get_coerce_type_from_subschemas(&ss.one_of, array))
             })
         })
 }
