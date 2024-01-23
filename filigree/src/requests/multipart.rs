@@ -3,40 +3,18 @@ use std::fmt::Debug;
 use async_trait::async_trait;
 use axum::{
     body::Body,
-    extract::{rejection::JsonRejection, FromRequest, Request},
-    response::IntoResponse,
-    Json,
+    extract::{FromRequest, Request},
 };
-use axum_extra::extract::{
-    multipart::{Multipart, MultipartError, MultipartRejection},
-    Form, FormRejection,
-};
+use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
 use super::{
     file::{FileData, FileUpload},
-    form_or_json::FormOrJsonRejection,
-    ContentType,
+    ContentType, Rejection,
 };
 
-fn update_or_insert_json_value(
-    output: &mut serde_json::Value,
-    input: serde_json::Map<String, serde_json::Value>,
-) {
-    match output {
-        serde_json::Value::Object(m) => {
-            for (key, value) in input {
-                m.insert(key, value);
-            }
-        }
-        _ => {
-            *output = serde_json::Value::Object(input);
-        }
-    }
-}
-
-fn add_maybe_array(output: &mut serde_json::Value, key: String, value: serde_json::Value) {
+fn coerce_and_push_array(output: &mut serde_json::Value, key: String, value: serde_json::Value) {
     match output.get_mut(&key) {
         Some(serde_json::Value::Array(a)) => {
             a.push(value);
@@ -54,18 +32,19 @@ fn add_maybe_array(output: &mut serde_json::Value, key: String, value: serde_jso
 /// Parse a multipart form submission into the specified type and a list of files uploaded with it.
 pub async fn parse_multipart(
     req: Request<Body>,
-) -> Result<(serde_json::Value, Vec<FileUpload>), FormOrJsonRejection> {
+) -> Result<(serde_json::Value, Vec<FileUpload>), Rejection> {
     let mut output = json!({});
     let mut files = Vec::new();
 
-    let mut multipart = Multipart::from_request(req, &())
+    let mut multipart = axum_extra::extract::multipart::Multipart::from_request(req, &())
         .await
-        .map_err(FormOrJsonRejection::Multipart)?;
+        .map_err(Rejection::Multipart)?;
 
     while let Some(field) = multipart.next_field().await? {
         let content_type = ContentType::new(field.content_type().unwrap_or_default());
-        println!("content_type: {}", content_type);
+
         if let Some(filename) = field.file_name() {
+            // If there's a file name, it's always a file.
             let content_type = content_type.to_string();
             let name = field.name().map(|s| s.to_string()).unwrap_or_default();
             let filename = filename.to_string();
@@ -90,8 +69,7 @@ pub async fn parse_multipart(
             let field_name = field.name().map(|s| s.to_string());
             let data = field.bytes().await?;
             let mut jd = serde_json::Deserializer::from_slice(&data);
-            let val =
-                serde_path_to_error::deserialize(&mut jd).map_err(FormOrJsonRejection::Serde)?;
+            let val = serde_path_to_error::deserialize(&mut jd).map_err(Rejection::Serde)?;
             if let Some(name) = field_name {
                 output[name] = val;
             } else {
@@ -100,11 +78,43 @@ pub async fn parse_multipart(
         } else if let Some(name) = field.name() {
             let name = name.to_string();
             let data = field.text().await?;
-            add_maybe_array(&mut output, name, json!(data));
+            coerce_and_push_array(&mut output, name, json!(data));
         }
     }
 
     Ok((output, files))
+}
+
+/// Extract a multipart form submission and perform JSON schema validation.
+/// The `data` field contains all the non-file submissions, and the uploaded files
+/// are placed in the `files` field.
+pub struct Multipart<T>
+where
+    T: DeserializeOwned + JsonSchema + Debug + Send + Sync + 'static,
+{
+    /// The non-file data
+    pub data: T,
+    /// The files attached to the request.
+    pub files: Vec<FileUpload>,
+}
+
+#[async_trait]
+impl<S, T> FromRequest<S> for Multipart<T>
+where
+    S: Send + Sync,
+    T: DeserializeOwned + JsonSchema + Debug + Send + Sync + 'static,
+{
+    type Rejection = Rejection;
+
+    async fn from_request(req: Request<Body>, _: &S) -> Result<Self, Self::Rejection> {
+        let (mut data, files) = parse_multipart(req).await?;
+
+        super::json_schema::validate::<T>(&mut data, true).map_err(Rejection::Validation)?;
+
+        let data = serde_path_to_error::deserialize(data).map_err(Rejection::Serde)?;
+
+        Ok(Self { data, files })
+    }
 }
 
 #[cfg(test)]

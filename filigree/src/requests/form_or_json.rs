@@ -1,85 +1,33 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Deref};
 
 use async_trait::async_trait;
 use axum::{
     body::Body,
-    extract::{rejection::JsonRejection, FromRequest, Request},
-    response::IntoResponse,
+    extract::{FromRequest, Request},
     Json,
 };
-use axum_extra::extract::{
-    multipart::{Multipart, MultipartError, MultipartRejection},
-    Form, FormRejection,
-};
-use hyper::StatusCode;
+use axum_extra::extract::Form;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
-use serde_json::json;
 
-use super::{file::FileUpload, json_schema::SchemaErrors, ContentType};
+use super::{ContentType, Rejection};
 
+/// Extract a body from either JSON or form submission, and perform JSON schema validation.
 #[derive(Debug)]
-pub enum FormOrJsonRejection {
-    Validation(SchemaErrors),
-    Json(JsonRejection),
-    Form(FormRejection),
-    Multipart(MultipartRejection),
-    MultipartField(MultipartError),
-    HtmlForm(serde_html_form::de::Error),
-    Serde(serde_path_to_error::Error<serde_json::Error>),
-    MissingData,
-    UnknownContentType,
-}
-
-impl From<MultipartError> for FormOrJsonRejection {
-    fn from(err: MultipartError) -> Self {
-        FormOrJsonRejection::MultipartField(err)
-    }
-}
-
-impl From<serde_html_form::de::Error> for FormOrJsonRejection {
-    fn from(err: serde_html_form::de::Error) -> Self {
-        FormOrJsonRejection::HtmlForm(err)
-    }
-}
-
-impl From<serde_path_to_error::Error<serde_json::Error>> for FormOrJsonRejection {
-    fn from(err: serde_path_to_error::Error<serde_json::Error>) -> Self {
-        FormOrJsonRejection::Serde(err)
-    }
-}
-
-impl IntoResponse for FormOrJsonRejection {
-    fn into_response(self) -> axum::response::Response {
-        match self {
-            FormOrJsonRejection::Validation(inner) => {
-                // Put together a proper format here
-                todo!()
-            }
-            FormOrJsonRejection::Form(inner) => inner.into_response(),
-            FormOrJsonRejection::Json(inner) => inner.into_response(),
-            FormOrJsonRejection::Multipart(inner) => inner.into_response(),
-            FormOrJsonRejection::MultipartField(inner) => {
-                todo!()
-            }
-            FormOrJsonRejection::HtmlForm(inner) => {
-                todo!()
-            }
-            FormOrJsonRejection::Serde(inner) => {
-                // TODO common format between this and Validation
-                (StatusCode::BAD_REQUEST, inner.to_string()).into_response()
-            }
-            FormOrJsonRejection::UnknownContentType => {
-                (StatusCode::BAD_REQUEST, "Unknown content type").into_response()
-            }
-            FormOrJsonRejection::MissingData => todo!(),
-        }
-    }
-}
-
 pub struct FormOrJson<T>(pub T)
 where
     T: Debug + JsonSchema + DeserializeOwned;
+
+impl<T> Deref for FormOrJson<T>
+where
+    T: Debug + JsonSchema + DeserializeOwned,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[async_trait]
 impl<T, S> FromRequest<S> for FormOrJson<T>
@@ -87,7 +35,7 @@ where
     T: Debug + JsonSchema + DeserializeOwned + 'static,
     S: Sync + Send,
 {
-    type Rejection = FormOrJsonRejection;
+    type Rejection = Rejection;
 
     async fn from_request(req: Request<Body>, _state: &S) -> Result<Self, Self::Rejection> {
         let content_type = ContentType::new(
@@ -102,24 +50,92 @@ where
             let value = Json::<serde_json::Value>::from_request(req, _state)
                 .await
                 .map(|json| FormOrJson(json.0))
-                .map_err(FormOrJsonRejection::Json)?
+                .map_err(Rejection::Json)?
                 .0;
             (value, false)
         } else if content_type.is_form() {
             let value = Form::<serde_json::Value>::from_request(req, _state)
                 .await
-                .map_err(FormOrJsonRejection::Form)?
+                .map_err(Rejection::Form)?
                 .0;
             (value, true)
         } else {
-            return Err(FormOrJsonRejection::UnknownContentType);
+            return Err(Rejection::UnknownContentType);
         };
 
         super::json_schema::validate::<T>(&mut value, coerce_arrays)
-            .map_err(FormOrJsonRejection::Validation)?;
+            .map_err(Rejection::Validation)?;
 
         serde_path_to_error::deserialize(value)
             .map(FormOrJson)
-            .map_err(FormOrJsonRejection::Serde)
+            .map_err(Rejection::Serde)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use schemars::JsonSchema;
+    use serde::Deserialize;
+
+    use super::*;
+
+    #[derive(Deserialize, Debug, PartialEq, Eq, JsonSchema)]
+    #[serde(untagged)]
+    enum NumOrBool {
+        Num(i32),
+        Bool(bool),
+    }
+
+    #[derive(Deserialize, JsonSchema, Debug, PartialEq, Eq)]
+    struct Data {
+        s: String,
+        s_vec1: Vec<String>,
+        s_vec2: Vec<String>,
+        i: i32,
+        i_vec1: Vec<i32>,
+        i_vec2: Vec<i32>,
+        nob_n: NumOrBool,
+        nob_b: NumOrBool,
+        nob_vec: Vec<NumOrBool>,
+        b: bool,
+        b_omitted: bool,
+        ob: Option<bool>,
+        b_vec1: Vec<bool>,
+        b_vec2: Vec<bool>,
+    }
+
+    #[tokio::test]
+    async fn extract_from_json() {}
+
+    #[tokio::test]
+    async fn extract_from_form() {
+        let body = "s=a&s_vec1=a&s_vec2=a&s_vec2=b&i=1&i_vec1=1&i_vec2=1&i_vec2=2&nob_n=1&nob_b=on&nob_vec=1&nob_vec=on&b=true&b_vec1=true&b_vec2=on&b_vec2=false";
+        let data = hyper::Request::builder()
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("content-length", body.len())
+            .body(axum::body::Body::from(body))
+            .unwrap();
+
+        let data = FormOrJson::<Data>::from_request(data, &()).await.unwrap();
+
+        assert_eq!(
+            data.0,
+            Data {
+                s: "a".to_string(),
+                s_vec1: vec!["a".to_string()],
+                s_vec2: vec!["a".to_string(), "b".to_string()],
+                i: 1,
+                i_vec1: vec![1],
+                i_vec2: vec![1, 2],
+                nob_n: NumOrBool::Num(1),
+                nob_b: NumOrBool::Bool(true),
+                nob_vec: vec![NumOrBool::Num(1), NumOrBool::Bool(true)],
+                b: true,
+                b_omitted: false,
+                ob: Some(true),
+                b_vec1: vec![true],
+                b_vec2: vec![true, false],
+            }
+        )
     }
 }

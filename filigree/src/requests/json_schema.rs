@@ -1,4 +1,4 @@
-// Code in this file inspired by [axum-jsonschema](https://github.com/tamasfe/aide/blob/master/crates/axum-jsonschema/src/lib.rs)
+// Schema caching code in this file originally inspired by [axum-jsonschema](https://github.com/tamasfe/aide/blob/master/crates/axum-jsonschema/src/lib.rs).
 
 use std::{
     any::TypeId,
@@ -12,26 +12,104 @@ use jsonschema::{
 };
 use schemars::{
     gen::{SchemaGenerator, SchemaSettings},
-    schema::{InstanceType, RootSchema, Schema, SingleOrVec},
+    schema::{InstanceType, RootSchema, Schema, SchemaObject, SingleOrVec},
     JsonSchema,
 };
+use serde_json::Number;
 
 thread_local! {
     static SCHEMAS: RefCell<Schemas> = RefCell::new(Schemas::new());
 }
 
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
+enum CoerceOp {
+    #[default]
+    // Don't coerce the value
+    None,
+    // Coerce the value's type
+    Singleton,
+    // Coerce the value's type and make sure it's an array
+    Array,
+}
+
+impl CoerceOp {
+    fn new(coerce: bool, array: bool) -> Self {
+        match (coerce, array) {
+            (true, true) => CoerceOp::Array,
+            (true, false) => CoerceOp::Singleton,
+            _ => CoerceOp::None,
+        }
+    }
+
+    // Combine this CoerceOp with another. When two ops combine and one is an array, the output is
+    // Singleton because that means that we don't have to coerce it into an array for validation to
+    // pass.
+    fn extend(&mut self, other: &CoerceOp) {
+        match (&self, other) {
+            (CoerceOp::None, a) => {
+                *self = *a;
+            }
+            (CoerceOp::Singleton, _) => {}
+            (CoerceOp::Array, CoerceOp::Singleton) => {
+                *self = CoerceOp::Singleton;
+            }
+            (CoerceOp::Array, _) => {}
+        }
+    }
+
+    // Create a version of this op, filtered on if array coercion is allowed in the caller's
+    // context.
+    fn with_array(&self, allow_array: bool) -> Self {
+        match (self, allow_array) {
+            (CoerceOp::Array, false) => CoerceOp::Singleton,
+            _ => *self,
+        }
+    }
+
+    fn is_none(&self) -> bool {
+        matches!(self, CoerceOp::None)
+    }
+
+    fn is_singleton(&self) -> bool {
+        matches!(self, CoerceOp::Singleton)
+    }
+
+    fn is_array(&self) -> bool {
+        matches!(self, CoerceOp::Array)
+    }
+
+    fn coerce_singleton_or_array(&self, output: &mut serde_json::Value, input: serde_json::Value) {
+        if self.is_array() {
+            *output = serde_json::Value::Array(vec![input]);
+        } else if self.is_singleton() {
+            *output = input;
+        }
+    }
+}
+
 #[derive(Debug, Default, PartialEq, Eq)]
 struct CoerceTo {
-    number: bool,
-    boolean: bool,
+    number: CoerceOp,
+    integer: CoerceOp,
+    boolean: CoerceOp,
+    string: CoerceOp,
 }
 
 impl CoerceTo {
-    fn from_instance_types(t: &SingleOrVec<InstanceType>) -> Self {
+    fn from_instance_types(t: &SingleOrVec<InstanceType>, array: bool) -> Self {
         Self {
-            number: t.contains(&InstanceType::Number),
-            boolean: t.contains(&InstanceType::Boolean),
+            number: CoerceOp::new(t.contains(&InstanceType::Number), array),
+            integer: CoerceOp::new(t.contains(&InstanceType::Integer), array),
+            boolean: CoerceOp::new(t.contains(&InstanceType::Boolean), array),
+            string: CoerceOp::new(t.contains(&InstanceType::String), array),
         }
+    }
+
+    fn extend(&mut self, other: &CoerceTo) {
+        self.number.extend(&other.number);
+        self.integer.extend(&other.integer);
+        self.boolean.extend(&other.boolean);
+        self.string.extend(&other.string);
     }
 
     fn into_option(self) -> Option<Self> {
@@ -43,31 +121,14 @@ impl CoerceTo {
     }
 
     fn is_empty(&self) -> bool {
-        !(self.number || self.boolean)
-    }
-
-    /// Try to coerce a string value to a number
-    fn coerce_to_number(&self, input: &mut serde_json::Value) {
-        match input {
-            serde_json::Value::String(s) => {
-                if s.contains('.') {
-                    let n = s.parse::<f64>().ok().and_then(serde_json::Number::from_f64);
-                    if let Some(number) = n {
-                        *input = serde_json::Value::Number(number);
-                    }
-                } else {
-                    let n = s.parse::<i64>().ok();
-                    if let Some(number) = n {
-                        *input = serde_json::Value::Number(number.into());
-                    }
-                }
-            }
-            _ => {}
-        }
+        self.number.is_none()
+            && self.integer.is_none()
+            && self.boolean.is_none()
+            && !self.string.is_array()
     }
 
     /// Coerce from string to boolean, accounting for values that come from forms
-    fn coerce_to_boolean(&self, input: &mut serde_json::Value) {
+    fn coerce_to_boolean(&self, op: CoerceOp, input: &mut serde_json::Value) {
         match input {
             serde_json::Value::String(s) => {
                 let value = match s.as_str() {
@@ -80,39 +141,84 @@ impl CoerceTo {
                     }
                 };
 
-                *input = serde_json::Value::Bool(value);
+                op.coerce_singleton_or_array(input, serde_json::Value::Bool(value));
             }
             _ => {}
         }
     }
 
-    fn coerce(&self, input: &mut serde_json::Value) {
-        if self.number {
-            self.coerce_to_number(input);
+    fn coerce_to_integer(&self, op: CoerceOp, input: &mut serde_json::Value) {
+        match input {
+            serde_json::Value::String(s) => {
+                let n = s.parse::<i64>().ok();
+                if let Some(number) = n {
+                    op.coerce_singleton_or_array(input, serde_json::Value::Number(number.into()));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn coerce_to_number(&self, op: CoerceOp, input: &mut serde_json::Value) {
+        match input {
+            serde_json::Value::String(s) => {
+                if s.contains('.') {
+                    let n = s.parse::<f64>().ok().and_then(Number::from_f64);
+                    if let Some(number) = n {
+                        op.coerce_singleton_or_array(input, serde_json::Value::Number(number));
+                    }
+                } else {
+                    let n = s.parse::<i64>().ok();
+                    if let Some(number) = n {
+                        op.coerce_singleton_or_array(
+                            input,
+                            serde_json::Value::Number(number.into()),
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn coerce(&self, input: &mut serde_json::Value, do_array_coercion: bool) {
+        if !self.number.is_none() {
+            self.coerce_to_number(self.number.with_array(do_array_coercion), input);
+        } else if !self.integer.is_none() {
+            self.coerce_to_integer(self.integer.with_array(do_array_coercion), input);
         }
 
-        if self.boolean {
-            self.coerce_to_boolean(input);
+        if !self.boolean.is_none() {
+            self.coerce_to_boolean(self.boolean.with_array(do_array_coercion), input);
+        }
+
+        // Everything is a string already, so only do array coercion for strings.
+        if do_array_coercion && input.is_string() && self.string.is_array() {
+            *input = serde_json::Value::Array(vec![input.take()]);
         }
     }
 }
 
+#[derive(Debug)]
 struct FieldInfo {
     name: String,
     required: bool,
-    array: bool,
     coerce: CoerceTo,
 }
 
 impl FieldInfo {
+    // Browsers omit checkboxes completely if they are not checked, so supply `false` or vec![] if the
+    // validator is expecting a value.
     fn coerce_none(&self) -> Option<serde_json::Value> {
         if !self.required {
             return None;
         }
 
-        self.coerce
-            .boolean
-            .then_some(serde_json::Value::Bool(false))
+        match self.coerce.boolean {
+            CoerceOp::Singleton => Some(serde_json::Value::Bool(false)),
+            CoerceOp::Array => Some(serde_json::Value::Array(vec![])),
+            CoerceOp::None => None,
+        }
     }
 }
 
@@ -156,24 +262,21 @@ pub fn validate<T: JsonSchema + 'static>(
             .or_insert_with(|| compile_schema(sch.generator.root_schema_for::<T>()));
 
         if coerce_values {
-            // The format this was serialized from can't distinguish between singletons and single element
-            // arrays, so coerce them according to the schema.
+            // When a browser submits a form, everything is a string and there's no distinction between singletons
+            // and single-element arrays. This code attempts to match the submitted data to the
+            // actual format. It specifically only attempts to handle HTML form submissions, rather
+            // than every possible input.
             for field in &schema.coerce_fields {
                 if let Some(data) = input.get_mut(&field.name) {
                     match data {
                         serde_json::Value::Array(a) => {
                             for v in a {
-                                field.coerce.coerce(v);
+                                field.coerce.coerce(v, false);
                             }
                         }
                         serde_json::Value::Null => {}
-                        // Wrap everything else in an array
                         _ => {
-                            field.coerce.coerce(data);
-                            if field.array {
-                                let v = data.take();
-                                *data = serde_json::Value::Array(vec![v]);
-                            }
+                            field.coerce.coerce(data, true);
                         }
                     }
                 } else if let Some(none_value) = field.coerce_none() {
@@ -197,44 +300,12 @@ fn compile_schema(input: RootSchema) -> SchemaInfo {
         .map(|root| {
             root.properties
                 .iter()
-                .filter_map(|(name, s)| match s {
-                    Schema::Object(o) => {
-                        let required = root.required.contains(name);
-                        let (is_array, coerce_to) = o
-                            .instance_type
-                            .as_ref()
-                            .map(|t| {
-                                let string = t.contains(&InstanceType::String);
-                                if string {
-                                    return (false, CoerceTo::default());
-                                }
-                                let c = CoerceTo::from_instance_types(t);
-                                if !c.is_empty() || !t.contains(&InstanceType::Array) {
-                                    (false, c)
-                                } else {
-                                    let coerce_to = o
-                                        .array
-                                        .as_ref()
-                                        .and_then(|a| a.items.as_ref())
-                                        .and_then(get_coerce_type_from_array_items)
-                                        .unwrap_or_else(CoerceTo::default);
-                                    (true, coerce_to)
-                                }
-                            })
-                            .unwrap_or((false, CoerceTo::default()));
-
-                        if is_array || !coerce_to.is_empty() {
-                            Some(FieldInfo {
-                                name: name.to_string(),
-                                required,
-                                array: is_array,
-                                coerce: coerce_to,
-                            })
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
+                .filter_map(|(name, s)| {
+                    get_coerce_type_from_schema(s, false).map(|ct| FieldInfo {
+                        name: name.to_string(),
+                        required: root.required.contains(name),
+                        coerce: ct,
+                    })
                 })
                 .collect::<Vec<_>>()
         })
@@ -251,25 +322,337 @@ fn compile_schema(input: RootSchema) -> SchemaInfo {
     }
 }
 
+/// When there are multiple subschemas for a field, combine the coercion info from them all.
+fn get_coerce_type_from_subschemas(ss: &[Schema], array: bool) -> Option<CoerceTo> {
+    let mut ct = CoerceTo::default();
+
+    for schema in ss {
+        if let Some(c) = get_coerce_type_from_schema(schema, array) {
+            ct.extend(&c);
+        }
+    }
+
+    ct.into_option()
+}
+
+/// Get the schemas from an array's items.
 fn get_coerce_type_from_array_items(items: &SingleOrVec<Schema>) -> Option<CoerceTo> {
     match items {
-        SingleOrVec::Single(schema) => get_coerce_type_from_schema(schema),
-        SingleOrVec::Vec(schemas) => schemas.iter().find_map(get_coerce_type_from_schema),
+        SingleOrVec::Single(schema) => get_coerce_type_from_schema(schema, true),
+        SingleOrVec::Vec(schemas) => schemas
+            .iter()
+            .find_map(|s| get_coerce_type_from_schema(s, true)),
     }
 }
 
-fn get_coerce_type_from_schema(schema: &Schema) -> Option<CoerceTo> {
-    match schema {
-        Schema::Object(o) => o.instance_type.as_ref().and_then(|t| {
-            if t.contains(&InstanceType::String) {
-                return None;
-            }
+/// Get the coercion info from a schema object, accounting for it using the "type" field
+/// or "anyOf" or "oneOf".
+fn get_coerce_type_from_schema_object(o: &SchemaObject, array: bool) -> Option<CoerceTo> {
+    o.instance_type
+        .as_ref()
+        .and_then(|t| CoerceTo::from_instance_types(t, array).into_option())
+        .or_else(|| {
+            o.subschemas.as_ref().and_then(|ss| {
+                ss.any_of
+                    .as_deref()
+                    .and_then(|s| get_coerce_type_from_subschemas(s, array))
+                    .or_else(|| {
+                        ss.one_of
+                            .as_deref()
+                            .and_then(|s| get_coerce_type_from_subschemas(s, array))
+                    })
+            })
+        })
+}
 
-            CoerceTo::from_instance_types(t).into_option()
-        }),
+/// Get the coercion info from a field's schema.
+fn get_coerce_type_from_schema(schema: &Schema, array: bool) -> Option<CoerceTo> {
+    match schema {
+        Schema::Object(o) => {
+            if let Some(ct) = get_coerce_type_from_schema_object(o, array) {
+                Some(ct)
+            } else if let Some(array) = o.array.as_ref() {
+                let ct = array
+                    .items
+                    .as_ref()
+                    .and_then(get_coerce_type_from_array_items)
+                    .unwrap_or_else(CoerceTo::default);
+                Some(ct)
+            } else {
+                None
+            }
+        }
         _ => None,
     }
 }
 
 #[cfg(test)]
-mod test {}
+#[allow(dead_code)]
+mod test {
+    use serde::Deserialize;
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn strings() {
+        #[derive(Deserialize, JsonSchema, Debug, PartialEq, Eq)]
+        struct Data {
+            s: String,
+            s_vec1: Vec<String>,
+            s_vec2: Vec<String>,
+            s_vec3: Vec<String>,
+        }
+
+        let mut data = json!({
+            "s": "foo",
+            "s_vec1": "foo",
+            "s_vec2": "foo",
+            "s_vec3": ["foo", "bar"],
+        });
+
+        let res = validate::<Data>(&mut data, true);
+        println!("{res:#?}");
+        res.unwrap();
+        assert_eq!(
+            data,
+            json!({
+                "s": "foo",
+                "s_vec1": ["foo"],
+                "s_vec2": ["foo"],
+                "s_vec3": ["foo", "bar"],
+            })
+        )
+    }
+
+    #[derive(Debug, PartialEq, Eq, JsonSchema)]
+    #[serde(untagged)]
+    enum NumOrBool {
+        Num(i32),
+        Bool(bool),
+    }
+
+    #[derive(Debug, PartialEq, Eq, JsonSchema)]
+    #[serde(untagged)]
+    enum NumVecOrBool {
+        Num(Vec<i32>),
+        Bool(bool),
+    }
+
+    #[derive(Debug, PartialEq, Eq, JsonSchema)]
+    #[serde(untagged)]
+    enum NumOrBoolVec {
+        Num(i32),
+        Bool(Vec<bool>),
+    }
+
+    #[derive(Debug, PartialEq, Eq, JsonSchema)]
+    #[serde(untagged)]
+    enum NumVecOrBoolVec {
+        Num(Vec<i32>),
+        Bool(Vec<bool>),
+    }
+
+    #[test]
+    fn num_or_bool() {
+        #[derive(JsonSchema, Debug, PartialEq, Eq)]
+        struct Data {
+            nob_n: NumOrBool,
+            nob_b: NumOrBool,
+            nob_b_option: Option<NumOrBool>,
+            nob_b_omitted: NumOrBool,
+            nob_v1: Vec<NumOrBool>,
+            nob_v2: Vec<NumOrBool>,
+            nob_v3: Vec<NumOrBool>,
+        }
+
+        let mut data = json!({
+            "nob_n": "1",
+            "nob_b": "on",
+            "nob_v1": "1",
+            "nob_v2": "on",
+            "nob_v3": ["on", 1, 23],
+        });
+
+        let res = validate::<Data>(&mut data, true);
+        println!("{res:#?}");
+        println!("{data:#?}");
+        res.unwrap();
+        assert_eq!(
+            data,
+            json!({
+                "nob_n": 1,
+                "nob_b": true,
+                "nob_b_omitted": false,
+                "nob_v1": [1],
+                "nob_v2": [true],
+                "nob_v3": [true, 1, 23],
+            })
+        )
+    }
+
+    #[test]
+    fn num_vec_or_bool_vec() {
+        #[derive(JsonSchema, Debug, PartialEq, Eq)]
+        struct Data {
+            b1: NumVecOrBoolVec,
+            n1: NumVecOrBoolVec,
+            b2: NumVecOrBoolVec,
+            n2: NumVecOrBoolVec,
+        }
+
+        let mut data = json!({
+            "b1": "on",
+            "n1": "1",
+            "b2": ["on", "on"],
+            "n2": ["1", "2"],
+        });
+
+        let res = validate::<Data>(&mut data, true);
+        println!("{res:#?}");
+        println!("{data:#?}");
+        res.unwrap();
+        assert_eq!(
+            data,
+            json!({
+                "b1": [true],
+                "n1": [1],
+                "b2": [true, true],
+                "n2": [1, 2],
+            })
+        );
+    }
+
+    #[test]
+    fn num_or_bool_vec() {
+        #[derive(JsonSchema, Debug, PartialEq, Eq)]
+        struct Data {
+            n: NumOrBoolVec,
+            b1: NumOrBoolVec,
+            b2: NumOrBoolVec,
+        }
+
+        let mut data = json!({
+            "n": "1",
+            "b1": "on",
+            "b2": ["on", "on"],
+        });
+
+        let res = validate::<Data>(&mut data, true);
+        println!("{res:#?}");
+        println!("{data:#?}");
+        res.unwrap();
+        assert_eq!(
+            data,
+            json!({
+                "n": 1,
+                "b1": [true],
+                "b2": [true, true],
+            })
+        );
+    }
+
+    #[test]
+    fn coerce_none() {
+        #[derive(JsonSchema, Debug, PartialEq, Eq)]
+        struct Data {
+            b: bool,
+            bv: Vec<bool>,
+        }
+
+        let mut data = json!({});
+
+        let res = validate::<Data>(&mut data, true);
+        println!("{res:#?}");
+        println!("{data:#?}");
+        res.unwrap();
+        assert_eq!(
+            data,
+            json!({
+                "b": false,
+                "bv": [],
+            })
+        );
+    }
+
+    #[test]
+    fn comprehensive_coerce() {
+        #[derive(JsonSchema, Debug, PartialEq, Eq)]
+        struct Data {
+            s: String,
+            s_vec1: Vec<String>,
+            s_vec2: Vec<String>,
+            i: i32,
+            i_vec1: Vec<i32>,
+            i_vec2: Vec<i32>,
+            nob_n: NumOrBool,
+            nob_b: NumOrBool,
+            nob_vec1: Vec<NumOrBool>,
+            nob_vec2: Vec<NumOrBool>,
+            nobv1: NumOrBoolVec,
+            nobv2: NumOrBoolVec,
+            nvob1: NumVecOrBool,
+            nvob2: NumVecOrBool,
+            nvobv1: NumVecOrBoolVec,
+            nvobv2: NumVecOrBoolVec,
+            b: bool,
+            b_omitted: bool,
+            ob: Option<bool>,
+            b_vec1: Vec<bool>,
+            b_vec2: Vec<bool>,
+        }
+
+        let mut data = json!({
+            "s": "a",
+            "s_vec1": "a",
+            "s_vec2": ["a", "b"],
+            "i": "1",
+            "i_vec1": "1",
+            "i_vec2": ["1", "2"],
+            "nob_n": "1",
+            "nob_b": "on",
+            "nob_vec1": "1",
+            "nob_vec2": ["1", "on"],
+            "nobv1": "1",
+            "nobv2": "on",
+            "nvob1": "1",
+            "nvob2": "on",
+            "nvobv1": "1",
+            "nvobv2": "on",
+            "b": "on",
+            "b_vec1": "on",
+            "b_vec2": ["on", "false"]
+        });
+
+        let res = validate::<Data>(&mut data, true);
+        println!("{res:#?}");
+        println!("{data:#?}");
+        res.unwrap();
+
+        assert_eq!(
+            data,
+            json!({
+                "s": "a",
+                "s_vec1": ["a"],
+                "s_vec2": ["a", "b"],
+                "i": 1,
+                "i_vec1": [1],
+                "i_vec2": [1, 2],
+                "nob_n": 1,
+                "nob_b": true,
+                "nob_vec1": [1],
+                "nob_vec2": [1, true],
+                "nobv1": 1,
+                "nobv2": [true],
+                "nvob1": [1],
+                "nvob2": true,
+                "nvobv1": [1],
+                "nvobv2": [true],
+                "b": true,
+                "b_omitted": false,
+                "b_vec1": [true],
+                "b_vec2": [true, false]
+            })
+        );
+    }
+}
