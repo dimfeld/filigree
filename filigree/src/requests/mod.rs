@@ -13,6 +13,7 @@ pub mod file;
 pub mod form_or_json;
 pub mod json_schema;
 pub mod multipart;
+pub mod urlencoded;
 
 #[derive(Debug, Clone)]
 pub struct ContentType<'a>(pub Cow<'a, str>);
@@ -40,11 +41,11 @@ impl<'a> ContentType<'a> {
 #[derive(Debug)]
 pub enum Rejection {
     Validation(SchemaErrors),
+    ReadBody(axum::Error),
     Json(JsonRejection),
     Form(FormRejection),
     Multipart(MultipartRejection),
     MultipartField(MultipartError),
-    HtmlForm(serde_html_form::de::Error),
     Serde(serde_path_to_error::Error<serde_json::Error>),
     MissingData,
     UnknownContentType,
@@ -53,12 +54,6 @@ pub enum Rejection {
 impl From<MultipartError> for Rejection {
     fn from(err: MultipartError) -> Self {
         Rejection::MultipartField(err)
-    }
-}
-
-impl From<serde_html_form::de::Error> for Rejection {
-    fn from(err: serde_html_form::de::Error) -> Self {
-        Rejection::HtmlForm(err)
     }
 }
 
@@ -75,13 +70,13 @@ impl IntoResponse for Rejection {
                 // Put together a proper format here
                 todo!()
             }
+            Rejection::ReadBody(inner) => {
+                todo!()
+            }
             Rejection::Form(inner) => inner.into_response(),
             Rejection::Json(inner) => inner.into_response(),
             Rejection::Multipart(inner) => inner.into_response(),
             Rejection::MultipartField(inner) => {
-                todo!()
-            }
-            Rejection::HtmlForm(inner) => {
                 todo!()
             }
             Rejection::Serde(inner) => {

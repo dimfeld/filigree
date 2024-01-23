@@ -11,6 +11,7 @@ use serde_json::json;
 
 use super::{
     file::{FileData, FileUpload},
+    urlencoded::value_from_urlencoded,
     ContentType, Rejection,
 };
 
@@ -59,7 +60,7 @@ pub async fn parse_multipart(
         } else if content_type.is_form() {
             let field_name = field.name().map(|s| s.to_string());
             let data = field.bytes().await?;
-            let val = serde_html_form::from_bytes(&data)?;
+            let val = value_from_urlencoded(&data);
             if let Some(name) = field_name {
                 output[name] = val;
             } else {

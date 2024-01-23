@@ -11,6 +11,7 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 
 use super::{ContentType, Rejection};
+use crate::requests::urlencoded::value_from_urlencoded;
 
 /// Extract a body from either JSON or form submission, and perform JSON schema validation.
 #[derive(Debug)]
@@ -54,10 +55,10 @@ where
                 .0;
             (value, false)
         } else if content_type.is_form() {
-            let value = Form::<serde_json::Value>::from_request(req, _state)
+            let bytes = axum::body::to_bytes(req.into_body(), 1048576)
                 .await
-                .map_err(Rejection::Form)?
-                .0;
+                .map_err(Rejection::ReadBody)?;
+            let value = value_from_urlencoded(&bytes);
             (value, true)
         } else {
             return Err(Rejection::UnknownContentType);
@@ -132,7 +133,7 @@ mod test {
                 nob_vec: vec![NumOrBool::Num(1), NumOrBool::Bool(true)],
                 b: true,
                 b_omitted: false,
-                ob: Some(true),
+                ob: None,
                 b_vec1: vec![true],
                 b_vec2: vec![true, false],
             }
