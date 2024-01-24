@@ -12,7 +12,7 @@ use jsonschema::{
 };
 use schemars::{
     gen::{SchemaGenerator, SchemaSettings},
-    schema::{InstanceType, RootSchema, Schema, SchemaObject, SingleOrVec},
+    schema::{InstanceType, RootSchema, SingleOrVec},
     JsonSchema,
 };
 use serde::Serialize;
@@ -247,6 +247,35 @@ impl Schemas {
 /// Errors returned from JSON schema validation
 pub type SchemaErrors = VecDeque<OutputUnit<ErrorDescription>>;
 
+/// Validation errors, formatted for return to the client
+#[derive(Debug, Serialize)]
+pub struct ValidationErrorResponse {
+    /// Validation messages not specific to a particular field.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<String>,
+    /// Validation messages for particular fields. For nested fields, the paths are in
+    /// JSON Pointer format.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, Vec<String>>,
+}
+
+impl From<SchemaErrors> for ValidationErrorResponse {
+    fn from(value: SchemaErrors) -> Self {
+        let mut result = ValidationErrorResponse {
+            messages: vec![],
+            fields: BTreeMap::default(),
+        };
+
+        for err in value {
+            let field = err.instance_location().to_string();
+            let message = err.error_description().to_string();
+            result.fields.entry(field).or_default().push(message);
+        }
+
+        result
+    }
+}
+
 /// Validate a JSON value against a JSON schema
 /// If `coerce_arrays` is true, non-array values will be coerced to `Vec<_>` if the schema
 /// specifies an array. This should be used when the original input format is not completely
@@ -303,7 +332,7 @@ fn compile_schema(input: RootSchema) -> SchemaInfo {
             root.properties
                 .iter()
                 .filter_map(|(name, s)| {
-                    get_coerce_type_from_schema(s, false).map(|ct| FieldInfo {
+                    get_coerce_type::get_coerce_type_from_schema(s, false).map(|ct| FieldInfo {
                         name: name.to_string(),
                         required: root.required.contains(name),
                         coerce: ct,
@@ -324,91 +353,71 @@ fn compile_schema(input: RootSchema) -> SchemaInfo {
     }
 }
 
-/// When there are multiple subschemas for a field, combine the coercion info from them all.
-fn get_coerce_type_from_subschemas(ss: &Option<Vec<Schema>>, array: bool) -> Option<CoerceTo> {
-    let Some(ss) = ss.as_deref() else {
-        return None;
-    };
+mod get_coerce_type {
+    use schemars::schema::{Schema, SchemaObject, SingleOrVec};
 
-    let mut ct = CoerceTo::default();
+    use super::CoerceTo;
 
-    for schema in ss {
-        if let Some(c) = get_coerce_type_from_schema(schema, array) {
-            ct.extend(&c);
-        }
-    }
-
-    ct.into_option()
-}
-
-/// Get the schemas from an array's items.
-fn get_coerce_type_from_array_items(items: &SingleOrVec<Schema>) -> Option<CoerceTo> {
-    match items {
-        SingleOrVec::Single(schema) => get_coerce_type_from_schema(schema, true),
-        SingleOrVec::Vec(schemas) => schemas
-            .iter()
-            .find_map(|s| get_coerce_type_from_schema(s, true)),
-    }
-}
-
-/// Get the coercion info from a schema object, accounting for it using the "type" field
-/// or "anyOf" or "oneOf".
-fn get_coerce_type_from_schema_object(o: &SchemaObject, array: bool) -> Option<CoerceTo> {
-    o.instance_type
-        .as_ref()
-        .and_then(|t| CoerceTo::from_instance_types(t, array).into_option())
-        .or_else(|| {
-            o.subschemas.as_ref().and_then(|ss| {
-                get_coerce_type_from_subschemas(&ss.any_of, array)
-                    .or_else(|| get_coerce_type_from_subschemas(&ss.one_of, array))
-            })
-        })
-}
-
-/// Get the coercion info from a field's schema.
-fn get_coerce_type_from_schema(schema: &Schema, array: bool) -> Option<CoerceTo> {
-    match schema {
-        Schema::Object(o) => {
-            if let Some(ct) = get_coerce_type_from_schema_object(o, array) {
-                Some(ct)
-            } else if let Some(array) = o.array.as_ref() {
-                let ct = array
-                    .items
-                    .as_ref()
-                    .and_then(get_coerce_type_from_array_items)
-                    .unwrap_or_else(CoerceTo::default);
-                Some(ct)
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct ValidationErrorResponse {
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub messages: Vec<String>,
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    pub fields: BTreeMap<String, Vec<String>>,
-}
-
-impl From<SchemaErrors> for ValidationErrorResponse {
-    fn from(value: SchemaErrors) -> Self {
-        let mut result = ValidationErrorResponse {
-            messages: vec![],
-            fields: BTreeMap::default(),
+    /// When there are multiple subschemas for a field, combine the coercion info from them all.
+    fn get_coerce_type_from_subschemas(ss: &Option<Vec<Schema>>, array: bool) -> Option<CoerceTo> {
+        let Some(ss) = ss.as_deref() else {
+            return None;
         };
 
-        for err in value {
-            let field = err.instance_location().to_string();
-            let message = err.error_description().to_string();
+        let mut ct = CoerceTo::default();
 
-            result.fields.entry(field).or_default().push(message);
+        for schema in ss {
+            if let Some(c) = get_coerce_type_from_schema(schema, array) {
+                ct.extend(&c);
+            }
         }
 
-        result
+        ct.into_option()
+    }
+
+    /// Get the schemas from an array's items.
+    fn get_coerce_type_from_array_items(items: &SingleOrVec<Schema>) -> Option<CoerceTo> {
+        match items {
+            SingleOrVec::Single(schema) => get_coerce_type_from_schema(schema, true),
+            SingleOrVec::Vec(schemas) => schemas
+                .iter()
+                .find_map(|s| get_coerce_type_from_schema(s, true)),
+        }
+    }
+
+    /// Get the coercion info from a schema object, accounting for it using the "type" field
+    /// or "anyOf" or "oneOf".
+    fn get_coerce_type_from_schema_object(o: &SchemaObject, array: bool) -> Option<CoerceTo> {
+        o.instance_type
+            .as_ref()
+            .and_then(|t| CoerceTo::from_instance_types(t, array).into_option())
+            .or_else(|| {
+                o.subschemas.as_ref().and_then(|ss| {
+                    get_coerce_type_from_subschemas(&ss.any_of, array)
+                        .or_else(|| get_coerce_type_from_subschemas(&ss.one_of, array))
+                })
+            })
+    }
+
+    /// Get the coercion info from a field's schema.
+    pub fn get_coerce_type_from_schema(schema: &Schema, array: bool) -> Option<CoerceTo> {
+        match schema {
+            Schema::Object(o) => {
+                if let Some(ct) = get_coerce_type_from_schema_object(o, array) {
+                    Some(ct)
+                } else if let Some(array) = o.array.as_ref() {
+                    let ct = array
+                        .items
+                        .as_ref()
+                        .and_then(get_coerce_type_from_array_items)
+                        .unwrap_or_else(CoerceTo::default);
+                    Some(ct)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 }
 
