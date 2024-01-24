@@ -21,9 +21,15 @@ mod root;
 mod state;
 mod templates;
 
+pub enum RenderedFileLocation {
+    Api,
+    Web,
+}
+
 pub struct RenderedFile {
     path: PathBuf,
     contents: Vec<u8>,
+    location: RenderedFileLocation,
 }
 
 #[derive(Parser)]
@@ -202,12 +208,10 @@ pub fn main() -> Result<(), Report<Error>> {
             .attach_printable(down_filename)?;
     }
 
-    let api_files = root_files
+    let (api_files, web_files): (Vec<_>, Vec<_>) = root_files
         .into_iter()
         .chain(model_files.into_iter().flatten())
-        .collect::<Vec<_>>();
-    // TODO
-    let web_files: Vec<RenderedFile> = vec![];
+        .partition(|f| matches!(f.location, RenderedFileLocation::Api));
 
     let filesets = [
         (api_files, &api_dir, &api_merge_tracker),
@@ -249,7 +253,30 @@ pub fn main() -> Result<(), Report<Error>> {
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let merge_files = merge_files.into_iter().flatten().collect::<Vec<_>>();
+    let mut model_mod_context = tera::Context::new();
+    model_mod_context.insert(
+        "models",
+        &all_model_contexts
+            .iter()
+            .map(|(_, v)| v)
+            .collect::<Vec<_>>(),
+    );
+
+    let models_main_mod_path = PathBuf::from("src/models/mod.rs");
+    let model_mod = renderer.render_with_full_path(
+        models_main_mod_path,
+        "model/main_mod.rs.tera",
+        RenderedFileLocation::Api,
+        &model_mod_context,
+    )?;
+
+    let models_output = api_merge_tracker.from_rendered_file(model_mod);
+
+    let merge_files = merge_files
+        .into_iter()
+        .flatten()
+        .chain([models_output])
+        .collect::<Vec<_>>();
 
     let mut conflict_files = merge_files
         .iter()
@@ -270,25 +297,6 @@ pub fn main() -> Result<(), Report<Error>> {
         .into_par_iter()
         .try_for_each(|file| file.write())
         .change_context(Error::WriteFile)?;
-
-    let mut model_mod_context = tera::Context::new();
-    model_mod_context.insert(
-        "models",
-        &all_model_contexts
-            .iter()
-            .map(|(_, v)| v)
-            .collect::<Vec<_>>(),
-    );
-
-    let models_main_mod_path = PathBuf::from("src/models/mod.rs");
-    let model_mod = renderer.render_with_full_path(
-        models_main_mod_path,
-        "model/main_mod.rs.tera",
-        &model_mod_context,
-    )?;
-
-    let models_output = api_merge_tracker.from_rendered_file(model_mod);
-    models_output.write().change_context(Error::WriteFile)?;
 
     Ok(())
 }

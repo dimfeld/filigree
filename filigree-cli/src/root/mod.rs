@@ -7,8 +7,8 @@ use rayon::prelude::*;
 
 use crate::{
     config::Config,
-    templates::{Renderer, RootTemplates},
-    Error, RenderedFile,
+    templates::{Renderer, RootApiTemplates, RootWebTemplates},
+    Error, RenderedFile, RenderedFileLocation,
 };
 
 pub fn render_files(
@@ -62,16 +62,19 @@ pub fn render_files(
 
     let base_path = PathBuf::from("src");
 
-    let files = RootTemplates::iter().collect::<Vec<_>>();
+    let files = RootApiTemplates::iter()
+        .map(|f| (RenderedFileLocation::Api, f))
+        .chain(RootWebTemplates::iter().map(|f| (RenderedFileLocation::Web, f)))
+        .collect::<Vec<_>>();
     let mut output = files
         .into_par_iter()
-        .filter(|file| file != "root/build.rs.tera" && file != "root/auth/fetch_base.sql.tera")
-        .map(|file| {
+        .filter(|(_, file)| file != "root/build.rs.tera" && file != "root/auth/fetch_base.sql.tera")
+        .map(|(location, file)| {
             let filename = file.strip_prefix("root/").unwrap();
             let filename = filename.strip_suffix(".tera").unwrap_or(filename);
 
             let path = base_path.join(filename);
-            renderer.render_with_full_path(path, &file, &context)
+            renderer.render_with_full_path(path, &file, location, &context)
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -79,6 +82,7 @@ pub fn render_files(
     let build_rs = renderer.render_with_full_path(
         PathBuf::from("build.rs"),
         "root/build.rs.tera",
+        RenderedFileLocation::Api,
         &context,
     )?;
     output.push(build_rs);

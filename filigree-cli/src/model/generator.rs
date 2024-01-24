@@ -8,7 +8,7 @@ use crate::{
     config::Config,
     migrations::SingleMigration,
     templates::{ModelRustTemplates, ModelSqlTemplates, Renderer},
-    Error, RenderedFile,
+    Error, RenderedFile, RenderedFileLocation,
 };
 
 pub struct ModelGenerator<'a> {
@@ -78,7 +78,12 @@ impl<'a> ModelGenerator<'a> {
 
     pub fn render_up_migration(&self) -> Result<Vec<u8>, Report<Error>> {
         self.renderer
-            .render(&PathBuf::new(), "model/migrate_up.sql.tera", &self.context)
+            .render(
+                &PathBuf::new(),
+                "model/migrate_up.sql.tera",
+                crate::RenderedFileLocation::Api,
+                &self.context,
+            )
             .map(|f| f.contents)
     }
 
@@ -87,6 +92,7 @@ impl<'a> ModelGenerator<'a> {
             .render(
                 &PathBuf::new(),
                 "model/migrate_down.sql.tera",
+                crate::RenderedFileLocation::Api,
                 &self.context,
             )
             .map(|f| f.contents)
@@ -118,7 +124,7 @@ impl<'a> ModelGenerator<'a> {
                     .unwrap();
                 let path = base_path.join(filename);
                 self.renderer
-                    .render_with_full_path(path, &file, &self.context)
+                    .render_with_full_path(path, &file, RenderedFileLocation::Api, &self.context)
                     .attach_printable_lazy(|| format!("Model {}", self.model.name))
             })
             .collect::<Result<Vec<_>, _>>()?;

@@ -9,7 +9,7 @@ use error_stack::{Report, ResultExt};
 use rust_embed::RustEmbed;
 use tera::{Tera, Value};
 
-use crate::{config::Config, Error, RenderedFile};
+use crate::{config::Config, Error, RenderedFile, RenderedFileLocation};
 
 pub struct Renderer<'a> {
     tera: Tera,
@@ -27,6 +27,7 @@ impl<'a> Renderer<'a> {
         &self,
         dir: &Path,
         template_name: &str,
+        location: RenderedFileLocation,
         context: &tera::Context,
     ) -> Result<RenderedFile, Report<Error>> {
         let path = dir.join(
@@ -34,7 +35,7 @@ impl<'a> Renderer<'a> {
                 .strip_suffix(".tera")
                 .expect("template name did not end with .tera"),
         );
-        self.render_with_full_path(path, template_name, context)
+        self.render_with_full_path(path, template_name, location, context)
     }
 
     /// Render a template with a precalculated path
@@ -42,6 +43,7 @@ impl<'a> Renderer<'a> {
         &self,
         path: PathBuf,
         template_name: &str,
+        location: RenderedFileLocation,
         context: &tera::Context,
     ) -> Result<RenderedFile, Report<Error>> {
         let output = self
@@ -62,14 +64,20 @@ impl<'a> Renderer<'a> {
         Ok(RenderedFile {
             path,
             contents: output,
+            location,
         })
     }
 }
 
 #[derive(RustEmbed)]
 #[prefix = "root/"]
-#[folder = "$CARGO_MANIFEST_DIR/src/root/templates"]
-pub struct RootTemplates;
+#[folder = "$CARGO_MANIFEST_DIR/src/root/web_templates"]
+pub struct RootWebTemplates;
+
+#[derive(RustEmbed)]
+#[prefix = "root/"]
+#[folder = "$CARGO_MANIFEST_DIR/src/root/api_templates"]
+pub struct RootApiTemplates;
 
 #[derive(RustEmbed)]
 #[prefix = "model/"]
@@ -80,6 +88,11 @@ pub struct ModelSqlTemplates;
 #[prefix = "model/"]
 #[folder = "$CARGO_MANIFEST_DIR/src/model/rust_templates/"]
 pub struct ModelRustTemplates;
+
+#[derive(RustEmbed)]
+#[prefix = "model/"]
+#[folder = "$CARGO_MANIFEST_DIR/src/model/web_templates/"]
+pub struct ModelWebTemplates;
 
 fn get_files<FILES: RustEmbed>() -> impl Iterator<Item = (String, Cow<'static, str>)> {
     FILES::iter().map(|f| {
@@ -96,9 +109,10 @@ fn get_files<FILES: RustEmbed>() -> impl Iterator<Item = (String, Cow<'static, s
 fn create_tera() -> Tera {
     let mut tera = Tera::default();
 
-    let template_files = get_files::<RootTemplates>()
+    let template_files = get_files::<RootApiTemplates>()
         .chain(get_files::<ModelRustTemplates>())
         .chain(get_files::<ModelSqlTemplates>())
+        .chain(get_files::<ModelWebTemplates>())
         .collect::<Vec<_>>();
     let res = tera.add_raw_templates(template_files);
 
