@@ -25,10 +25,6 @@ pub trait HttpError: ToString + std::fmt::Debug {
     /// The status code and data for this error. Most implementors of this trait will not
     /// need to override the default implementation.
     fn response_tuple(&self) -> (StatusCode, ErrorResponseData<Self::Detail>) {
-        let detail = self.error_detail();
-
-        let detail = (!detail.is_empty()).then_some(detail);
-
         (
             self.status_code(),
             ErrorResponseData::new(self.error_kind(), self.to_string(), self.error_detail()),

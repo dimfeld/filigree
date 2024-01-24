@@ -26,6 +26,8 @@ pub enum SessionError {
 }
 
 impl HttpError for SessionError {
+    type Detail = ();
+
     fn status_code(&self) -> StatusCode {
         match self {
             Self::Db => StatusCode::INTERNAL_SERVER_ERROR,
@@ -38,6 +40,10 @@ impl HttpError for SessionError {
             Self::Db => "db",
             Self::NotFound => "not_found",
         }
+    }
+
+    fn error_detail(&self) -> Self::Detail {
+        ()
     }
 }
 

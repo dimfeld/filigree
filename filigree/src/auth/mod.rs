@@ -85,6 +85,8 @@ impl AuthError {
 }
 
 impl HttpError for AuthError {
+    type Detail = ();
+
     fn status_code(&self) -> StatusCode {
         match self {
             Self::InvalidApiKey | Self::InvalidToken | Self::Unauthenticated => {
@@ -100,6 +102,10 @@ impl HttpError for AuthError {
             | Self::PasswordHasherError(_)
             | Self::SessionBackend => StatusCode::INTERNAL_SERVER_ERROR,
         }
+    }
+
+    fn error_detail(&self) -> Self::Detail {
+        ()
     }
 
     fn error_kind(&self) -> &'static str {

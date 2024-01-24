@@ -20,11 +20,17 @@ pub enum OrderByError {
 }
 
 impl HttpError for OrderByError {
+    type Detail = ();
+
     fn status_code(&self) -> hyper::StatusCode {
         hyper::StatusCode::BAD_REQUEST
     }
 
     fn error_kind(&self) -> &'static str {
         "order_by"
+    }
+
+    fn error_detail(&self) -> Self::Detail {
+        ()
     }
 }
