@@ -95,14 +95,14 @@ where
                 StatusCode::INTERNAL_SERVER_ERROR => Some(ErrorResponseData::new(
                     "internal_error",
                     "Internal error",
-                    None,
+                    serde_json::Value::Null,
                 )),
-                StatusCode::UNAUTHORIZED => settings
-                    .obfuscate_unauthorized
-                    .then(|| ErrorResponseData::new("unauthorized", "Unauthorized", None)),
-                StatusCode::FORBIDDEN => settings
-                    .obfuscate_forbidden
-                    .then(|| ErrorResponseData::new("forbidden", "Forbidden", None)),
+                StatusCode::UNAUTHORIZED => settings.obfuscate_unauthorized.then(|| {
+                    ErrorResponseData::new("unauthorized", "Unauthorized", serde_json::Value::Null)
+                }),
+                StatusCode::FORBIDDEN => settings.obfuscate_forbidden.then(|| {
+                    ErrorResponseData::new("forbidden", "Forbidden", serde_json::Value::Null)
+                }),
                 _ => None,
             };
 

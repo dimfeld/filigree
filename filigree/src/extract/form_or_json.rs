@@ -60,7 +60,7 @@ where
             let value = value_from_urlencoded(&bytes);
             (value, true)
         } else {
-            return Err(Rejection::UnknownContentType);
+            return Err(Rejection::UnsupportedContentType);
         };
 
         crate::requests::json_schema::validate::<T>(&mut value, coerce_arrays)

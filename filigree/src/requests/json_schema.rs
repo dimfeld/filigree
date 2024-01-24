@@ -3,7 +3,7 @@
 use std::{
     any::TypeId,
     cell::RefCell,
-    collections::{HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, VecDeque},
 };
 
 use jsonschema::{
@@ -15,6 +15,7 @@ use schemars::{
     schema::{InstanceType, RootSchema, Schema, SchemaObject, SingleOrVec},
     JsonSchema,
 };
+use serde::Serialize;
 use serde_json::Number;
 
 thread_local! {
@@ -382,6 +383,32 @@ fn get_coerce_type_from_schema(schema: &Schema, array: bool) -> Option<CoerceTo>
             }
         }
         _ => None,
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct ValidationErrorResponse {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, Vec<String>>,
+}
+
+impl From<SchemaErrors> for ValidationErrorResponse {
+    fn from(value: SchemaErrors) -> Self {
+        let mut result = ValidationErrorResponse {
+            messages: vec![],
+            fields: BTreeMap::default(),
+        };
+
+        for err in value {
+            let field = err.instance_location().to_string();
+            let message = err.error_description().to_string();
+
+            result.fields.entry(field).or_default().push(message);
+        }
+
+        result
     }
 }
 

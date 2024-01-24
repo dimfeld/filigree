@@ -12,7 +12,11 @@ use super::http_error::ErrorResponseData;
 /// A middleware that handles panics in the application
 fn handle_panic(production: bool, err: Box<dyn Any + Send + 'static>) -> Response {
     let body = if production {
-        ErrorResponseData::new("internal_server_error", "Server error", None)
+        ErrorResponseData::new(
+            "internal_server_error",
+            "Server error",
+            serde_json::Value::Null,
+        )
     } else {
         let details = if let Some(s) = err.downcast_ref::<String>() {
             s.clone()
@@ -22,7 +26,7 @@ fn handle_panic(production: bool, err: Box<dyn Any + Send + 'static>) -> Respons
             "Unknown panic message".to_string()
         };
 
-        ErrorResponseData::new("panic", details, None)
+        ErrorResponseData::new("panic", details, serde_json::Value::Null)
     };
 
     let body = serde_json::to_string(&body).unwrap_or_default();
