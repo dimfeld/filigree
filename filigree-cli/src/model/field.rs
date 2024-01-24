@@ -215,6 +215,7 @@ pub enum SqlType {
     Boolean,
     Json,
     Timestamp,
+    Date,
 }
 
 impl SqlType {
@@ -227,6 +228,7 @@ impl SqlType {
             SqlType::Boolean => "bool",
             SqlType::Json => "serde_json::Value",
             SqlType::Timestamp => "chrono::DateTime<chrono::Utc>",
+            SqlType::Date => "chrono::NaiveDate",
             SqlType::Uuid => "uuid::Uuid",
         }
     }
@@ -244,6 +246,8 @@ impl SqlType {
             (SqlType::Json, SqlDialect::SQLite) => "JSON",
             (SqlType::Timestamp, SqlDialect::Postgresql) => "TIMESTAMPTZ",
             (SqlType::Timestamp, SqlDialect::SQLite) => "INTEGER",
+            (SqlType::Date, SqlDialect::Postgresql) => "DATE",
+            (SqlType::Date, SqlDialect::SQLite) => "INTEGER",
             (SqlType::Uuid, SqlDialect::Postgresql) => "UUID",
             (SqlType::Uuid, SqlDialect::SQLite) => "BLOB",
         }
