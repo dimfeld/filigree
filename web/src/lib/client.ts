@@ -408,7 +408,7 @@ export function mergeRetryOptions(
   }
 }
 
-export function makeClient(clientOptions: ClientOptions = {}) {
+export function makeClient(clientOptions: ClientOptions = {}): Client {
   let { prefixUrl: baseUrl, timeout: defaultTimeout, hooks, headers: headerOption } = clientOptions;
   const fixedHeaders = new Headers(headerOption);
   if (!fixedHeaders.has('Accept')) {
@@ -535,3 +535,5 @@ export function makeClient(clientOptions: ClientOptions = {}) {
 
   return client;
 }
+
+export const client = makeClient();
