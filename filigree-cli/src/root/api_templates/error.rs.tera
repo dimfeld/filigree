@@ -67,6 +67,8 @@ impl Error {
 }
 
 impl HttpError for Error {
+    type Detail = String;
+
     fn error_kind(&self) -> &'static str {
         if let Some(e) = self.find_downstack_error() {
             return e.error_kind();
