@@ -460,7 +460,7 @@ impl Schema {
                 self.create_view(
                     name,
                     or_replace,
-                    columns.into_iter().map(|c| c.value).collect(),
+                    columns.into_iter().map(|c| c.name.value).collect(),
                 )?;
             }
 
