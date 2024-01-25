@@ -4,6 +4,8 @@
 // lot in SvelteKit.
 // - Option to declare which specific HTTP status codes should throw an error or not.
 
+import { getContext, setContext } from 'svelte';
+
 export type HttpMethod =
   | 'GET'
   | 'HEAD'
@@ -103,6 +105,8 @@ export interface RequestOptions {
   json?: object;
   /** The body to send with the request. If sending json, use the `json` option instead. */
   body?: BodyInit;
+  /** Customize caching behavior. */
+  cache?: RequestCache;
   /** An abort controller to use for the request. If omitted, a new one will be created, so {@link FetchPromise.abort()} will still
    * work. */
   abort?: AbortController;
@@ -117,6 +121,7 @@ export interface RequestOptions {
    * If an array, failed responses with status codes in the array are returned to the user, and other failure codes
    * throw an error. */
   tolerateFailure?: boolean | number[];
+  followRedirects?: boolean;
 }
 
 function makeUrl(baseUrl: string | undefined, url: string | URL, searchParams: URLSearchParams) {
@@ -454,7 +459,9 @@ export function makeClient(clientOptions: ClientOptions = {}): Client {
         method,
         headers,
         body,
+        cache: options.cache,
         signal: abort.signal,
+        redirect: options.followRedirects === false ? 'manual' : 'follow',
       };
 
       for (let hook of beforeRequestHooks) {
@@ -537,3 +544,12 @@ export function makeClient(clientOptions: ClientOptions = {}): Client {
 }
 
 export const client = makeClient();
+
+const FILIGREE_CLIENT = Symbol('filigree-client');
+export function setContextClient(newClient: Client): Client {
+  return setContext(FILIGREE_CLIENT, newClient);
+}
+
+export function contextClient(): Client {
+  return getContext(FILIGREE_CLIENT);
+}

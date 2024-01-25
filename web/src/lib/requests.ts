@@ -19,8 +19,11 @@ export interface ErrorResponse<KIND extends string = string, DETAILS extends obj
 }
 
 export function isErrorResponse<T extends ErrorResponse<string, object>>(
-  obj: object,
+  obj: object | undefined,
   kind: string
 ): obj is T {
-  return 'error' in obj && (obj.error as T['error'])?.kind === kind;
+  if (!obj) {
+    return false;
+  }
+  return obj && 'error' in obj && (obj.error as T['error'])?.kind === kind;
 }
