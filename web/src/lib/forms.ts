@@ -194,17 +194,39 @@ function trackSlowLoading<T extends object>(options: InternalOptions<T>) {
   }, options.slowLoadThreshold);
 }
 
+function resolveSuccessHookReturnValue<T extends object>(
+  options: InternalOptions<T>,
+  retVal: { resetForm?: boolean; invalidateAll?: boolean } | void
+) {
+  return {
+    resetForm: retVal?.resetForm ?? options.options.resetForm ?? true,
+    invalidateAll: retVal?.invalidateAll ?? options.options.invalidateAll ?? true,
+  };
+}
+
+function maybeHandleFailureResult<T extends object>(
+  options: InternalOptions<T>,
+  result: ActionResult
+) {
+  if (result.type !== 'failure') {
+    return;
+  }
+
+  const { state } = options;
+  state.message = result.data?.message;
+
+  const data = result.data as unknown as FormResponse<T>;
+  if (result.status === 400 && isValidationError(data)) {
+    state.errors = data.error;
+  } else {
+    state.errors = null;
+  }
+}
+
 function plainEnhance<T extends object>(options: InternalOptions<T>) {
   const {
     state,
-    options: {
-      model,
-      onSubmit,
-      onSuccess,
-      onError,
-      resetForm: resetFormOption,
-      invalidateAll: invalidateAllOption,
-    },
+    options: { model, onSubmit, onSuccess, onError },
   } = options;
 
   return function (formEl: HTMLFormElement) {
@@ -233,43 +255,24 @@ function plainEnhance<T extends object>(options: InternalOptions<T>) {
         clearTimeout(slowTimer);
         state.loading = 'idle';
 
-        let resetForm = resetFormOption ?? true;
-        let invalidateAll = invalidateAllOption ?? true;
-
         if (result.type === 'failure' || result.type === 'error') {
           let hookResult = onError?.(result);
           if (hookResult) {
             result = hookResult;
           }
 
-          if (result.type === 'failure') {
-            const data = result.data as unknown as FormResponse<T>;
-            state.message = data.message;
-            if (isValidationError(data)) {
-              state.errors = data.error;
-            } else {
-              state.errors = null;
-            }
-          }
+          maybeHandleFailureResult(options, result);
         } else if (result.type === 'success') {
           const data = result.data as unknown as FormResponse<T>;
           state.message = data.message;
+          state.errors = null;
 
           let hookResult = onSuccess?.(result);
-          if (hookResult) {
-            if (typeof hookResult.invalidateAll === 'boolean') {
-              invalidateAll = hookResult.invalidateAll;
-            }
+          const updateOptions = resolveSuccessHookReturnValue(options, hookResult);
 
-            if (typeof hookResult.resetForm === 'boolean') {
-              resetForm = hookResult.resetForm;
-            }
-          }
-
-          state.errors = null;
           update({
-            reset: resetForm,
-            invalidateAll,
+            reset: updateOptions.resetForm,
+            invalidateAll: updateOptions.invalidateAll,
           });
         }
       };
@@ -281,17 +284,10 @@ function plainEnhance<T extends object>(options: InternalOptions<T>) {
 function nestedEnhance<T extends object>(options: InternalOptions<T>) {
   const {
     state,
-    options: {
-      model,
-      onSubmit,
-      onSuccess,
-      onError,
-      resetForm: resetFormOption,
-      invalidateAll: invalidateAllOption,
-    },
+    options: { model, onSubmit, onSuccess, onError },
   } = options;
 
-  return function (formEl: HTMLFormElement) {
+  return function (originalFormEl: HTMLFormElement) {
     async function handleSubmit(event: SubmitEvent) {
       event.preventDefault();
 
@@ -305,6 +301,10 @@ function nestedEnhance<T extends object>(options: InternalOptions<T>) {
         return;
       }
 
+      // Clone the node, so that any children whose names conflict with normal form properties
+      // won't cause problems. (https://github.com/sveltejs/kit/pull/7599)
+      let formEl = HTMLFormElement.prototype.cloneNode.call(originalFormEl) as HTMLFormElement;
+
       const submitter = event.submitter as HTMLButtonElement | undefined;
       const method =
         (submitter?.hasAttribute('formMethod') && submitter?.formMethod) || formEl.method;
@@ -317,6 +317,7 @@ function nestedEnhance<T extends object>(options: InternalOptions<T>) {
         action: new URL(action),
         controller: abort,
         formElement: formEl,
+        formData: new FormData(formEl),
         submitter: event.submitter,
         cancel,
         data: options.state.form,
@@ -336,6 +337,8 @@ function nestedEnhance<T extends object>(options: InternalOptions<T>) {
           json: payload,
           method: method as HttpMethod,
           headers: {
+            // Make sure the request goes to +page.server.ts, not +server.ts, if both exist.
+            // Per https://kit.svelte.dev/docs/form-actions#progressive-enhancement-custom-event-listener
             'x-sveltekit-action': 'true',
           },
           tolerateFailure: true,
@@ -364,51 +367,37 @@ function nestedEnhance<T extends object>(options: InternalOptions<T>) {
       }
 
       if (result.type === 'success') {
-        const resultData = result.data as unknown as FormResponse<T>;
-        state.message = resultData.message;
-        let shouldInvalidateAll = options.options.invalidateAll ?? true;
-        let resetForm = options.options.resetForm ?? true;
+        const data = result.data as unknown as FormResponse<T>;
+        state.form = data.form;
 
+        state.message = data.message;
         state.errors = null;
-        state.form = resultData.form;
 
         let hookResult = onSuccess?.(result);
-        if (hookResult) {
-          if (typeof hookResult.invalidateAll === 'boolean') {
-            shouldInvalidateAll = hookResult.invalidateAll;
-          }
+        const updateOptions = resolveSuccessHookReturnValue(options, hookResult);
 
-          if (typeof hookResult.resetForm === 'boolean') {
-            resetForm = hookResult.resetForm;
-          }
+        if (updateOptions.resetForm) {
+          HTMLFormElement.prototype.reset.call(originalFormEl);
         }
-
-        if (resetForm) {
-          formEl.reset();
-        }
-        if (shouldInvalidateAll) {
+        if (updateOptions.invalidateAll) {
           await invalidateAll();
         }
       } else if (result.type === 'failure' || result.type === 'error') {
-        state.message = result.data?.message;
-
         let hookResult = onError?.(result);
         if (hookResult) {
           result = hookResult;
         }
 
-        if (result.type === 'failure' && result.status === 400 && isValidationError(result.data)) {
-          state.errors = result.data.error;
-        }
+        maybeHandleFailureResult(options, result);
       }
 
       await applyAction(result);
     }
 
-    formEl.addEventListener('submit', handleSubmit);
+    originalFormEl.addEventListener('submit', handleSubmit);
     return {
       destroy() {
-        formEl.removeEventListener('submit', handleSubmit);
+        originalFormEl.removeEventListener('submit', handleSubmit);
       },
     };
   };
