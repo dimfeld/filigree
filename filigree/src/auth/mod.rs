@@ -8,6 +8,8 @@ mod extractors;
 pub mod lookup;
 /// Authentication middleware
 pub mod middleware;
+/// OAuth Functionalty
+pub mod oauth;
 /// Functions for generating and verifying password hashes
 pub mod password;
 /// Functionalty for passwordless email-based login.

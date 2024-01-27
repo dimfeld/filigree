@@ -300,6 +300,7 @@ impl SessionBackend {
         .execute(&self.db)
         .await
         .change_context(SessionError::Db)?;
+
         Ok(())
     }
 

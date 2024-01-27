@@ -93,11 +93,24 @@ pub struct ServerConfig {
 
     /// How to configure CORS for the API routes
     #[serde(default)]
-    pub api_cors: filigree::auth::CorsSetting,
+    pub api_cors: CorsSetting,
 }
 
 const fn default_port() -> u16 {
     7823
+}
+
+/// Cross-origin Resource Sharing (CORS) configuration
+#[derive(Serialize, Deserialize, Default, Clone, Copy, Debug)]
+pub enum CorsSetting {
+    /// Don't configure CORS at all, which prevents any cross-origin request from being accepted
+    /// if nothing else in the request chain (e.g. a reverse proxy) sets the Access-Control headers.
+    #[default]
+    None,
+    /// Allow cross-origin requests from any host in the `hosts` list
+    AllowHostList,
+    /// Allow all hosts to access /api routes. Cookies are still not permitted.
+    AllowAll,
 }
 
 #[derive(Serialize, Deserialize, serde_derive_default::Default, Debug)]

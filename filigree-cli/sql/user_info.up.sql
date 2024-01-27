@@ -55,6 +55,14 @@ CREATE TABLE oauth_logins (
 
 CREATE INDEX oauth_logins_user_id ON oauth_logins (user_id);
 
+CREATE TABLE oauth_authorization_sessions (
+  key text PRIMARY KEY,
+  provider text NOT NULL,
+  add_to_user_id uuid,
+  redirect_to text,
+  expires_at timestamptz NOT NULL
+);
+
 CREATE TABLE user_invites (
   email text NOT NULL,
   token uuid NOT NULL,

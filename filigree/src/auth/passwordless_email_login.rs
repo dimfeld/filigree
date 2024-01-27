@@ -21,20 +21,22 @@ pub async fn setup_passwordless_login(
 ) -> Result<PasswordlessLoginRequestAnswer, Report<AuthError>> {
     let token = Uuid::new_v4();
 
-    // TODO get the user name here too if we have it
-    let result = sqlx::query!(
-        "UPDATE email_logins
+    let found_email = {
+        // TODO get the user name here too if we have it
+        let result = sqlx::query!(
+            "UPDATE email_logins
             SET passwordless_login_token = $2,
                 passwordless_login_expires_at = now() + interval '1 hour'
             WHERE email = $1",
-        email,
-        &token
-    )
-    .execute(&state.db)
-    .await
-    .map_err(AuthError::from)?;
+            email,
+            &token
+        )
+        .execute(&state.db)
+        .await
+        .map_err(AuthError::from)?;
 
-    let found_email = result.rows_affected() > 0;
+        result.rows_affected() > 0
+    };
 
     if found_email {
         Ok(PasswordlessLoginRequestAnswer {

@@ -1,5 +1,7 @@
 DROP TABLE user_invites;
 
+DROP TABLE oauth_authorization_sessions;
+
 DROP TABLE oauth_logins;
 
 DROP TABLE email_logins;
