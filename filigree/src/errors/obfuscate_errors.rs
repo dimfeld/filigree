@@ -8,7 +8,7 @@ use axum::{
 use futures::future::BoxFuture;
 use tower::{Layer, Service};
 
-use super::ErrorResponseData;
+use super::{ErrorResponseData, ForceObfuscate};
 
 /// Configuration for [ObfuscateErrorLayer]
 #[derive(Debug, Clone)]
@@ -90,17 +90,24 @@ where
                 return Ok(res);
             }
 
+            let force_obfuscate = res.extensions().get::<ForceObfuscate>().cloned();
             let status = res.status();
-            let message = match status {
-                StatusCode::INTERNAL_SERVER_ERROR => Some(ErrorResponseData::new(
+
+            let message = match (force_obfuscate, status) {
+                (Some(ob), _) => Some(ErrorResponseData::new(
+                    ob.kind,
+                    ob.message,
+                    serde_json::Value::Null,
+                )),
+                (None, StatusCode::INTERNAL_SERVER_ERROR) => Some(ErrorResponseData::new(
                     "internal_error",
                     "Internal error",
                     serde_json::Value::Null,
                 )),
-                StatusCode::UNAUTHORIZED => settings.obfuscate_unauthorized.then(|| {
+                (None, StatusCode::UNAUTHORIZED) => settings.obfuscate_unauthorized.then(|| {
                     ErrorResponseData::new("unauthorized", "Unauthorized", serde_json::Value::Null)
                 }),
-                StatusCode::FORBIDDEN => settings.obfuscate_forbidden.then(|| {
+                (None, StatusCode::FORBIDDEN) => settings.obfuscate_forbidden.then(|| {
                     ErrorResponseData::new("forbidden", "Forbidden", serde_json::Value::Null)
                 }),
                 _ => None,
@@ -123,6 +130,7 @@ mod test {
     use axum::{
         body::Body,
         http::{Method, Request, StatusCode},
+        response::IntoResponse,
         routing::get,
         Router,
     };
@@ -130,6 +138,7 @@ mod test {
     use tower::ServiceExt;
 
     use super::{ObfuscateErrorLayer, ObfuscateErrorLayerSettings};
+    use crate::errors::ForceObfuscate;
 
     fn make_app(enabled: bool) -> Router {
         Router::new()
@@ -173,6 +182,10 @@ mod test {
         (status, String::from_utf8(body.to_vec()).unwrap())
     }
 
+    fn make_value(body: &str) -> serde_json::Value {
+        serde_json::from_str(body).unwrap()
+    }
+
     #[tokio::test]
     async fn test_disabled() {
         let app = make_app(false);
@@ -197,10 +210,6 @@ mod test {
     #[tokio::test]
     async fn test_enabled() {
         let app = make_app(true);
-
-        fn make_value(detail: &str) -> serde_json::Value {
-            serde_json::from_str(detail).unwrap()
-        }
 
         let (code, body) = send_req(&app, "/200").await;
         assert_eq!(code, 200, "/200 status code");
@@ -228,6 +237,54 @@ mod test {
             make_value(&body),
             json!({ "error": { "kind": "internal_error", "message": "Internal error", "details": null }}),
             "/500 body should be obfuscated"
+        );
+    }
+
+    #[tokio::test]
+    async fn with_force_obfuscate() {
+        let app = Router::new()
+            .route(
+                "/401",
+                get(|| async {
+                    let mut res = (StatusCode::UNAUTHORIZED, "error 401 with info").into_response();
+                    res.extensions_mut().insert(ForceObfuscate {
+                        kind: "force_401".into(),
+                        message: "Forced 401".into(),
+                    });
+                    res
+                }),
+            )
+            .route(
+                "/403",
+                get(|| async {
+                    let mut res = (StatusCode::FORBIDDEN, "error 403 with info").into_response();
+                    res.extensions_mut().insert(ForceObfuscate {
+                        kind: "force_403".into(),
+                        message: "Forced 403".into(),
+                    });
+                    res
+                }),
+            )
+            .layer(ObfuscateErrorLayer::new(ObfuscateErrorLayerSettings {
+                enabled: true,
+                obfuscate_unauthorized: false,
+                obfuscate_forbidden: true,
+            }));
+
+        let (code, body) = send_req(&app, "/401").await;
+        assert_eq!(code, 401, "/401 status code");
+        assert_eq!(
+            make_value(&body),
+            json!({ "error": { "kind": "force_401", "message": "Forced 401", "details": null }}),
+            "/401 body should be obfuscated"
+        );
+
+        let (code, body) = send_req(&app, "/403").await;
+        assert_eq!(code, 403, "/403 status code");
+        assert_eq!(
+            make_value(&body),
+            json!({ "error": { "kind": "force_403", "message": "Forced 403", "details": null }}),
+            "/403 body should be obfuscated"
         );
     }
 }

@@ -11,6 +11,7 @@ use tracing::{event, Level};
 
 /// An error that can be returned from an HTTP endpoint
 pub trait HttpError: ToString + std::fmt::Debug {
+    /// The type of the error detail. Can be [()] if there is no detail for this error.
     type Detail: Serialize + Debug + Send + Sync + 'static;
 
     /// The status code that the error should return.
@@ -31,12 +32,33 @@ pub trait HttpError: ToString + std::fmt::Debug {
         )
     }
 
+    /// Return a value to force the [ObfuscateErrorLayer] to obfuscate this error's response in production, even if
+    /// it would not otherwise do so.
+    fn obfuscate(&self) -> Option<ForceObfuscate> {
+        None
+    }
+
     /// Convert the error into a [Response]. Most implementors of this trait will not
     /// need to override the default implementation.
     fn to_response(&self) -> Response {
         let (code, json) = self.response_tuple();
-        (code, Json(json)).into_response()
+        let mut response = (code, Json(json)).into_response();
+
+        if let Some(obfuscate) = self.obfuscate() {
+            response.extensions_mut().insert(obfuscate);
+        }
+
+        response
     }
+}
+
+/// Force error obfuscation and customize the values returned to the user.
+#[derive(Clone, Debug, Default)]
+pub struct ForceObfuscate {
+    /// The code to return in the error
+    pub kind: Cow<'static, str>,
+    /// The message to return to in the error
+    pub message: Cow<'static, str>,
 }
 
 impl<T> HttpError for error_stack::Report<T>

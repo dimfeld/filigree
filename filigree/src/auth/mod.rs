@@ -29,7 +29,10 @@ pub use sessions::*;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::{errors::HttpError, make_object_id};
+use crate::{
+    errors::{ForceObfuscate, HttpError, ObfuscateError},
+    make_object_id,
+};
 
 make_object_id!(UserId, usr);
 make_object_id!(OrganizationId, org);
@@ -108,6 +111,10 @@ impl HttpError for AuthError {
 
     fn error_detail(&self) -> Self::Detail {
         ()
+    }
+
+    fn obfuscate(&self) -> Option<ForceObfuscate> {
+        None
     }
 
     fn error_kind(&self) -> &'static str {
