@@ -44,6 +44,12 @@ pub enum AuthError {
     /// The user is not logged in
     #[error("Not authenticated")]
     Unauthenticated,
+    /// User was not found. This will be obfuscated to a generic "unauthenticated" error
+    #[error("User not found")]
+    UserNotFound,
+    /// Password was incorrect. This will be obfuscated to a generic "unauthenticated" error
+    #[error("User not found")]
+    IncorrectPassword,
     /// An API key was provided but it does not exist or is inactive
     #[error("Invalid API Key")]
     InvalidApiKey,
@@ -79,7 +85,7 @@ pub enum AuthError {
     InvalidToken,
     /// Password and confirmation value do not match when updating password
     #[error("Passwords do not match")]
-    PasswordMismatch,
+    PasswordConfirmMismatch,
 }
 
 impl AuthError {
@@ -94,14 +100,16 @@ impl HttpError for AuthError {
 
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::InvalidApiKey | Self::InvalidToken | Self::Unauthenticated => {
-                StatusCode::UNAUTHORIZED
-            }
+            Self::InvalidApiKey
+            | Self::InvalidToken
+            | Self::Unauthenticated
+            | Self::UserNotFound
+            | Self::IncorrectPassword => StatusCode::UNAUTHORIZED,
             Self::NotVerified
             | Self::Disabled
             | Self::MissingPermission(_)
             | Self::FailedPredicate(_) => StatusCode::FORBIDDEN,
-            Self::ApiKeyFormat | Self::PasswordMismatch => StatusCode::BAD_REQUEST,
+            Self::ApiKeyFormat | Self::PasswordConfirmMismatch => StatusCode::BAD_REQUEST,
             Self::Db(_)
             | Self::EmailSendFailure
             | Self::PasswordHasherError(_)
@@ -114,18 +122,26 @@ impl HttpError for AuthError {
     }
 
     fn obfuscate(&self) -> Option<ForceObfuscate> {
-        None
+        match self {
+            Self::UserNotFound | Self::IncorrectPassword => Some(ForceObfuscate {
+                kind: "unauthenticated".into(),
+                message: "Unauthenticated".into(),
+            }),
+            _ => None,
+        }
     }
 
     fn error_kind(&self) -> &'static str {
         match self {
             Self::Unauthenticated => "unauthenticated",
+            Self::UserNotFound => "user_not_found",
+            Self::IncorrectPassword => "incorrect_password",
             Self::InvalidApiKey => "invalid_api_key",
             Self::InvalidToken => "invalid_token",
             Self::NotVerified => "not_verified",
             Self::Disabled => "disabled",
             Self::Db(_) => "db",
-            Self::PasswordMismatch => "password_mismatch",
+            Self::PasswordConfirmMismatch => "password_mismatch",
             Self::ApiKeyFormat => "invalid_api_key",
             Self::PasswordHasherError(_) => "password_hash_internal",
             Self::MissingPermission(_) => "missing_permission",

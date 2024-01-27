@@ -44,7 +44,7 @@ pub async fn verify_password(password: String, hash_str: String) -> Result<(), A
 
         Argon2::default()
             .verify_password(password.as_bytes(), &hash)
-            .map_err(|_| AuthError::Unauthenticated)
+            .map_err(|_| AuthError::IncorrectPassword)
     })
     .await
     .map_err(|e| AuthError::PasswordHasherError(e.to_string()))??;
@@ -82,7 +82,7 @@ pub async fn lookup_user_from_email_and_password(
     .fetch_optional(db)
     .await
     .map_err(AuthError::from)?
-    .ok_or(AuthError::Unauthenticated)?;
+    .ok_or(AuthError::UserNotFound)?;
 
     let password_hash = user_info.password_hash.unwrap_or_default();
 

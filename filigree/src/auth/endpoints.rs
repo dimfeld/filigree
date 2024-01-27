@@ -59,7 +59,7 @@ async fn update_password(
     Json(request): Json<UpdatePasswordRequest>,
 ) -> Result<(), AuthError> {
     if request.password != request.confirm {
-        return Err(AuthError::PasswordMismatch);
+        return Err(AuthError::PasswordConfirmMismatch);
     }
 
     let hashed = super::password::new_hash(request.password).await?;
