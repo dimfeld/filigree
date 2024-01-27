@@ -13,8 +13,7 @@ documentation = "https://docs.rs/sql-migration-sim"
 
 [dependencies]
 serde = { version = "1.0.195", optional = true }
-# sqlparser = "0.41.0"
-sqlparser = { path = "../../sqlparser-rs" }
+sqlparser = "0.43.1"
 thiserror = "1.0.56"
 
 [features]
