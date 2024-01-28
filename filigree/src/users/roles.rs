@@ -30,6 +30,32 @@ pub async fn add_roles_to_user(
     Ok(())
 }
 
+/// Add the default role to a user, if one is set on the organization.
+#[instrument(skip(db))]
+pub async fn add_default_role_to_user(
+    db: impl PgExecutor<'_>,
+    organization_id: OrganizationId,
+    user_id: UserId,
+) -> Result<(), sqlx::Error> {
+    query!(
+        r##"
+        INSERT INTO user_roles (organization_id, user_id, role_id)
+        (
+            SELECT $1, $2, default_role as role_id
+            FROM organizations
+            WHERE id = $1 AND default_role IS NOT NULL
+        )
+        ON CONFLICT DO NOTHING
+        "##,
+        organization_id.as_uuid(),
+        user_id.as_uuid(),
+    )
+    .execute(db)
+    .await?;
+
+    Ok(())
+}
+
 /// Remove roles from a user
 #[instrument(skip(db))]
 pub async fn remove_roles_from_user(

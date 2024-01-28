@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use axum::{
-    debug_handler,
     extract::{FromRef, State},
     response::IntoResponse,
     routing::Router,
@@ -83,7 +82,7 @@ async fn update_password(
         WHERE users.id = sel.user_id AND sel.matches",
         request.email,
         request.token,
-        hashed,
+        hashed.0,
     )
     .execute(&state.db)
     .await?;

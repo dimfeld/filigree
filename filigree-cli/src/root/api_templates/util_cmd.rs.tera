@@ -25,7 +25,8 @@ impl UtilCommand {
             UtilSubcommand::HashPassword(password) => {
                 let hash = filigree::auth::password::new_hash(password.password)
                     .await
-                    .change_context(Error::AuthSubsystem)?;
+                    .change_context(Error::AuthSubsystem)?
+                    .0;
                 println!("{hash}");
             }
         }

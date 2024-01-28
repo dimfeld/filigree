@@ -61,7 +61,12 @@ impl Model {
                     },
                     ModelField {
                         unique: true,
+                        nullable: true,
                         ..simple_model_field("email", SqlType::Text)
+                    },
+                    ModelField {
+                        nullable: true,
+                        ..simple_model_field("avatar_url", SqlType::Text)
                     },
                 ],
             },
@@ -91,6 +96,17 @@ impl Model {
                             DeleteBehavior::SetNull,
                         )),
                         ..simple_model_field("owner", SqlType::Uuid)
+                    },
+                    ModelField {
+                        rust_type: Some("crate::models::role::RoleId".to_string()),
+                        user_access: Access::None,
+                        nullable: true,
+                        references: Some(ModelFieldReference::new(
+                            "roles",
+                            "id",
+                            DeleteBehavior::SetNull,
+                        )),
+                        ..simple_model_field("default_role", SqlType::Uuid)
                     },
                     ModelField {
                         user_access: Access::None,

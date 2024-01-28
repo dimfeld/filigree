@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
@@ -12,14 +14,27 @@ use uuid::Uuid;
 
 use super::{sessions::SessionBackend, AuthError, UserId};
 
+/// A wrapper around a hashed password, to help avoid passing a plaintext password where a hashed
+/// password is expected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HashedPassword(pub String);
+
+impl Deref for HashedPassword {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// Hash a password using a randomly-generated salt value
-pub async fn new_hash(password: String) -> Result<String, AuthError> {
+pub async fn new_hash(password: String) -> Result<HashedPassword, AuthError> {
     let salt = uuid::Uuid::new_v4();
     hash_password(password, salt).await
 }
 
 #[instrument]
-async fn hash_password(password: String, salt: Uuid) -> Result<String, AuthError> {
+async fn hash_password(password: String, salt: Uuid) -> Result<HashedPassword, AuthError> {
     let hash = tokio::task::spawn_blocking(move || {
         let saltstring = SaltString::encode_b64(salt.as_bytes())
             .map_err(|e| AuthError::PasswordHasherError(e.to_string()))?;
@@ -33,11 +48,11 @@ async fn hash_password(password: String, salt: Uuid) -> Result<String, AuthError
     .await
     .map_err(|e| AuthError::PasswordHasherError(e.to_string()))??;
 
-    Ok(hash)
+    Ok(HashedPassword(hash))
 }
 
 /// Verify that the given password matches the stored hash
-pub async fn verify_password(password: String, hash_str: String) -> Result<(), AuthError> {
+pub async fn verify_password(password: String, hash_str: HashedPassword) -> Result<(), AuthError> {
     tokio::task::spawn_blocking(move || {
         let hash = PasswordHash::new(&hash_str)
             .map_err(|e| AuthError::PasswordHasherError(e.to_string()))?;
@@ -84,7 +99,7 @@ pub async fn lookup_user_from_email_and_password(
     .map_err(AuthError::from)?
     .ok_or(AuthError::UserNotFound)?;
 
-    let password_hash = user_info.password_hash.unwrap_or_default();
+    let password_hash = HashedPassword(user_info.password_hash.unwrap_or_default());
 
     verify_password(email_and_password.password, password_hash).await?;
 

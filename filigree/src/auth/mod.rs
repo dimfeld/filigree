@@ -30,7 +30,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
-    errors::{ForceObfuscate, HttpError, ObfuscateError},
+    errors::{ForceObfuscate, HttpError},
     make_object_id,
 };
 

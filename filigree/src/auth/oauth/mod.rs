@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::response::{IntoResponse, Redirect};
 use error_stack::{Report, ResultExt};
 use hyper::StatusCode;
-use oauth2::{reqwest::async_http_client, AuthorizationCode, TokenResponse};
+use oauth2::TokenResponse;
 use sqlx::PgExecutor;
 use thiserror::Error;
 use tower_cookies::Cookies;
@@ -46,6 +46,8 @@ pub enum OAuthError {
     /// Returned when user signups are disabled.
     #[error("Sorry, new signups are currently not allowed")]
     PublicSignupDisabled,
+    #[error("Failed to create user")]
+    UserCreation,
 }
 
 impl From<sqlx::Error> for OAuthError {
@@ -59,7 +61,7 @@ impl HttpError for OAuthError {
 
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::Db(_) | Self::ExchangeError | Self::FetchUserDetails => {
+            Self::Db(_) | Self::ExchangeError | Self::FetchUserDetails | Self::UserCreation => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             Self::PublicSignupDisabled => StatusCode::FORBIDDEN,
@@ -94,6 +96,7 @@ impl HttpError for OAuthError {
             Self::SessionBackend => "session_backend_error",
             Self::FetchUserDetails => "fetch_oauth_user_details",
             Self::ExchangeError => "oauth_exchange_error",
+            Self::UserCreation => "user_creation_error",
         }
     }
 }
@@ -235,13 +238,14 @@ pub async fn handle_login_code(
             email: user_details.email.clone(),
             name: user_details.name.clone(),
             avatar_url: user_details.avatar_url.clone(),
+            password_plaintext: None,
         };
 
         let user_id = state
             .user_creator
-            .create_user(&mut tx, None, &create_user_details)
+            .create_user(&mut tx, None, create_user_details)
             .await
-            .map_err(OAuthError::from)?;
+            .change_context(OAuthError::UserCreation)?;
         add_oauth_login(&mut *tx, user_id, provider_name, &user_details.login_id)
             .await
             .map_err(OAuthError::from)?;

@@ -1,5 +1,7 @@
 use async_trait::async_trait;
-use sqlx::PgExecutor;
+use error_stack::Report;
+use sqlx::{PgConnection, PgExecutor};
+use thiserror::Error;
 use url::Url;
 
 use crate::auth::{OrganizationId, UserId};
@@ -27,6 +29,7 @@ pub async fn add_user_email_login(
 
 /// User details that may be present when first creating a user, without any information specific
 /// to your application. This information may come from an initial signup, an email invite, or an OAuth login.
+#[derive(Debug, Clone)]
 pub struct CreateUserDetails {
     /// The user's name
     pub name: Option<String>,
@@ -34,6 +37,8 @@ pub struct CreateUserDetails {
     pub email: Option<String>,
     /// An avatar image for this user
     pub avatar_url: Option<Url>,
+    /// Password to set on the user
+    pub password_plaintext: Option<String>,
 }
 
 /// Allow filigree to call into the database to create a new user, along with all the appropriate
@@ -47,8 +52,13 @@ pub trait UserCreator: Send + Sync + 'static {
     /// Create a new user
     async fn create_user(
         &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        tx: &mut PgConnection,
         add_to_organization: Option<OrganizationId>,
-        details: &CreateUserDetails,
-    ) -> Result<UserId, sqlx::Error>;
+        details: CreateUserDetails,
+    ) -> Result<UserId, Report<UserCreatorError>>;
 }
+
+/// An error that occurred while creating a user.
+#[derive(Debug, Error)]
+#[error("Failed to create user")]
+pub struct UserCreatorError;

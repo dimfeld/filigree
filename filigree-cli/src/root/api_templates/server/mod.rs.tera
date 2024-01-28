@@ -179,10 +179,12 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
     let state = ServerState(Arc::new(ServerStateInner {
         production,
         filigree: Arc::new(FiligreeState {
+            http_client: reqwest::Client::new(),
             db: config.pg_pool.clone(),
             email: config.email_sender,
             new_user_flags: config.new_user_flags,
             hosts: config.hosts,
+            user_creator: Box::new(crate::users::users::UserCreator),
             session_backend: SessionBackend::new(
                 config.pg_pool.clone(),
                 config.cookie_configuration,

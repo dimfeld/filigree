@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use error_stack::Report;
 use filigree::{
-    auth::{api_key::ApiKeyData, ExpiryStyle, SessionCookieBuilder},
+    auth::{api_key::ApiKeyData, password::HashedPassword, ExpiryStyle, SessionCookieBuilder},
     testing::{self, TestClient},
 };
 use futures::future::FutureExt;
@@ -126,7 +126,7 @@ async fn add_test_user(
 
     let email = format!("{name}@example.com");
     let user_payload = user::UserCreatePayload {
-        email: email.clone(),
+        email: Some(email.clone()),
         name: name.to_string(),
         ..Default::default()
     };
@@ -136,7 +136,7 @@ async fn add_test_user(
         user_id,
         organization_id,
         user_payload,
-        Some(testing::TEST_PASSWORD_HASH.to_string()),
+        Some(HashedPassword(testing::TEST_PASSWORD_HASH.to_string())),
     )
     .await
     .expect("Creating user");
