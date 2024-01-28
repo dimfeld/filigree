@@ -34,7 +34,7 @@ impl<T: AuthInfo> AuthLookup<T> {
         self.queries
             .get_user_by_api_key(key, hash)
             .await
-            .map_err(|e| AuthError::Db(Arc::new(e)))?
+            .map_err(AuthError::from)?
             .map(Arc::new)
             .ok_or(AuthError::InvalidApiKey)
     }
@@ -43,7 +43,7 @@ impl<T: AuthInfo> AuthLookup<T> {
         self.queries
             .get_user_by_session_id(key)
             .await
-            .map_err(|e| AuthError::Db(Arc::new(e)))?
+            .map_err(AuthError::from)?
             .map(Arc::new)
             .ok_or(AuthError::Unauthenticated)
     }

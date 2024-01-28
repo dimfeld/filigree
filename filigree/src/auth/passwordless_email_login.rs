@@ -63,7 +63,7 @@ pub async fn setup_passwordless_login(
             new_user: true,
         })
     } else {
-        Err(Report::from(AuthError::Unauthenticated))
+        Err(Report::from(AuthError::UserNotFound))
     }
 }
 

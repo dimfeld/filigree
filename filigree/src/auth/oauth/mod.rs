@@ -78,10 +78,7 @@ impl HttpError for OAuthError {
 
     fn obfuscate(&self) -> Option<ForceObfuscate> {
         if self.status_code() == StatusCode::UNAUTHORIZED {
-            Some(ForceObfuscate {
-                kind: "unauthenticated".into(),
-                message: "Unauthenticated".into(),
-            })
+            Some(ForceObfuscate::unauthenticated())
         } else {
             None
         }
@@ -246,7 +243,7 @@ pub async fn handle_login_code(
             .create_user(&mut tx, None, create_user_details)
             .await
             .change_context(OAuthError::UserCreation)?;
-        add_oauth_login(&mut *tx, user_id, provider_name, &user_details.login_id)
+        add_oauth_login(&mut *tx, user_id, provider_name, &user_bodys.login_id)
             .await
             .map_err(OAuthError::from)?;
         user_id

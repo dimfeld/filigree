@@ -59,9 +59,10 @@ pub enum AuthError {
     /// The user or organization is inactive
     #[error("User or org is disabled")]
     Disabled,
+    // Wrapped in an ARC because sqlx::Error isn't Clone
     /// The database returned an error
     #[error("Database error {0}")]
-    Db(#[from] Arc<sqlx::Error>),
+    Db(Arc<sqlx::Error>),
     /// Internal error hashing a password
     #[error("Error hashing password")]
     PasswordHasherError(String),
@@ -89,9 +90,16 @@ pub enum AuthError {
 }
 
 impl AuthError {
-    /// Return true if this error is [AuthError::Unauthenticated]
+    /// Return true if this error is [AuthError::Unauthenticated] or a similar error that indicates
+    /// a failed login
     pub fn is_unauthenticated(&self) -> bool {
-        matches!(self, Self::Unauthenticated)
+        matches!(
+            self,
+            Self::Unauthenticated
+                | Self::UserNotFound
+                | Self::IncorrectPassword
+                | Self::InvalidToken
+        )
     }
 }
 
@@ -122,13 +130,8 @@ impl HttpError for AuthError {
     }
 
     fn obfuscate(&self) -> Option<ForceObfuscate> {
-        match self {
-            Self::UserNotFound | Self::IncorrectPassword => Some(ForceObfuscate {
-                kind: "unauthenticated".into(),
-                message: "Unauthenticated".into(),
-            }),
-            _ => None,
-        }
+        self.is_unauthenticated()
+            .then(ForceObfuscate::unauthenticated)
     }
 
     fn error_kind(&self) -> &'static str {

@@ -61,6 +61,22 @@ pub struct ForceObfuscate {
     pub message: Cow<'static, str>,
 }
 
+impl ForceObfuscate {
+    /// Create a new ForceObfuscate
+    pub fn new(kind: impl Into<Cow<'static, str>>, message: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            kind: kind.into(),
+            message: message.into(),
+        }
+    }
+
+    /// A generic "Unauthenticated" error to return when the details of an authentication failure
+    /// should be obfuscated.
+    pub fn unauthenticated() -> Self {
+        Self::new("unauthenticated", "Unauthenticated")
+    }
+}
+
 impl<T> HttpError for error_stack::Report<T>
 where
     T: HttpError + Send + Sync + 'static,
