@@ -1,7 +1,7 @@
 use futures::FutureExt;
 use tokio::signal;
 
-use crate::{auth::SessionBackend, email::services::EmailSender};
+use crate::{auth::SessionBackend, email::services::EmailSender, users::users::UserCreator};
 
 /// Internal state used by the server
 pub struct FiligreeState {
@@ -14,8 +14,12 @@ pub struct FiligreeState {
     /// A list of hosts that the server is listening on
     pub hosts: Vec<String>,
 
+    pub http_client: reqwest::Client,
+
     /// Control behavior around adding new users
     pub new_user_flags: NewUserFlags,
+
+    pub user_creator: Box<dyn UserCreator>,
 }
 
 impl FiligreeState {

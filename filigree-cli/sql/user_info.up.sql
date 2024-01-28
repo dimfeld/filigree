@@ -47,10 +47,10 @@ CREATE TABLE email_logins (
 CREATE INDEX email_logins_user_id ON email_logins (user_id);
 
 CREATE TABLE oauth_logins (
-  user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   oauth_provider text NOT NULL,
   oauth_account_id text NOT NULL,
-  PRIMARY KEY (user_id, oauth_provider, oauth_account_id)
+  user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
+  PRIMARY KEY (oauth_provider, oauth_account_id)
 );
 
 CREATE INDEX oauth_logins_user_id ON oauth_logins (user_id);
@@ -58,6 +58,7 @@ CREATE INDEX oauth_logins_user_id ON oauth_logins (user_id);
 CREATE TABLE oauth_authorization_sessions (
   key text PRIMARY KEY,
   provider text NOT NULL,
+  pkce_verifier text,
   add_to_user_id uuid,
   redirect_to text,
   expires_at timestamptz NOT NULL

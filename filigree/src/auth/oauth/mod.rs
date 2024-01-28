@@ -1,38 +1,51 @@
 use std::sync::Arc;
 
 use axum::response::{IntoResponse, Redirect};
-use error_stack::Report;
+use error_stack::{Report, ResultExt};
 use hyper::StatusCode;
 use oauth2::{reqwest::async_http_client, AuthorizationCode, TokenResponse};
+use sqlx::PgExecutor;
 use thiserror::Error;
 use tower_cookies::Cookies;
 
-use self::providers::{OAuthProvider, OAuthUserDetails};
-use super::{AuthError, SessionError, UserId};
+use self::providers::{AuthorizeUrl, OAuthProvider, OAuthUserDetails};
+use super::UserId;
 use crate::{
-    errors::{ForceObfuscate, HttpError},
+    errors::{ForceObfuscate, HttpError, WrapReport},
     server::FiligreeState,
+    users::users::CreateUserDetails,
 };
 
 /// OAuth provider implementations
 pub mod providers;
 
+/// An error returned from an OAuth2 interaction
 #[derive(Error, Debug)]
 pub enum OAuthError {
+    /// The session referred to in the `state` parameter was not found. In production this will
+    /// appear as a generic 401 error.
     #[error("Login session not found")]
     SessionNotFound,
+    /// The session referred to in the `state` parameter was not found. In production this will
+    /// appear as a generic 401 error.
     #[error("Login session expired")]
     SessionExpired,
+    /// Attempted to exchange an OAuth login authorization token for an access token, but it didn't
+    /// work.
     #[error("Failed to exchange code")]
-    ExchangeError(
-        #[from] oauth2::basic::BasicRequestTokenError<oauth2::reqwest::Error<reqwest::Error>>,
-    ),
+    ExchangeError,
+    /// The database returned an error
     #[error("Database error")]
     Db(Arc<sqlx::Error>),
+    /// Failure when trying to read the user details from the OAuth provider.
     #[error("Failed to fetch user details")]
-    FetchUserDetails(reqwest::Error),
+    FetchUserDetails,
+    /// Some error from the session backend
     #[error("Session backend error")]
-    SessionBackend(Report<SessionError>),
+    SessionBackend,
+    /// Returned when user signups are disabled.
+    #[error("Sorry, new signups are currently not allowed")]
+    PublicSignupDisabled,
 }
 
 impl From<sqlx::Error> for OAuthError {
@@ -46,18 +59,16 @@ impl HttpError for OAuthError {
 
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::Db(_) | Self::ExchangeError(_) | Self::FetchUserDetails(_) => {
+            Self::Db(_) | Self::ExchangeError | Self::FetchUserDetails => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
+            Self::PublicSignupDisabled => StatusCode::FORBIDDEN,
             _ => StatusCode::UNAUTHORIZED,
         }
     }
 
     fn error_detail(&self) -> Self::Detail {
         match self {
-            Self::ExchangeError(e) => Some(e.to_string()),
-            Self::FetchUserDetails(e) => Some(e.to_string()),
-            Self::SessionBackend(e) => Some(e.to_string()),
             Self::Db(e) => Some(e.to_string()),
             _ => None,
         }
@@ -77,73 +88,14 @@ impl HttpError for OAuthError {
     fn error_kind(&self) -> &'static str {
         match self {
             Self::Db(_) => "db",
+            Self::PublicSignupDisabled => "signup_disabled",
             Self::SessionExpired => "oauth_session_expired",
             Self::SessionNotFound => "oauth_session_not_found",
-            Self::SessionBackend(_) => "session_backend_error",
-            Self::FetchUserDetails(_) => "fetch_oauth_user_details",
-            Self::ExchangeError(_) => "oauth_exchange_error",
+            Self::SessionBackend => "session_backend_error",
+            Self::FetchUserDetails => "fetch_oauth_user_details",
+            Self::ExchangeError => "oauth_exchange_error",
         }
     }
-}
-
-/// A successful OAuth login response
-pub struct OAuthLoginResponse {
-    /// Information about the user from the OAuth provider
-    pub user_details: OAuthUserDetails,
-    /// An existing user ID to link to, if the user's email isn't aleady known.
-    pub link_to_user: Option<UserId>,
-    /// The URL to redirect the user to after login
-    pub redirect_to: Option<String>,
-}
-
-/// Handle a successful login with an OAuth provider, which should have returned a token that can
-/// be exchanged for an access token.
-pub async fn handle_login_code(
-    state: &FiligreeState,
-    provider: Box<dyn OAuthProvider>,
-    state_code: String,
-    authorization_code: String,
-) -> Result<OAuthLoginResponse, OAuthError> {
-    let result = sqlx::query!(
-        "DELETE FROM oauth_authorization_sessions
-        WHERE key = $1
-        RETURNING provider, expires_at, add_to_user_id, redirect_to",
-        &state_code,
-    )
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or(OAuthError::SessionNotFound)?;
-
-    if result.expires_at < chrono::Utc::now() || result.provider != provider.name() {
-        return Err(OAuthError::SessionExpired);
-    }
-
-    let token_response = provider
-        .client()
-        .exchange_code(AuthorizationCode::new(authorization_code))
-        .request_async(async_http_client)
-        .await
-        .map_err(OAuthError::ExchangeError)?;
-    let access_token = token_response.access_token();
-
-    let user_info = provider
-        .fetch_user_details(access_token.secret())
-        .await
-        .map_err(OAuthError::FetchUserDetails)?;
-
-    Ok(OAuthLoginResponse {
-        link_to_user: result.add_to_user_id.map(UserId::from_uuid),
-        redirect_to: result.redirect_to,
-        user_details: user_info,
-    })
-
-    // For caller:
-    // TODO Add/update oauth_logins
-    // If there's an existing user_id and we haven't seen this email before, link this one into it.
-    // TODO Add email address to account if not already present
-    // Create a new user if we need to
-    // Create session and cookie
-    // Redirect to redirect_to, if it's set
 }
 
 /// Store state for an OAuth provider and redirects the user to the provider
@@ -152,21 +104,162 @@ pub async fn start_oauth_login(
     provider: Box<dyn OAuthProvider>,
     link_account: Option<UserId>,
     redirect_to: Option<String>,
-) -> Result<impl IntoResponse, OAuthError> {
-    let (url, csrf_token) = provider.authorize_url();
+) -> Result<impl IntoResponse, sqlx::Error> {
+    let AuthorizeUrl {
+        url,
+        state: key,
+        pkce_verifier,
+    } = provider.authorize_url();
 
     sqlx::query!(
         "INSERT INTO oauth_authorization_sessions
-            (key, provider, add_to_user_id, redirect_to, expires_at)
+            (key, provider, add_to_user_id, redirect_to, pkce_verifier, expires_at)
             VALUES
-            ($1, $2, $3, $4, now() + '10 minutes'::interval)",
-        csrf_token.secret(),
+            ($1, $2, $3, $4, $5, now() + '10 minutes'::interval)",
+        key.secret(),
         provider.name(),
         link_account.map(|u| u.0),
-        redirect_to
+        redirect_to,
+        pkce_verifier.as_ref().map(|p| p.secret()),
     )
     .execute(&state.db)
     .await?;
 
     Ok(Redirect::to(url.as_str()))
+}
+
+/// A successful OAuth login response
+pub struct OAuthLoginResponse {
+    /// The user ID for the user, if the user already exists. If this is None, you should
+    /// create a new user.
+    pub user_id: UserId,
+    /// Information about the user from the OAuth provider
+    pub user_details: OAuthUserDetails,
+    /// The URL to redirect the user to after login
+    pub redirect_to: Option<String>,
+}
+
+/// Link an OAuth login to a user
+pub async fn add_oauth_login(
+    db: impl PgExecutor<'_>,
+    user_id: UserId,
+    oauth_provider_name: &str,
+    oauth_account_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO oauth_logins
+            (user_id, oauth_provider, oauth_account_id)
+            VALUES
+            ($1, $2, $3)",
+        user_id.0,
+        oauth_provider_name,
+        oauth_account_id
+    )
+    .execute(db)
+    .await?;
+
+    Ok(())
+}
+
+/// Handle a successful login with an OAuth provider, which should have returned a token that can
+/// be exchanged for an access token.
+///
+/// If the OAuth login session information indicates that this login should be linked to an
+/// existing user, then this function will do that. Otherwise it creates a new user, if signups are
+/// allowed.
+///
+/// This function returns a [OAuthLoginResponse] which has information about the user.
+pub async fn handle_login_code(
+    state: &FiligreeState,
+    provider: Box<dyn OAuthProvider>,
+    cookies: &Cookies,
+    state_code: String,
+    authorization_code: String,
+) -> Result<OAuthLoginResponse, WrapReport<OAuthError>> {
+    // TODO need to get either state code or pkce code
+    let provider_name = provider.name();
+    let oauth_login_session = sqlx::query!(
+        "DELETE FROM oauth_authorization_sessions
+        WHERE key = $1
+        RETURNING provider, expires_at, pkce_verifier, add_to_user_id, redirect_to",
+        &state_code,
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(OAuthError::from)?
+    .ok_or(OAuthError::SessionNotFound)?;
+
+    if oauth_login_session.expires_at < chrono::Utc::now()
+        || oauth_login_session.provider != provider_name
+    {
+        return Err(Report::new(OAuthError::SessionExpired).into());
+    }
+
+    let token_response = provider
+        .fetch_access_token(
+            authorization_code,
+            oauth_login_session.pkce_verifier.unwrap_or_default(),
+        )
+        .await?;
+    let access_token = token_response.access_token();
+
+    let user_details = provider
+        .fetch_user_details(state.http_client.clone(), access_token.secret())
+        .await
+        .change_context(OAuthError::FetchUserDetails)?;
+
+    let mut tx = state.db.begin().await.map_err(OAuthError::from)?;
+    let existing_user = sqlx::query_scalar!(
+        "SELECT user_id FROM oauth_logins
+        WHERE oauth_provider = $1 AND oauth_account_id = $2",
+        provider_name,
+        &user_details.login_id
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(OAuthError::from)?;
+
+    let user_id = if let Some(existing_user) = existing_user {
+        // This user already has an account.
+        UserId::from(existing_user)
+    } else if let Some(link_user_id) = oauth_login_session.add_to_user_id {
+        let user_id = UserId::from(link_user_id);
+        add_oauth_login(&mut *tx, user_id, provider_name, &user_details.login_id)
+            .await
+            .map_err(OAuthError::from)?;
+        user_id
+    } else if !state.new_user_flags.allow_public_signup {
+        return Err(Report::new(OAuthError::PublicSignupDisabled).into());
+    } else {
+        let create_user_details = CreateUserDetails {
+            email: user_details.email.clone(),
+            name: user_details.name.clone(),
+            avatar_url: user_details.avatar_url.clone(),
+        };
+
+        let user_id = state
+            .user_creator
+            .create_user(&mut tx, None, &create_user_details)
+            .await
+            .map_err(OAuthError::from)?;
+        add_oauth_login(&mut *tx, user_id, provider_name, &user_details.login_id)
+            .await
+            .map_err(OAuthError::from)?;
+        user_id
+    };
+
+    state
+        .session_backend
+        .create_session(cookies, &user_id)
+        .await
+        .change_context(OAuthError::SessionBackend)?;
+
+    tx.commit().await.map_err(OAuthError::from)?;
+
+    // This user already has an account.
+    Ok(OAuthLoginResponse {
+        user_id,
+        redirect_to: oauth_login_session.redirect_to,
+        user_details,
+    })
 }

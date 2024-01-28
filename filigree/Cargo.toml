@@ -14,7 +14,7 @@ documentation = "https://docs.rs/filigree"
 [dependencies]
 argon2 = "0.5.2"
 async-trait = "0.1.74"
-axum = { version = "0.7.3", features = ["tracing"] }
+axum = { version = "0.7.3", features = ["macros", "tracing"] }
 axum-extra = { version = "0.9.0", features = ["multipart", "form", "typed-header"] }
 axum-jsonschema = "0.8.0"
 base64 = "0.21.5"
