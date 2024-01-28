@@ -11,7 +11,7 @@ use tower_cookies::Cookies;
 use self::providers::{AuthorizeUrl, OAuthProvider, OAuthUserDetails};
 use super::UserId;
 use crate::{
-    errors::{ForceObfuscate, HttpError, WrapReport},
+    errors::{ErrorKind, ForceObfuscate, HttpError, WrapReport},
     server::FiligreeState,
     users::users::CreateUserDetails,
 };
@@ -36,7 +36,7 @@ pub enum OAuthError {
     ExchangeError,
     /// The database returned an error
     #[error("Database error")]
-    Db(Arc<sqlx::Error>),
+    Db,
     /// Failure when trying to read the user details from the OAuth provider.
     #[error("Failed to fetch user details")]
     FetchUserDetails,
@@ -50,18 +50,12 @@ pub enum OAuthError {
     UserCreation,
 }
 
-impl From<sqlx::Error> for OAuthError {
-    fn from(e: sqlx::Error) -> Self {
-        Self::Db(Arc::new(e))
-    }
-}
-
 impl HttpError for OAuthError {
-    type Detail = Option<String>;
+    type Detail = ();
 
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::Db(_) | Self::ExchangeError | Self::FetchUserDetails | Self::UserCreation => {
+            Self::Db | Self::ExchangeError | Self::FetchUserDetails | Self::UserCreation => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             Self::PublicSignupDisabled => StatusCode::FORBIDDEN,
@@ -70,10 +64,7 @@ impl HttpError for OAuthError {
     }
 
     fn error_detail(&self) -> Self::Detail {
-        match self {
-            Self::Db(e) => Some(e.to_string()),
-            _ => None,
-        }
+        ()
     }
 
     fn obfuscate(&self) -> Option<ForceObfuscate> {
@@ -86,15 +77,16 @@ impl HttpError for OAuthError {
 
     fn error_kind(&self) -> &'static str {
         match self {
-            Self::Db(_) => "db",
-            Self::PublicSignupDisabled => "signup_disabled",
-            Self::SessionExpired => "oauth_session_expired",
-            Self::SessionNotFound => "oauth_session_not_found",
-            Self::SessionBackend => "session_backend_error",
-            Self::FetchUserDetails => "fetch_oauth_user_details",
-            Self::ExchangeError => "oauth_exchange_error",
-            Self::UserCreation => "user_creation_error",
+            Self::Db => ErrorKind::Database,
+            Self::PublicSignupDisabled => ErrorKind::SignupDisabled,
+            Self::SessionExpired => ErrorKind::OAuthSessionExpired,
+            Self::SessionNotFound => ErrorKind::OAuthSessionNotFound,
+            Self::SessionBackend => ErrorKind::SessionBackendError,
+            Self::FetchUserDetails => ErrorKind::FetchOAuthUserDetails,
+            Self::ExchangeError => ErrorKind::OAuthExchangeError,
+            Self::UserCreation => ErrorKind::UserCreationError,
         }
+        .as_str()
     }
 }
 
@@ -186,7 +178,7 @@ pub async fn handle_login_code(
     )
     .fetch_optional(&state.db)
     .await
-    .map_err(OAuthError::from)?
+    .change_context(OAuthError::Db)?
     .ok_or(OAuthError::SessionNotFound)?;
 
     if oauth_login_session.expires_at < chrono::Utc::now()
@@ -208,7 +200,7 @@ pub async fn handle_login_code(
         .await
         .change_context(OAuthError::FetchUserDetails)?;
 
-    let mut tx = state.db.begin().await.map_err(OAuthError::from)?;
+    let mut tx = state.db.begin().await.change_context(OAuthError::Db)?;
     let existing_user = sqlx::query_scalar!(
         "SELECT user_id FROM oauth_logins
         WHERE oauth_provider = $1 AND oauth_account_id = $2",
@@ -217,7 +209,7 @@ pub async fn handle_login_code(
     )
     .fetch_optional(&mut *tx)
     .await
-    .map_err(OAuthError::from)?;
+    .change_context(OAuthError::Db)?;
 
     let user_id = if let Some(existing_user) = existing_user {
         // This user already has an account.
@@ -226,7 +218,7 @@ pub async fn handle_login_code(
         let user_id = UserId::from(link_user_id);
         add_oauth_login(&mut *tx, user_id, provider_name, &user_details.login_id)
             .await
-            .map_err(OAuthError::from)?;
+            .change_context(OAuthError::Db)?;
         user_id
     } else if !state.new_user_flags.allow_public_signup {
         return Err(Report::new(OAuthError::PublicSignupDisabled).into());
@@ -243,9 +235,9 @@ pub async fn handle_login_code(
             .create_user(&mut tx, None, create_user_details)
             .await
             .change_context(OAuthError::UserCreation)?;
-        add_oauth_login(&mut *tx, user_id, provider_name, &user_bodys.login_id)
+        add_oauth_login(&mut *tx, user_id, provider_name, &user_details.login_id)
             .await
-            .map_err(OAuthError::from)?;
+            .change_context(OAuthError::Db)?;
         user_id
     };
 
@@ -255,7 +247,7 @@ pub async fn handle_login_code(
         .await
         .change_context(OAuthError::SessionBackend)?;
 
-    tx.commit().await.map_err(OAuthError::from)?;
+    tx.commit().await.change_context(OAuthError::Db)?;
 
     // This user already has an account.
     Ok(OAuthLoginResponse {

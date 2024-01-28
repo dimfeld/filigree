@@ -52,6 +52,83 @@ pub trait HttpError: ToString + std::fmt::Debug {
     }
 }
 
+/// Error kind codes to return to the client in an error response.
+pub enum ErrorKind {
+    ApiKeyFormat,
+    /// A generic ErrorKind when obfuscating a bad request error
+    BadRequest,
+    Database,
+    DatabaseInit,
+    Disabled,
+    EmailSendFailure,
+    FailedPredicate,
+    FetchOAuthUserDetails,
+    IncorrectPassword,
+    InvalidApiKey,
+    InvalidHostHeader,
+    InvalidToken,
+    MissingPermission,
+    NotFound,
+    NotVerified,
+    OAuthExchangeError,
+    OAuthSessionExpired,
+    OAuthSessionNotFound,
+    OrderBy,
+    PasswordConfirmMismatch,
+    PasswordHasherError,
+    ServerStart,
+    SessionBackend,
+    SessionBackendError,
+    Shutdown,
+    SignupDisabled,
+    Unauthenticated,
+    UserCreationError,
+    UserNotFound,
+}
+
+impl ErrorKind {
+    /// Return the string form of the error kind code
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::ApiKeyFormat => "invalid_api_key",
+            Self::BadRequest => "bad_request",
+            Self::Database => "database",
+            Self::DatabaseInit => "db_init",
+            Self::Disabled => "disabled",
+            Self::EmailSendFailure => "email_send_failure",
+            Self::FailedPredicate => "failed_authz_condition",
+            Self::FetchOAuthUserDetails => "fetch_oauth_user_details",
+            Self::IncorrectPassword => "incorrect_password",
+            Self::InvalidApiKey => "invalid_api_key",
+            Self::InvalidHostHeader => "invalid_host_header",
+            Self::InvalidToken => "invalid_token",
+            Self::MissingPermission => "missing_permission",
+            Self::NotFound => "not_found",
+            Self::NotVerified => "not_verified",
+            Self::OAuthExchangeError => "oauth_exchange_error",
+            Self::OAuthSessionExpired => "oauth_session_expired",
+            Self::OAuthSessionNotFound => "oauth_session_not_found",
+            Self::OrderBy => "order_by",
+            Self::PasswordConfirmMismatch => "password_mismatch",
+            Self::PasswordHasherError => "password_hash_internal",
+            Self::ServerStart => "server",
+            Self::SessionBackend => "session_backend",
+            Self::SessionBackendError => "session_backend_error",
+            Self::Shutdown => "shutdown",
+            Self::SignupDisabled => "signup_disabled",
+            Self::Unauthenticated => "unauthenticated",
+            Self::UserCreationError => "user_creation_error",
+            Self::UserNotFound => "user_not_found",
+        }
+    }
+}
+
+impl Into<Cow<'static, str>> for ErrorKind {
+    fn into(self) -> Cow<'static, str> {
+        Cow::Borrowed(self.as_str())
+    }
+}
+
 /// Force error obfuscation and customize the values returned to the user.
 #[derive(Clone, Debug, Default)]
 pub struct ForceObfuscate {
@@ -73,7 +150,7 @@ impl ForceObfuscate {
     /// A generic "Unauthenticated" error to return when the details of an authentication failure
     /// should be obfuscated.
     pub fn unauthenticated() -> Self {
-        Self::new("unauthenticated", "Unauthenticated")
+        Self::new(ErrorKind::Unauthenticated, "Unauthenticated")
     }
 }
 

@@ -27,7 +27,7 @@ impl HttpError for OrderByError {
     }
 
     fn error_kind(&self) -> &'static str {
-        "order_by"
+        ErrorKind::OrderBy.as_str()
     }
 
     fn error_detail(&self) -> Self::Detail {

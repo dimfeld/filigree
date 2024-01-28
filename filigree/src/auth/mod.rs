@@ -30,7 +30,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
-    errors::{ForceObfuscate, HttpError},
+    errors::{ErrorKind, ForceObfuscate, HttpError},
     make_object_id,
 };
 
@@ -136,22 +136,23 @@ impl HttpError for AuthError {
 
     fn error_kind(&self) -> &'static str {
         match self {
-            Self::Unauthenticated => "unauthenticated",
-            Self::UserNotFound => "user_not_found",
-            Self::IncorrectPassword => "incorrect_password",
-            Self::InvalidApiKey => "invalid_api_key",
-            Self::InvalidToken => "invalid_token",
-            Self::NotVerified => "not_verified",
-            Self::Disabled => "disabled",
-            Self::Db(_) => "db",
-            Self::PasswordConfirmMismatch => "password_mismatch",
-            Self::ApiKeyFormat => "invalid_api_key",
-            Self::PasswordHasherError(_) => "password_hash_internal",
-            Self::MissingPermission(_) => "missing_permission",
-            Self::FailedPredicate(_) => "failed_authz_condition",
-            Self::SessionBackend => "session_backend",
-            Self::EmailSendFailure => "email_send_failure",
+            Self::InvalidApiKey => ErrorKind::InvalidApiKey,
+            Self::InvalidToken => ErrorKind::InvalidToken,
+            Self::Unauthenticated => ErrorKind::Unauthenticated,
+            Self::UserNotFound => ErrorKind::UserNotFound,
+            Self::IncorrectPassword => ErrorKind::IncorrectPassword,
+            Self::NotVerified => ErrorKind::NotVerified,
+            Self::Disabled => ErrorKind::Disabled,
+            Self::ApiKeyFormat => ErrorKind::ApiKeyFormat,
+            Self::PasswordConfirmMismatch => ErrorKind::PasswordConfirmMismatch,
+            Self::MissingPermission(_) => ErrorKind::MissingPermission,
+            Self::FailedPredicate(_) => ErrorKind::FailedPredicate,
+            Self::Db(_) => ErrorKind::Database,
+            Self::EmailSendFailure => ErrorKind::EmailSendFailure,
+            Self::PasswordHasherError(_) => ErrorKind::PasswordHasherError,
+            Self::SessionBackend => ErrorKind::SessionBackend,
         }
+        .as_str()
     }
 }
 

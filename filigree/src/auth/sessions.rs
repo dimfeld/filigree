@@ -10,7 +10,7 @@ use tower_cookies::{Cookie, Cookies};
 use uuid::Uuid;
 
 use super::UserId;
-use crate::errors::HttpError;
+use crate::errors::{ErrorKind, HttpError};
 
 crate::make_object_id!(SessionId, sid);
 
@@ -37,9 +37,10 @@ impl HttpError for SessionError {
 
     fn error_kind(&self) -> &'static str {
         match self {
-            Self::Db => "db",
-            Self::NotFound => "not_found",
+            Self::Db => ErrorKind::Database,
+            Self::NotFound => ErrorKind::NotFound,
         }
+        .as_str()
     }
 
     fn error_detail(&self) -> Self::Detail {
