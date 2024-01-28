@@ -74,6 +74,9 @@ CREATE TABLE user_invites (
   invited_by uuid,
   -- The organization that the user will be added to. NULL indicates a new organization.
   organization_id uuid,
+  -- The roles that the user will be added with, if inviting to an existing organization.
+  -- If omitted, the organization's default role will be used.
+  role_ids uuid[],
   invite_sent_at timestamptz NOT NULL DEFAULT now()
 );
 
