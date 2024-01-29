@@ -29,7 +29,7 @@ pub async fn add_user_email_login(
 
 /// User details that may be present when first creating a user, without any information specific
 /// to your application. This information may come from an initial signup, an email invite, or an OAuth login.
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct CreateUserDetails {
     /// The user's name
     pub name: Option<String>,

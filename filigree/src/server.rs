@@ -1,7 +1,11 @@
 use futures::FutureExt;
 use tokio::signal;
 
-use crate::{auth::SessionBackend, email::services::EmailSender, users::users::UserCreator};
+use crate::{
+    auth::{oauth::providers::OAuthProvider, SessionBackend},
+    email::services::EmailSender,
+    users::users::UserCreator,
+};
 
 /// Internal state used by the server
 pub struct FiligreeState {
@@ -14,12 +18,19 @@ pub struct FiligreeState {
     /// A list of hosts that the server is listening on
     pub hosts: Vec<String>,
 
+    /// An HTTP client for the server to make requests with. The client is shared so that they will
+    /// all use the same request pool, and allow other things like custom User-Agent across the
+    /// server.
     pub http_client: reqwest::Client,
 
     /// Control behavior around adding new users
     pub new_user_flags: NewUserFlags,
 
+    /// Functionality for creating users in the app using Filigree
     pub user_creator: Box<dyn UserCreator>,
+
+    /// The enabled OAuth Providers. This can be populated using [create_supported_providers].
+    pub oauth_providers: Vec<Box<dyn OAuthProvider>>,
 }
 
 impl FiligreeState {

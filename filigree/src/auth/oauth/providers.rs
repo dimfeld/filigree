@@ -44,7 +44,7 @@ pub struct AuthorizeUrl {
 
 /// Configuration to authenticate with an OAuth provider
 #[async_trait]
-pub trait OAuthProvider {
+pub trait OAuthProvider: Send + Sync + 'static {
     /// The name of the service
     fn name(&self) -> &'static str;
 
@@ -100,5 +100,50 @@ pub async fn fetch_access_token_with_pkce(
 
 /// Create an OAuth 2 redirect URL for a provider
 pub fn build_redirect_url(base: &str, provider_name: &str) -> String {
-    format!("{base}/api/auth/oauth/{provider_name}/callback")
+    format!("{base}/{provider_name}/callback")
+}
+
+/// Create all the supported OAuth providers, inspecting the environment variables to determine
+/// which ones are configured.
+pub fn create_supported_providers(redirect_base_url: &str) -> Vec<Box<dyn OAuthProvider>> {
+    let github_provider = match (
+        std::env::var("OAUTH_GITHUB_CLIENT_ID"),
+        std::env::var("OAUTH_GITHUB_CLIENT_SECRET"),
+    ) {
+        (Ok(client_id), Ok(client_secret)) => Some(Box::new(GitHubOAuthProvider::new(
+            client_id,
+            client_secret,
+            redirect_base_url,
+        )) as Box<dyn OAuthProvider>),
+        _ => None,
+    };
+
+    let google_provider = match (
+        std::env::var("OAUTH_GOOGLE_CLIENT_ID"),
+        std::env::var("OAUTH_GOOGLE_CLIENT_SECRET"),
+    ) {
+        (Ok(client_id), Ok(client_secret)) => Some(Box::new(GoogleOAuthProvider::new(
+            client_id,
+            client_secret,
+            redirect_base_url,
+        )) as Box<dyn OAuthProvider>),
+        _ => None,
+    };
+
+    let twitter_provider = match (
+        std::env::var("OAUTH_TWITTER_CLIENT_ID"),
+        std::env::var("OAUTH_TWITTER_CLIENT_SECRET"),
+    ) {
+        (Ok(client_id), Ok(client_secret)) => Some(Box::new(TwitterOAuthProvider::new(
+            client_id,
+            client_secret,
+            redirect_base_url,
+        )) as Box<dyn OAuthProvider>),
+        _ => None,
+    };
+
+    [github_provider, google_provider, twitter_provider]
+        .into_iter()
+        .flatten()
+        .collect()
 }

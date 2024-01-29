@@ -73,6 +73,8 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
             tower_cookies::cookie::SameSite::Strict,
         ),
         session_expiry: ExpiryStyle::AfterIdle(std::time::Duration::from_secs(24 * 60 * 60)),
+        oauth_redirect_url_base: String::new(),
+        oauth_providers: Some(vec![]),
         new_user_flags: filigree::server::NewUserFlags{
             {# new user flags #}
             allow_public_signup: {{users.allow_public_signup}},

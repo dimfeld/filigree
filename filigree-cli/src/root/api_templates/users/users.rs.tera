@@ -7,7 +7,7 @@ use filigree::{
     users::{
         organization::add_user_to_organization,
         roles::add_default_role_to_user,
-        users::{CreateUserDetails, UserCreatorError},
+        users::{add_user_email_login, CreateUserDetails, UserCreatorError},
     },
 };
 use sqlx::{PgConnection, PgExecutor};
@@ -73,10 +73,8 @@ pub async fn create_new_user_with_prehashed_password(
 
 pub struct UserCreator;
 
-#[async_trait]
-impl filigree::users::users::UserCreator for UserCreator {
-    async fn create_user(
-        &self,
+impl UserCreator {
+    pub async fn create_user(
         tx: &mut PgConnection,
         add_to_organization: Option<OrganizationId>,
         details: CreateUserDetails,
@@ -143,7 +141,25 @@ impl filigree::users::users::UserCreator for UserCreator {
         .await
         .change_context(UserCreatorError)?;
 
+        if let Some(email) = details.email {
+            add_user_email_login(&mut *tx, user_id, email, true)
+                .await
+                .change_context(UserCreatorError)?;
+        }
+
         Ok(user_id)
+    }
+}
+
+#[async_trait]
+impl filigree::users::users::UserCreator for UserCreator {
+    async fn create_user(
+        &self,
+        tx: &mut PgConnection,
+        add_to_organization: Option<OrganizationId>,
+        details: CreateUserDetails,
+    ) -> Result<UserId, Report<UserCreatorError>> {
+        Self::create_user(tx, add_to_organization, details).await
     }
 }
 

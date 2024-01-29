@@ -18,7 +18,10 @@ use std::{
 use axum::{extract::FromRef, routing::get, Router};
 use error_stack::{Report, ResultExt};
 use filigree::{
-    auth::{CorsSetting, ExpiryStyle, SessionBackend, SessionCookieBuilder},
+    auth::{
+        oauth::providers::OAuthProvider, CorsSetting, ExpiryStyle, SessionBackend,
+        SessionCookieBuilder,
+    },
     errors::{panic_handler, ObfuscateErrorLayer, ObfuscateErrorLayerSettings},
     server::FiligreeState,
 };
@@ -162,6 +165,15 @@ pub struct Config {
 
     pub hosts: Vec<String>,
     pub api_cors: filigree::auth::CorsSetting,
+
+    /// The base URL for OAuth redirect URLs.
+    pub oauth_redirect_url_base: String,
+    /// Set the OAuth providers. If this is None, OAuth providers will be configured based on the
+    /// environment variables present for each provider. See
+    /// [filigree::auth::oauth::providers::create_supported_providers] for the logic there.
+    ///
+    /// OAuth can be disabled, regardless of environment variable settings, but passing `Some(Vec::new())`.
+    pub oauth_providers: Option<Vec<Box<dyn OAuthProvider>>>,
 }
 
 /// Create the server and return it, ready to run.
@@ -176,6 +188,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .change_context(Error::ServerStart)
         .attach_printable("Unable to parse hosts list")?;
 
+    let oauth_redirect_base = format!("{}/api/auth/oauth/login", config.oauth_redirect_url_base);
     let state = ServerState(Arc::new(ServerStateInner {
         production,
         filigree: Arc::new(FiligreeState {
@@ -185,6 +198,9 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             new_user_flags: config.new_user_flags,
             hosts: config.hosts,
             user_creator: Box::new(crate::users::users::UserCreator),
+            oauth_providers: config.oauth_providers.unwrap_or_else(|| {
+                filigree::auth::oauth::providers::create_supported_providers(&oauth_redirect_base)
+            }),
             session_backend: SessionBackend::new(
                 config.pg_pool.clone(),
                 config.cookie_configuration,
@@ -213,6 +229,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .route("/healthz", get(health::healthz))
         .nest("/meta", meta::create_routes())
         .merge(filigree::auth::endpoints::create_routes())
+        .merge(filigree::auth::oauth::create_routes())
         .merge(crate::models::create_routes())
         .merge(crate::users::users::create_routes())
         .merge(crate::auth::create_routes())

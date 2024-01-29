@@ -8,7 +8,7 @@ use sqlx::PgExecutor;
 use thiserror::Error;
 use tower_cookies::{Cookie, Cookies};
 
-use self::providers::{AuthorizeUrl, OAuthProvider, OAuthUserDetails};
+use self::providers::{AuthorizeUrl, OAuthUserDetails};
 use super::UserId;
 use crate::{
     errors::{ErrorKind, ForceObfuscate, HttpError, WrapReport},
@@ -16,8 +16,12 @@ use crate::{
     users::users::CreateUserDetails,
 };
 
+/// OAuth endpoints that provide standard behavior
+pub mod endpoints;
 /// OAuth provider implementations
 pub mod providers;
+
+pub use endpoints::create_routes;
 
 const STATE_COOKIE_NAME: &str = "oauth_state_key";
 
@@ -62,6 +66,9 @@ pub enum OAuthError {
     /// Error while trying to create a new user after an OAuth login
     #[error("Failed to create user")]
     UserCreation,
+    /// Attempted to login with an unsupported OAuth provider
+    #[error("OAuth provider not supported")]
+    ProviderNotSupported,
 }
 
 impl HttpError for OAuthError {
@@ -73,6 +80,7 @@ impl HttpError for OAuthError {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             Self::PublicSignupDisabled => StatusCode::FORBIDDEN,
+            Self::ProviderNotSupported => StatusCode::NOT_IMPLEMENTED,
             _ => StatusCode::UNAUTHORIZED,
         }
     }
@@ -100,6 +108,7 @@ impl HttpError for OAuthError {
             Self::FetchUserDetails => ErrorKind::FetchOAuthUserDetails,
             Self::ExchangeError => ErrorKind::OAuthExchangeError,
             Self::UserCreation => ErrorKind::UserCreationError,
+            Self::ProviderNotSupported => ErrorKind::OAuthProviderNotSupported,
         }
         .as_str()
     }
@@ -109,10 +118,16 @@ impl HttpError for OAuthError {
 pub async fn start_oauth_login(
     state: &FiligreeState,
     cookies: &Cookies,
-    provider: Box<dyn OAuthProvider>,
+    provider_name: &str,
     link_account: Option<UserId>,
     redirect_to: Option<String>,
-) -> Result<impl IntoResponse, sqlx::Error> {
+) -> Result<impl IntoResponse, Report<OAuthError>> {
+    let provider = state
+        .oauth_providers
+        .iter()
+        .find(|p| p.name() == provider_name)
+        .ok_or(OAuthError::ProviderNotSupported)?;
+
     let AuthorizeUrl {
         url,
         state: key,
@@ -131,7 +146,8 @@ pub async fn start_oauth_login(
         pkce_verifier.as_ref().map(|p| p.secret()),
     )
     .execute(&state.db)
-    .await?;
+    .await
+    .change_context(OAuthError::Db)?;
 
     cookies.add(
         // Store a hash of the state code on the client so we can verify that the same client is
@@ -189,11 +205,17 @@ pub async fn add_oauth_login(
 /// This function returns a [OAuthLoginResponse] which has information about the user.
 pub async fn handle_login_code(
     state: &FiligreeState,
-    provider: Box<dyn OAuthProvider>,
     cookies: &Cookies,
+    provider_name: &str,
     state_code: String,
     authorization_code: String,
 ) -> Result<OAuthLoginResponse, WrapReport<OAuthError>> {
+    let provider = state
+        .oauth_providers
+        .iter()
+        .find(|p| p.name() == provider_name)
+        .ok_or(OAuthError::ProviderNotSupported)?;
+
     let expected_cookie_hash = hash_state_cookie(&state_code);
     let session_cookie_matches = cookies
         .get(STATE_COOKIE_NAME)
@@ -279,15 +301,14 @@ pub async fn handle_login_code(
         user_id
     };
 
+    tx.commit().await.change_context(OAuthError::Db)?;
+
     state
         .session_backend
         .create_session(cookies, &user_id)
         .await
         .change_context(OAuthError::SessionBackend)?;
 
-    tx.commit().await.change_context(OAuthError::Db)?;
-
-    // This user already has an account.
     Ok(OAuthLoginResponse {
         user_id,
         redirect_to: oauth_login_session.redirect_to,
