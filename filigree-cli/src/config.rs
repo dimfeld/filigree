@@ -6,7 +6,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
     format::Formatters,
-    model::{Model, ModelAuthScope, SqlDialect},
+    model::{field::ModelField, Model, ModelAuthScope, SqlDialect},
     state::State,
     Error,
 };
@@ -53,6 +53,10 @@ pub struct Config {
     /// Configuration for user behavior
     #[serde(default)]
     pub users: UsersConfig,
+
+    /// Configuration that extends built-in models
+    #[serde(default)]
+    pub extend: ExtendConfig,
 }
 
 impl Config {
@@ -182,6 +186,27 @@ pub struct UsersConfig {
     /// Defaults to true.
     #[serde(default = "true_t")]
     pub allow_invite_to_new_org: bool,
+}
+
+/// Configuration that extends built-in data
+#[derive(Debug, serde_derive_default::Default, Serialize, Deserialize)]
+pub struct ExtendConfig {
+    pub models: Option<ExtendModelsConfig>,
+}
+
+/// Extend the built-in user, role, and organization models
+#[derive(Debug, serde_derive_default::Default, Serialize, Deserialize)]
+pub struct ExtendModelsConfig {
+    pub user: Option<ExtendModelConfig>,
+    pub role: Option<ExtendModelConfig>,
+    pub organization: Option<ExtendModelConfig>,
+}
+
+/// Extend a built-in model
+#[derive(Debug, serde_derive_default::Default, Serialize, Deserialize)]
+pub struct ExtendModelConfig {
+    /// Add more fields to the model
+    pub fields: Vec<ModelField>,
 }
 
 const fn true_t() -> bool {

@@ -28,7 +28,21 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
 
 impl Model {
     /// Return models for the user, org, etc.
-    pub fn create_default_models(_config: &Config) -> Vec<Model> {
+    pub fn create_default_models(config: &Config) -> Vec<Model> {
+        let extend_config = config.extend.models.as_ref();
+        let extra_user_fields = extend_config
+            .and_then(|c| c.user.as_ref())
+            .map(|m| m.fields.clone())
+            .unwrap_or_default();
+        let extra_role_fields = extend_config
+            .and_then(|c| c.role.as_ref())
+            .map(|m| m.fields.clone())
+            .unwrap_or_default();
+        let extra_organization_fields = extend_config
+            .and_then(|c| c.organization.as_ref())
+            .map(|m| m.fields.clone())
+            .unwrap_or_default();
+
         vec![
             Model {
                 name: "User".to_string(),
@@ -47,7 +61,7 @@ impl Model {
                 default_sort_field: Some("name".to_string()),
                 extra_create_table_sql: String::new(),
                 pagination: Default::default(),
-                fields: vec![
+                fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
                         ..simple_model_field("name", SqlType::Text)
@@ -68,7 +82,10 @@ impl Model {
                         nullable: true,
                         ..simple_model_field("avatar_url", SqlType::Text)
                     },
-                ],
+                ]
+                .into_iter()
+                .chain(extra_user_fields.into_iter())
+                .collect(),
             },
             Model {
                 name: "Organization".to_string(),
@@ -81,7 +98,7 @@ impl Model {
                 auth_scope: Some(crate::model::ModelAuthScope::Model),
                 extra_create_table_sql: String::new(),
                 pagination: Default::default(),
-                fields: vec![
+                fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
                         ..simple_model_field("name", SqlType::Text)
@@ -114,7 +131,10 @@ impl Model {
                         default_sql: "true".into(),
                         ..simple_model_field("active", SqlType::Boolean)
                     },
-                ],
+                ]
+                .into_iter()
+                .chain(extra_organization_fields.into_iter())
+                .collect(),
             },
             Model {
                 name: "Role".to_string(),
@@ -127,7 +147,7 @@ impl Model {
                 auth_scope: Some(crate::model::ModelAuthScope::Model),
                 extra_create_table_sql: String::new(),
                 pagination: Default::default(),
-                fields: vec![
+                fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
                         ..simple_model_field("name", SqlType::Text)
@@ -137,7 +157,10 @@ impl Model {
                         user_access: Access::Read,
                         ..simple_model_field("description", SqlType::Text)
                     },
-                ],
+                ]
+                .into_iter()
+                .chain(extra_role_fields.into_iter())
+                .collect(),
             },
         ]
     }
