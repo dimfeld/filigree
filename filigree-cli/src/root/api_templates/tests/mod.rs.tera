@@ -59,10 +59,13 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
     let email_service = filigree::email::services::test_service::TestEmailService::new();
     let sent_emails = email_service.emails.clone();
 
+    let listener = crate::server::create_tcp_listener("127.0.0.1", 0).await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let base_url = format!("http://127.0.0.1:{port}");
+
     let config = crate::server::Config {
         env: "test".into(),
-        host: "127.0.0.1".into(),
-        port: 0, // Bind to random port
+        bind: crate::server::ServerBind::Listener(listener),
         insecure: true,
         request_timeout: std::time::Duration::from_secs(30),
         pg_pool: pg_pool.clone(),
@@ -73,7 +76,7 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
             tower_cookies::cookie::SameSite::Strict,
         ),
         session_expiry: ExpiryStyle::AfterIdle(std::time::Duration::from_secs(24 * 60 * 60)),
-        oauth_redirect_url_base: String::new(),
+        oauth_redirect_url_base: base_url.clone(),
         oauth_providers: Some(vec![]),
         new_user_flags: filigree::server::NewUserFlags{
             {# new user flags #}
@@ -93,8 +96,7 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
         .await
         .expect("creating server");
 
-    let base_url = format!("http://{}:{}", server.host, server.port);
-    let test_client = TestClient::new(base_url.clone());
+    let test_client = TestClient::new(format!("{base_url}/api"));
 
     let bootstrapped_data = bootstrap_data(&pg_pool, &test_client).await;
 

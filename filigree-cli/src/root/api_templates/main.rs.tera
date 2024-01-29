@@ -172,8 +172,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
 
     let server = server::create_server(server::Config {
         env: cmd.env,
-        host: cmd.host,
-        port: cmd.port,
+        bind: server::ServerBind::HostPort(cmd.host, cmd.port),
         insecure: cmd.insecure,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),
         cookie_configuration: SessionCookieBuilder::new(secure_cookies, cmd.cookie_same_site),

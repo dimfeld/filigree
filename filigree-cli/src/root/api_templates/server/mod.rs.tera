@@ -142,15 +142,32 @@ impl Server {
     }
 }
 
+/// Create a TCP listener.
+pub async fn create_tcp_listener(
+    host: &str,
+    port: u16,
+) -> Result<tokio::net::TcpListener, Report<Error>> {
+    let bind_ip = host.parse::<IpAddr>().change_context(Error::ServerStart)?;
+    let bind_addr = SocketAddr::from((bind_ip, port));
+    tokio::net::TcpListener::bind(bind_addr)
+        .await
+        .change_context(Error::ServerStart)
+}
+
+pub enum ServerBind {
+    /// A host and port to bind to
+    HostPort(String, u16),
+    /// An existing TCP listener to use
+    Listener(tokio::net::TcpListener),
+}
+
 /// Configuration for the server
 pub struct Config {
     /// The environment we're running in. Currently this just distinguishes between
     /// "development" and any other value.
     pub env: String,
-    /// The host to bind to.
-    pub host: String,
-    /// The port to bind to
-    pub port: u16,
+    /// The host and port to bind to, or an existing TCP listener
+    pub bind: ServerBind,
     /// True if the site is being hosted on plain HTTP. This should only be set in a development
     /// or testing environment.
     pub insecure: bool,
@@ -262,21 +279,18 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
 
     let app = Router::new().nest("/api", api_routes);
 
-    let bind_ip = config
-        .host
-        .parse::<IpAddr>()
-        .change_context(Error::ServerStart)?;
-    let bind_addr = SocketAddr::from((bind_ip, config.port));
-    let listener = tokio::net::TcpListener::bind(bind_addr)
-        .await
-        .change_context(Error::ServerStart)?;
+    let listener = match config.bind {
+        ServerBind::Listener(l) => l,
+        ServerBind::HostPort(host, port) => create_tcp_listener(&host, port).await?,
+    };
 
     let actual_addr = listener.local_addr().change_context(Error::ServerStart)?;
     let port = actual_addr.port();
-    event!(Level::INFO, "Listening on {}:{port}", config.host);
+    let host = actual_addr.ip().to_string();
+    event!(Level::INFO, "Listening on {host}:{port}");
 
     Ok(Server {
-        host: config.host,
+        host,
         port,
         app,
         state,
