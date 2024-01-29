@@ -1,25 +1,24 @@
 use async_trait::async_trait;
-use error_stack::{Report, ResultExt};
+use error_stack::Report;
 use oauth2::{
     basic::{BasicClient, BasicTokenResponse},
-    reqwest::async_http_client,
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope, TokenUrl,
+    AuthUrl, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope, TokenUrl,
 };
 use serde::Deserialize;
 use url::Url;
 
-use super::{AuthorizeUrl, OAuthProvider, OAuthUserDetails};
+use super::{build_redirect_url, AuthorizeUrl, OAuthProvider, OAuthUserDetails};
 use crate::auth::oauth::OAuthError;
 
-struct GitHubOAuthProvider {
+/// OAuth provider for Github logins
+pub struct GitHubOAuthProvider {
     client: BasicClient,
 }
 
 impl GitHubOAuthProvider {
     /// Set up the Github OAuth provider
-    pub fn new(client_id: String, client_secret: String, redirect_base_url: String) -> Self {
-        let mut redirect_url = Url::parse(&redirect_base_url).unwrap();
-        redirect_url.set_path("/api/auth/oauth/github/callback");
+    pub fn new(client_id: String, client_secret: String, redirect_base_url: &str) -> Self {
+        let redirect_url = build_redirect_url(redirect_base_url, "github");
 
         let client = BasicClient::new(
             ClientId::new(client_id),
@@ -27,7 +26,7 @@ impl GitHubOAuthProvider {
             AuthUrl::new("https://github.com/login/oauth/authorize".into()).unwrap(),
             Some(TokenUrl::new("https://github.com/login/oauth/access_token".into()).unwrap()),
         )
-        .set_redirect_uri(RedirectUrl::from_url(redirect_url));
+        .set_redirect_uri(RedirectUrl::new(redirect_url).unwrap());
 
         Self { client }
     }

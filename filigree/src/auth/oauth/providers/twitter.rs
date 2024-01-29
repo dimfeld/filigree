@@ -1,33 +1,32 @@
 use async_trait::async_trait;
-use error_stack::{Report, ResultExt};
+use error_stack::Report;
 use oauth2::{
     basic::{BasicClient, BasicTokenResponse},
-    reqwest::async_http_client,
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge,
-    PkceCodeVerifier, RedirectUrl, Scope, TokenUrl,
+    AuthUrl, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge, RedirectUrl, Scope, TokenUrl,
 };
 use serde::Deserialize;
 use url::Url;
 
-use super::{AuthorizeUrl, OAuthProvider, OAuthUserDetails};
+use super::{build_redirect_url, AuthorizeUrl, OAuthProvider, OAuthUserDetails};
 use crate::auth::oauth::OAuthError;
 
-struct TwitterOAuthProvider {
+/// OAuth provider for Twitter logins
+pub struct TwitterOAuthProvider {
     client: BasicClient,
 }
 
 impl TwitterOAuthProvider {
     /// Set up the Twitter OAuth provider
-    pub fn new(client_id: String, client_secret: String, redirect_base_url: String) -> Self {
-        let mut redirect_url = Url::parse(&redirect_base_url).unwrap();
-        redirect_url.set_path("/api/auth/oauth/twitter/callback");
+    pub fn new(client_id: String, client_secret: String, redirect_base_url: &str) -> Self {
+        let redirect_url = build_redirect_url(redirect_base_url, "twitter");
 
         let client = BasicClient::new(
             ClientId::new(client_id),
             Some(ClientSecret::new(client_secret)),
             AuthUrl::new("https://twitter.com/i/oauth2/authorize".into()).unwrap(),
             Some(TokenUrl::new("https://api.twitter.com/2/oauth2/token".into()).unwrap()),
-        );
+        )
+        .set_redirect_uri(RedirectUrl::new(redirect_url).unwrap());
 
         Self { client }
     }

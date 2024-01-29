@@ -10,9 +10,11 @@ use url::Url;
 use super::OAuthError;
 
 mod github;
+mod google;
 mod twitter;
 
 pub use github::*;
+pub use google::*;
 pub use twitter::*;
 
 /// User information from an OAuth provider
@@ -32,8 +34,11 @@ pub struct OAuthUserDetails {
 
 /// An authorization URL and state generated in the URL to save for handling the response.
 pub struct AuthorizeUrl {
+    /// The full URL to send the user's browser to
     pub url: Url,
+    /// A random string to use as the state. This is the key in the oauth_authorization_sessions table
     pub state: CsrfToken,
+    /// The PKCE verifier code, if applicable.
     pub pkce_verifier: Option<PkceCodeVerifier>,
 }
 
@@ -67,7 +72,7 @@ pub trait OAuthProvider {
 }
 
 /// Helper function to exchange an authorization token for an access token, without PKCE.
-async fn fetch_access_token_simple(
+pub async fn fetch_access_token_simple(
     client: &BasicClient,
     authorization_code: String,
 ) -> Result<BasicTokenResponse, Report<OAuthError>> {
@@ -79,7 +84,7 @@ async fn fetch_access_token_simple(
 }
 
 /// Helper function to exchange an authorization token for an access token, with PKCE.
-async fn fetch_access_token_with_pkce(
+pub async fn fetch_access_token_with_pkce(
     client: &BasicClient,
     authorization_code: String,
     pkce_verifier: String,
@@ -91,4 +96,9 @@ async fn fetch_access_token_with_pkce(
         .request_async(async_http_client)
         .await
         .change_context(OAuthError::ExchangeError)
+}
+
+/// Create an OAuth 2 redirect URL for a provider
+pub fn build_redirect_url(base: &str, provider_name: &str) -> String {
+    format!("{base}/api/auth/oauth/{provider_name}/callback")
 }

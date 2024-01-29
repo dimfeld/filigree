@@ -1,12 +1,12 @@
-use std::sync::Arc;
-
 use axum::response::{IntoResponse, Redirect};
+use base64::Engine;
 use error_stack::{Report, ResultExt};
 use hyper::StatusCode;
 use oauth2::TokenResponse;
+use sha3::{Digest, Sha3_256};
 use sqlx::PgExecutor;
 use thiserror::Error;
-use tower_cookies::Cookies;
+use tower_cookies::{Cookie, Cookies};
 
 use self::providers::{AuthorizeUrl, OAuthProvider, OAuthUserDetails};
 use super::UserId;
@@ -19,6 +19,15 @@ use crate::{
 /// OAuth provider implementations
 pub mod providers;
 
+const STATE_COOKIE_NAME: &str = "oauth_state_key";
+
+fn hash_state_cookie(state_code: &str) -> String {
+    let mut hasher = Sha3_256::new();
+    hasher.update(state_code.as_bytes());
+    let hash = hasher.finalize();
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&hash)
+}
+
 /// An error returned from an OAuth2 interaction
 #[derive(Error, Debug)]
 pub enum OAuthError {
@@ -26,6 +35,10 @@ pub enum OAuthError {
     /// appear as a generic 401 error.
     #[error("Login session not found")]
     SessionNotFound,
+    /// The `state` parameter did not hash to the same value stored in the cookie. In production this will
+    /// appear as a generic 401 error.
+    #[error("Session cookie does not match")]
+    SessionCookieMismatch,
     /// The session referred to in the `state` parameter was not found. In production this will
     /// appear as a generic 401 error.
     #[error("Login session expired")]
@@ -46,6 +59,7 @@ pub enum OAuthError {
     /// Returned when user signups are disabled.
     #[error("Sorry, new signups are currently not allowed")]
     PublicSignupDisabled,
+    /// Error while trying to create a new user after an OAuth login
     #[error("Failed to create user")]
     UserCreation,
 }
@@ -81,6 +95,7 @@ impl HttpError for OAuthError {
             Self::PublicSignupDisabled => ErrorKind::SignupDisabled,
             Self::SessionExpired => ErrorKind::OAuthSessionExpired,
             Self::SessionNotFound => ErrorKind::OAuthSessionNotFound,
+            Self::SessionCookieMismatch => ErrorKind::OAuthSessionNotFound,
             Self::SessionBackend => ErrorKind::SessionBackendError,
             Self::FetchUserDetails => ErrorKind::FetchOAuthUserDetails,
             Self::ExchangeError => ErrorKind::OAuthExchangeError,
@@ -93,6 +108,7 @@ impl HttpError for OAuthError {
 /// Store state for an OAuth provider and redirects the user to the provider
 pub async fn start_oauth_login(
     state: &FiligreeState,
+    cookies: &Cookies,
     provider: Box<dyn OAuthProvider>,
     link_account: Option<UserId>,
     redirect_to: Option<String>,
@@ -116,6 +132,16 @@ pub async fn start_oauth_login(
     )
     .execute(&state.db)
     .await?;
+
+    cookies.add(
+        // Store a hash of the state code on the client so we can verify that the same client is
+        // sending the response. Sending a hash instead of the state value prevents malicious
+        // actors from constructing a fake response URL with the state value.
+        Cookie::build((STATE_COOKIE_NAME, hash_state_cookie(key.secret())))
+            .http_only(true)
+            .path("/")
+            .build(),
+    );
 
     Ok(Redirect::to(url.as_str()))
 }
@@ -168,7 +194,17 @@ pub async fn handle_login_code(
     state_code: String,
     authorization_code: String,
 ) -> Result<OAuthLoginResponse, WrapReport<OAuthError>> {
-    // TODO need to get either state code or pkce code
+    let expected_cookie_hash = hash_state_cookie(&state_code);
+    let session_cookie_matches = cookies
+        .get(STATE_COOKIE_NAME)
+        .map(|cookie| cookie.value() == expected_cookie_hash)
+        .unwrap_or(false);
+    cookies.remove(Cookie::new(STATE_COOKIE_NAME, ""));
+
+    if !session_cookie_matches {
+        return Err(Report::new(OAuthError::SessionCookieMismatch).into());
+    };
+
     let provider_name = provider.name();
     let oauth_login_session = sqlx::query!(
         "DELETE FROM oauth_authorization_sessions
@@ -212,9 +248,10 @@ pub async fn handle_login_code(
     .change_context(OAuthError::Db)?;
 
     let user_id = if let Some(existing_user) = existing_user {
-        // This user already has an account.
+        // We've seen this user log in with this OAuth account before.
         UserId::from(existing_user)
     } else if let Some(link_user_id) = oauth_login_session.add_to_user_id {
+        // Linking to an existing account
         let user_id = UserId::from(link_user_id);
         add_oauth_login(&mut *tx, user_id, provider_name, &user_details.login_id)
             .await
@@ -223,6 +260,7 @@ pub async fn handle_login_code(
     } else if !state.new_user_flags.allow_public_signup {
         return Err(Report::new(OAuthError::PublicSignupDisabled).into());
     } else {
+        // Create a new user for this login
         let create_user_details = CreateUserDetails {
             email: user_details.email.clone(),
             name: user_details.name.clone(),
