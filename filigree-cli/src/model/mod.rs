@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use self::field::{
-    Access, DeleteBehavior, FilterableType, ModelField, ModelFieldReference, SqlType,
+    Access, FilterableType, ModelField, ModelFieldReference, ReferentialAction, SqlType,
 };
 use crate::{config::Config, model::field::SortableType};
 
@@ -34,9 +34,14 @@ pub struct Model {
     #[serde(default)]
     pub pagination: Pagination,
 
-    /// Extra SQL to place after the column definitions inside the `CREATE TABLE` statement.
+    /// Extra SQL to place after the column definitions inside the `CREATE TABLE` statement,
+    /// such as multi-column foreign keys or other constraints.
     #[serde(default)]
     pub extra_create_table_sql: String,
+
+    /// Extra SQL to place in the migration after creating the table and indexes.
+    #[serde(default)]
+    pub extra_sql: String,
 
     /// If true, this model does not have a organization_id.
     /// This mostly applies to the organization object itself but may be useful for other things.
@@ -140,6 +145,7 @@ impl Model {
             "owner_permission": format!("{}::owner", self.name),
             "read_permission": format!("{}::read", self.name),
             "write_permission": format!("{}::write", self.name),
+            "extra_sql": self.extra_sql,
             "extra_create_table_sql": self.extra_create_table_sql,
             "pagination": self.pagination,
             "full_default_sort_field": full_default_sort_field,
@@ -159,11 +165,14 @@ impl Model {
         let org_field = if self.global {
             None
         } else {
+            let org_id_nullable = self.name == "User";
+            let org_id_foreign_key = self.name != "User";
+
             Some(ModelField {
                 name: "organization_id".to_string(),
                 typ: SqlType::Uuid,
                 rust_type: Some("crate::models::organization::OrganizationId".to_string()),
-                nullable: false,
+                nullable: org_id_nullable,
                 unique: false,
                 indexed: true,
                 sortable: field::SortableType::None,
@@ -176,11 +185,13 @@ impl Model {
                 never_read: false,
                 fixed: true,
                 previous_name: None,
-                references: Some(ModelFieldReference::new(
-                    "organizations",
-                    "id",
-                    DeleteBehavior::Cascade,
-                )),
+                references: org_id_foreign_key.then(|| {
+                    ModelFieldReference::new(
+                        "organizations",
+                        "id",
+                        Some(ReferentialAction::Cascade),
+                    )
+                }),
             })
         };
 

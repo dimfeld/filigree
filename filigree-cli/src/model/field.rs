@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt::Display};
 
 use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
@@ -163,6 +163,7 @@ impl ModelField {
             "filterable": self.filterable,
             "sortable": self.sortable,
             "unique": self.unique,
+            "foreign_key_sql": self.references.as_ref().map(|r| r.to_string()),
             "extra_sql_modifiers": self.extra_sql_modifiers,
             "user_read": self.user_read(),
             "user_write": self.user_write(),
@@ -177,31 +178,90 @@ impl ModelField {
 pub struct ModelFieldReference {
     table: String,
     field: String,
-    delete_behavior: DeleteBehavior,
+    on_delete: Option<ReferentialAction>,
+    on_update: Option<ReferentialAction>,
+    deferrable: Option<Deferrable>,
 }
 
 impl ModelFieldReference {
     pub fn new(
         table: impl Into<String>,
         field: impl Into<String>,
-        delete_behavior: DeleteBehavior,
+        on_delete: Option<ReferentialAction>,
     ) -> Self {
         Self {
             table: table.into(),
             field: field.into(),
-            delete_behavior,
+            on_delete,
+            on_update: None,
+            deferrable: None,
+        }
+    }
+
+    pub fn with_deferrable(mut self, deferrable: Deferrable) -> Self {
+        self.deferrable = Some(deferrable);
+        self
+    }
+}
+
+impl Display for ModelFieldReference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "REFERENCES {} ({})", self.table, self.field)?;
+
+        if let Some(delete_behavior) = self.on_delete {
+            write!(f, "ON DELETE {}", delete_behavior)?;
+        }
+
+        if let Some(update_behavior) = self.on_update {
+            write!(f, "ON UPDATE {}", update_behavior)?;
+        }
+
+        if let Some(deferrable) = self.deferrable {
+            write!(f, " {}", deferrable)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum ReferentialAction {
+    NoAction,
+    Restrict,
+    Cascade,
+    SetNull,
+    SetDefault,
+}
+
+impl Display for ReferentialAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReferentialAction::NoAction => write!(f, "NO ACTION"),
+            ReferentialAction::Restrict => write!(f, "RESTRICT"),
+            ReferentialAction::Cascade => write!(f, "CASCADE"),
+            ReferentialAction::SetNull => write!(f, "SET NULL"),
+            ReferentialAction::SetDefault => write!(f, "SET DEFAULT"),
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
-pub enum DeleteBehavior {
-    Ignore,
-    Restrict,
-    Cascade,
-    SetNull,
-    SetDefault,
+pub enum Deferrable {
+    NotDeferrable,
+    InitiallyDeferred,
+    InitiallyImmediate,
+}
+
+impl Display for Deferrable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Deferrable::NotDeferrable => write!(f, "NOT DEFERRABLE"),
+            Deferrable::InitiallyDeferred => write!(f, "DEFERRABLE INITIALLY DEFERRED"),
+            Deferrable::InitiallyImmediate => write!(f, "DEFERRABLE INITIALLY IMMEDIATE"),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
