@@ -21,4 +21,4 @@ CREATE TABLE {{table}} (
 {%- if not i is ending_with(';') %};{%- endif -%}
 {% endfor %}
 
-{% if extra_sql -%} {{ extra_sql }} {%- endif -%}
+{{ extra_sql }}{%- if extra_sql and not extra_sql is ending_with(';') %};{% endif %}

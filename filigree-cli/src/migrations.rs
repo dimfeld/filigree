@@ -9,7 +9,10 @@ use error_stack::{Report, ResultExt};
 use glob::glob;
 use itertools::Itertools;
 use sql_migration_sim::{
-    ast::{AlterColumnOperation, AlterTableOperation, Ident, ObjectName, Statement},
+    ast::{
+        AlterColumnOperation, AlterTableOperation, ColumnOption, ColumnOptionDef, Ident,
+        ObjectName, Statement, TableConstraint,
+    },
     Column, Schema, SchemaObjectType, Table,
 };
 
@@ -245,6 +248,15 @@ enum TableChange {
         column_name: Ident,
         changes: Vec<AlterColumnOperation>,
     },
+    AddConstraint {
+        table: ObjectName,
+        constraint_name: Ident,
+        constraint: TableConstraint,
+    },
+    RemoveConstraint {
+        table: ObjectName,
+        constraint_name: Ident,
+    },
 }
 
 impl TableChange {
@@ -316,6 +328,35 @@ impl TableChange {
 
                 Ok(())
             }
+            TableChange::AddConstraint {
+                table, constraint, ..
+            } => {
+                let statement = Statement::AlterTable {
+                    name: table.clone(),
+                    if_exists: false,
+                    only: false,
+                    operations: vec![AlterTableOperation::AddConstraint(constraint.clone())],
+                };
+
+                write!(f, "{statement};\n")
+            }
+            TableChange::RemoveConstraint {
+                table,
+                constraint_name,
+            } => {
+                let statement = Statement::AlterTable {
+                    name: table.clone(),
+                    if_exists: false,
+                    only: false,
+                    operations: vec![AlterTableOperation::DropConstraint {
+                        if_exists: true,
+                        cascade: false,
+                        name: constraint_name.clone(),
+                    }],
+                };
+
+                write!(f, "{statement};\n")
+            }
         }
     }
 
@@ -377,6 +418,27 @@ impl TableChange {
 
                 Ok(())
             }
+            TableChange::AddConstraint {
+                table,
+                constraint_name,
+                ..
+            } => {
+                let statement = Statement::AlterTable {
+                    name: table.clone(),
+                    if_exists: true,
+                    only: false,
+                    operations: vec![AlterTableOperation::DropConstraint {
+                        if_exists: true,
+                        cascade: false,
+                        name: constraint_name.clone(),
+                    }],
+                };
+
+                write!(f, "{statement};\n")
+            }
+
+            // TODO need old constraint information for this
+            TableChange::RemoveConstraint { .. } => Ok(()),
         }
     }
 }
@@ -437,6 +499,43 @@ fn opposite_alter_op(
     }
 }
 
+fn process_column_option_to_table_constraint(
+    column_name: &Ident,
+    option: &ColumnOptionDef,
+) -> Option<TableConstraint> {
+    match &option.option {
+        ColumnOption::ForeignKey {
+            foreign_table,
+            referred_columns,
+            on_delete,
+            on_update,
+            characteristics,
+        } => Some(TableConstraint::ForeignKey {
+            name: option.name.clone(),
+            columns: vec![column_name.clone()],
+            foreign_table: foreign_table.clone(),
+            referred_columns: referred_columns.clone(),
+            on_delete: on_delete.clone(),
+            on_update: on_update.clone(),
+            characteristics: characteristics.clone(),
+        }),
+        ColumnOption::Unique {
+            is_primary,
+            characteristics,
+        } => Some(TableConstraint::Unique {
+            name: option.name.clone(),
+            columns: vec![column_name.clone()],
+            is_primary: *is_primary,
+            characteristics: characteristics.clone(),
+        }),
+        ColumnOption::Check(expr) => Some(TableConstraint::Check {
+            name: option.name.clone(),
+            expr: Box::new(expr.clone()),
+        }),
+        _ => None,
+    }
+}
+
 fn diff_table(model: Option<&Model>, old_table: &Table, new_table: &Table) -> Vec<TableChange> {
     let mut changes = vec![];
 
@@ -469,6 +568,9 @@ fn diff_table(model: Option<&Model>, old_table: &Table, new_table: &Table) -> Ve
         .map(|(new_name, old_name)| (old_name.as_str(), new_name.as_str()))
         .collect::<HashMap<_, _>>();
 
+    let mut new_table_constraints = new_table.constraints.clone();
+    let mut old_table_constraints = old_table.constraints.clone();
+
     // Look for new or altered columns
     for column in &new_table.columns {
         let column_name = column.name();
@@ -477,6 +579,13 @@ fn diff_table(model: Option<&Model>, old_table: &Table, new_table: &Table) -> Ve
                 .get(column_name)
                 .and_then(|f| old_columns.get(f.as_str()))
         });
+
+        new_table_constraints.extend(
+            column
+                .options
+                .iter()
+                .filter_map(|o| process_column_option_to_table_constraint(&column.name, o)),
+        );
 
         if let Some(matching_column) = matching_column {
             if matching_column.name() != column_name {
@@ -512,6 +621,13 @@ fn diff_table(model: Option<&Model>, old_table: &Table, new_table: &Table) -> Ve
                 .and_then(|f| new_columns.get(f))
         });
 
+        old_table_constraints.extend(
+            column
+                .options
+                .iter()
+                .filter_map(|o| process_column_option_to_table_constraint(&column.name, o)),
+        );
+
         if matching_column.is_none() {
             changes.push(TableChange::RemoveColumn {
                 table: new_table.name.clone(),
@@ -519,6 +635,8 @@ fn diff_table(model: Option<&Model>, old_table: &Table, new_table: &Table) -> Ve
             })
         }
     }
+
+    // TODO Match constraints together
 
     changes
 }
@@ -553,8 +671,6 @@ fn diff_column(old_column: &Column, new_column: &Column) -> Vec<AlterColumnOpera
             changes.push(AlterColumnOperation::DropDefault)
         }
     }
-
-    // TODO add constraints once submodels are supported
 
     changes
 }

@@ -51,7 +51,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, Ident, ObjectName, ObjectType, Statement,
+    ColumnOptionDef, Ident, ObjectName, ObjectType, Statement, TableConstraint,
 };
 pub use sqlparser::{ast, dialect};
 
@@ -110,6 +110,8 @@ pub struct Table {
     pub name: ObjectName,
     /// The columns in the table
     pub columns: Vec<Column>,
+    /// Constraints on this table
+    pub constraints: Vec<TableConstraint>,
 }
 
 impl Table {
@@ -252,6 +254,7 @@ impl Schema {
             Table {
                 name,
                 columns: columns.into_iter().map(Column).collect(),
+                constraints: Vec::new(),
             },
         );
 
@@ -427,6 +430,37 @@ impl Schema {
                     }
                     _ => {}
                 }
+            }
+
+            AlterTableOperation::AddConstraint(c) => {
+                let table = self
+                    .tables
+                    .get_mut(name)
+                    .ok_or_else(|| Error::AlteredMissingTable(name.to_string()))?;
+
+                table.constraints.push(c);
+            }
+
+            AlterTableOperation::DropConstraint {
+                name: constraint_name,
+                ..
+            } => {
+                let table = self
+                    .tables
+                    .get_mut(name)
+                    .ok_or_else(|| Error::AlteredMissingTable(name.to_string()))?;
+
+                table.constraints.retain(|c| {
+                    let name = match c {
+                        TableConstraint::Unique { name, .. } => name,
+                        TableConstraint::ForeignKey { name, .. } => name,
+                        TableConstraint::Check { name, .. } => name,
+                        TableConstraint::Index { name, .. } => name,
+                        TableConstraint::FulltextOrSpatial { .. } => &None,
+                    };
+
+                    name.as_ref().map(|n| n != &constraint_name).unwrap_or(true)
+                });
             }
 
             _ => {}

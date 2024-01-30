@@ -163,6 +163,7 @@ impl ModelField {
             "filterable": self.filterable,
             "sortable": self.sortable,
             "unique": self.unique,
+            "indexed": self.indexed,
             "foreign_key_sql": self.references.as_ref().map(|r| r.to_string()),
             "extra_sql_modifiers": self.extra_sql_modifiers,
             "user_read": self.user_read(),
