@@ -97,15 +97,18 @@ impl UserCreator {
                     Ok(organization_id)
                 }
                 None => {
+                    let org_name = details
+                        .name
+                        .as_deref()
+                        .unwrap_or("My Organization")
+                        .to_string();
+
                     // create_new_organization does everything except actually creating the user
                     // object.
-                    let org = super::organization::create_new_organization(
-                        &mut *tx,
-                        "My Organization".to_string(),
-                        user_id,
-                    )
-                    .await
-                    .change_context(UserCreatorError)?;
+                    let org =
+                        super::organization::create_new_organization(&mut *tx, org_name, user_id)
+                            .await
+                            .change_context(UserCreatorError)?;
 
                     Ok(org.organization.id)
                 }
