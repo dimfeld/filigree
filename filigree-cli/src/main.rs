@@ -4,7 +4,7 @@ use clap::Parser;
 use config::Config;
 use error_stack::{Report, ResultExt};
 use merge_files::MergeTracker;
-use migrations::{resolve_migration, SingleMigration};
+use migrations::{resolve_migration, save_migration_state, SingleMigration};
 use model::Model;
 use rayon::prelude::*;
 use thiserror::Error;
@@ -169,7 +169,7 @@ pub fn main() -> Result<(), Report<Error>> {
             )
         })?;
 
-    let migration = resolve_migration(&migrations_dir, migrations)?;
+    let migration = resolve_migration(&migrations_dir, &state_dir, &migrations)?;
 
     if !migration.up.is_empty() {
         let timestamp = chrono::Utc::now().format("%Y%m%d%H%M%S");
@@ -207,6 +207,8 @@ pub fn main() -> Result<(), Report<Error>> {
             .change_context(Error::WriteFile)
             .attach_printable(down_filename)?;
     }
+
+    save_migration_state(&state_dir, &migrations)?;
 
     let (api_files, web_files): (Vec<_>, Vec<_>) = root_files
         .into_iter()

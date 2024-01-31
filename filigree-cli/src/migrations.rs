@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::Display,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use error_stack::{Report, ResultExt};
@@ -13,11 +13,12 @@ use sql_migration_sim::{
         AlterColumnOperation, AlterTableOperation, ColumnOption, ColumnOptionDef, Ident,
         ObjectName, Statement, TableConstraint,
     },
-    Column, Schema, SchemaObjectType, Table,
+    table_constraint_name, Column, Schema, SchemaObjectType, Table,
 };
 
 use crate::{model::Model, Error};
 
+#[derive(Debug, Clone)]
 pub struct SingleMigration<'a> {
     pub name: String,
     pub model: Option<&'a Model>,
@@ -25,18 +26,19 @@ pub struct SingleMigration<'a> {
     pub down: Cow<'static, str>,
 }
 
-pub fn read_existing_migrations(migrations_dir: &Path) -> Result<Schema, Report<Error>> {
+fn last_migration_path(state_dir: &Path) -> PathBuf {
+    state_dir.join("schema.sql.gen")
+}
+
+pub fn read_previous_migration(state_dir: &Path) -> Result<Schema, Report<Error>> {
     let mut schema = Schema::new_with_dialect(sql_migration_sim::dialect::PostgreSqlDialect {});
 
-    let mut files = glob(migrations_dir.join("*.up.sql").to_string_lossy().as_ref())
-        .change_context(Error::ReadMigrationFiles)?
-        .collect::<Result<Vec<_>, _>>()
-        .change_context(Error::ReadMigrationFiles)?;
-    files.sort();
+    let file = last_migration_path(state_dir);
 
-    for file in files {
+    // It's ok if the schema SQL doesn't exist.
+    if let Ok(data) = std::fs::read_to_string(&file) {
         schema
-            .apply_file(&file)
+            .apply_sql(&data)
             .change_context(Error::ReadMigrationFiles)
             .attach_printable_lazy(|| file.display().to_string())?;
     }
@@ -44,14 +46,26 @@ pub fn read_existing_migrations(migrations_dir: &Path) -> Result<Schema, Report<
     Ok(schema)
 }
 
+pub fn save_migration_state(
+    state_dir: &Path,
+    migrations: &[SingleMigration<'_>],
+) -> Result<(), Report<Error>> {
+    let file = last_migration_path(state_dir);
+
+    let full_migration = migrations.iter().map(|m| m.up.as_ref()).join("\n\n");
+    std::fs::write(&file, full_migration)
+        .change_context(Error::WriteFile)
+        .attach_printable_lazy(|| file.display().to_string())
+}
+
 struct ParsedMigration<'a> {
     source: SingleMigration<'a>,
     statements: Vec<sql_migration_sim::ast::Statement>,
 }
 
-fn parse_new_migrations(
-    migrations: Vec<SingleMigration>,
-) -> Result<(Schema, Vec<ParsedMigration>), Report<Error>> {
+fn parse_new_migrations<'a>(
+    migrations: &'a [SingleMigration<'a>],
+) -> Result<(Schema, Vec<ParsedMigration<'a>>), Report<Error>> {
     let mut new_schema = Schema::new_with_dialect(sql_migration_sim::dialect::PostgreSqlDialect {});
 
     let migrations = migrations
@@ -63,7 +77,7 @@ fn parse_new_migrations(
             }
 
             Ok::<_, sql_migration_sim::Error>(ParsedMigration {
-                source: m,
+                source: m.clone(),
                 statements,
             })
         })
@@ -75,9 +89,21 @@ fn parse_new_migrations(
 
 pub fn resolve_migration(
     migrations_dir: &Path,
-    new_migrations: Vec<SingleMigration<'_>>,
+    state_dir: &Path,
+    new_migrations: &[SingleMigration<'_>],
 ) -> Result<SingleMigration<'static>, Report<Error>> {
-    let existing_schema = read_existing_migrations(migrations_dir)?;
+    let any_migrations_exist = glob(migrations_dir.join("*.sql").to_string_lossy().as_ref())
+        .ok()
+        .map(|mut g| g.next().is_some())
+        .unwrap_or(false);
+    let existing_schema = if any_migrations_exist {
+        read_previous_migration(state_dir)?
+    } else {
+        // If the migrations were cleared out, then we need to regenerate the whole thing
+        // regardless of what's in the state directory.
+        Schema::new()
+    };
+
     let (new_schema, migrations) = parse_new_migrations(new_migrations)?;
 
     let tables_to_create = new_schema
@@ -236,7 +262,7 @@ enum TableChange {
     },
     RemoveColumn {
         table: ObjectName,
-        column: Ident,
+        column: Column,
     },
     RenameColumn {
         table: ObjectName,
@@ -250,12 +276,12 @@ enum TableChange {
     },
     AddConstraint {
         table: ObjectName,
-        constraint_name: Ident,
         constraint: TableConstraint,
     },
     RemoveConstraint {
         table: ObjectName,
         constraint_name: Ident,
+        constraint: Option<TableConstraint>,
     },
 }
 
@@ -282,7 +308,7 @@ impl TableChange {
                     if_exists: false,
                     only: false,
                     operations: vec![AlterTableOperation::DropColumn {
-                        column_name: column.clone(),
+                        column_name: column.name.clone(),
                         if_exists: false,
                         cascade: true,
                     }],
@@ -343,6 +369,7 @@ impl TableChange {
             TableChange::RemoveConstraint {
                 table,
                 constraint_name,
+                ..
             } => {
                 let statement = Statement::AlterTable {
                     name: table.clone(),
@@ -362,39 +389,29 @@ impl TableChange {
 
     fn down(&self, f: &mut std::fmt::Formatter<'_>, old_table: &Table) -> std::fmt::Result {
         match self {
-            TableChange::AddColumn { table, column } => {
-                let statement = Statement::AlterTable {
-                    name: table.clone(),
-                    if_exists: true,
-                    only: false,
-                    operations: vec![AlterTableOperation::DropColumn {
-                        if_exists: true,
-                        cascade: true,
-                        column_name: column.name.clone(),
-                    }],
-                };
-
-                write!(f, "{statement};\n")
+            TableChange::AddColumn { table, column } => TableChange::RemoveColumn {
+                table: table.clone(),
+                column: column.clone(),
             }
-            // TODO need old column information for this (although the up was destructive anyway)
-            TableChange::RemoveColumn { .. } => Ok(()),
+            .up(f),
+
+            TableChange::RemoveColumn { table, column } => TableChange::AddColumn {
+                table: table.clone(),
+                column: column.clone(),
+            }
+            .up(f),
+
             TableChange::RenameColumn {
                 table,
                 old_name,
                 new_name,
-            } => {
-                let statement = Statement::AlterTable {
-                    name: table.clone(),
-                    if_exists: true,
-                    only: false,
-                    operations: vec![AlterTableOperation::RenameColumn {
-                        old_column_name: new_name.clone(),
-                        new_column_name: old_name.clone(),
-                    }],
-                };
-
-                write!(f, "{statement};\n")
+            } => TableChange::RenameColumn {
+                table: table.clone(),
+                old_name: new_name.clone(),
+                new_name: old_name.clone(),
             }
+            .up(f),
+
             TableChange::AlterColumn {
                 table,
                 column_name,
@@ -418,27 +435,33 @@ impl TableChange {
 
                 Ok(())
             }
-            TableChange::AddConstraint {
-                table,
-                constraint_name,
-                ..
-            } => {
-                let statement = Statement::AlterTable {
-                    name: table.clone(),
-                    if_exists: true,
-                    only: false,
-                    operations: vec![AlterTableOperation::DropConstraint {
-                        if_exists: true,
-                        cascade: false,
-                        name: constraint_name.clone(),
-                    }],
-                };
 
-                write!(f, "{statement};\n")
+            TableChange::AddConstraint { table, constraint } => {
+                if let Some(constraint_name) = table_constraint_name(constraint) {
+                    TableChange::RemoveConstraint {
+                        table: table.clone(),
+                        constraint_name: constraint_name.clone(),
+                        constraint: Some(constraint.clone()),
+                    }
+                    .up(f)
+                } else {
+                    Ok(())
+                }
             }
 
-            // TODO need old constraint information for this
-            TableChange::RemoveConstraint { .. } => Ok(()),
+            TableChange::RemoveConstraint {
+                table, constraint, ..
+            } => {
+                if let Some(constraint) = constraint {
+                    TableChange::AddConstraint {
+                        table: table.clone(),
+                        constraint: constraint.clone(),
+                    }
+                    .up(f)
+                } else {
+                    Ok(())
+                }
+            }
         }
     }
 }
@@ -499,6 +522,7 @@ fn opposite_alter_op(
     }
 }
 
+/// Given a column constraint, generate an equivalent table constraint, if there is one.
 fn process_column_option_to_table_constraint(
     column_name: &Ident,
     option: &ColumnOptionDef,
@@ -519,6 +543,7 @@ fn process_column_option_to_table_constraint(
             on_update: on_update.clone(),
             characteristics: characteristics.clone(),
         }),
+
         ColumnOption::Unique {
             is_primary,
             characteristics,
@@ -528,10 +553,12 @@ fn process_column_option_to_table_constraint(
             is_primary: *is_primary,
             characteristics: characteristics.clone(),
         }),
+
         ColumnOption::Check(expr) => Some(TableConstraint::Check {
             name: option.name.clone(),
             expr: Box::new(expr.clone()),
         }),
+
         _ => None,
     }
 }
@@ -631,12 +658,41 @@ fn diff_table(model: Option<&Model>, old_table: &Table, new_table: &Table) -> Ve
         if matching_column.is_none() {
             changes.push(TableChange::RemoveColumn {
                 table: new_table.name.clone(),
-                column: column.name.clone(),
+                column: column.clone(),
             })
         }
     }
 
-    // TODO Match constraints together
+    // Look for constraints to drop
+    for constraint in &old_table_constraints {
+        if let Some(name) = table_constraint_name(constraint) {
+            if new_table_constraints
+                .iter()
+                .find(|c| c == &constraint)
+                .is_none()
+            {
+                changes.push(TableChange::RemoveConstraint {
+                    table: old_table.name.clone(),
+                    constraint_name: name.clone(),
+                    constraint: Some(constraint.clone()),
+                });
+            }
+        }
+    }
+
+    // Look for new constraints to add
+    for constraint in &new_table_constraints {
+        if old_table_constraints
+            .iter()
+            .find(|c| c == &constraint)
+            .is_none()
+        {
+            changes.push(TableChange::AddConstraint {
+                table: new_table.name.clone(),
+                constraint: constraint.clone(),
+            });
+        }
+    }
 
     changes
 }

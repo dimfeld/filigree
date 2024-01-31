@@ -98,10 +98,7 @@ impl Model {
                 default_sort_field: Some("name".to_string()),
                 auth_scope: Some(crate::model::ModelAuthScope::Model),
                 extra_create_table_sql: String::new(),
-                // This is kind of dumb, but the easiest way to create the circular foreign key
-                extra_sql: "ALTER TABLE users
-                        ADD FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE SET NULL;"
-                    .to_string(),
+                extra_sql: String::new(),
                 pagination: Default::default(),
                 fields: [
                     ModelField {
@@ -112,18 +109,20 @@ impl Model {
                         rust_type: Some("crate::models::user::UserId".to_string()),
                         user_access: Access::None,
                         nullable: true,
-                        references: Some(ModelFieldReference::new(
-                            "users",
-                            "id",
-                            Some(ReferentialAction::SetNull),
-                        ).with_deferrable(crate::model::field::Deferrable::InitiallyImmediate)),
+                        references: Some(
+                            ModelFieldReference::new(
+                                "users",
+                                "id",
+                                Some(ReferentialAction::SetNull),
+                            )
+                            .with_deferrable(crate::model::field::Deferrable::InitiallyImmediate),
+                        ),
                         ..simple_model_field("owner", SqlType::Uuid)
                     },
                     ModelField {
                         rust_type: Some("crate::models::role::RoleId".to_string()),
                         user_access: Access::None,
                         nullable: true,
-                        // This is set up below since it's a circular foreign key.
                         references: None,
                         ..simple_model_field("default_role", SqlType::Uuid)
                     },
@@ -148,10 +147,7 @@ impl Model {
                 default_sort_field: Some("name".to_string()),
                 auth_scope: Some(crate::model::ModelAuthScope::Model),
                 extra_create_table_sql: String::new(),
-                // This is kind of dumb, but the easiest way to create the circular foreign key
-                extra_sql: "ALTER TABLE organizations
-                        ADD FOREIGN KEY (default_role) REFERENCES roles (id) ON DELETE SET NULL;"
-                    .to_string(),
+                extra_sql: String::new(),
                 pagination: Default::default(),
                 fields: [
                     ModelField {
