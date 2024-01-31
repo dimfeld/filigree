@@ -451,14 +451,7 @@ impl Schema {
                     .ok_or_else(|| Error::AlteredMissingTable(name.to_string()))?;
 
                 table.constraints.retain(|c| {
-                    let name = match c {
-                        TableConstraint::Unique { name, .. } => name,
-                        TableConstraint::ForeignKey { name, .. } => name,
-                        TableConstraint::Check { name, .. } => name,
-                        TableConstraint::Index { name, .. } => name,
-                        TableConstraint::FulltextOrSpatial { .. } => &None,
-                    };
-
+                    let name = table_constraint_name(c);
                     name.as_ref().map(|n| n != &constraint_name).unwrap_or(true)
                 });
             }
@@ -612,6 +605,17 @@ fn object_schema_and_name(name: &ObjectName) -> (Option<&Ident>, &Ident) {
         (Some(&name.0[0]), &name.0[1])
     } else {
         (None, &name.0[0])
+    }
+}
+
+/// Get the name of a table constraint
+pub fn table_constraint_name(constraint: &TableConstraint) -> &Option<Ident> {
+    match constraint {
+        TableConstraint::Unique { name, .. } => name,
+        TableConstraint::ForeignKey { name, .. } => name,
+        TableConstraint::Check { name, .. } => name,
+        TableConstraint::Index { name, .. } => name,
+        TableConstraint::FulltextOrSpatial { .. } => &None,
     }
 }
 
