@@ -90,9 +90,9 @@ fn generate_merged_output(
             output: this_generation.to_string(),
             conflicts: false,
         },
-        (None, Some(users_file)) => diffy::merge("", this_generation, users_file).into(),
+        (None, Some(users_file)) => diffy::merge("", users_file, this_generation).into(),
         (Some(previous), Some(users_file)) => {
-            diffy::merge(previous, this_generation, users_file).into()
+            diffy::merge(previous, users_file, this_generation).into()
         }
     }
 }

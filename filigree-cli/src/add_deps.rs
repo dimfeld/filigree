@@ -51,15 +51,20 @@ pub fn add_deps(manifest: &Manifest) -> Result<(), Report<Error>> {
             continue;
         };
 
-        let desired = VersionReq::parse(version).expect("version requirement");
+        if !existing.is_crates_io() {
+            // This is a git or path dependency, so don't change it.
+            continue;
+        }
 
-        let existing_version = Version::parse(existing.req())
+        let desired = Version::parse(version).expect("version requirement");
+
+        let existing_version = VersionReq::parse(existing.req())
             .change_context(Error::ReadConfigFile)
             .attach_printable_lazy(|| {
                 format!("Invalid req {} = {} in Cargo.toml", name, existing.req())
             })?;
 
-        if !desired.matches(&existing_version) {
+        if !existing_version.matches(&desired) {
             run_cargo_add(name, version, features)?;
             continue;
         }
