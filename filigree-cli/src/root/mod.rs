@@ -7,7 +7,7 @@ use rayon::prelude::*;
 
 use crate::{
     config::Config,
-    templates::{Renderer, RootApiTemplates, RootWebTemplates},
+    templates::{Renderer, RootApiTemplates},
     Error, RenderedFile, RenderedFileLocation,
 };
 
@@ -64,7 +64,7 @@ pub fn render_files(
 
     let files = RootApiTemplates::iter()
         .map(|f| (RenderedFileLocation::Api, f))
-        .chain(RootWebTemplates::iter().map(|f| (RenderedFileLocation::Web, f)))
+        // .chain(RootWebTemplates::iter().map(|f| (RenderedFileLocation::Web, f)))
         .collect::<Vec<_>>();
     let mut output = files
         .into_par_iter()
