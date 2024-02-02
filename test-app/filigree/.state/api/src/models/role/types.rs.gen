@@ -8,7 +8,7 @@ use serde::{
 use super::RoleId;
 use crate::models::organization::OrganizationId;
 
-#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 
 pub struct Role {
     pub id: RoleId,
@@ -63,7 +63,7 @@ impl Default for Role {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 #[cfg_attr(test, derive(Serialize))]
 pub struct RoleCreatePayloadAndUpdatePayload {
     pub name: String,
@@ -101,26 +101,14 @@ impl Serialize for Role {
     where
         S: Serializer,
     {
-        if self._permission == ObjectPermission::Owner {
-            let mut state = serializer.serialize_struct("Role", 7)?;
-            state.serialize_field("id", &self.id)?;
-            state.serialize_field("organization_id", &self.organization_id)?;
-            state.serialize_field("updated_at", &self.updated_at)?;
-            state.serialize_field("created_at", &self.created_at)?;
-            state.serialize_field("name", &self.name)?;
-            state.serialize_field("description", &self.description)?;
-            state.serialize_field("_permission", &self._permission)?;
-            state.end()
-        } else {
-            let mut state = serializer.serialize_struct("Role", 7)?;
-            state.serialize_field("id", &self.id)?;
-            state.serialize_field("organization_id", &self.organization_id)?;
-            state.serialize_field("updated_at", &self.updated_at)?;
-            state.serialize_field("created_at", &self.created_at)?;
-            state.serialize_field("name", &self.name)?;
-            state.serialize_field("description", &self.description)?;
-            state.serialize_field("_permission", &self._permission)?;
-            state.end()
-        }
+        let mut state = serializer.serialize_struct("Role", 7)?;
+        state.serialize_field("id", &self.id)?;
+        state.serialize_field("organization_id", &self.organization_id)?;
+        state.serialize_field("updated_at", &self.updated_at)?;
+        state.serialize_field("created_at", &self.created_at)?;
+        state.serialize_field("name", &self.name)?;
+        state.serialize_field("description", &self.description)?;
+        state.serialize_field("_permission", &self._permission)?;
+        state.end()
     }
 }

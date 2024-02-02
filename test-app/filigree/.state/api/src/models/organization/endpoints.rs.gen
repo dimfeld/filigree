@@ -3,9 +3,10 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing, Json,
+    routing,
 };
 use axum_extra::extract::Query;
+use axum_jsonschema::Json;
 
 use super::{
     queries, types::*, OrganizationId, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION,
@@ -92,6 +93,7 @@ mod test {
         OrganizationCreatePayload {
             name: format!("Test object {i}"),
             owner: (i > 1).then(|| <crate::models::user::UserId as Default>::default()),
+            default_role: (i > 1).then(|| <crate::models::role::RoleId as Default>::default()),
         }
     }
 

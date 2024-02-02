@@ -1,6 +1,16 @@
-use axum::{extract::State, http::StatusCode, response::IntoResponse, routing, Json};
+use async_trait::async_trait;
+use axum::{extract::State, http::StatusCode, response::IntoResponse, routing};
+use axum_jsonschema::Json;
 use error_stack::{Report, ResultExt};
-use sqlx::PgExecutor;
+use filigree::{
+    auth::password::{new_hash, HashedPassword},
+    users::{
+        organization::add_user_to_organization,
+        roles::add_default_role_to_user,
+        users::{add_user_email_login, CreateUserDetails, UserCreatorError},
+    },
+};
+use sqlx::{PgConnection, PgExecutor};
 
 use crate::{
     auth::Authed,
@@ -12,7 +22,7 @@ use crate::{
     Error,
 };
 
-pub async fn create_new_user(
+pub async fn create_new_user_with_plaintext_password(
     db: impl PgExecutor<'_>,
     user_id: UserId,
     organization_id: OrganizationId,
@@ -38,22 +48,118 @@ pub async fn create_new_user_with_prehashed_password(
     user_id: UserId,
     organization_id: OrganizationId,
     payload: UserCreatePayload,
-    password_hash: Option<String>,
+    password_hash: Option<HashedPassword>,
 ) -> Result<User, Report<Error>> {
     let user = sqlx::query_file_as!(
         User,
         "src/users/create_user.sql",
         user_id.as_uuid(),
         organization_id.as_uuid(),
-        password_hash,
+        password_hash.map(|h| h.0),
         &payload.name,
-        &payload.email,
+        payload.email.as_ref(),
+        payload.avatar_url.as_ref(),
     )
     .fetch_one(db)
     .await
     .change_context(Error::Db)?;
 
     Ok(user)
+}
+
+pub struct UserCreator;
+
+impl UserCreator {
+    pub async fn create_user(
+        tx: &mut PgConnection,
+        add_to_organization: Option<OrganizationId>,
+        details: CreateUserDetails,
+    ) -> Result<UserId, Report<UserCreatorError>> {
+        let user_id = UserId::new();
+        let organization_fut = async {
+            match add_to_organization {
+                Some(organization_id) => {
+                    sqlx::query!("SET CONSTRAINTS ALL DEFERRED")
+                        .execute(&mut *tx)
+                        .await
+                        .change_context(UserCreatorError)?;
+                    add_user_to_organization(&mut *tx, organization_id, user_id)
+                        .await
+                        .change_context(UserCreatorError)?;
+                    add_default_role_to_user(&mut *tx, organization_id, user_id)
+                        .await
+                        .change_context(UserCreatorError)?;
+
+                    Ok(organization_id)
+                }
+                None => {
+                    let org_name = details
+                        .name
+                        .as_deref()
+                        .unwrap_or("My Organization")
+                        .to_string();
+
+                    // create_new_organization does everything except actually creating the user
+                    // object.
+                    let org =
+                        super::organization::create_new_organization(&mut *tx, org_name, user_id)
+                            .await
+                            .change_context(UserCreatorError)?;
+
+                    Ok(org.organization.id)
+                }
+            }
+        };
+
+        let password_fut = async {
+            match details.password_plaintext {
+                Some(password) => new_hash(password)
+                    .await
+                    .map(Some)
+                    .change_context(UserCreatorError),
+                None => Ok(None),
+            }
+        };
+
+        let (organization_id, password_hash) = tokio::try_join!(organization_fut, password_fut)?;
+
+        let create_payload = UserCreatePayload {
+            name: details.name.clone().unwrap_or_default(),
+            email: details.email.clone(),
+            avatar_url: details.avatar_url.map(|u| u.to_string()),
+            ..Default::default()
+        };
+
+        create_new_user_with_prehashed_password(
+            &mut *tx,
+            user_id,
+            organization_id,
+            create_payload,
+            password_hash,
+        )
+        .await
+        .change_context(UserCreatorError)?;
+
+        if let Some(email) = details.email {
+            add_user_email_login(&mut *tx, user_id, email, true)
+                .await
+                .change_context(UserCreatorError)?;
+        }
+
+        Ok(user_id)
+    }
+}
+
+#[async_trait]
+impl filigree::users::users::UserCreator for UserCreator {
+    async fn create_user(
+        &self,
+        tx: &mut PgConnection,
+        add_to_organization: Option<OrganizationId>,
+        details: CreateUserDetails,
+    ) -> Result<UserId, Report<UserCreatorError>> {
+        Self::create_user(tx, add_to_organization, details).await
+    }
 }
 
 async fn get_current_user_endpoint(
@@ -119,7 +225,7 @@ mod test {
 
         let payload = crate::models::user::UserUpdatePayload {
             name: "Not Admin".into(),
-            email: "another-email@example.com".into(),
+            email: Some("another-email@example.com".into()),
             ..Default::default()
         };
 

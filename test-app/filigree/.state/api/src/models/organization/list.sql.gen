@@ -4,6 +4,7 @@ SELECT
   created_at,
   name,
   OWNER,
+  default_role,
   active,
   perm._permission
 FROM

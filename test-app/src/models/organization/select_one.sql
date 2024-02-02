@@ -4,6 +4,7 @@ SELECT
   created_at,
   name,
   OWNER AS "owner: crate::models::user::UserId",
+  default_role AS "default_role: crate::models::role::RoleId",
   active,
   _permission AS "_permission!: filigree::auth::ObjectPermission"
 FROM

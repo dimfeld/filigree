@@ -7,7 +7,7 @@ use serde::{
 
 use super::OrganizationId;
 
-#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 
 pub struct Organization {
     pub id: OrganizationId,
@@ -15,6 +15,7 @@ pub struct Organization {
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub name: String,
     pub owner: Option<crate::models::user::UserId>,
+    pub default_role: Option<crate::models::role::RoleId>,
     pub active: bool,
     pub _permission: ObjectPermission,
 }
@@ -43,6 +44,10 @@ impl Organization {
         None
     }
 
+    pub fn default_default_role() -> Option<crate::models::role::RoleId> {
+        None
+    }
+
     pub fn default_active() -> bool {
         <bool as Default>::default().into()
     }
@@ -56,17 +61,19 @@ impl Default for Organization {
             created_at: Self::default_created_at(),
             name: Self::default_name(),
             owner: Self::default_owner(),
+            default_role: Self::default_default_role(),
             active: Self::default_active(),
             _permission: ObjectPermission::Owner,
         }
     }
 }
 
-#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 #[cfg_attr(test, derive(Serialize))]
 pub struct OrganizationCreatePayloadAndUpdatePayload {
     pub name: String,
     pub owner: Option<crate::models::user::UserId>,
+    pub default_role: Option<crate::models::role::RoleId>,
 }
 
 pub type OrganizationCreatePayload = OrganizationCreatePayloadAndUpdatePayload;
@@ -84,6 +91,10 @@ impl OrganizationCreatePayloadAndUpdatePayload {
     pub fn default_owner() -> Option<crate::models::user::UserId> {
         None
     }
+
+    pub fn default_default_role() -> Option<crate::models::role::RoleId> {
+        None
+    }
 }
 
 impl Default for OrganizationCreatePayloadAndUpdatePayload {
@@ -91,6 +102,7 @@ impl Default for OrganizationCreatePayloadAndUpdatePayload {
         Self {
             name: Self::default_name(),
             owner: Self::default_owner(),
+            default_role: Self::default_default_role(),
         }
     }
 }
@@ -101,12 +113,13 @@ impl Serialize for Organization {
         S: Serializer,
     {
         if self._permission == ObjectPermission::Owner {
-            let mut state = serializer.serialize_struct("Organization", 6)?;
+            let mut state = serializer.serialize_struct("Organization", 7)?;
             state.serialize_field("id", &self.id)?;
             state.serialize_field("updated_at", &self.updated_at)?;
             state.serialize_field("created_at", &self.created_at)?;
             state.serialize_field("name", &self.name)?;
             state.serialize_field("owner", &self.owner)?;
+            state.serialize_field("default_role", &self.default_role)?;
             state.serialize_field("_permission", &self._permission)?;
             state.end()
         } else {

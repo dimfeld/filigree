@@ -5,6 +5,7 @@ SELECT
   created_at,
   name,
   email,
+  avatar_url,
   perm._permission
 FROM
   users tb

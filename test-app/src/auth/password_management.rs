@@ -1,9 +1,9 @@
 use axum::{
     extract::{Host, State},
     response::{IntoResponse, Redirect},
-    Json,
 };
 use axum_extra::extract::Query;
+use axum_jsonschema::Json;
 use error_stack::{Report, ResultExt};
 use filigree::{
     auth::{password::create_reset_token, AuthError},
@@ -20,6 +20,11 @@ pub async fn start_password_reset(
     Host(host): Host,
     Json(body): Json<EmailBody>,
 ) -> Result<impl IntoResponse, Error> {
+    if state.host_is_allowed(&host).is_err() {
+        // Bail due to some kind of hijinks
+        return Err(Error::InvalidHostHeader);
+    }
+
     let token = create_reset_token(&state.db, &body.email).await;
 
     let token = match token {
@@ -38,7 +43,6 @@ pub async fn start_password_reset(
     let template = crate::emails::PasswordResetRequestTemplate {
         user_name: None,
         url_scheme: state.site_scheme(),
-        // TODO validate that the host is in the allowed list
         host,
         email: body.email.clone(),
         token,
@@ -67,8 +71,8 @@ mod test {
         tests::{start_app, BootstrappedData},
     };
 
-    #[cfg(feature = "test_password")]
     #[sqlx::test]
+    #[cfg_attr(not(feature = "test_password"), ignore = "slow password test")]
     async fn change_password(db: sqlx::PgPool) {
         let (app, BootstrappedData { user, .. }) = start_app(db).await;
 
@@ -126,8 +130,8 @@ mod test {
         assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
     }
 
-    #[cfg(feature = "test_password")]
     #[sqlx::test]
+    #[cfg_attr(not(feature = "test_password"), ignore = "slow password test")]
     async fn invalid_reset_token(db: sqlx::PgPool) {
         let (app, BootstrappedData { user, .. }) = start_app(db).await;
 
@@ -171,8 +175,8 @@ mod test {
             .unwrap();
     }
 
-    #[cfg(feature = "test_password")]
     #[sqlx::test]
+    #[cfg_attr(not(feature = "test_password"), ignore = "slow password test")]
     async fn expired_reset_token(db: sqlx::PgPool) {
         let (app, BootstrappedData { user, .. }) = start_app(db.clone()).await;
 
@@ -227,8 +231,8 @@ mod test {
             .unwrap();
     }
 
-    #[cfg(feature = "test_password")]
     #[sqlx::test]
+    #[cfg_attr(not(feature = "test_password"), ignore = "slow password test")]
     async fn password_mismatch(db: sqlx::PgPool) {
         let (app, BootstrappedData { user, .. }) = start_app(db).await;
 
@@ -286,4 +290,8 @@ mod test {
             .error_for_status()
             .unwrap();
     }
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn bad_host_header() {}
 }

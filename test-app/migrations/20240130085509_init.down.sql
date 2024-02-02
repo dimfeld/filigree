@@ -6,6 +6,8 @@ DROP INDEX user_invites_email_org;
 
 DROP TABLE user_invites;
 
+DROP TABLE oauth_authorization_sessions;
+
 DROP INDEX oauth_logins_user_id;
 
 DROP TABLE oauth_logins;
@@ -24,11 +26,17 @@ DROP TABLE user_sessions;
 
 DROP TABLE user_roles;
 
+DROP INDEX reports_organization_id;
+
 DROP TABLE reports;
+
+DROP INDEX roles_organization_id;
 
 DROP TABLE roles;
 
 DROP TABLE organizations;
+
+DROP INDEX users_organization_id;
 
 DROP TABLE users;
 

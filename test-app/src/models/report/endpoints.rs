@@ -3,9 +3,10 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing, Json,
+    routing,
 };
 use axum_extra::extract::Query;
+use axum_jsonschema::Json;
 
 use super::{
     queries, types::*, ReportId, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION,

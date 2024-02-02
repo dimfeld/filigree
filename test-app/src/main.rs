@@ -99,6 +99,10 @@ struct ServeCommand {
     /// CORS configuration
     #[clap(env="API_CORS", value_enum, default_value_t = CorsSetting::None)]
     api_cors: CorsSetting,
+
+    /// The base URL for OAuth redirect URLs. If omitted, `hosts[0]` is used.
+    #[clap(env = "OAUTH_REDIRECT_URL_BASE")]
+    oauth_redirect_host: Option<String>,
     // tracing endpoint (if any)
     // honeycomb team
     // honeycomb dataset
@@ -146,10 +150,21 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
 
     let hosts = cmd.hosts.unwrap_or_else(|| vec!["localhost".to_string()]);
 
+    let oauth_redirect_host = cmd.oauth_redirect_host.unwrap_or_else(|| {
+        format!(
+            "{}://{}",
+            if cmd.insecure { "http" } else { "https" },
+            if hosts.is_empty() {
+                format!("localhost:{}", cmd.port)
+            } else {
+                hosts[0].clone()
+            }
+        )
+    });
+
     let server = server::create_server(server::Config {
         env: cmd.env,
-        host: cmd.host,
-        port: cmd.port,
+        bind: server::ServerBind::HostPort(cmd.host, cmd.port),
         insecure: cmd.insecure,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),
         cookie_configuration: SessionCookieBuilder::new(secure_cookies, cmd.cookie_same_site),
@@ -159,6 +174,9 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         email_sender,
         hosts,
         api_cors: cmd.api_cors,
+        // This will build OAuth providers based on the environment variables present.
+        oauth_providers: None,
+        oauth_redirect_url_base: oauth_redirect_host,
         new_user_flags: filigree::server::NewUserFlags {
             allow_public_signup: cmd.allow_public_signup,
             allow_invite_to_same_org: cmd.allow_invite_to_same_org,

@@ -21,6 +21,11 @@ SET
   ELSE
     organizations.owner
   END,
+  default_role = CASE WHEN permissions.is_owner THEN
+    $6
+  ELSE
+    organizations.default_role
+  END,
   updated_at = now()
 FROM
   permissions

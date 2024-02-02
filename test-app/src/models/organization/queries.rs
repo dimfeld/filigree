@@ -230,6 +230,7 @@ pub async fn create_raw(
         id.as_uuid(),
         &payload.name,
         payload.owner.as_ref() as _,
+        payload.default_role.as_ref() as _,
     )
     .fetch_one(db)
     .await
@@ -252,6 +253,7 @@ pub async fn update(
         &actor_ids,
         &payload.name as _,
         payload.owner.as_ref() as _,
+        payload.default_role.as_ref() as _,
     )
     .execute(db)
     .await

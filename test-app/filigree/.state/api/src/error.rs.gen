@@ -3,7 +3,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use error_stack::Report;
-use filigree::{auth::AuthError, errors::HttpError};
+use filigree::{
+    auth::AuthError,
+    errors::{ErrorKind as FilErrorKind, ForceObfuscate, HttpError},
+};
 use thiserror::Error;
 
 /// The top-level error type from the platform
@@ -42,6 +45,9 @@ pub enum Error {
     AuthSubsystem,
     #[error("Login failure")]
     Login,
+    /// An invalid Host header was passed
+    #[error("Invalid host")]
+    InvalidHostHeader,
 }
 
 impl From<Report<Error>> for Error {
@@ -64,6 +70,8 @@ impl Error {
 }
 
 impl HttpError for Error {
+    type Detail = String;
+
     fn error_kind(&self) -> &'static str {
         if let Some(e) = self.find_downstack_error() {
             return e.error_kind();
@@ -71,17 +79,32 @@ impl HttpError for Error {
 
         match self {
             Error::WrapReport(e) => e.current_context().error_kind(),
-            Error::DbInit => "db_init",
-            Error::Db => "db",
+            Error::DbInit => FilErrorKind::DatabaseInit.as_str(),
+            Error::Db => FilErrorKind::Database.as_str(),
             Error::TaskQueue => "task_queue",
-            Error::ServerStart => "server",
-            Error::NotFound(_) => "not_found",
-            Error::Shutdown => "shutdown",
+            Error::ServerStart => FilErrorKind::ServerStart.as_str(),
+            Error::NotFound(_) => FilErrorKind::NotFound.as_str(),
+            Error::Shutdown => FilErrorKind::Shutdown.as_str(),
             Error::ScheduledTask => "scheduled_task",
             Error::Filter => "invalid_filter",
             Error::AuthSubsystem => "auth",
-            Error::Login => "auth",
-            Error::MissingPermission(_) => "missing_permission",
+            Error::Login => FilErrorKind::Unauthenticated.as_str(),
+            Error::MissingPermission(_) => FilErrorKind::Unauthenticated.as_str(),
+            Error::InvalidHostHeader => FilErrorKind::InvalidHostHeader.as_str(),
+        }
+    }
+
+    fn obfuscate(&self) -> Option<ForceObfuscate> {
+        if let Some(e) = self.find_downstack_error() {
+            return e.obfuscate();
+        }
+
+        match self {
+            Error::InvalidHostHeader => Some(ForceObfuscate::new(
+                FilErrorKind::BadRequest,
+                "Invalid Request",
+            )),
+            _ => None,
         }
     }
 
@@ -103,6 +126,7 @@ impl HttpError for Error {
             Error::AuthSubsystem => StatusCode::INTERNAL_SERVER_ERROR,
             Error::MissingPermission(_) => StatusCode::FORBIDDEN,
             Error::Login => StatusCode::UNAUTHORIZED,
+            Error::InvalidHostHeader => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -117,5 +141,25 @@ impl HttpError for Error {
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         self.to_response()
+    }
+}
+
+pub enum ErrorKind {
+    TaskQueue,
+    ScheduledTask,
+    Filter,
+    AuthSubsystem,
+    Login,
+}
+
+impl ErrorKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ErrorKind::TaskQueue => "task_queue",
+            ErrorKind::ScheduledTask => "scheduled_task",
+            ErrorKind::Filter => "invalid_filter",
+            ErrorKind::AuthSubsystem => "auth",
+            ErrorKind::Login => "auth",
+        }
     }
 }

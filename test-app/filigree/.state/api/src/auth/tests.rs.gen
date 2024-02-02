@@ -13,8 +13,8 @@ pub fn extract_token_from_email(email: &filigree::email::Email) -> &str {
         .0
 }
 
-#[cfg(feature = "test_password")]
 #[sqlx::test]
+#[cfg_attr(not(feature = "test_password"), ignore = "slow password test")]
 async fn login_with_password_and_logout(db: sqlx::PgPool) {
     let (app, BootstrappedData { admin_user, .. }) = start_app(db.clone()).await;
 
@@ -99,8 +99,8 @@ async fn login_with_password_and_logout(db: sqlx::PgPool) {
     // TODO check that adding the session cookie back to the request after logout doesn't work
 }
 
-#[cfg(feature = "test_password")]
 #[sqlx::test]
+#[cfg_attr(not(feature = "test_password"), ignore = "slow password test")]
 async fn login_with_nonexistent_email(db: sqlx::PgPool) {
     let (app, BootstrappedData { admin_user, .. }) = start_app(db).await;
 
@@ -114,8 +114,8 @@ async fn login_with_nonexistent_email(db: sqlx::PgPool) {
     assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
 }
 
-#[cfg(feature = "test_password")]
 #[sqlx::test]
+#[cfg_attr(not(feature = "test_password"), ignore = "slow password test")]
 async fn login_with_wrong_password(db: sqlx::PgPool) {
     let (app, BootstrappedData { admin_user, .. }) = start_app(db).await;
 
@@ -129,8 +129,8 @@ async fn login_with_wrong_password(db: sqlx::PgPool) {
     assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
 }
 
-#[cfg(feature = "test_password")]
 #[sqlx::test]
+#[cfg_attr(not(feature = "test_password"), ignore = "slow password test")]
 async fn login_with_no_roles_user(db: sqlx::PgPool) {
     let (app, BootstrappedData { no_roles_user, .. }) = start_app(db).await;
 

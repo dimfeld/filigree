@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use error_stack::Report;
 use filigree::{
-    auth::{api_key::ApiKeyData, ExpiryStyle, SessionCookieBuilder},
+    auth::{api_key::ApiKeyData, password::HashedPassword, ExpiryStyle, SessionCookieBuilder},
     testing::{self, TestClient},
 };
 use futures::future::FutureExt;
@@ -59,20 +59,27 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
     let email_service = filigree::email::services::test_service::TestEmailService::new();
     let sent_emails = email_service.emails.clone();
 
+    let listener = crate::server::create_tcp_listener("127.0.0.1", 0)
+        .await
+        .unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let base_url = format!("http://127.0.0.1:{port}");
+
     let config = crate::server::Config {
         env: "test".into(),
-        host: "127.0.0.1".into(),
-        port: 0, // Bind to random port
+        bind: crate::server::ServerBind::Listener(listener),
         insecure: true,
         request_timeout: std::time::Duration::from_secs(30),
         pg_pool: pg_pool.clone(),
         api_cors: filigree::auth::CorsSetting::default(),
-        hosts: vec!["localhost".to_string()],
+        hosts: vec![],
         cookie_configuration: SessionCookieBuilder::new(
             false,
             tower_cookies::cookie::SameSite::Strict,
         ),
         session_expiry: ExpiryStyle::AfterIdle(std::time::Duration::from_secs(24 * 60 * 60)),
+        oauth_redirect_url_base: base_url.clone(),
+        oauth_providers: Some(vec![]),
         new_user_flags: filigree::server::NewUserFlags {
             allow_public_signup: true,
             allow_invite_to_same_org: true,
@@ -90,8 +97,7 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
         .await
         .expect("creating server");
 
-    let base_url = format!("http://{}:{}/api", server.host, server.port);
-    let test_client = TestClient::new(base_url.clone());
+    let test_client = TestClient::new(format!("{base_url}/api"));
 
     let bootstrapped_data = bootstrap_data(&pg_pool, &test_client).await;
 
@@ -125,7 +131,7 @@ async fn add_test_user(
 
     let email = format!("{name}@example.com");
     let user_payload = user::UserCreatePayload {
-        email: email.clone(),
+        email: Some(email.clone()),
         name: name.to_string(),
         ..Default::default()
     };
@@ -135,7 +141,7 @@ async fn add_test_user(
         user_id,
         organization_id,
         user_payload,
-        Some(testing::TEST_PASSWORD_HASH.to_string()),
+        Some(HashedPassword(testing::TEST_PASSWORD_HASH.to_string())),
     )
     .await
     .expect("Creating user");

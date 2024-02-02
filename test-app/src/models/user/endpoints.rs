@@ -3,9 +3,10 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing, Json,
+    routing,
 };
 use axum_extra::extract::Query;
+use axum_jsonschema::Json;
 
 use super::{
     queries, types::*, UserId, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION,
@@ -115,7 +116,8 @@ mod test {
     fn make_create_payload(i: usize) -> UserCreatePayload {
         UserCreatePayload {
             name: format!("Test object {i}"),
-            email: format!("Test object {i}"),
+            email: (i > 1).then(|| format!("Test object {i}")),
+            avatar_url: (i > 1).then(|| format!("Test object {i}")),
         }
     }
 
@@ -215,6 +217,11 @@ mod test {
                 serde_json::to_value(&added.email).unwrap(),
                 "field email"
             );
+            assert_eq!(
+                result["avatar_url"],
+                serde_json::to_value(&added.avatar_url).unwrap(),
+                "field avatar_url"
+            );
             assert_eq!(result["_permission"], "owner");
 
             // Check that we don't return any fields which are supposed to be omitted.
@@ -286,6 +293,11 @@ mod test {
                 result["email"],
                 serde_json::to_value(&added.email).unwrap(),
                 "field email"
+            );
+            assert_eq!(
+                result["avatar_url"],
+                serde_json::to_value(&added.avatar_url).unwrap(),
+                "field avatar_url"
             );
             assert_eq!(result["_permission"], "write");
 
@@ -407,6 +419,11 @@ mod test {
             serde_json::to_value(&added.email).unwrap(),
             "field email"
         );
+        assert_eq!(
+            result["avatar_url"],
+            serde_json::to_value(&added.avatar_url).unwrap(),
+            "field avatar_url"
+        );
         assert_eq!(result["_permission"], "owner");
 
         // Check that we don't return any fields which are supposed to be omitted.
@@ -460,6 +477,11 @@ mod test {
             serde_json::to_value(&added.email).unwrap(),
             "field email"
         );
+        assert_eq!(
+            result["avatar_url"],
+            serde_json::to_value(&added.avatar_url).unwrap(),
+            "field avatar_url"
+        );
         assert_eq!(result["_permission"], "write");
 
         // Check that we don't return any fields which are supposed to be omitted.
@@ -497,7 +519,9 @@ mod test {
         let update_payload = UserUpdatePayload {
             name: format!("Test object {i}"),
 
-            email: format!("Test object {i}"),
+            email: Some(format!("Test object {i}")),
+
+            avatar_url: Some(format!("Test object {i}")),
         };
 
         admin_user
@@ -533,6 +557,11 @@ mod test {
             updated["email"],
             serde_json::to_value(&update_payload.email).unwrap(),
             "field email"
+        );
+        assert_eq!(
+            updated["avatar_url"],
+            serde_json::to_value(&update_payload.avatar_url).unwrap(),
+            "field avatar_url"
         );
         assert_eq!(updated["_permission"], "owner");
 
@@ -582,6 +611,11 @@ mod test {
             non_updated["email"],
             serde_json::to_value(&added_objects[0].email).unwrap(),
             "field email"
+        );
+        assert_eq!(
+            non_updated["avatar_url"],
+            serde_json::to_value(&added_objects[0].avatar_url).unwrap(),
+            "field avatar_url"
         );
         assert_eq!(non_updated["_permission"], "owner");
 

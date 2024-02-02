@@ -21,6 +21,11 @@ SET
   ELSE
     users.email
   END,
+  avatar_url = CASE WHEN permissions.is_owner THEN
+    $6
+  ELSE
+    users.avatar_url
+  END,
   updated_at = now()
 FROM
   permissions

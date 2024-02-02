@@ -5,6 +5,7 @@ SELECT
   created_at,
   name,
   email,
+  avatar_url,
   _permission AS "_permission!: filigree::auth::ObjectPermission"
 FROM
   users tb

@@ -18,7 +18,10 @@ use std::{
 use axum::{extract::FromRef, routing::get, Router};
 use error_stack::{Report, ResultExt};
 use filigree::{
-    auth::{CorsSetting, ExpiryStyle, SessionBackend, SessionCookieBuilder},
+    auth::{
+        oauth::providers::OAuthProvider, CorsSetting, ExpiryStyle, SessionBackend,
+        SessionCookieBuilder,
+    },
     errors::{panic_handler, ObfuscateErrorLayer, ObfuscateErrorLayerSettings},
     server::FiligreeState,
 };
@@ -139,15 +142,32 @@ impl Server {
     }
 }
 
+/// Create a TCP listener.
+pub async fn create_tcp_listener(
+    host: &str,
+    port: u16,
+) -> Result<tokio::net::TcpListener, Report<Error>> {
+    let bind_ip = host.parse::<IpAddr>().change_context(Error::ServerStart)?;
+    let bind_addr = SocketAddr::from((bind_ip, port));
+    tokio::net::TcpListener::bind(bind_addr)
+        .await
+        .change_context(Error::ServerStart)
+}
+
+pub enum ServerBind {
+    /// A host and port to bind to
+    HostPort(String, u16),
+    /// An existing TCP listener to use
+    Listener(tokio::net::TcpListener),
+}
+
 /// Configuration for the server
 pub struct Config {
     /// The environment we're running in. Currently this just distinguishes between
     /// "development" and any other value.
     pub env: String,
-    /// The host to bind to.
-    pub host: String,
-    /// The port to bind to
-    pub port: u16,
+    /// The host and port to bind to, or an existing TCP listener
+    pub bind: ServerBind,
     /// True if the site is being hosted on plain HTTP. This should only be set in a development
     /// or testing environment.
     pub insecure: bool,
@@ -162,6 +182,15 @@ pub struct Config {
 
     pub hosts: Vec<String>,
     pub api_cors: filigree::auth::CorsSetting,
+
+    /// The base URL for OAuth redirect URLs.
+    pub oauth_redirect_url_base: String,
+    /// Set the OAuth providers. If this is None, OAuth providers will be configured based on the
+    /// environment variables present for each provider. See
+    /// [filigree::auth::oauth::providers::create_supported_providers] for the logic there.
+    ///
+    /// OAuth can be disabled, regardless of environment variable settings, but passing `Some(Vec::new())`.
+    pub oauth_providers: Option<Vec<Box<dyn OAuthProvider>>>,
 }
 
 /// Create the server and return it, ready to run.
@@ -176,13 +205,19 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .change_context(Error::ServerStart)
         .attach_printable("Unable to parse hosts list")?;
 
+    let oauth_redirect_base = format!("{}/api/auth/oauth/login", config.oauth_redirect_url_base);
     let state = ServerState(Arc::new(ServerStateInner {
         production,
         filigree: Arc::new(FiligreeState {
+            http_client: reqwest::Client::new(),
             db: config.pg_pool.clone(),
             email: config.email_sender,
             new_user_flags: config.new_user_flags,
             hosts: config.hosts,
+            user_creator: Box::new(crate::users::users::UserCreator),
+            oauth_providers: config.oauth_providers.unwrap_or_else(|| {
+                filigree::auth::oauth::providers::create_supported_providers(&oauth_redirect_base)
+            }),
             session_backend: SessionBackend::new(
                 config.pg_pool.clone(),
                 config.cookie_configuration,
@@ -211,6 +246,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .route("/healthz", get(health::healthz))
         .nest("/meta", meta::create_routes())
         .merge(filigree::auth::endpoints::create_routes())
+        .merge(filigree::auth::oauth::create_routes())
         .merge(crate::models::create_routes())
         .merge(crate::users::users::create_routes())
         .merge(crate::auth::create_routes())
@@ -243,21 +279,18 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
 
     let app = Router::new().nest("/api", api_routes);
 
-    let bind_ip = config
-        .host
-        .parse::<IpAddr>()
-        .change_context(Error::ServerStart)?;
-    let bind_addr = SocketAddr::from((bind_ip, config.port));
-    let listener = tokio::net::TcpListener::bind(bind_addr)
-        .await
-        .change_context(Error::ServerStart)?;
+    let listener = match config.bind {
+        ServerBind::Listener(l) => l,
+        ServerBind::HostPort(host, port) => create_tcp_listener(&host, port).await?,
+    };
 
     let actual_addr = listener.local_addr().change_context(Error::ServerStart)?;
     let port = actual_addr.port();
-    event!(Level::INFO, "Listening on {}:{port}", config.host);
+    let host = actual_addr.ip().to_string();
+    event!(Level::INFO, "Listening on {host}:{port}");
 
     Ok(Server {
-        host: config.host,
+        host,
         port,
         app,
         state,

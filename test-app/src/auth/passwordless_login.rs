@@ -1,9 +1,9 @@
 use axum::{
     extract::{Host, State},
     response::IntoResponse,
-    Json,
 };
 use axum_extra::extract::Query;
+use axum_jsonschema::Json;
 use error_stack::ResultExt;
 use filigree::auth::{
     passwordless_email_login::{
@@ -11,6 +11,7 @@ use filigree::auth::{
     },
     LoginResult,
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tower_cookies::Cookies;
 use uuid::Uuid;
@@ -24,7 +25,7 @@ use crate::{
     Error,
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct CreatePasswordlessLoginRequestBody {
     email: String,
     redirect_to: Option<String>,
@@ -37,6 +38,12 @@ pub async fn request_passwordless_login(
         CreatePasswordlessLoginRequestBody,
     >,
 ) -> Result<impl IntoResponse, Error> {
+    if state.host_is_allowed(&host).is_err() {
+        tracing::event!(tracing::Level::ERROR, "Invalid host header: {}", host);
+        // Bail due to some kind of hijinks
+        return Err(Error::InvalidHostHeader);
+    }
+
     let token = setup_passwordless_login(&state.filigree, email.clone()).await;
 
     let token = match token {
@@ -68,7 +75,6 @@ pub async fn request_passwordless_login(
         // TODO get the user's name in `setup_passwordless_login`, if we have it
         user_name: None,
         url_scheme: state.site_scheme(),
-        // TODO validate that the host is in the allowed list
         host,
         email: email.clone(),
         redirect_to,
@@ -105,33 +111,19 @@ async fn accept_new_user_invite(
         .await
         .change_context(Error::Login)?;
 
-    let user_id = crate::models::user::UserId::new();
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
-    let created_org =
-        create_new_organization(&mut *tx, "My Organization".to_string(), user_id).await?;
 
-    let new_user = UserCreatePayload {
-        email: email.clone(),
+    let user_details = filigree::users::users::CreateUserDetails {
+        email: Some(email),
         ..Default::default()
     };
-
-    create_new_user_with_prehashed_password(
-        &mut *tx,
-        user_id,
-        created_org.organization.id,
-        new_user,
-        None,
-    )
-    .await?;
-
-    filigree::users::users::add_user_email_login(&mut *tx, user_id, email, true)
+    let user_id = crate::users::users::UserCreator::create_user(&mut *tx, None, user_details)
         .await
-        .change_context(Error::Db)?;
+        .change_context(Error::AuthSubsystem)?;
 
     tx.commit().await.change_context(Error::Db)?;
 
     state
-        .filigree
         .session_backend
         .create_session(&cookies, &user_id)
         .await
@@ -143,8 +135,14 @@ async fn accept_new_user_invite(
 pub async fn process_passwordless_login_token(
     State(state): State<ServerState>,
     cookies: Cookies,
+    Host(host): Host,
     Query(q): Query<PasswordlessLoginRequestQueryFromEmail>,
 ) -> Result<impl IntoResponse, Error> {
+    if state.host_is_allowed(&host).is_err() {
+        // Bail due to some kind of hijinks
+        return Err(Error::InvalidHostHeader);
+    }
+
     if q.invite {
         if !state.filigree.new_user_flags.allow_public_signup {
             return Err(Error::Login);
@@ -394,4 +392,8 @@ mod test {
             "User should be in a new organization"
         );
     }
+
+    #[sqlx::test]
+    #[ignore = "todo"]
+    async fn bad_host_header() {}
 }

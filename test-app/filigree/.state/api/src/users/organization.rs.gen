@@ -13,7 +13,6 @@ use crate::{
 };
 
 const ADMIN_DEFAULT_PERMISSIONS: &[&str] = &["org_admin"];
-// TODO This needs all the models, create permissions, etc.
 const USER_DEFAULT_PERMISSIONS: &[&str] = &[
     "User::read",
     "User::write",
@@ -46,10 +45,14 @@ pub async fn create_new_organization(
         .await
         .change_context(Error::Db)?;
 
+    let admin_role_id = role::RoleId::new();
+    let user_role_id = role::RoleId::new();
+
     let org_id = OrganizationId::new();
     let new_org = OrganizationCreatePayload {
         name,
         owner: Some(owner),
+        default_role: Some(user_role_id),
         ..Default::default()
     };
 
@@ -59,13 +62,11 @@ pub async fn create_new_organization(
         .await
         .change_context(Error::Db)?;
 
-    let admin_role_id = role::RoleId::new();
     let admin_role = role::RoleCreatePayload {
         name: "Admin".to_string(),
         description: None,
     };
 
-    let user_role_id = role::RoleId::new();
     let user_role = role::RoleCreatePayload {
         name: "User".to_string(),
         description: None,

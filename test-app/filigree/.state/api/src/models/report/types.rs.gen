@@ -8,7 +8,7 @@ use serde::{
 use super::ReportId;
 use crate::models::organization::OrganizationId;
 
-#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 
 pub struct Report {
     pub id: ReportId,
@@ -69,7 +69,7 @@ impl Default for Report {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 #[cfg_attr(test, derive(Serialize))]
 pub struct ReportCreatePayload {
     pub title: String,
@@ -104,7 +104,7 @@ impl Default for ReportCreatePayload {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, sqlx::FromRow)]
+#[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 #[cfg_attr(test, derive(Serialize))]
 pub struct ReportUpdatePayload {
     pub title: String,
@@ -144,28 +144,15 @@ impl Serialize for Report {
     where
         S: Serializer,
     {
-        if self._permission == ObjectPermission::Owner {
-            let mut state = serializer.serialize_struct("Report", 8)?;
-            state.serialize_field("id", &self.id)?;
-            state.serialize_field("organization_id", &self.organization_id)?;
-            state.serialize_field("updated_at", &self.updated_at)?;
-            state.serialize_field("created_at", &self.created_at)?;
-            state.serialize_field("title", &self.title)?;
-            state.serialize_field("description", &self.description)?;
-            state.serialize_field("ui", &self.ui)?;
-            state.serialize_field("_permission", &self._permission)?;
-            state.end()
-        } else {
-            let mut state = serializer.serialize_struct("Report", 8)?;
-            state.serialize_field("id", &self.id)?;
-            state.serialize_field("organization_id", &self.organization_id)?;
-            state.serialize_field("updated_at", &self.updated_at)?;
-            state.serialize_field("created_at", &self.created_at)?;
-            state.serialize_field("title", &self.title)?;
-            state.serialize_field("description", &self.description)?;
-            state.serialize_field("ui", &self.ui)?;
-            state.serialize_field("_permission", &self._permission)?;
-            state.end()
-        }
+        let mut state = serializer.serialize_struct("Report", 8)?;
+        state.serialize_field("id", &self.id)?;
+        state.serialize_field("organization_id", &self.organization_id)?;
+        state.serialize_field("updated_at", &self.updated_at)?;
+        state.serialize_field("created_at", &self.created_at)?;
+        state.serialize_field("title", &self.title)?;
+        state.serialize_field("description", &self.description)?;
+        state.serialize_field("ui", &self.ui)?;
+        state.serialize_field("_permission", &self._permission)?;
+        state.end()
     }
 }
