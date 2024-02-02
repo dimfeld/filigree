@@ -23,7 +23,7 @@ clap = { version = "4.4.11", features = ["derive", "env"] }
 dotenvy = "0.15.7"
 error-stack = "0.4.1"
 eyre = "0.6.11"
-filigree = { version = "0.0.1", path = "../filigree" }
+filigree = { version = "0.0.2", path = "../filigree" }
 futures = "0.3.30"
 http = "1.0.0"
 hyper = { version = "1.1.0", features = ["server", "http1", "http2"] }
