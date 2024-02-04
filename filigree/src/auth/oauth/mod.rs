@@ -13,7 +13,7 @@ use super::UserId;
 use crate::{
     errors::{ErrorKind, ForceObfuscate, HttpError, WrapReport},
     server::FiligreeState,
-    users::users::CreateUserDetails,
+    users::users::{add_user_email_login, CreateUserDetails},
 };
 
 /// OAuth endpoints that provide standard behavior
@@ -259,19 +259,70 @@ pub async fn handle_login_code(
         .change_context(OAuthError::FetchUserDetails)?;
 
     let mut tx = state.db.begin().await.change_context(OAuthError::Db)?;
-    let existing_user = sqlx::query_scalar!(
-        "SELECT user_id FROM oauth_logins
+    let (existing_user, oauth_login_exists, known_email) =
+        if let Some(email) = user_details.email.as_ref() {
+            let result = sqlx::query!(
+                r##"WITH
+            email_lookup AS (
+                SELECT user_id
+                FROM email_logins
+                WHERE email = $1
+            ),
+            oauth_lookup AS (
+                SELECT user_id
+                FROM oauth_logins
+                WHERE oauth_provider = $2 AND oauth_account_id = $3
+            )
+            SELECT COALESCE(email_lookup.user_id, oauth_lookup.user_id) AS user_id,
+                email_lookup.user_id IS NOT NULL AS "email_exists!",
+                oauth_lookup.user_id IS NOT NULL AS "oauth_exists!"
+            FROM email_lookup
+            FULL JOIN oauth_lookup USING (user_id)"##,
+                email,
+                provider_name,
+                &user_details.login_id
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .change_context(OAuthError::Db)?;
+
+            result
+                .map(|r| (r.user_id, r.email_exists, r.oauth_exists))
+                .unwrap_or_default()
+        } else {
+            let existing_user = sqlx::query_scalar!(
+                "SELECT user_id FROM oauth_logins
         WHERE oauth_provider = $1 AND oauth_account_id = $2",
-        provider_name,
-        &user_details.login_id
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .change_context(OAuthError::Db)?;
+                provider_name,
+                &user_details.login_id
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .change_context(OAuthError::Db)?;
+
+            (existing_user, existing_user.is_some(), false)
+        };
 
     let user_id = if let Some(existing_user) = existing_user {
-        // We've seen this user log in with this OAuth account before.
-        UserId::from(existing_user)
+        // We've seen this user log in with this OAuth account before, or the email is the same.
+        // We may need to fiil in some information depending on which case it is.
+
+        let user_id = UserId::from(existing_user);
+        if !known_email {
+            if let Some(email) = user_details.email.as_ref() {
+                add_user_email_login(&mut *tx, user_id, email.clone(), true)
+                    .await
+                    .change_context(OAuthError::Db)?;
+            }
+        }
+
+        if !oauth_login_exists {
+            add_oauth_login(&mut *tx, user_id, provider_name, &user_details.login_id)
+                .await
+                .change_context(OAuthError::Db)?;
+        }
+
+        user_id
     } else if let Some(link_user_id) = oauth_login_session.add_to_user_id {
         // Linking to an existing account
         let user_id = UserId::from(link_user_id);
