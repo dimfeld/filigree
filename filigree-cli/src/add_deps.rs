@@ -16,7 +16,7 @@ const DEPS: &[DepVersion] = &[
         "0.8.0",
         &["postgres", "runtime-tokio-rustls"],
     ),
-    ("chrono", "0.4.31", &[]),
+    ("chrono", "0.4.33", &[]),
     ("clap", "4.4.11", &["env", "derive"]),
     ("dotenvy", "0.15.7", &[]),
     ("error-stack", "0.4.1", &[]),
@@ -30,11 +30,11 @@ const DEPS: &[DepVersion] = &[
     ("rust-embed", "8.1.0", &[]),
     ("schemars", "0.8.16", &["chrono", "url", "uuid1"]),
     ("serde", "1.0.193", &["derive"]),
-    ("serde_json", "1.0.108", &[]),
+    ("serde_json", "1.0.113", &[]),
     ("sqlx", "0.7.3", &["chrono", "postgres"]),
     ("tera", "1.19.1", &[]),
-    ("thiserror", "1.0.52", &[]),
-    ("tokio", "1.35.1", &["full"]),
+    ("thiserror", "1.0.56", &[]),
+    ("tokio", "1.36.0", &["full"]),
     ("tower", "0.4.13", &[]),
     ("tower-cookies", "0.10.0", &[]),
     ("tower-http", "0.5.1", &["full"]),
@@ -56,15 +56,19 @@ pub fn add_deps(manifest: &Manifest) -> Result<(), Report<Error>> {
             continue;
         }
 
-        let desired = Version::parse(version).expect("version requirement");
+        let desired = VersionReq::parse(version).expect("version requirement");
 
-        let existing_version = VersionReq::parse(existing.req())
-            .change_context(Error::ReadConfigFile)
-            .attach_printable_lazy(|| {
-                format!("Invalid req {} = {} in Cargo.toml", name, existing.req())
-            })?;
+        let Ok(existing_version) = Version::parse(existing.req()) else {
+            // Let the user know that we were unable to parse the version in Cargo.toml
+            // but don't fail since it could be intentionally this way.
+            eprintln!(
+                "WARN: Unable to parse version {} for {name} in Cargo.toml. Only plain versions are supported.",
+                existing.req()
+            );
+            return Ok(());
+        };
 
-        if !existing_version.matches(&desired) {
+        if !desired.matches(&existing_version) {
             run_cargo_add(name, version, features)?;
             continue;
         }
