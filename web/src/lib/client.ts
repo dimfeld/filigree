@@ -104,12 +104,19 @@ export interface RequestOptions {
   /** An object to serialize and place into the body. */
   json?: object;
   /** The body to send with the request. If sending json, use the `json` option instead. */
-  body?: BodyInit;
+  body?: BodyInit | null;
   /** Customize caching behavior. */
   cache?: RequestCache;
   /** An abort controller to use for the request. If omitted, a new one will be created, so {@link FetchPromise.abort()} will still
    * work. */
   abort?: AbortController;
+  /** Supply a signal from an AbortController to cancel the request. This should only be
+   * used if the AbortController that created the signal is not available to the caller.
+   *
+   * When `signal` is passed, the `abort` option is ignored and the `abort` method on the client's return value will do
+   * nothing.
+   * */
+  signal?: AbortSignal;
   /** The query string to append to the URL. If this is present, the passed-in URL should not already have a query
    * string. */
   query?: SearchParamsInit;
@@ -413,6 +420,7 @@ export function mergeRetryOptions(
   }
 }
 
+/** Create an HTTP client with the given options. */
 export function makeClient(clientOptions: ClientOptions = {}): Client {
   let { prefixUrl: baseUrl, timeout: defaultTimeout, hooks, headers: headerOption } = clientOptions;
   const fixedHeaders = new Headers(headerOption);
@@ -426,7 +434,15 @@ export function makeClient(clientOptions: ClientOptions = {}): Client {
 
   const client = (options: RequestOptions) => {
     const tolerateFailure = options.tolerateFailure ?? clientOptions.tolerateFailure ?? false;
-    let abort = options.abort ?? new AbortController();
+
+    let abort: AbortController | undefined;
+    let signal: AbortSignal;
+    if (options.signal && options.signal !== options.abort?.signal) {
+      signal = options.signal;
+    } else {
+      abort = options.abort ?? new AbortController();
+      signal = abort.signal;
+    }
 
     let qs = makeSearchParams(options.query);
     let url = makeUrl(baseUrl, options.url, qs);
@@ -460,7 +476,7 @@ export function makeClient(clientOptions: ClientOptions = {}): Client {
         headers,
         body,
         cache: options.cache,
-        signal: abort.signal,
+        signal,
         redirect: options.followRedirects === false ? 'manual' : 'follow',
       };
 
@@ -485,7 +501,7 @@ export function makeClient(clientOptions: ClientOptions = {}): Client {
         options,
         options.retry ?? clientOptions.retry,
         tolerateFailure,
-        abort.signal,
+        signal,
         method,
         timeout,
         clientOptions.hooks?.beforeRetry,
@@ -520,7 +536,7 @@ export function makeClient(clientOptions: ClientOptions = {}): Client {
     }
 
     const promise = runRequest() as FetchPromise;
-    promise.abort = () => abort.abort();
+    promise.abort = () => abort?.abort();
     promise.arrayBuffer = () => promise.then((r) => r.arrayBuffer());
     promise.blob = () => promise.then((r) => r.blob());
     promise.formData = () => promise.then((res) => res.formData());
@@ -543,13 +559,16 @@ export function makeClient(clientOptions: ClientOptions = {}): Client {
   return client;
 }
 
+/** A client with default options. */
 export const client = makeClient();
 
 const FILIGREE_CLIENT = Symbol('filigree-client');
+/** Set a client in the Svelte context for child components to use. */
 export function setContextClient(newClient: Client): Client {
   return setContext(FILIGREE_CLIENT, newClient);
 }
 
+/** Retrieve a client from the Svelte context. */
 export function contextClient(): Client {
   return getContext(FILIGREE_CLIENT);
 }
