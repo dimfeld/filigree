@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{ops::Deref, sync::Arc};
 
 use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
@@ -7,12 +7,14 @@ use argon2::{
 use error_stack::{Report, ResultExt};
 use schemars::JsonSchema;
 use serde::Deserialize;
+use serde_json::json;
 use sqlx::PgPool;
 use tower_cookies::Cookies;
 use tracing::instrument;
 use uuid::Uuid;
 
 use super::{sessions::SessionBackend, AuthError, UserId};
+use crate::errors::FormDataResponse;
 
 /// A wrapper around a hashed password, to help avoid passing a plaintext password where a hashed
 /// password is expected.
@@ -68,7 +70,7 @@ pub async fn verify_password(password: String, hash_str: HashedPassword) -> Resu
 }
 
 /// An email and password to attempt login
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct EmailAndPassword {
     #[validate(email)]
     email: String,
@@ -119,7 +121,11 @@ pub async fn login_with_password(
     email_and_password: EmailAndPassword,
 ) -> Result<(), Report<AuthError>> {
     let user_id =
-        lookup_user_from_email_and_password(&session_backend.db, email_and_password).await?;
+        lookup_user_from_email_and_password(&session_backend.db, email_and_password.clone())
+            .await
+            .attach_lazy(|| {
+                FormDataResponse::new(Arc::new(json!({ "email": email_and_password.email })))
+            })?;
 
     session_backend
         .create_session(&cookies, &user_id)

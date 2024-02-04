@@ -281,9 +281,9 @@ impl From<SchemaErrors> for ValidationErrorResponse {
 /// specifies an array. This should be used when the original input format is not completely
 /// self-describing, such as `application/x-www-form-urlencoded`.
 pub fn validate<T: JsonSchema + 'static>(
-    input: &mut serde_json::Value,
+    mut input: serde_json::Value,
     coerce_values: bool,
-) -> Result<(), SchemaErrors> {
+) -> Result<serde_json::Value, (serde_json::Value, SchemaErrors)> {
     SCHEMAS.with(|sch| {
         let sch = &mut *sch.borrow_mut();
         let schema = sch
@@ -316,9 +316,9 @@ pub fn validate<T: JsonSchema + 'static>(
             }
         }
 
-        match schema.schema.apply(input).basic() {
-            BasicOutput::Valid(_) => Ok(()),
-            BasicOutput::Invalid(err) => Err(err),
+        match schema.schema.apply(&input).basic() {
+            BasicOutput::Valid(_) => Ok(input),
+            BasicOutput::Invalid(err) => Err((input, err)),
         }
     })
 }
@@ -439,16 +439,16 @@ mod test {
             s_vec3: Vec<String>,
         }
 
-        let mut data = json!({
+        let data = json!({
             "s": "foo",
             "s_vec1": "foo",
             "s_vec2": "foo",
             "s_vec3": ["foo", "bar"],
         });
 
-        let res = validate::<Data>(&mut data, true);
+        let res = validate::<Data>(data, true);
         println!("{res:#?}");
-        res.unwrap();
+        let data = res.unwrap();
         assert_eq!(
             data,
             json!({
@@ -501,7 +501,7 @@ mod test {
             nob_v3: Vec<NumOrBool>,
         }
 
-        let mut data = json!({
+        let data = json!({
             "nob_n": "1",
             "nob_b": "on",
             "nob_v1": "1",
@@ -509,10 +509,9 @@ mod test {
             "nob_v3": ["on", 1, 23],
         });
 
-        let res = validate::<Data>(&mut data, true);
+        let res = validate::<Data>(data, true);
         println!("{res:#?}");
-        println!("{data:#?}");
-        res.unwrap();
+        let data = res.unwrap();
         assert_eq!(
             data,
             json!({
@@ -536,17 +535,16 @@ mod test {
             n2: NumVecOrBoolVec,
         }
 
-        let mut data = json!({
+        let data = json!({
             "b1": "on",
             "n1": "1",
             "b2": ["on", "on"],
             "n2": ["1", "2"],
         });
 
-        let res = validate::<Data>(&mut data, true);
+        let res = validate::<Data>(data, true);
         println!("{res:#?}");
-        println!("{data:#?}");
-        res.unwrap();
+        let data = res.unwrap();
         assert_eq!(
             data,
             json!({
@@ -567,16 +565,15 @@ mod test {
             b2: NumOrBoolVec,
         }
 
-        let mut data = json!({
+        let data = json!({
             "n": "1",
             "b1": "on",
             "b2": ["on", "on"],
         });
 
-        let res = validate::<Data>(&mut data, true);
+        let res = validate::<Data>(data, true);
         println!("{res:#?}");
-        println!("{data:#?}");
-        res.unwrap();
+        let data = res.unwrap();
         assert_eq!(
             data,
             json!({
@@ -595,12 +592,11 @@ mod test {
             bv: Vec<bool>,
         }
 
-        let mut data = json!({});
+        let data = json!({});
 
-        let res = validate::<Data>(&mut data, true);
+        let res = validate::<Data>(data, true);
         println!("{res:#?}");
-        println!("{data:#?}");
-        res.unwrap();
+        let data = res.unwrap();
         assert_eq!(
             data,
             json!({
@@ -637,7 +633,7 @@ mod test {
             b_vec2: Vec<bool>,
         }
 
-        let mut data = json!({
+        let data = json!({
             "s": "a",
             "s_vec1": "a",
             "s_vec2": ["a", "b"],
@@ -659,10 +655,9 @@ mod test {
             "b_vec2": ["on", "false"]
         });
 
-        let res = validate::<Data>(&mut data, true);
+        let res = validate::<Data>(data, true);
         println!("{res:#?}");
-        println!("{data:#?}");
-        res.unwrap();
+        let data = res.unwrap();
 
         assert_eq!(
             data,

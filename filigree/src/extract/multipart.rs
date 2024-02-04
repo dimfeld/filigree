@@ -38,7 +38,7 @@ where
     async fn from_request(req: Request<Body>, _: &S) -> Result<Self, Self::Rejection> {
         let (mut data, files) = parse_multipart(req).await?;
 
-        crate::requests::json_schema::validate::<T>(&mut data, true)
+        let data = crate::requests::json_schema::validate::<T>(data, true)
             .map_err(Rejection::Validation)?;
 
         let data = serde_path_to_error::deserialize(data).map_err(Rejection::Serde)?;

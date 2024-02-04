@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
 use axum::{extract::rejection::JsonRejection, response::IntoResponse, Json};
 use axum_extra::extract::{
@@ -21,7 +21,7 @@ pub use multipart::*;
 
 #[derive(Debug)]
 pub enum Rejection {
-    Validation(SchemaErrors),
+    Validation((serde_json::Value, SchemaErrors)),
     ReadBody(axum::Error),
     Json(JsonRejection),
     Form(FormRejection),
@@ -54,15 +54,19 @@ struct SerdePathToErrorDetail {
 impl IntoResponse for Rejection {
     fn into_response(self) -> axum::response::Response {
         match self {
-            Rejection::Validation(err) => (
+            Rejection::Validation((data, err)) => (
                 StatusCode::BAD_REQUEST,
-                Json(ErrorResponseData::new(
-                    "validation",
-                    "Validation Failure",
-                    ValidationErrorResponse::from(err),
-                )),
+                Json(
+                    ErrorResponseData::new(
+                        "validation",
+                        "Validation Failure",
+                        ValidationErrorResponse::from(err),
+                    )
+                    .with_form(Some(Arc::new(data))),
+                ),
             )
                 .into_response(),
+
             Rejection::ReadBody(inner) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponseData::new(

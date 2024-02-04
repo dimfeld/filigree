@@ -63,7 +63,7 @@ where
             return Err(Rejection::UnsupportedContentType);
         };
 
-        crate::requests::json_schema::validate::<T>(&mut value, coerce_arrays)
+        let value = crate::requests::json_schema::validate::<T>(value, coerce_arrays)
             .map_err(Rejection::Validation)?;
 
         serde_path_to_error::deserialize(value)

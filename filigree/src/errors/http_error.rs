@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::Debug, ops::Deref};
+use std::{borrow::Cow, fmt::Debug, ops::Deref, sync::Arc};
 
 use axum::{
     http::StatusCode,
@@ -41,10 +41,20 @@ pub trait HttpError: ToString + std::fmt::Debug {
     /// Convert the error into a [Response]. Most implementors of this trait will not
     /// need to override the default implementation.
     fn to_response(&self) -> Response {
-        let (code, json) = self.response_tuple();
-        let mut response = (code, Json(json)).into_response();
+        let (code, err) = self.response_tuple();
+        let form = err.form.clone();
+        let mut response = (code, Json(err)).into_response();
 
-        if let Some(obfuscate) = self.obfuscate() {
+        if let Some(mut obfuscate) = self.obfuscate() {
+            // Attach form to the obfuscated data if present, since we want to pass it through.
+            if obfuscate.form.is_none() {
+                obfuscate = if let Some(form) = form {
+                    obfuscate.with_form(form)
+                } else {
+                    obfuscate
+                };
+            }
+
             response.extensions_mut().insert(obfuscate);
         }
 
@@ -138,6 +148,8 @@ pub struct ForceObfuscate {
     pub kind: Cow<'static, str>,
     /// The message to return to in the error
     pub message: Cow<'static, str>,
+    /// Form data which should be returned even if the error is obfuscated
+    pub form: Option<Arc<serde_json::Value>>,
 }
 
 impl ForceObfuscate {
@@ -146,6 +158,15 @@ impl ForceObfuscate {
         Self {
             kind: kind.into(),
             message: message.into(),
+            form: None,
+        }
+    }
+
+    /// Attach form data to the obfuscated error
+    pub fn with_form(self, form: Arc<serde_json::Value>) -> Self {
+        Self {
+            form: Some(form),
+            ..self
         }
     }
 
@@ -156,11 +177,36 @@ impl ForceObfuscate {
     }
 }
 
+/// Attach this to a [Report] to include form data when rendering the error response.
+#[derive(Debug)]
+pub struct FormDataResponse(pub Arc<serde_json::Value>);
+
+impl FormDataResponse {
+    /// Create a new FormDataResponse
+    pub fn new(form: Arc<serde_json::Value>) -> Self {
+        Self(form)
+    }
+}
+
 impl<T> HttpError for error_stack::Report<T>
 where
     T: HttpError + Send + Sync + 'static,
 {
     type Detail = String;
+
+    fn response_tuple(&self) -> (StatusCode, ErrorResponseData<Self::Detail>) {
+        let err = ErrorResponseData::new(self.error_kind(), self.to_string(), self.error_detail());
+        let err = if let Some(form_data) = self
+            .frames()
+            .find_map(|frame| frame.downcast_ref::<FormDataResponse>())
+        {
+            err.with_form(Some(form_data.0.clone()))
+        } else {
+            err
+        };
+
+        (self.status_code(), err)
+    }
 
     fn status_code(&self) -> StatusCode {
         self.current_context().status_code()
@@ -179,6 +225,8 @@ where
 /// A body to be returned in an error response
 #[derive(Debug, Serialize)]
 pub struct ErrorResponseData<T: Debug + Serialize> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    form: Option<Arc<serde_json::Value>>,
     error: ErrorDetails<T>,
 }
 
@@ -198,6 +246,7 @@ impl<T: Debug + Serialize> ErrorResponseData<T> {
         details: T,
     ) -> ErrorResponseData<T> {
         let ret = ErrorResponseData {
+            form: None,
             error: ErrorDetails {
                 kind: kind.into(),
                 message: message.into(),
@@ -208,6 +257,14 @@ impl<T: Debug + Serialize> ErrorResponseData<T> {
         event!(Level::ERROR, kind=%ret.error.kind, message=%ret.error.message, details=?ret.error.details);
 
         ret
+    }
+
+    /// Attach form details to the error response
+    pub fn with_form(self, form: Option<Arc<serde_json::Value>>) -> Self {
+        Self {
+            form,
+            error: self.error,
+        }
     }
 }
 
@@ -238,5 +295,24 @@ impl<T: HttpError + Sync + Send + 'static> Deref for WrapReport<T> {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use serde_json::json;
+
+    use super::*;
+    use crate::auth::AuthError;
+
+    #[test]
+    fn report_form_data_attachment() {
+        let err = Report::new(AuthError::Unauthenticated).attach(FormDataResponse::new(Arc::new(
+            json!({ "email": "abc@example.com" }),
+        )));
+
+        let (_, data) = err.response_tuple();
+        let form = data.form.unwrap();
+        assert_eq!(form.as_ref(), &json!({ "email": "abc@example.com" }));
     }
 }

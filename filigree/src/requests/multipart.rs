@@ -153,10 +153,10 @@ where
             }
         }
 
-        crate::requests::json_schema::validate::<T>(&mut self.data, true)
+        let data = crate::requests::json_schema::validate::<T>(self.data, true)
             .map_err(Rejection::Validation)?;
 
-        serde_path_to_error::deserialize(self.data).map_err(Rejection::Serde)
+        serde_path_to_error::deserialize(data).map_err(Rejection::Serde)
     }
 }
 

@@ -15,9 +15,9 @@ use super::{ErrorResponseData, ForceObfuscate};
 pub struct ObfuscateErrorLayerSettings {
     /// Enable the middleware
     pub enabled: bool,
-    /// Obfucate 403 forbidden errors
+    /// Obfuscate 403 forbidden errors
     pub obfuscate_forbidden: bool,
-    /// Obfucate 401 unauthorized errors
+    /// Obfuscate 401 unauthorized errors
     pub obfuscate_unauthorized: bool,
 }
 
@@ -94,11 +94,10 @@ where
             let status = res.status();
 
             let message = match (force_obfuscate, status) {
-                (Some(ob), _) => Some(ErrorResponseData::new(
-                    ob.kind,
-                    ob.message,
-                    serde_json::Value::Null,
-                )),
+                (Some(ob), _) => Some(
+                    ErrorResponseData::new(ob.kind, ob.message, serde_json::Value::Null)
+                        .with_form(ob.form),
+                ),
                 (None, StatusCode::INTERNAL_SERVER_ERROR) => Some(ErrorResponseData::new(
                     "internal_error",
                     "Internal error",
@@ -127,6 +126,8 @@ where
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+
     use axum::{
         body::Body,
         http::{Method, Request, StatusCode},
@@ -250,6 +251,7 @@ mod test {
                     res.extensions_mut().insert(ForceObfuscate {
                         kind: "force_401".into(),
                         message: "Forced 401".into(),
+                        form: Some(Arc::new(json!({ "email": "abc@def.com"}))),
                     });
                     res
                 }),
@@ -261,6 +263,7 @@ mod test {
                     res.extensions_mut().insert(ForceObfuscate {
                         kind: "force_403".into(),
                         message: "Forced 403".into(),
+                        form: None,
                     });
                     res
                 }),
@@ -275,7 +278,7 @@ mod test {
         assert_eq!(code, 401, "/401 status code");
         assert_eq!(
             make_value(&body),
-            json!({ "error": { "kind": "force_401", "message": "Forced 401", "details": null }}),
+            json!({ "error": { "kind": "force_401", "message": "Forced 401", "details": null }, "form": { "email": "abc@def.com" } }),
             "/401 body should be obfuscated"
         );
 
