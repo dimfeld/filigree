@@ -107,6 +107,11 @@ struct ServeCommand {
     #[clap(env="{{env_prefix}}OAUTH_REDIRECT_URL_BASE")]
     oauth_redirect_host: Option<String>,
 
+    /// Whether or not to obfuscate details from internal server errors. If omitted,
+    /// the default is to obfuscate when env != "development".
+    #[clap(env="{{env_prefix}}OBFUSCATE_ERRORS")]
+    obfuscate_errors: Option<bool>,
+
     // tracing endpoint (if any)
     // honeycomb team
     // honeycomb dataset
@@ -182,6 +187,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         email_sender,
         hosts,
         api_cors: cmd.api_cors,
+        obfuscate_errors: cmd.obfuscate_errors,
         // This will build OAuth providers based on the environment variables present.
         oauth_providers: None,
         oauth_redirect_url_base: oauth_redirect_host,

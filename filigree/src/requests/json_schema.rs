@@ -310,7 +310,6 @@ pub fn validate<T: JsonSchema + 'static>(
                         }
                     }
                 } else if let Some(none_value) = field.coerce_none() {
-                    eprintln!("{:?}:  {}", input, field.name);
                     input[field.name.clone()] = none_value;
                 }
             }

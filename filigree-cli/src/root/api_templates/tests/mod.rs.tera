@@ -48,7 +48,21 @@ pub struct BootstrappedData {
     pub no_roles_user: TestUser,
 }
 
-pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
+pub struct TestAppOptions {
+    obfuscate_errors: Option<bool>,
+}
+
+impl Default for TestAppOptions {
+    fn default() -> Self {
+        Self { obfuscate_errors: Some(false) }
+    }
+}
+
+pub async fn start_app(pg_pool: PgPool)  -> (TestApp, BootstrappedData) {
+    start_app_with_options(pg_pool, TestAppOptions::default()).await
+}
+
+pub async fn start_app_with_options(pg_pool: PgPool, options: TestAppOptions) -> (TestApp, BootstrappedData) {
     error_stack::Report::set_color_mode(error_stack::fmt::ColorMode::None);
     filigree::tracing_config::test::init();
 
@@ -75,6 +89,7 @@ pub async fn start_app(pg_pool: PgPool) -> (TestApp, BootstrappedData) {
             false,
             tower_cookies::cookie::SameSite::Strict,
         ),
+        obfuscate_errors: options.obfuscate_errors,
         session_expiry: ExpiryStyle::AfterIdle(std::time::Duration::from_secs(24 * 60 * 60)),
         oauth_redirect_url_base: base_url.clone(),
         oauth_providers: Some(vec![]),

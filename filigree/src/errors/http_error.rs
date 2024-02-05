@@ -64,14 +64,19 @@ pub trait HttpError: ToString + std::fmt::Debug {
 
 /// Error kind codes to return to the client in an error response.
 pub enum ErrorKind {
+    /// Invalid API key format
     ApiKeyFormat,
     /// A generic ErrorKind when obfuscating a bad request error
     BadRequest,
+    /// Error communicating with the database
     Database,
+    /// Error initializing the database connection
     DatabaseInit,
     Disabled,
+    /// Error from the email sending service
     EmailSendFailure,
     FailedPredicate,
+    /// An OAuth login seemed to work, but fetching the user's details failed.
     FetchOAuthUserDetails,
     IncorrectPassword,
     InvalidApiKey,
@@ -206,6 +211,10 @@ where
         };
 
         (self.status_code(), err)
+    }
+
+    fn obfuscate(&self) -> Option<ForceObfuscate> {
+        self.current_context().obfuscate()
     }
 
     fn status_code(&self) -> StatusCode {
