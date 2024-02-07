@@ -57,6 +57,6 @@ where
         .route("/auth/oauth/login/:provider", routing::get(login))
         .route(
             "/auth/oauth/login/:provider/callback",
-            routing::post(callback),
+            routing::get(callback),
         )
 }

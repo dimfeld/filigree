@@ -28,14 +28,14 @@ export function isValidationFailure(obj: object | undefined): obj is ValidationF
 }
 
 export interface FormResponse<MODEL extends object, ERROR = unknown | undefined> {
-  form: MODEL;
+  form: Partial<MODEL>;
   message?: string;
   toast?: never; // TODO make a toast type
   error: ERROR;
 }
 
 function isValidationError<T extends object>(
-  obj: FormResponse<T> | undefined
+  obj: FormResponse<T> | null | undefined
 ): obj is FormResponse<T, ValidationErrors> {
   return !!obj?.error && 'kind' in obj && obj.kind === 'validation';
 }
@@ -46,13 +46,22 @@ export interface FormOptions<T extends object> {
   model?: ModelDefinition<T>;
   /** If the form data is nested or flat. If omitted, it will be inferred from the model. */
   nested?: boolean;
-  form?: FormResponse<T>;
+  /** Initial data to load into the form fields */
+  data?: T | null;
+  /** The page's form property */
+  form?: FormResponse<T> | null;
   slowLoadThreshold?: number;
 
   /** Perform extra client-side validation. */
-  validate?: (data: T) => ValidationErrors | undefined;
+  validate?: (data: Partial<T>) => ValidationErrors | undefined;
 
+  /** Whether or not to reset the form when the form is submitted.
+   *
+   * @default true */
   resetForm?: boolean;
+  /** Whether or not to invalidate all loaded data when the form is submitted.
+   *
+   * @default true */
   invalidateAll?: boolean;
 
   onSubmit?: (args: Parameters<SubmitFunction>[0] & { data: T }) => void;
@@ -84,7 +93,7 @@ function processAjvError(errors: ErrorObject[]): ValidationErrors {
 interface State<T extends object> {
   message?: string;
   errors: Readonly<ValidationErrors | null>;
-  form: T;
+  formData: Partial<T>;
   loading: SubmitState;
 }
 
@@ -99,7 +108,7 @@ export function manageForm<T extends object>(options: FormOptions<T>) {
   let state: State<T> = $state({
     message: options.form?.message,
     errors: formError,
-    form: options.form?.form ?? ({} as T),
+    formData: options.form?.form ?? options.data ?? ({} as T),
     loading: 'idle' as SubmitState,
   });
 
@@ -121,6 +130,8 @@ export function manageForm<T extends object>(options: FormOptions<T>) {
     enhance = plainEnhance(internalOptions);
   }
 
+  const loading = $derived(state.loading === 'loading' || state.loading === 'slow');
+  const slowLoading = $derived(state.loading === 'slow');
   return {
     get errors() {
       return state.errors;
@@ -128,9 +139,9 @@ export function manageForm<T extends object>(options: FormOptions<T>) {
     get message() {
       return state.message;
     },
-    form: state.form,
-    loading: $derived(state.loading === 'loading' || state.loading === 'slow'),
-    slowLoading: $derived(state.loading === 'slow'),
+    formData: state.formData,
+    loading,
+    slowLoading,
     enhance,
   };
 }
@@ -145,12 +156,12 @@ function validate<T extends object>(
 
   let errors: ValidationErrors | undefined;
 
-  let validated = model.validator(options.state.form);
+  let validated = model.validator(options.state.formData);
   if (!validated) {
     errors = processAjvError(model.validator.errors ?? []);
   }
 
-  let extraErrors = options.options.validate?.(options.state.form);
+  let extraErrors = options.options.validate?.(options.state.formData);
   if (extraErrors) {
     let errorFields = errors?.fields ?? {};
     for (let [key, value] of Object.entries(extraErrors.fields ?? {})) {
@@ -175,7 +186,7 @@ function validate<T extends object>(
       type: 'failure',
       status: 400,
       data: {
-        form: options.state.form,
+        form: options.state.formData,
         error: options.state.errors,
       },
     });
@@ -243,7 +254,7 @@ function plainEnhance<T extends object>(options: InternalOptions<T>) {
         return;
       }
 
-      onSubmit?.({ ...submitData, cancel: hookCancel, data: options.state.form });
+      onSubmit?.({ ...submitData, cancel: hookCancel, data: options.state.formData as T });
       if (cancelled) {
         return;
       }
@@ -294,7 +305,7 @@ function nestedEnhance<T extends object>(options: InternalOptions<T>) {
       let cancelled = false;
       const cancel = () => (cancelled = true);
 
-      let payload = state.form;
+      let payload = state.formData;
 
       let validated = validate(model, options);
       if (!validated) {
@@ -320,7 +331,7 @@ function nestedEnhance<T extends object>(options: InternalOptions<T>) {
         formData: new FormData(formEl),
         submitter: event.submitter,
         cancel,
-        data: options.state.form,
+        data: options.state.formData as T,
       });
 
       if (cancelled) {
@@ -368,7 +379,7 @@ function nestedEnhance<T extends object>(options: InternalOptions<T>) {
 
       if (result.type === 'success') {
         const data = result.data as unknown as FormResponse<T>;
-        state.form = data.form;
+        state.formData = data.form;
 
         state.message = data.message;
         state.errors = null;
