@@ -21,6 +21,11 @@ export interface ValidationErrors {
   fields?: Record<string, string[]>;
 }
 
+export interface GenericError {
+  kind: 'error';
+  messages: string[];
+}
+
 export type ValidationFailureResponse = ErrorResponse<'validation', ValidationErrors>;
 
 export function isValidationFailure(obj: object | undefined): obj is ValidationFailureResponse {
@@ -92,7 +97,7 @@ function processAjvError(errors: ErrorObject[]): ValidationErrors {
 
 interface State<T extends object> {
   message?: string;
-  errors: Readonly<ValidationErrors | null>;
+  errors: Readonly<ValidationErrors | GenericError | null>;
   formData: Partial<T>;
   loading: SubmitState;
 }
@@ -227,10 +232,17 @@ function maybeHandleFailureResult<T extends object>(
   state.message = result.data?.message;
 
   const data = result.data as unknown as FormResponse<T>;
-  if (result.status === 400 && isValidationError(data)) {
+  if (isValidationError(data)) {
     state.errors = data.error;
   } else {
-    state.errors = null;
+    const message =
+      typeof data.error === 'object' && data.error && 'message' in data.error
+        ? (data.error.message as string)
+        : 'An error occurred. Please try again';
+    state.errors = {
+      kind: 'error',
+      messages: [message],
+    };
   }
 }
 
@@ -262,23 +274,37 @@ function plainEnhance<T extends object>(options: InternalOptions<T>) {
       state.loading = 'loading';
       let slowTimer = trackSlowLoading(options);
 
-      return ({ result, update }) => {
+      return async ({ result, update }) => {
         clearTimeout(slowTimer);
         state.loading = 'idle';
 
-        if (result.type === 'failure' || result.type === 'error') {
-          let hookResult = onError?.(result);
-          if (hookResult) {
-            result = hookResult;
+        if (result.type === 'error') {
+          if (onError) {
+            let hookResult = onError?.(result);
+            if (hookResult) {
+              result = hookResult;
+            }
+          } else {
+            return applyAction(result);
+          }
+        } else if (result.type === 'failure') {
+          if (onError) {
+            let hookResult = onError?.(result);
+            if (hookResult) {
+              result = hookResult;
+            }
           }
 
           maybeHandleFailureResult(options, result);
-        } else if (result.type === 'success') {
-          const data = result.data as unknown as FormResponse<T>;
-          state.message = data.message;
-          state.errors = null;
+          update();
+        } else if (result.type === 'success' || result.type === 'redirect') {
+          if (result.type === 'success') {
+            const data = result.data as unknown as FormResponse<T>;
+            state.message = data.message;
+            state.errors = null;
+          }
 
-          let hookResult = onSuccess?.(result);
+          const hookResult = onSuccess?.(result);
           const updateOptions = resolveSuccessHookReturnValue(options, hookResult);
 
           update({
@@ -318,7 +344,7 @@ function nestedEnhance<T extends object>(options: InternalOptions<T>) {
 
       const submitter = event.submitter as HTMLButtonElement | undefined;
       const method =
-        (submitter?.hasAttribute('formMethod') && submitter?.formMethod) || formEl.method;
+        (submitter?.hasAttribute('formmethod') && submitter?.formMethod) || formEl.method;
       const action = new URL(
         (submitter?.hasAttribute('formaction') && submitter?.formAction) || formEl.action
       );
@@ -328,7 +354,7 @@ function nestedEnhance<T extends object>(options: InternalOptions<T>) {
         action: new URL(action),
         controller: abort,
         formElement: formEl,
-        formData: new FormData(formEl),
+        formData: new FormData(originalFormEl),
         submitter: event.submitter,
         cancel,
         data: options.state.formData as T,

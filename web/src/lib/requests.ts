@@ -1,4 +1,4 @@
-import { error, fail, type RequestEvent } from '@sveltejs/kit';
+import { error, fail, type NumericRange, type RequestEvent } from '@sveltejs/kit';
 import { client, type Client, type HttpMethod, type RequestOptions } from './client.js';
 
 /** Forward a Request directly to an API endpoint.
@@ -49,19 +49,26 @@ export async function forwardFormToApi(
   event: RequestEvent,
   options?: Partial<RequestOptions> & { client?: Client }
 ) {
-  const response = await forwardToApi(method, url, event, options);
+  const response = await forwardToApi(method, url, event, {
+    tolerateFailure: true,
+    ...options,
+  });
 
+  // todo handle 403?
   if (response.status === 400) {
-    // TODO return body
-    fail(400, {});
+    fail(400, await response.json());
   } else if (!response.ok) {
-    // TODO return body
-    error(response.status, {});
+    let err: object;
+    try {
+      err = await response.json();
+    } catch (e) {
+      err = { error: { kind: 'internal_error', message: response.statusText } };
+    }
+
+    error(response.status as NumericRange<400, 599>, err);
   }
 
-  return {
-    // todo
-  };
+  return await response.json();
 }
 
 /** Copy the Set-Cookie headers from the given response into the given headers. */

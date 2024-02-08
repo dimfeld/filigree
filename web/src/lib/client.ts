@@ -478,6 +478,8 @@ export function makeClient(clientOptions: ClientOptions = {}): Client {
         cache: options.cache,
         signal,
         redirect: options.followRedirects === false ? 'manual' : 'follow',
+        // @ts-expect-error duplex required, but it's not in the types
+        duplex: 'half',
       };
 
       for (let hook of beforeRequestHooks) {
@@ -516,7 +518,7 @@ export function makeClient(clientOptions: ClientOptions = {}): Client {
         }
       }
 
-      if (res.status < 400 || tolerateFailure === true) {
+      if (res.ok || tolerateFailure === true) {
         return res;
       }
 
