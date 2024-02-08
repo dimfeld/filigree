@@ -26,4 +26,8 @@ impl<'a> ContentType<'a> {
     pub fn is_form(&self) -> bool {
         self.0.starts_with("application/x-www-form-urlencoded")
     }
+
+    pub fn is_multipart(&self) -> bool {
+        self.0.starts_with("multipart/form-data")
+    }
 }

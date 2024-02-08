@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 
 use super::Rejection;
-use crate::requests::{urlencoded::value_from_urlencoded, ContentType};
+use crate::requests::{multipart::parse_multipart, urlencoded::value_from_urlencoded, ContentType};
 
 /// Extract a body from either JSON or form submission, and perform JSON schema validation.
 #[derive(Debug)]
@@ -46,7 +46,7 @@ where
                 .unwrap_or("application/json"),
         );
 
-        let (mut value, coerce_arrays) = if content_type.is_json() {
+        let (value, coerce_arrays) = if content_type.is_json() {
             let value = Json::<serde_json::Value>::from_request(req, _state)
                 .await
                 .map(|json| FormOrJson(json.0))
@@ -58,6 +58,9 @@ where
                 .await
                 .map_err(Rejection::ReadBody)?;
             let value = value_from_urlencoded(&bytes);
+            (value, true)
+        } else if content_type.is_multipart() {
+            let (value, _) = parse_multipart::<serde_json::Value>(req).await?;
             (value, true)
         } else {
             return Err(Rejection::UnsupportedContentType);
