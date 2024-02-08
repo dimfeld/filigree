@@ -88,6 +88,7 @@ pub struct ServerConfig {
     pub default_port: u16,
 
     /// The hosts that the server should assume are pointing to it.
+    #[serde(default)]
     pub hosts: Vec<String>,
 
     /// A prefix that will be used for all environment variable names when reading server

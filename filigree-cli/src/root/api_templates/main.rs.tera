@@ -161,17 +161,20 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         email_service,
     );
 
-    let hosts = cmd.hosts.unwrap_or_else(|| vec![{{server_hosts}}]);
+    let hosts = cmd.hosts.unwrap_or_else(|| {
+        {%if server_hosts %}
+        vec![{{server_hosts}}]
+        {% else %}
+        let host = format!("localhost:{}", cmd.port);
+        vec![host]
+        {% endif %}
+    });
 
     let oauth_redirect_host = cmd.oauth_redirect_host.unwrap_or_else(|| {
         format!(
             "{}://{}",
             if cmd.insecure { "http" } else { "https" },
-            if hosts.is_empty() {
-              format!("localhost:{}", cmd.port)
-            } else {
-              hosts[0].clone()
-            }
+            hosts[0]
         )
     });
 
