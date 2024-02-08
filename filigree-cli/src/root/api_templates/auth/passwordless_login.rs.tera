@@ -5,11 +5,14 @@ use axum::{
 use axum_extra::extract::Query;
 use axum_jsonschema::Json;
 use error_stack::ResultExt;
-use filigree::auth::{
-    passwordless_email_login::{
-        check_signup_request, perform_passwordless_login, setup_passwordless_login,
+use filigree::{
+    auth::{
+        passwordless_email_login::{
+            check_signup_request, perform_passwordless_login, setup_passwordless_login,
+        },
+        LoginResult,
     },
-    LoginResult,
+    extract::FormOrJson,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -34,7 +37,7 @@ pub struct CreatePasswordlessLoginRequestBody {
 pub async fn request_passwordless_login(
     State(state): State<ServerState>,
     Host(host): Host,
-    Json(CreatePasswordlessLoginRequestBody { email, redirect_to }): Json<
+    FormOrJson(CreatePasswordlessLoginRequestBody { email, redirect_to }): FormOrJson<
         CreatePasswordlessLoginRequestBody,
     >,
 ) -> Result<impl IntoResponse, Error> {
