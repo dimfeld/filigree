@@ -20,6 +20,14 @@ pub fn render_files(
     let mut context = tera::Context::new();
     context.insert("company_name", &config.company_name);
     context.insert("product_name", &config.product_name);
+    context.insert(
+        "user_agent",
+        config
+            .server
+            .user_agent
+            .as_ref()
+            .unwrap_or(&config.product_name),
+    );
     context.insert("crate_name", &crate_name.to_case(Case::Snake));
     context.insert("email", &config.email);
     context.insert("server", &config.server);

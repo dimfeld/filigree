@@ -99,6 +99,10 @@ pub struct ServerConfig {
     /// How to configure CORS for the API routes
     #[serde(default)]
     pub api_cors: CorsSetting,
+
+    /// The HTTP user agent to use when making requests from the API. If omitted, `product_name`
+    /// from the main configuration will be used.
+    pub user_agent: Option<String>,
 }
 
 const fn default_port() -> u16 {

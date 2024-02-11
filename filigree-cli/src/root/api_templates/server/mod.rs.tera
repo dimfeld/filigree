@@ -213,11 +213,15 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .change_context(Error::ServerStart)
         .attach_printable("Unable to parse hosts list")?;
 
-    let oauth_redirect_base = format!("{}/api/auth/oauth/login", config.oauth_redirect_url_base);
+    let oauth_redirect_base = format!("{}/auth/oauth/login", config.oauth_redirect_url_base);
+    let http_client = reqwest::Client::builder()
+        .user_agent("{{user_agent}}")
+        .build()
+        .unwrap();
     let state = ServerState(Arc::new(ServerStateInner {
         production,
         filigree: Arc::new(FiligreeState {
-            http_client: reqwest::Client::new(),
+            http_client,
             db: config.pg_pool.clone(),
             email: config.email_sender,
             new_user_flags: config.new_user_flags,
