@@ -283,9 +283,14 @@ pub fn main() -> Result<(), Report<Error>> {
     let mut conflict_files = merge_files
         .iter()
         .filter(|f| f.merged.conflicts)
-        .map(|f| &f.output_path)
+        .map(|f| f.output_path.clone())
         .collect::<Vec<_>>();
     conflict_files.sort();
+
+    merge_files
+        .into_par_iter()
+        .try_for_each(|file| file.write())
+        .change_context(Error::WriteFile)?;
 
     if !conflict_files.is_empty() {
         println!("=== Files with conflicts");
@@ -294,11 +299,6 @@ pub fn main() -> Result<(), Report<Error>> {
             println!("{}", path.display());
         }
     }
-
-    merge_files
-        .into_par_iter()
-        .try_for_each(|file| file.write())
-        .change_context(Error::WriteFile)?;
 
     Ok(())
 }

@@ -25,11 +25,11 @@ impl MergeTracker {
     }
 
     pub fn from_rendered_file(&self, file: RenderedFile) -> MergeFile {
-        self.file(&file.path, String::from_utf8(file.contents).unwrap())
+        self.file(file.path, String::from_utf8(file.contents).unwrap())
     }
 
-    pub fn file(&self, path: &Path, new_output: String) -> MergeFile {
-        let base_generated_path = self.internal_file_path(path);
+    pub fn file(&self, path: PathBuf, new_output: String) -> MergeFile {
+        let base_generated_path = self.internal_file_path(&path);
 
         let output_path = self.output_path.join(&path);
 
@@ -43,13 +43,14 @@ impl MergeTracker {
         );
 
         let generation_changed = previous_generation.map(|p| p != new_output).unwrap_or(true);
-        let output_changed = users_file.map(|u| u != new_output).unwrap_or(true);
+        let output_changed = users_file.map(|u| u != merged.output).unwrap_or(true);
 
         MergeFile {
             generation_changed,
             output_changed,
             base_generated_path,
             output_path,
+            output_relative_path: path,
             this_generation: new_output,
             merged,
         }
@@ -100,6 +101,7 @@ fn generate_merged_output(
 pub struct MergeFile {
     base_generated_path: PathBuf,
     pub output_path: PathBuf,
+    pub output_relative_path: PathBuf,
 
     pub generation_changed: bool,
     pub output_changed: bool,
@@ -116,6 +118,7 @@ impl MergeFile {
         }
 
         if self.output_changed {
+            println!("Writing file {}", self.output_relative_path.display());
             std::fs::write(&self.output_path, self.merged.output.as_bytes())
                 .attach_printable_lazy(|| self.output_path.display().to_string())?;
         }
