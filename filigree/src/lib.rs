@@ -14,6 +14,7 @@ pub mod email;
 pub mod errors;
 /// Request extractors
 pub mod extract;
+pub mod inspect_response;
 /// A UUIDv7-based type for handling object IDs with a more compact representation.
 pub mod object_id;
 /// Request Handling and Validation
