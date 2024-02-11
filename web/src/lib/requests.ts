@@ -1,5 +1,6 @@
 import { error, fail, type NumericRange, type RequestEvent } from '@sveltejs/kit';
 import { client, type Client, type HttpMethod, type RequestOptions } from './client.js';
+import type { FormResponse } from './forms.svelte.js';
 
 /** Forward a Request directly to an API endpoint.
  * @param method The HTTP method to use.
@@ -43,12 +44,12 @@ export function isErrorResponse<T extends ErrorResponse<string, object>>(
   return obj && 'error' in obj && (obj.error as T['error'])?.kind === kind;
 }
 
-export async function forwardFormToApi(
+export async function forwardFormToApi<T extends object>(
   method: HttpMethod,
   url: string,
   event: RequestEvent,
   options?: Partial<RequestOptions> & { client?: Client }
-) {
+): Promise<FormResponse<T>> {
   const response = await forwardToApi(method, url, event, {
     tolerateFailure: true,
     ...options,

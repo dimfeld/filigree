@@ -1,12 +1,5 @@
 import type { ModelDefinition } from './model.js';
-import {
-  type Client,
-  client as defaultClient,
-  type HttpMethod,
-  HttpError,
-  contextClient,
-  client,
-} from './client.js';
+import { type HttpMethod, client } from './client.js';
 import { isErrorResponse, type ErrorResponse } from './requests.js';
 import type { ErrorObject, ValidationError } from 'ajv';
 import { applyAction, deserialize, enhance } from '$app/forms';
@@ -32,11 +25,11 @@ export function isValidationFailure(obj: object | undefined): obj is ValidationF
   return isErrorResponse(obj, 'validation');
 }
 
-export interface FormResponse<MODEL extends object, ERROR = unknown | undefined> {
+export interface FormResponse<MODEL extends object, ERROR = unknown> {
   form: Partial<MODEL>;
   message?: string;
   toast?: never; // TODO make a toast type
-  error: ERROR;
+  error?: ERROR;
 }
 
 function isValidationError<T extends object>(
@@ -95,11 +88,40 @@ function processAjvError(errors: ErrorObject[]): ValidationErrors {
   };
 }
 
-interface State<T extends object> {
-  message?: string;
-  errors: Readonly<ValidationErrors | GenericError | null>;
-  formData: Partial<T>;
-  loading: SubmitState;
+class State<T extends object> {
+  message: string | undefined = $state();
+  errors: Readonly<ValidationErrors | GenericError | null | undefined> = $state(null);
+  formData: Partial<T> = $state({});
+  loadingState: SubmitState = $state('idle');
+
+  loading = $derived(this.loadingState === 'loading' || this.loadingState === 'slow');
+  slowLoading = $derived(this.loadingState === 'slow');
+
+  enhance: (formEl: HTMLFormElement) => void;
+
+  constructor(options: FormOptions<T>) {
+    // TODO If this was called with a toast, add the toast right away since it came from the server.
+    const formError = isValidationError(options.form) ? options.form.error : null;
+    this.message = options.form?.message;
+    this.errors = formError;
+    this.formData = options.form?.form ?? options.data ?? ({} as T);
+
+    let internalOptions: InternalOptions<T> = {
+      state: this,
+      options,
+      slowLoadThreshold: options.slowLoadThreshold ?? 1000,
+    };
+
+    const nested =
+      options.nested ?? options.model?.fields.some((f) => f.type === 'object') ?? false;
+
+    // TODO Both of these enhance functions need to handle toast field in response once toast system is implemented
+    if (nested) {
+      this.enhance = nestedEnhance(internalOptions);
+    } else {
+      this.enhance = plainEnhance(internalOptions);
+    }
+  }
 }
 
 interface InternalOptions<T extends object> {
@@ -109,46 +131,7 @@ interface InternalOptions<T extends object> {
 }
 
 export function manageForm<T extends object>(options: FormOptions<T>) {
-  const formError = isValidationError(options.form) ? options.form.error : null;
-  let state: State<T> = $state({
-    message: options.form?.message,
-    errors: formError,
-    formData: options.form?.form ?? options.data ?? ({} as T),
-    loading: 'idle' as SubmitState,
-  });
-
-  // TODO If this was called with a toast, add the toast right away since it came from the server.
-
-  let internalOptions: InternalOptions<T> = {
-    state,
-    options,
-    slowLoadThreshold: options.slowLoadThreshold ?? 1000,
-  };
-
-  const nested = options.nested ?? options.model?.fields.some((f) => f.type === 'object') ?? false;
-
-  let enhance: (formEl: HTMLFormElement) => void;
-  // TODO Both of these enhance functions need to handle toast field in response once toast system is implemented
-  if (nested) {
-    enhance = nestedEnhance(internalOptions);
-  } else {
-    enhance = plainEnhance(internalOptions);
-  }
-
-  const loading = $derived(state.loading === 'loading' || state.loading === 'slow');
-  const slowLoading = $derived(state.loading === 'slow');
-  return {
-    get errors() {
-      return state.errors;
-    },
-    get message() {
-      return state.message;
-    },
-    formData: state.formData,
-    loading,
-    slowLoading,
-    enhance,
-  };
+  return new State(options);
 }
 
 function validate<T extends object>(
@@ -204,8 +187,8 @@ function validate<T extends object>(
 
 function trackSlowLoading<T extends object>(options: InternalOptions<T>) {
   return setTimeout(() => {
-    if (options.state.loading === 'loading') {
-      options.state.loading = 'slow';
+    if (options.state.loadingState === 'loading') {
+      options.state.loadingState = 'slow';
     }
   }, options.slowLoadThreshold);
 }
@@ -271,12 +254,12 @@ function plainEnhance<T extends object>(options: InternalOptions<T>) {
         return;
       }
 
-      state.loading = 'loading';
+      state.loadingState = 'loading';
       let slowTimer = trackSlowLoading(options);
 
       return async ({ result, update }) => {
         clearTimeout(slowTimer);
-        state.loading = 'idle';
+        state.loadingState = 'idle';
 
         if (result.type === 'error') {
           if (onError) {
@@ -364,7 +347,7 @@ function nestedEnhance<T extends object>(options: InternalOptions<T>) {
         return;
       }
 
-      state.loading = 'loading';
+      state.loadingState = 'loading';
       const slowTimer = trackSlowLoading(options);
 
       let result: ActionResult;
@@ -387,14 +370,14 @@ function nestedEnhance<T extends object>(options: InternalOptions<T>) {
         result = deserialize(await response.text());
 
         clearTimeout(slowTimer);
-        state.loading = 'idle';
+        state.loadingState = 'idle';
 
         if (result.type === 'error') {
           result.status = response.status;
         }
       } catch (e) {
         clearTimeout(slowTimer);
-        state.loading = 'idle';
+        state.loadingState = 'idle';
 
         if ((e as Error).name === 'AbortError') {
           return;
