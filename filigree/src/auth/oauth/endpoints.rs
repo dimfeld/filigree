@@ -8,11 +8,13 @@ use axum::{
 use hyper::StatusCode;
 use serde::Deserialize;
 use tower_cookies::Cookies;
+use tracing::instrument;
 
 use super::{handle_login_code, start_oauth_login, OAuthError};
 use crate::{errors::WrapReport, server::FiligreeState};
 
 /// Start an OAuth2 login
+#[instrument(skip(state, cookies))]
 pub async fn login(
     State(state): State<Arc<FiligreeState>>,
     cookies: Cookies,
@@ -31,6 +33,7 @@ pub struct OAuthCallbackQuery {
 }
 
 /// OAuth2 Login callback
+#[instrument(skip(state, cookies))]
 pub async fn callback(
     State(state): State<Arc<FiligreeState>>,
     cookies: Cookies,

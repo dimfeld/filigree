@@ -7,6 +7,7 @@ use sha3::{Digest, Sha3_256};
 use sqlx::PgExecutor;
 use thiserror::Error;
 use tower_cookies::{Cookie, Cookies};
+use tracing::{event, Level};
 
 use self::providers::{AuthorizeUrl, OAuthUserDetails};
 use super::UserId;
@@ -134,6 +135,8 @@ pub async fn start_oauth_login(
         pkce_verifier,
     } = provider.authorize_url();
 
+    event!(Level::DEBUG, %url, "Generated OAuth URL");
+
     sqlx::query!(
         "INSERT INTO oauth_authorization_sessions
             (key, provider, add_to_user_id, redirect_to, pkce_verifier, expires_at)
@@ -252,6 +255,7 @@ pub async fn handle_login_code(
         )
         .await?;
     let access_token = token_response.access_token();
+    event!(Level::INFO, token=?access_token.secret(), "Got access token");
 
     let user_details = provider
         .fetch_user_details(state.http_client.clone(), access_token.secret())

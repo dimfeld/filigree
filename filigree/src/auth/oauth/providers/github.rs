@@ -8,7 +8,7 @@ use serde::Deserialize;
 use url::Url;
 
 use super::{build_redirect_url, AuthorizeUrl, OAuthProvider, OAuthUserDetails};
-use crate::auth::oauth::OAuthError;
+use crate::{auth::oauth::OAuthError, inspect_response::InspectResponseError};
 
 /// OAuth provider for Github logins
 pub struct GitHubOAuthProvider {
@@ -71,24 +71,25 @@ impl OAuthProvider for GitHubOAuthProvider {
     ) -> Result<OAuthUserDetails, reqwest::Error> {
         #[derive(Deserialize)]
         struct GithubUserDetails {
-            id: String,
+            id: i64,
             email: Option<String>,
             name: Option<String>,
             avatar_url: Option<Url>,
         }
 
         let user_details = client
-            .get("https://github.com/api/user")
+            .get("https://api.github.com/user")
             .bearer_auth(access_token)
-            .header("Accept", "application/json")
+            .header("Accept", "application/vnd.github+json")
             .send()
             .await?
-            .error_for_status()?
+            .print_error_for_status()
+            .await?
             .json::<GithubUserDetails>()
             .await?;
 
         Ok(OAuthUserDetails {
-            login_id: user_details.id,
+            login_id: user_details.id.to_string(),
             name: user_details.name,
             email: user_details.email,
             avatar_url: user_details.avatar_url,
