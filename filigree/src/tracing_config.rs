@@ -54,7 +54,12 @@ where
     for<'writer> W: MakeWriter<'writer> + Send + Sync + 'static,
 {
     LogTracer::builder()
-        .ignore_crate("rustls")
+        .ignore_all([
+            "rustls",
+            // These spam the logs when debug level is turned on and we do CSS inlining on an email
+            "selectors",
+            "html5ever",
+        ])
         .with_max_level(log::LevelFilter::Debug)
         .init()
         .expect("Failed to create logger");

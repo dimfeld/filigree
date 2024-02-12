@@ -11,6 +11,14 @@ pub struct ResendEmailService {
     client: reqwest::Client,
 }
 
+impl std::fmt::Debug for ResendEmailService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResendEmailService")
+            .field("base_url", &self.base_url)
+            .finish_non_exhaustive()
+    }
+}
+
 impl ResendEmailService {
     /// Create a new ResendEmailService at the normal base URL
     pub fn new(token: String) -> Self {
