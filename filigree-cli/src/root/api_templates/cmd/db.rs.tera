@@ -6,10 +6,6 @@ use crate::Error;
 
 mod bootstrap;
 
-pub async fn run_migrations(db: &PgPool) -> Result<(), Report<Error>> {
-    sqlx::migrate!().run(db).await.change_context(Error::Db)
-}
-
 #[derive(Args, Debug)]
 pub struct DbCommand {
     /// The PostgreSQL database to connect to
@@ -36,7 +32,7 @@ impl DbCommand {
 
         match self.command {
             DbSubcommand::Bootstrap(cmd) => cmd.handle(pg_pool).await,
-            DbSubcommand::Migrate => run_migrations(&pg_pool).await,
+            DbSubcommand::Migrate => crate::db::run_migrations(&pg_pool).await,
         }
     }
 }

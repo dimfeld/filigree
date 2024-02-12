@@ -11,8 +11,9 @@ pub struct BootstrapCommand {
     admin_email: String,
 
     /// The name for the admin user
-    #[clap(env = "{{env_prefix}}BOOTSTRAP_ADMIN_NAME", default_value_t = String::from("Administrator"))]
-    admin_name: String,
+    /// Defaults to "Admin"
+    #[clap(env = "{{env_prefix}}BOOTSTRAP_ADMIN_NAME")]
+    admin_name: Option<String>,
 
     /// The password for the admin user. If supplied, this should be prehashed
     /// by the `util hash` subcommand. If omitted, login through OAuth2 and passwordless methods
@@ -21,13 +22,35 @@ pub struct BootstrapCommand {
     admin_password: Option<String>,
 
     /// The name for the admin user's organization.
-    #[clap(env = "{{env_prefix}}BOOTSTRAP_ORG_NAME", default_value_t = String::from("Administration"))]
-    organization_name: String,
+    /// Defaults to "Administration"
+    #[clap(env = "{{env_prefix}}BOOTSTRAP_ORG_NAME")]
+    organization_name: Option<String>,
+
+    /// Force adding the admin user even if the database already contains at least one
+    /// organization.
+    #[clap(long, env = "{{env_prefix}}BOOTSTRAP_FORCE")]
+    force: bool,
 }
 
 impl BootstrapCommand {
     pub async fn handle(self, pg_pool: PgPool) -> Result<(), Report<Error>> {
-        // call bootstrap handler
-        todo!()
+        let data = crate::db::BootstrapData {
+            force: self.force,
+            admin_email: self.admin_email,
+            admin_name: self.admin_name,
+            admin_password: self
+                .admin_password
+                .map(filigree::auth::password::HashedPassword),
+            organization_name: self.organization_name,
+        };
+
+        let bootstrapped = crate::db::bootstrap(pg_pool, data).await?;
+        if bootstrapped {
+            println!("Bootstrapped database");
+        } else {
+            println!("Database already bootstrapped");
+        }
+
+        Ok(())
     }
 }

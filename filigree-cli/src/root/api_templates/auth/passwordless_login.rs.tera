@@ -22,9 +22,6 @@ use uuid::Uuid;
 use crate::{
     models::user::{self, UserCreatePayload},
     server::ServerState,
-    users::{
-        organization::create_new_organization, users::create_new_user_with_prehashed_password,
-    },
     Error,
 };
 
@@ -120,7 +117,7 @@ async fn accept_new_user_invite(
         email: Some(email),
         ..Default::default()
     };
-    let user_id = crate::users::users::UserCreator::create_user(&mut *tx, None, user_details)
+    let (user_id, _) = crate::users::users::UserCreator::create_user(&mut *tx, None, user_details)
         .await
         .change_context(Error::AuthSubsystem)?;
 
