@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! The non-generated components of the Filigree web framework
 
-use std::borrow::Cow;
+use std::{borrow::Cow, env::VarError};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,7 @@ pub mod email;
 pub mod errors;
 /// Request extractors
 pub mod extract;
+/// Extension trait to inspect the body of a Reqwest error response
 pub mod inspect_response;
 /// A UUIDv7-based type for handling object IDs with a more compact representation.
 pub mod object_id;
@@ -52,4 +53,13 @@ pub struct EmailBody {
     /// The email address
     #[validate(email)]
     pub email: String,
+}
+
+/// Get an environment variable with an optional prefix
+pub fn prefixed_env_var(prefix: &str, key: &str) -> Result<String, VarError> {
+    if prefix.is_empty() {
+        std::env::var(key)
+    } else {
+        std::env::var(format!("{prefix}{key}"))
+    }
 }

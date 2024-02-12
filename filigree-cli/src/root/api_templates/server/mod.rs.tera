@@ -228,7 +228,10 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             hosts: config.hosts,
             user_creator: Box::new(crate::users::users::UserCreator),
             oauth_providers: config.oauth_providers.unwrap_or_else(|| {
-                filigree::auth::oauth::providers::create_supported_providers(&oauth_redirect_base)
+                filigree::auth::oauth::providers::create_supported_providers(
+                    "{{env_prefix}}",
+                    &oauth_redirect_base,
+                )
             }),
             session_backend: SessionBackend::new(
                 config.pg_pool.clone(),

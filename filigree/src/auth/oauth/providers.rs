@@ -8,6 +8,7 @@ use oauth2::{
 use url::Url;
 
 use super::OAuthError;
+use crate::prefixed_env_var;
 
 mod github;
 mod google;
@@ -98,17 +99,20 @@ pub async fn fetch_access_token_with_pkce(
         .change_context(OAuthError::ExchangeError)
 }
 
-/// Create an OAuth 2 redirect URL for a provider
+/// Create an OAuth2 redirect URL for a provider
 pub fn build_redirect_url(base: &str, provider_name: &str) -> String {
     format!("{base}/{provider_name}/callback")
 }
 
 /// Create all the supported OAuth providers, inspecting the environment variables to determine
 /// which ones are configured.
-pub fn create_supported_providers(redirect_base_url: &str) -> Vec<Box<dyn OAuthProvider>> {
+pub fn create_supported_providers(
+    env_prefix: &str,
+    redirect_base_url: &str,
+) -> Vec<Box<dyn OAuthProvider>> {
     let github_provider = match (
-        std::env::var("OAUTH_GITHUB_CLIENT_ID"),
-        std::env::var("OAUTH_GITHUB_CLIENT_SECRET"),
+        prefixed_env_var(env_prefix, "OAUTH_GITHUB_CLIENT_ID"),
+        prefixed_env_var(env_prefix, "OAUTH_GITHUB_CLIENT_SECRET"),
     ) {
         (Ok(client_id), Ok(client_secret)) => Some(Box::new(GitHubOAuthProvider::new(
             client_id,
@@ -119,8 +123,8 @@ pub fn create_supported_providers(redirect_base_url: &str) -> Vec<Box<dyn OAuthP
     };
 
     let google_provider = match (
-        std::env::var("OAUTH_GOOGLE_CLIENT_ID"),
-        std::env::var("OAUTH_GOOGLE_CLIENT_SECRET"),
+        prefixed_env_var(env_prefix, "OAUTH_GOOGLE_CLIENT_ID"),
+        prefixed_env_var(env_prefix, "OAUTH_GOOGLE_CLIENT_SECRET"),
     ) {
         (Ok(client_id), Ok(client_secret)) => Some(Box::new(GoogleOAuthProvider::new(
             client_id,
@@ -131,8 +135,8 @@ pub fn create_supported_providers(redirect_base_url: &str) -> Vec<Box<dyn OAuthP
     };
 
     let twitter_provider = match (
-        std::env::var("OAUTH_TWITTER_CLIENT_ID"),
-        std::env::var("OAUTH_TWITTER_CLIENT_SECRET"),
+        prefixed_env_var(env_prefix, "OAUTH_TWITTER_CLIENT_ID"),
+        prefixed_env_var(env_prefix, "OAUTH_TWITTER_CLIENT_SECRET"),
     ) {
         (Ok(client_id), Ok(client_secret)) => Some(Box::new(TwitterOAuthProvider::new(
             client_id,
