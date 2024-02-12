@@ -42,6 +42,8 @@ pub trait HttpError: ToString + std::fmt::Debug {
     /// need to override the default implementation.
     fn to_response(&self) -> Response {
         let (code, err) = self.response_tuple();
+        event!(Level::ERROR, code=%code, kind=%err.error.kind, message=%err.error.message, details=?err.error.details);
+
         let form = err.form.clone();
         let mut response = (code, Json(err)).into_response();
 
@@ -72,9 +74,11 @@ pub enum ErrorKind {
     Database,
     /// Error initializing the database connection
     DatabaseInit,
+    /// User or organization is inactive
     Disabled,
     /// Error from the email sending service
     EmailSendFailure,
+    /// A permissions predicate failed
     FailedPredicate,
     /// An OAuth login seemed to work, but fetching the user's details failed.
     FetchOAuthUserDetails,

@@ -4,6 +4,7 @@ use axum_jsonschema::Json;
 use error_stack::{Report, ResultExt};
 use filigree::{
     auth::password::{new_hash, HashedPassword},
+    extract::FormOrJson,
     users::{
         organization::add_user_to_organization,
         roles::add_default_role_to_user,
@@ -185,7 +186,7 @@ async fn get_current_user_endpoint(
 async fn update_current_user_endpoint(
     State(state): State<ServerState>,
     authed: Authed,
-    Json(body): Json<crate::models::user::UserUpdatePayload>,
+    FormOrJson(body): FormOrJson<crate::models::user::UserUpdatePayload>,
 ) -> Result<impl IntoResponse, Error> {
     // TODO Need a permission specifically for updating self
     let updated =

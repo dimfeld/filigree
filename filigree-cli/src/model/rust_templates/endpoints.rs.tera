@@ -2,6 +2,7 @@
 use axum::{extract::{State, Path}, http::StatusCode, response::IntoResponse, routing};
 use axum_jsonschema::Json;
 use axum_extra::extract::Query;
+use filigree::extract::FormOrJson;
 
 use crate::{Error, auth::{Authed, has_any_permission}, server::ServerState};
 
@@ -29,7 +30,7 @@ async fn list(
 async fn create(
     State(state): State<ServerState>,
     auth: Authed,
-    Json(payload): Json<{{ struct_base }}CreatePayload>,
+    FormOrJson(payload): FormOrJson<{{ struct_base }}CreatePayload>,
     ) -> Result<impl IntoResponse, Error> {
     let result = queries::create(&state.db, &auth, &payload).await?;
 
@@ -40,7 +41,7 @@ async fn update(
     State(state): State<ServerState>,
     auth: Authed,
     Path(id): Path<{{ id_type }}>,
-    Json(payload): Json<{{ struct_base }}UpdatePayload>,
+    FormOrJson(payload): FormOrJson<{{ struct_base }}UpdatePayload>,
     ) -> Result<impl IntoResponse, Error> {
 
     let updated = queries::update(&state.db, &auth, id, &payload).await?;

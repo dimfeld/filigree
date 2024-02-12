@@ -15,13 +15,13 @@ use super::{
     password::{login_with_password, EmailAndPassword},
     AuthError, SessionError,
 };
-use crate::{errors::WrapReport, server::FiligreeState, Message};
+use crate::{errors::WrapReport, extract::FormOrJson, server::FiligreeState, Message};
 
 /// Try to log in with a username and password, and create a session if successful.
 async fn password_login(
     State(state): State<Arc<FiligreeState>>,
     cookies: Cookies,
-    Json(body): Json<EmailAndPassword>,
+    FormOrJson(body): FormOrJson<EmailAndPassword>,
 ) -> Result<impl IntoResponse, WrapReport<AuthError>> {
     login_with_password(&state.session_backend, &cookies, body).await?;
 
@@ -56,7 +56,7 @@ pub struct UpdatePasswordRequest {
 
 async fn update_password(
     State(state): State<Arc<FiligreeState>>,
-    Json(request): Json<UpdatePasswordRequest>,
+    FormOrJson(request): FormOrJson<UpdatePasswordRequest>,
 ) -> Result<(), AuthError> {
     if request.password != request.confirm {
         return Err(AuthError::PasswordConfirmMismatch);

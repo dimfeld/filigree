@@ -7,6 +7,7 @@ use axum_jsonschema::Json;
 use error_stack::{Report, ResultExt};
 use filigree::{
     auth::{password::create_reset_token, AuthError},
+    extract::FormOrJson,
     testing, EmailBody,
 };
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,7 @@ use crate::{server::ServerState, Error};
 pub async fn start_password_reset(
     State(state): State<ServerState>,
     Host(host): Host,
-    Json(body): Json<EmailBody>,
+    FormOrJson(body): FormOrJson<EmailBody>,
 ) -> Result<impl IntoResponse, Error> {
     if state.host_is_allowed(&host).is_err() {
         // Bail due to some kind of hijinks
