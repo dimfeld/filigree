@@ -4,6 +4,8 @@ use sqlx::PgPool;
 
 use crate::Error;
 
+mod bootstrap;
+
 pub async fn run_migrations(db: &PgPool) -> Result<(), Report<Error>> {
     sqlx::migrate!().run(db).await.change_context(Error::Db)
 }
@@ -21,7 +23,7 @@ pub struct DbCommand {
 #[derive(Debug, Subcommand)]
 pub enum DbSubcommand {
     /// Create the initial set of data in the database.
-    Bootstrap,
+    Bootstrap(bootstrap::BootstrapCommand),
     /// Update the database with the latest migrations
     Migrate,
 }
@@ -33,12 +35,8 @@ impl DbCommand {
             .change_context(Error::Db)?;
 
         match self.command {
-            DbSubcommand::Bootstrap => {
-                todo!()
-            }
-            DbSubcommand::Migrate => run_migrations(&pg_pool).await?,
+            DbSubcommand::Bootstrap(cmd) => cmd.handle(pg_pool).await,
+            DbSubcommand::Migrate => run_migrations(&pg_pool).await,
         }
-
-        Ok(())
     }
 }

@@ -6,7 +6,7 @@ use filigree::{
 };
 use tracing::{event, Level};
 
-use {{crate_name}}::{Error, db, emails, server, util_cmd};
+use {{crate_name}}::{Error, cmd, emails, server};
 
 
 #[derive(Parser)]
@@ -18,8 +18,8 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    Util(util_cmd::UtilCommand),
-    Db(db::DbCommand),
+    Util(cmd::util::UtilCommand),
+    Db(cmd::db::DbCommand),
     Serve(ServeCommand),
 }
 
@@ -146,7 +146,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     let pg_pool = pg_pool.change_context(Error::Db)?;
 
     {% if db.migrate_on_start %}
-    db::run_migrations(&pg_pool).await?;
+    cmd::db::run_migrations(&pg_pool).await?;
     {% endif %}
 
     let secure_cookies = !cmd.insecure;

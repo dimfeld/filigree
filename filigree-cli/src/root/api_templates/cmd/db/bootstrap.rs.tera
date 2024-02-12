@@ -1,0 +1,33 @@
+use clap::{Args, Subcommand};
+use error_stack::{Report, ResultExt};
+use sqlx::PgPool;
+
+use crate::Error;
+
+#[derive(Args, Debug)]
+pub struct BootstrapCommand {
+    /// The email for the admin user
+    #[clap(env = "{{env_prefix}}BOOTSTRAP_ADMIN_EMAIL")]
+    admin_email: String,
+
+    /// The name for the admin user
+    #[clap(env = "{{env_prefix}}BOOTSTRAP_ADMIN_NAME", default_value_t = String::from("Administrator"))]
+    admin_name: String,
+
+    /// The password for the admin user. If supplied, this should be prehashed
+    /// by the `util hash` subcommand. If omitted, login through OAuth2 and passwordless methods
+    /// will still work.
+    #[clap(env = "{{env_prefix}}BOOTSTRAP_ADMIN_PASSWORD")]
+    admin_password: Option<String>,
+
+    /// The name for the admin user's organization.
+    #[clap(env = "{{env_prefix}}BOOTSTRAP_ORG_NAME", default_value_t = String::from("Administration"))]
+    organization_name: String,
+}
+
+impl BootstrapCommand {
+    pub async fn handle(self, pg_pool: PgPool) -> Result<(), Report<Error>> {
+        // call bootstrap handler
+        todo!()
+    }
+}
