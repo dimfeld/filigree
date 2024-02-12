@@ -10,13 +10,14 @@ use filigree::{
         passwordless_email_login::{
             check_signup_request, perform_passwordless_login, setup_passwordless_login,
         },
-        LoginResult,
+        AuthError, LoginResult,
     },
     extract::FormOrJson,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tower_cookies::Cookies;
+use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
 use crate::{
@@ -31,6 +32,7 @@ pub struct CreatePasswordlessLoginRequestBody {
     redirect_to: Option<String>,
 }
 
+#[instrument(skip(state))]
 pub async fn request_passwordless_login(
     State(state): State<ServerState>,
     Host(host): Host,
@@ -49,10 +51,11 @@ pub async fn request_passwordless_login(
     let token = match token {
         Ok(token) => token,
         Err(e) => {
-            if e.current_context().is_unauthenticated() {
+            if matches!(e.current_context(), AuthError::UserNotFound) {
                 // This means that the user does not exist and public signups are disabled.
                 // Don't do anything in that case, but also don't tell the user that the email
                 // doesn't exist.
+                event!(Level::INFO, %email, "Passwordless login user not found");
                 return Ok(());
             } else {
                 return Err(e.change_context(Error::AuthSubsystem).into());
