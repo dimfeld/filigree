@@ -26,16 +26,18 @@ export function forwardToApi(
   });
 }
 
+export interface ErrorField<KIND extends string = string, DETAILS extends object = object> {
+  kind: KIND;
+  message: string;
+  details: DETAILS;
+}
+
 export interface ErrorResponse<KIND extends string = string, DETAILS extends object = object> {
-  error: {
-    kind: KIND;
-    message: string;
-    details: DETAILS;
-  };
+  error: ErrorField<KIND, DETAILS>;
 }
 
 export function isErrorResponse<T extends ErrorResponse<string, object>>(
-  obj: object | undefined,
+  obj: object | null | undefined,
   kind: string
 ): obj is T {
   if (!obj) {

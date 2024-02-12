@@ -1,27 +1,29 @@
 import type { ModelDefinition } from './model.js';
 import { type HttpMethod, client } from './client.js';
-import { isErrorResponse, type ErrorResponse } from './requests.js';
-import type { ErrorObject, ValidationError } from 'ajv';
+import { isErrorResponse, type ErrorField, type ErrorResponse } from './requests.js';
+import type { ErrorObject } from 'ajv';
 import { applyAction, deserialize, enhance } from '$app/forms';
 import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 import { invalidateAll } from '$app/navigation';
 
-export interface ValidationErrors {
-  kind: 'validation';
+export interface FormErrorDetails {
   /** Validation messages not related to a specific field. */
   messages?: string[];
   /** Validation messages for particular fields. For nested data, the paths will be in JSON Pointer ('/' delimited) format. */
   fields?: Record<string, string[]>;
 }
 
-export interface GenericError {
-  kind: 'error';
-  messages: string[];
+export interface ErrorState<KIND extends string> {
+  kind: KIND;
 }
 
-export type ValidationFailureResponse = ErrorResponse<'validation', ValidationErrors>;
+export interface FormErrors extends FormErrorDetails {
+  kind: 'error' | 'validation';
+}
 
-export function isValidationFailure(obj: object | undefined): obj is ValidationFailureResponse {
+export function isValidationFailure(
+  obj: object | null | undefined
+): obj is ErrorResponse<'validation', FormErrorDetails> {
   return isErrorResponse(obj, 'validation');
 }
 
@@ -34,8 +36,8 @@ export interface FormResponse<MODEL extends object, ERROR = unknown> {
 
 function isValidationError<T extends object>(
   obj: FormResponse<T> | null | undefined
-): obj is FormResponse<T, ValidationErrors> {
-  return !!obj?.error && 'kind' in obj && obj.kind === 'validation';
+): obj is FormResponse<T, ErrorField<'validation', FormErrorDetails>> {
+  return isValidationFailure(obj);
 }
 
 export type SubmitState = 'idle' | 'loading' | 'slow';
@@ -51,7 +53,7 @@ export interface FormOptions<T extends object> {
   slowLoadThreshold?: number;
 
   /** Perform extra client-side validation. */
-  validate?: (data: Partial<T>) => ValidationErrors | undefined;
+  validate?: (data: Partial<T>) => FormErrors | undefined;
 
   /** Whether or not to reset the form when the form is submitted.
    *
@@ -67,7 +69,7 @@ export interface FormOptions<T extends object> {
   onError?: (result: ActionResult) => void | ActionResult;
 }
 
-function processAjvError(errors: ErrorObject[]): ValidationErrors {
+function processAjvError(errors: ErrorObject[]): FormErrors {
   let output: Record<string, string[]> = {};
 
   for (let error of errors) {
@@ -90,7 +92,10 @@ function processAjvError(errors: ErrorObject[]): ValidationErrors {
 
 class State<T extends object> {
   message: string | undefined = $state();
-  errors: Readonly<ValidationErrors | GenericError | null | undefined> = $state(null);
+  errors: Readonly<FormErrors | null | undefined> = $state(null);
+  fieldErrors = $derived(
+    Object.fromEntries(Object.entries(this.errors?.fields ?? {}).map(([k, v]) => [k, v.join('\n')]))
+  );
   formData: Partial<T> = $state({});
   loadingState: SubmitState = $state('idle');
 
@@ -101,9 +106,8 @@ class State<T extends object> {
 
   constructor(options: FormOptions<T>) {
     // TODO If this was called with a toast, add the toast right away since it came from the server.
-    const formError = isValidationError(options.form) ? options.form.error : null;
     this.message = options.form?.message;
-    this.errors = formError;
+    this.errors = errorStateFromErrorResponse(options.form);
     this.formData = options.form?.form ?? options.data ?? ({} as T);
 
     let internalOptions: InternalOptions<T> = {
@@ -142,7 +146,7 @@ function validate<T extends object>(
     return true;
   }
 
-  let errors: ValidationErrors | undefined;
+  let errors: FormErrors | undefined;
 
   let validated = model.validator(options.state.formData);
   if (!validated) {
@@ -203,6 +207,48 @@ function resolveSuccessHookReturnValue<T extends object>(
   };
 }
 
+function processErrorField(error: ErrorField<'validation', FormErrorDetails>) {
+  let { details, ...rest } = error;
+
+  let output: Record<string, string[]> = {};
+  for (let key in error.details.fields) {
+    const value = error.details.fields[key];
+    // Simplify JSON pointer syntax a bit
+    if (key[0] === '/') {
+      key = key.slice(1);
+    }
+
+    output[key] = value;
+  }
+
+  return {
+    ...rest,
+    ...details,
+    fields: output,
+  };
+}
+
+function errorStateFromErrorResponse<T extends object>(
+  data: FormResponse<T> | null | undefined
+): FormErrors | null | undefined {
+  if (data?.error == null) {
+    return data?.error;
+  }
+
+  if (isValidationError(data)) {
+    return processErrorField(data.error);
+  } else {
+    const message =
+      typeof data.error === 'object' && data.error && 'message' in data.error
+        ? (data.error.message as string)
+        : 'An error occurred. Please try again';
+    return {
+      kind: 'error',
+      messages: [message],
+    };
+  }
+}
+
 function maybeHandleFailureResult<T extends object>(
   options: InternalOptions<T>,
   result: ActionResult
@@ -215,18 +261,7 @@ function maybeHandleFailureResult<T extends object>(
   state.message = result.data?.message;
 
   const data = result.data as unknown as FormResponse<T>;
-  if (isValidationError(data)) {
-    state.errors = data.error;
-  } else {
-    const message =
-      typeof data.error === 'object' && data.error && 'message' in data.error
-        ? (data.error.message as string)
-        : 'An error occurred. Please try again';
-    state.errors = {
-      kind: 'error',
-      messages: [message],
-    };
-  }
+  state.errors = errorStateFromErrorResponse(data);
 }
 
 function plainEnhance<T extends object>(options: InternalOptions<T>) {
