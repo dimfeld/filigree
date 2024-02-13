@@ -1,3 +1,4 @@
+use axum::extract::Host;
 use futures::FutureExt;
 use tokio::signal;
 
@@ -34,6 +35,16 @@ pub struct FiligreeState {
 }
 
 impl FiligreeState {
+    /// Return the default host from the configured list, stripped of wildcards if it includes one
+    pub fn default_host(&self) -> &str {
+        let mut default_host = self.hosts[0].as_str();
+        if default_host.starts_with("*.") {
+            default_host = &default_host[2..];
+        }
+
+        default_host
+    }
+
     /// Check if a host is in the allowed list. If so, return the host. If not, return
     /// the first host in the list inside an `Err`.
     pub fn host_is_allowed<'a>(&'a self, host: &'a str) -> Result<&'a str, &'a str> {
@@ -52,11 +63,21 @@ impl FiligreeState {
         if allowed {
             Ok(host)
         } else {
-            let mut default_host = self.hosts[0].as_str();
-            if default_host.starts_with("*.") {
-                default_host = &default_host[2..];
+            Err(self.default_host())
+        }
+    }
+
+    /// If a host is passed, check if it's in the allow list and return it if so.
+    /// Otherwise, return the default host.
+    pub fn get_valid_host<'a>(&'a self, host: Option<&'a Host>) -> &'a str {
+        if let Some(Host(host)) = host {
+            match self.host_is_allowed(host) {
+                Ok(h) => h,
+                // The error is the default host
+                Err(h) => h,
             }
-            Err(default_host)
+        } else {
+            self.default_host()
         }
     }
 }
