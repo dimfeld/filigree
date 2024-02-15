@@ -48,7 +48,7 @@ pub enum AuthError {
     #[error("User not found")]
     UserNotFound,
     /// Password was incorrect. This will be obfuscated to a generic "unauthenticated" error
-    #[error("User not found")]
+    #[error("Incorrect password")]
     IncorrectPassword,
     /// An API key was provided but it does not exist or is inactive
     #[error("Invalid API Key")]

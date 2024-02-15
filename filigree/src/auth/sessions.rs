@@ -283,9 +283,12 @@ impl SessionBackend {
     }
 
     /// Delete a session, as when logging out.
+    /// This function is forgiving of its input, and will not fail if the session cookie is missing
+    /// or if it references a nonexistent session.
     pub async fn delete_session(&self, cookies: &Cookies) -> Result<(), Report<SessionError>> {
         let cookie = cookies.get("sid");
         let Some(cookie) = cookie else {
+            // It's fine if the session doesn't exist.
             return Ok(());
         };
 
