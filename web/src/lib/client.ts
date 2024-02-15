@@ -132,7 +132,6 @@ export interface RequestOptions {
 }
 
 function makeUrl(baseUrl: string | undefined, url: string | URL, searchParams: URLSearchParams) {
-  searchParams.sort();
   let qs = searchParams.toString();
 
   if (url instanceof URL || url.includes('://')) {

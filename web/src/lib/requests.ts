@@ -109,10 +109,10 @@ export async function handleFormResponse<T extends object>(
   const body: FormResponse<T> = await response.json();
 
   return {
-    status: 'extracted-response',
+    type: 'extracted-response',
     body,
     headers,
-    code: status,
+    status,
   };
 }
 

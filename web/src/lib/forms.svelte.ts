@@ -284,7 +284,7 @@ function plainEnhance<T extends object>(options: InternalOptions<T>) {
         return;
       }
 
-      onSubmit?.({ ...submitData, cancel: hookCancel, data: options.state.formData as T });
+      onSubmit?.({ ...submitData, cancel: hookCancel, data: state.formData as T });
       if (cancelled) {
         return;
       }
@@ -423,7 +423,10 @@ function nestedEnhance<T extends object>(options: InternalOptions<T>) {
 
       if (result.type === 'success') {
         const data = result.data as unknown as FormResponse<T>;
-        state.formData = data.form;
+        state.formData = {
+          ...state.formData,
+          ...data.form,
+        };
 
         state.message = data.message;
         state.errors = null;
