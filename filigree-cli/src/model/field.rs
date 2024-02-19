@@ -64,7 +64,7 @@ pub struct ModelField {
 
     /// A field in another model that this field references. This sets up a foreign
     /// key in the SQL definition.
-    pub references: Option<ModelFieldReference>,
+    pub references: Option<ModelFieldSqlReference>,
 
     /// Fields such as updated_at which are fixed for each model and can not be updated.
     /// Fields defined in the config should not set this.
@@ -176,7 +176,7 @@ impl ModelField {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ModelFieldReference {
+pub struct ModelFieldSqlReference {
     table: String,
     field: String,
     on_delete: Option<ReferentialAction>,
@@ -184,7 +184,7 @@ pub struct ModelFieldReference {
     deferrable: Option<Deferrable>,
 }
 
-impl ModelFieldReference {
+impl ModelFieldSqlReference {
     pub fn new(
         table: impl Into<String>,
         field: impl Into<String>,
@@ -205,7 +205,7 @@ impl ModelFieldReference {
     }
 }
 
-impl Display for ModelFieldReference {
+impl Display for ModelFieldSqlReference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "REFERENCES {} ({})", self.table, self.field)?;
 

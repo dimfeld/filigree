@@ -1,7 +1,7 @@
 use super::{Access, Model};
 use crate::{
     config::Config,
-    model::{field::ReferentialAction, ModelField, ModelFieldReference, PerEndpoint, SqlType},
+    model::{field::ReferentialAction, ModelField, ModelFieldSqlReference, PerEndpoint, SqlType},
 };
 
 fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
@@ -110,7 +110,7 @@ impl Model {
                         user_access: Access::None,
                         nullable: true,
                         references: Some(
-                            ModelFieldReference::new(
+                            ModelFieldSqlReference::new(
                                 "users",
                                 "id",
                                 Some(ReferentialAction::SetNull),

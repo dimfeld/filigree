@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use self::field::{
-    Access, FilterableType, ModelField, ModelFieldReference, ReferentialAction, SqlType,
+    Access, FilterableType, ModelField, ModelFieldSqlReference, ReferentialAction, SqlType,
 };
 use crate::{config::Config, model::field::SortableType};
 
@@ -58,6 +58,17 @@ pub struct Model {
     // TODO ability to define extra permissions
     // TODO ability to define extra operations that update specific things and require specific
     // permissions. Maybe this should just be defined in the normal code instead though...
+
+    // References to other models
+    /// This model can be a child of one of the listed models. This adds a field to the model that
+    /// will reference the parent's ID.
+    #[serde(default)]
+    pub belongs_to: Vec<BelongsTo>,
+
+    /// This model links to other instances of the listed models and can optionally manage them
+    /// as sub-entities, updating in the same operation as the update to the parent.
+    #[serde(default)]
+    pub has: Vec<ChildModelReference>,
 }
 
 impl Model {
@@ -186,7 +197,7 @@ impl Model {
                 fixed: true,
                 previous_name: None,
                 references: org_id_foreign_key.then(|| {
-                    ModelFieldReference::new(
+                    ModelFieldSqlReference::new(
                         "organizations",
                         "id",
                         Some(ReferentialAction::Cascade),
@@ -419,8 +430,116 @@ pub enum ModelAuthScope {
     // /// Object permissions are inherited from the user's permissions on the project that
     // /// contains the object.
     // Project,
-    // TODO implement this soon
+    // TODO implement this soon, and make it configurable whether objects are globally readable by
+    // default or not
     // /// Permissions on existing objects are set per-object.
-    // /// Creators of an object get owner permission by default.
+    // /// Creators of an object automatically get owner permission on the object.
     // Object,
+}
+
+/// How to fetch child models the parent model
+#[derive(Debug, Default, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReferenceFetchType {
+    /// Do not fetch the child models at all.
+    #[default]
+    None,
+    /// Return just the IDs of the child models
+    Id,
+    /// Fetch and return the entire data for the child models
+    Data,
+}
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum OnDelete {
+    #[default]
+    Delete,
+    SetNull,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+pub enum BelongsTo {
+    Simple(String),
+    Complex {
+        model: String,
+        /// The name of the field that contains the ID of the parent. This is usually
+        /// auto-generated as `parent_model_name_id`.
+        field_name: Option<String>,
+        /// If true, this model does not have to have a parent.
+        #[serde(default)]
+        optional: bool,
+
+        /// If true, fetch the data for the referenced instance of the other model in the "list" endpoint
+        #[serde(default)]
+        fetch_on_list: bool,
+        /// If true, fetch the data for the referenced instance of the other model in the "get" endpoint
+        #[serde(default)]
+        fetch_on_get: bool,
+
+        /// How to respond when the parent object is deleted.
+        /// By default this object will be deleted as well.
+        #[serde(default)]
+        on_delete: OnDelete,
+    },
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChildModelReference {
+    /// The name of the child model
+    pub model: String,
+
+    /// If true, this model can be a parent to more than one of the child model.
+    #[serde(default)]
+    pub many: bool,
+
+    /// The model that acts as the linking table between this model and the other model
+    /// if there is one. If not set, it is assumed that the chlid model contains the
+    /// relevant ID field to query against.
+    pub through: Option<String>,
+
+    /// How to fetch the referenced instances of the model in the "list" endpoint
+    #[serde(default)]
+    pub fetch_on_list: ReferenceFetchType,
+    /// How to fetch the referenced instances of the model in the "get" endpoint
+    #[serde(default)]
+    pub fetch_on_get: ReferenceFetchType,
+
+    /// If set, allow adding, updating, and deleting instances of the child model
+    /// during the "create", "update", and "delete" operations on this parent model.
+    ///
+    /// When set to "id", this adds an Option<ChildModelId> field to the model's update payload, and
+    /// for `has_many` relationships, this adds a Vec<ChildModelId> field. In this case, the child
+    /// objects must be added and deleted separately, and updating the ID field here will only
+    /// update the linkage to the child object.
+    ///
+    /// When set to "data":
+    /// For `has_one` relationships, this adds an Option<ChildModelUpdatePayload> field to the model's update payload, and
+    /// for `has_many` relationships, this adds a Vec<ChildModelUpdatePayload> field to the model.
+    /// Instances of the child model will be created and deleted when they are created and deleted
+    /// here.
+    #[serde(default)]
+    pub update_with_parent: ReferenceFetchType,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct HasAndBelongsToMany {
+    /// The name of the model that acts as the parent
+    pub model: String,
+    /// The model that acts as the linking table between this object and the other object.
+    pub through: Option<String>,
+    /// If true, fetch the referenced instances of the model in the "list" endpoint
+    #[serde(default)]
+    fetch_on_list: ReferenceFetchType,
+    /// If true, fetch the referenced instances of the model in the "get" endpoint
+    #[serde(default)]
+    fetch_on_get: ReferenceFetchType,
+    /// If true, allow adding, updating, and deleting instances of the child model
+    /// during the "create", "update", and "delete" operations on this parent model.
+    /// For `has_one` relationships, this adds an Option<ChildModelId> field to the model, and
+    /// for `has_many` relationships, this adds a Vec<ChildModelId> field to the model.
+    /// The child objects themselves must be created and deleted separately.
+    #[serde(default)]
+    update_with_parent: bool,
 }
