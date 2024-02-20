@@ -4,7 +4,7 @@ use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::SqlDialect;
+use super::{ReferenceFetchType, SqlDialect};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelField {
@@ -64,7 +64,10 @@ pub struct ModelField {
 
     /// A field in another model that this field references. This sets up a foreign
     /// key in the SQL definition.
-    pub references: Option<ModelFieldSqlReference>,
+    ///
+    /// For true parent-child relationships, you may prefer to use `has` and `belongs_to` in the
+    /// model definitions.
+    pub references: Option<ModelFieldReference>,
 
     /// Fields such as updated_at which are fixed for each model and can not be updated.
     /// Fields defined in the config should not set this.
@@ -176,15 +179,18 @@ impl ModelField {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ModelFieldSqlReference {
-    table: String,
-    field: String,
-    on_delete: Option<ReferentialAction>,
-    on_update: Option<ReferentialAction>,
-    deferrable: Option<Deferrable>,
+pub struct ModelFieldReference {
+    pub table: String,
+    pub field: String,
+    pub on_delete: Option<ReferentialAction>,
+    pub on_update: Option<ReferentialAction>,
+    pub deferrable: Option<Deferrable>,
+
+    pub populate_on_list: bool,
+    pub populate_on_get: bool,
 }
 
-impl ModelFieldSqlReference {
+impl ModelFieldReference {
     pub fn new(
         table: impl Into<String>,
         field: impl Into<String>,
@@ -196,6 +202,9 @@ impl ModelFieldSqlReference {
             on_delete,
             on_update: None,
             deferrable: None,
+
+            populate_on_get: false,
+            populate_on_list: false,
         }
     }
 
@@ -205,7 +214,7 @@ impl ModelFieldSqlReference {
     }
 }
 
-impl Display for ModelFieldSqlReference {
+impl Display for ModelFieldReference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "REFERENCES {} ({})", self.table, self.field)?;
 

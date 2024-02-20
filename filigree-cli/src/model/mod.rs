@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use self::field::{
-    Access, FilterableType, ModelField, ModelFieldSqlReference, ReferentialAction, SqlType,
+    Access, FilterableType, ModelField, ModelFieldReference, ReferentialAction, SqlType,
 };
 use crate::{config::Config, model::field::SortableType};
 
@@ -60,15 +60,20 @@ pub struct Model {
     // permissions. Maybe this should just be defined in the normal code instead though...
 
     // References to other models
-    /// This model can be a child of one of the listed models. This adds a field to the model that
-    /// will reference the parent's ID.
+    /// This model joins two other models, rather than being a normal model.
+    /// A joining model does not have a normal id field; instead its id is the combination of the ids of the
+    /// models specified here, and the primary key is composed of those two fields.
     #[serde(default)]
-    pub belongs_to: Vec<BelongsTo>,
+    pub joins: Option<(String, String)>,
+
+    /// A parent model for this model, when the other model has a `has` relationship
+    #[serde(default)]
+    pub belongs_to: Option<String>,
 
     /// This model links to other instances of the listed models and can optionally manage them
     /// as sub-entities, updating in the same operation as the update to the parent.
     #[serde(default)]
-    pub has: Vec<ChildModelReference>,
+    pub has: Vec<HasModel>,
 }
 
 impl Model {
@@ -106,6 +111,7 @@ impl Model {
         self.standard_fields()
             .map(|field| Cow::Owned(field))
             .chain(self.fields.iter().map(|field| Cow::Borrowed(field)))
+            .chain(self.reference_fields().map(|field| Cow::Owned(field)))
     }
 
     pub fn write_payload_struct_fields(&self) -> impl Iterator<Item = Cow<ModelField>> {
@@ -197,7 +203,7 @@ impl Model {
                 fixed: true,
                 previous_name: None,
                 references: org_id_foreign_key.then(|| {
-                    ModelFieldSqlReference::new(
+                    ModelFieldReference::new(
                         "organizations",
                         "id",
                         Some(ReferentialAction::Cascade),
@@ -268,6 +274,41 @@ impl Model {
         ]
         .into_iter()
         .flatten()
+    }
+
+    pub fn reference_fields(&self) -> impl Iterator<Item = ModelField> {
+        let belongs_to = self.belongs_to.as_ref().map(|belongs_to| {
+            let id_field_name = format!("{}_id", belongs_to.to_case(Case::Snake));
+            ModelField {
+                name: id_field_name,
+                typ: SqlType::Uuid,
+                rust_type: Some(format!("{belongs_to}Id")),
+                nullable: false,
+                unique: false,
+                indexed: true,
+                filterable: FilterableType::None,
+                sortable: field::SortableType::None,
+                extra_sql_modifiers: String::new(),
+                user_access: Access::Write,
+                owner_access: Access::Write,
+                references: Some(ModelFieldReference {
+                    table: "organizations".to_string(),
+                    field: "id".to_string(),
+                    on_delete: Some(ReferentialAction::Cascade),
+                    on_update: None,
+                    deferrable: None,
+                    populate_on_list: false,
+                    populate_on_get: false,
+                }),
+                default_sql: String::new(),
+                default_rust: String::new(),
+                never_read: false,
+                fixed: false,
+                previous_name: None,
+            }
+        });
+
+        [belongs_to].into_iter().flatten()
     }
 
     /// The base models use this function to merge in fields added from the config.
@@ -450,43 +491,8 @@ pub enum ReferenceFetchType {
     Data,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum OnDelete {
-    #[default]
-    Delete,
-    SetNull,
-}
-
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(untagged)]
-pub enum BelongsTo {
-    Simple(String),
-    Complex {
-        model: String,
-        /// The name of the field that contains the ID of the parent. This is usually
-        /// auto-generated as `parent_model_name_id`.
-        field_name: Option<String>,
-        /// If true, this model does not have to have a parent.
-        #[serde(default)]
-        optional: bool,
-
-        /// If true, fetch the data for the referenced instance of the other model in the "list" endpoint
-        #[serde(default)]
-        fetch_on_list: bool,
-        /// If true, fetch the data for the referenced instance of the other model in the "get" endpoint
-        #[serde(default)]
-        fetch_on_get: bool,
-
-        /// How to respond when the parent object is deleted.
-        /// By default this object will be deleted as well.
-        #[serde(default)]
-        on_delete: OnDelete,
-    },
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ChildModelReference {
+pub struct HasModel {
     /// The name of the child model
     pub model: String,
 
@@ -495,16 +501,16 @@ pub struct ChildModelReference {
     pub many: bool,
 
     /// The model that acts as the linking table between this model and the other model
-    /// if there is one. If not set, it is assumed that the chlid model contains the
+    /// if there is one. If not set, it is assumed that the child model contains the
     /// relevant ID field to query against.
     pub through: Option<String>,
 
     /// How to fetch the referenced instances of the model in the "list" endpoint
     #[serde(default)]
-    pub fetch_on_list: ReferenceFetchType,
+    pub populate_on_list: ReferenceFetchType,
     /// How to fetch the referenced instances of the model in the "get" endpoint
     #[serde(default)]
-    pub fetch_on_get: ReferenceFetchType,
+    pub populate_on_get: ReferenceFetchType,
 
     /// If set, allow adding, updating, and deleting instances of the child model
     /// during the "create", "update", and "delete" operations on this parent model.

@@ -1,7 +1,7 @@
 use super::{Access, Model};
 use crate::{
     config::Config,
-    model::{field::ReferentialAction, ModelField, ModelFieldSqlReference, PerEndpoint, SqlType},
+    model::{field::ReferentialAction, ModelField, ModelFieldReference, PerEndpoint, SqlType},
 };
 
 fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
@@ -62,6 +62,9 @@ impl Model {
                 extra_create_table_sql: String::new(),
                 extra_sql: String::new(),
                 pagination: Default::default(),
+                joins: None,
+                belongs_to: None,
+                has: vec![],
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
@@ -100,6 +103,9 @@ impl Model {
                 extra_create_table_sql: String::new(),
                 extra_sql: String::new(),
                 pagination: Default::default(),
+                joins: None,
+                belongs_to: None,
+                has: vec![],
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
@@ -110,7 +116,7 @@ impl Model {
                         user_access: Access::None,
                         nullable: true,
                         references: Some(
-                            ModelFieldSqlReference::new(
+                            ModelFieldReference::new(
                                 "users",
                                 "id",
                                 Some(ReferentialAction::SetNull),
@@ -149,6 +155,9 @@ impl Model {
                 extra_create_table_sql: String::new(),
                 extra_sql: String::new(),
                 pagination: Default::default(),
+                joins: None,
+                belongs_to: None,
+                has: vec![],
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
