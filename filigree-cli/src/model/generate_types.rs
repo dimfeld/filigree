@@ -4,24 +4,32 @@ use itertools::Itertools;
 use serde_json::json;
 
 use super::{field::ModelField, generator::ModelGenerator};
+use crate::Error;
 
 impl<'a> ModelGenerator<'a> {
-    pub(super) fn add_structs_to_rust_context(&self, context: &mut tera::Context) {
+    pub(super) fn add_rust_structs_to_context(
+        &self,
+        context: &mut tera::Context,
+    ) -> Result<(), Error> {
         let struct_base = self.model.struct_name();
-        let user_can_write_anything = self.all_fields().any(|f| f.user_access.can_write());
+        let user_can_write_anything = self.all_fields()?.any(|f| f.user_access.can_write());
         let struct_list = [
             (
                 "AllFields",
-                Self::struct_contents(self.all_fields().filter(|f| !f.never_read), |_| false, true),
+                Self::struct_contents(
+                    self.all_fields()?.filter(|f| !f.never_read),
+                    |_| false,
+                    true,
+                ),
             ),
             (
                 "CreatePayload",
-                Self::struct_contents(self.write_payload_struct_fields(), |_| false, false),
+                Self::struct_contents(self.write_payload_struct_fields()?, |_| false, false),
             ),
             (
                 "UpdatePayload",
                 Self::struct_contents(
-                    self.write_payload_struct_fields(),
+                    self.write_payload_struct_fields()?,
                     |f| {
                         // Allow optional fields for those that the owner can write,
                         // but the user can not, so that we can accept either form of
@@ -45,7 +53,7 @@ impl<'a> ModelGenerator<'a> {
         }
 
         let owner_and_user_different_access =
-            self.all_fields().any(|f| f.owner_read() && !f.user_read());
+            self.all_fields()?.any(|f| f.owner_read() && !f.user_read());
         context.insert(
             "owner_and_user_different_access",
             &owner_and_user_different_access,
@@ -93,6 +101,7 @@ impl<'a> ModelGenerator<'a> {
 
         context.insert("struct_base", &struct_base);
         context.insert("structs", &structs);
+        Ok(())
     }
 
     fn struct_contents<'b>(

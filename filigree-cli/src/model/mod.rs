@@ -77,6 +77,10 @@ impl Model {
         self.name.to_case(Case::Snake)
     }
 
+    pub fn foreign_key_id_field_name(&self) -> String {
+        format!("{}_id", self.name.to_case(Case::Snake))
+    }
+
     pub fn table(&self) -> String {
         self.plural().to_case(Case::Snake)
     }

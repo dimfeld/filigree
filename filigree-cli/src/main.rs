@@ -127,7 +127,7 @@ pub fn main() -> Result<(), Report<Error>> {
     let generators = models
         .into_iter()
         .map(|model| ModelGenerator::new(&config, &renderer, &model_map, model))
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, Error>>()?;
     let all_model_contexts = generators
         .iter()
         .map(|m| {

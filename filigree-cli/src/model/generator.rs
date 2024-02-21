@@ -1,7 +1,8 @@
-use std::{borrow::Cow, collections::HashMap, ops::Deref, path::PathBuf, sync::OnceLock};
+use std::{borrow::Cow, ops::Deref, path::PathBuf};
 
 use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
+use itertools::Itertools;
 use rayon::prelude::*;
 use serde_json::json;
 
@@ -22,7 +23,7 @@ pub struct ModelGenerator<'a> {
     pub model_map: &'a ModelMap,
     pub(super) renderer: &'a Renderer<'a>,
     pub config: &'a Config,
-    context: OnceLock<tera::Context>,
+    context: Option<tera::Context>,
 }
 
 impl<'a> ModelGenerator<'a> {
@@ -31,18 +32,22 @@ impl<'a> ModelGenerator<'a> {
         renderer: &'a Renderer<'a>,
         model_map: &'a ModelMap,
         model: Model,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, Error> {
+        let mut s = Self {
             config,
             model_map,
             model,
             renderer,
-            context: OnceLock::new(),
-        }
+            context: None,
+        };
+
+        s.create_template_context()?;
+
+        Ok(s)
     }
 
     pub fn template_context(&self) -> &tera::Context {
-        self.context.get_or_init(|| self.create_template_context())
+        self.context.as_ref().unwrap()
     }
 
     pub fn fixed_migrations() -> (Vec<SingleMigration<'static>>, Vec<SingleMigration<'static>>) {
@@ -83,7 +88,7 @@ impl<'a> ModelGenerator<'a> {
                 &PathBuf::new(),
                 "model/migrate_up.sql.tera",
                 crate::RenderedFileLocation::Api,
-                &self.template_context(),
+                self.template_context(),
             )
             .map(|f| f.contents)
     }
@@ -94,7 +99,7 @@ impl<'a> ModelGenerator<'a> {
                 &PathBuf::new(),
                 "model/migrate_down.sql.tera",
                 crate::RenderedFileLocation::Api,
-                &self.template_context(),
+                self.template_context(),
             )
             .map(|f| f.contents)
     }
@@ -138,19 +143,25 @@ impl<'a> ModelGenerator<'a> {
         Ok(output)
     }
 
-    pub fn all_fields(&self) -> impl Iterator<Item = Cow<ModelField>> {
-        self.standard_fields()
+    pub fn all_fields(&self) -> Result<impl Iterator<Item = Cow<ModelField>>, Error> {
+        let fields = self
+            .standard_fields()?
             .map(|field| Cow::Owned(field))
             .chain(self.fields.iter().map(|field| Cow::Borrowed(field)))
-            .chain(self.reference_fields().map(|field| Cow::Owned(field)))
+            .chain(self.reference_fields().map(|field| Cow::Owned(field)));
+
+        Ok(fields)
     }
 
-    pub fn write_payload_struct_fields(&self) -> impl Iterator<Item = Cow<ModelField>> {
-        self.all_fields()
-            .filter(|f| f.owner_access.can_write() && !f.never_read)
+    pub fn write_payload_struct_fields(
+        &self,
+    ) -> Result<impl Iterator<Item = Cow<ModelField>>, Error> {
+        Ok(self
+            .all_fields()?
+            .filter(|f| f.owner_access.can_write() && !f.never_read))
     }
 
-    pub fn create_template_context(&self) -> tera::Context {
+    fn create_template_context(&mut self) -> Result<(), Error> {
         let sql_dialect = Config::default_sql_dialect();
         let full_default_sort_field = self.default_sort_field.as_deref().unwrap_or("-updated_at");
         let default_sort_field = if full_default_sort_field.starts_with('-') {
@@ -160,7 +171,7 @@ impl<'a> ModelGenerator<'a> {
         };
 
         {
-            let default_field = self.all_fields().find(|f| f.name == default_sort_field);
+            let default_field = self.all_fields()?.find(|f| f.name == default_sort_field);
             if let Some(default_field) = default_field {
                 if default_field.sortable == SortableType::None {
                     panic!(
@@ -180,11 +191,26 @@ impl<'a> ModelGenerator<'a> {
             &["role", "user", "organization"].contains(&self.module_name().as_str());
 
         let fields = self
-            .all_fields()
+            .all_fields()?
             .map(|field| field.template_context())
             .collect::<Vec<_>>();
 
-        // TODO add primary key constraint on the two joining IDs if this is a joining model
+        let join_primary_keys = if let Some(model_names) = self.joins.as_ref() {
+            let model1 = self.model_map.get(&model_names.0, "join")?;
+            let model2 = self.model_map.get(&model_names.1, "join")?;
+
+            let model1_id_field_name = model1.foreign_key_id_field_name();
+            let model2_id_field_name = model2.foreign_key_id_field_name();
+
+            format!("PRIMARY KEY({model1_id_field_name}, {model2_id_field_name})")
+        } else {
+            String::new()
+        };
+
+        let extra_create_table_sql = [&join_primary_keys, &self.extra_create_table_sql]
+            .iter()
+            .filter(|s| !s.is_empty())
+            .join(",\n");
 
         let base_dir = PathBuf::from("src/models").join(self.module_name());
 
@@ -203,7 +229,7 @@ impl<'a> ModelGenerator<'a> {
             "read_permission": format!("{}::read", self.name),
             "write_permission": format!("{}::write", self.name),
             "extra_sql": self.extra_sql,
-            "extra_create_table_sql": self.extra_create_table_sql,
+            "extra_create_table_sql": extra_create_table_sql,
             "pagination": self.pagination,
             "full_default_sort_field": full_default_sort_field,
             "default_sort_field": default_sort_field,
@@ -217,12 +243,14 @@ impl<'a> ModelGenerator<'a> {
         });
 
         let mut context = tera::Context::from_value(json_value).unwrap();
-        self.add_structs_to_rust_context(&mut context);
-        context
+        self.add_rust_structs_to_context(&mut context)?;
+
+        self.context = Some(context);
+        Ok(())
     }
 
     /// The fields that apply to every object
-    fn standard_fields(&self) -> impl Iterator<Item = ModelField> {
+    fn standard_fields(&self) -> Result<impl Iterator<Item = ModelField>, Error> {
         let org_field = if self.global {
             None
         } else {
@@ -256,16 +284,15 @@ impl<'a> ModelGenerator<'a> {
             })
         };
 
-        let id_fields = if let Some((model1, model2)) = self.joins.as_ref() {
-            let model1_id_field_name = format!("{}_id", model1.to_case(Case::Snake));
-            let model2_id_field_name = format!("{}_id", model2.to_case(Case::Snake));
+        let id_fields = if let Some(model_names) = self.joins.as_ref() {
+            let model1 = self.model_map.get(&model_names.0, "join")?;
+            let model2 = self.model_map.get(&model_names.1, "join")?;
 
-            [
-                Some(ModelField {
-                    name: model1_id_field_name,
+            fn join_id_field(model: &Model) -> ModelField {
+                ModelField {
+                    name: model.foreign_key_id_field_name(),
                     typ: SqlType::Uuid,
-                    // TODO ID type of model 1
-                    rust_type: Some(self.object_id_type()),
+                    rust_type: Some(model.object_id_type()),
                     nullable: false,
                     unique: false,
                     indexed: true,
@@ -275,8 +302,7 @@ impl<'a> ModelGenerator<'a> {
                     user_access: Access::Read,
                     owner_access: Access::Read,
                     references: Some(ModelFieldReference::new(
-                        // TODO get the real model table name
-                        model1,
+                        model.table(),
                         "id",
                         Some(ReferentialAction::Cascade),
                     )),
@@ -285,33 +311,10 @@ impl<'a> ModelGenerator<'a> {
                     never_read: false,
                     fixed: true,
                     previous_name: None,
-                }),
-                Some(ModelField {
-                    name: model2_id_field_name,
-                    typ: SqlType::Uuid,
-                    // TODO ID type of model 2
-                    rust_type: Some(self.object_id_type()),
-                    nullable: false,
-                    unique: false,
-                    indexed: true,
-                    filterable: FilterableType::Exact,
-                    sortable: SortableType::None,
-                    extra_sql_modifiers: String::new(),
-                    user_access: Access::Read,
-                    owner_access: Access::Read,
-                    references: Some(ModelFieldReference::new(
-                        // TODO get the real model table name
-                        model2,
-                        "id",
-                        Some(ReferentialAction::Cascade),
-                    )),
-                    default_sql: String::new(),
-                    default_rust: String::new(),
-                    never_read: false,
-                    fixed: true,
-                    previous_name: None,
-                }),
-            ]
+                }
+            }
+
+            [Some(join_id_field(model1)), Some(join_id_field(model2))]
         } else {
             [
                 Some(ModelField {
@@ -380,7 +383,7 @@ impl<'a> ModelGenerator<'a> {
         ]
         .into_iter();
 
-        id_fields.into_iter().chain(other_fields).flatten()
+        Ok(id_fields.into_iter().chain(other_fields).flatten())
     }
 
     fn reference_fields(&self) -> impl Iterator<Item = ModelField> {
