@@ -1,4 +1,4 @@
-use std::{borrow::Cow, ops::Deref, path::PathBuf};
+use std::{borrow::Cow, collections::HashMap, ops::Deref, path::PathBuf};
 
 use error_stack::{Report, ResultExt};
 use itertools::Itertools;
@@ -14,7 +14,7 @@ use crate::{
     migrations::SingleMigration,
     model::field::SortableType,
     templates::{ModelRustTemplates, ModelSqlTemplates, Renderer},
-    Error, ModelMap, RenderedFile, RenderedFileLocation,
+    Error, GeneratorMap, ModelMap, RenderedFile, RenderedFileLocation,
 };
 
 pub struct ModelGenerator<'a> {
@@ -32,21 +32,23 @@ impl<'a> ModelGenerator<'a> {
         model_map: &'a ModelMap,
         model: Model,
     ) -> Result<Self, Error> {
-        let mut s = Self {
+        Ok(Self {
             config,
             model_map,
             model,
             renderer,
             context: None,
-        };
-
-        s.create_template_context()?;
-
-        Ok(s)
+        })
     }
 
     pub fn template_context(&self) -> &tera::Context {
-        self.context.as_ref().unwrap()
+        self.context
+            .as_ref()
+            .expect("called template_context before context was initialized")
+    }
+
+    pub fn set_template_context(&mut self, context: tera::Context) {
+        self.context = Some(context);
     }
 
     pub fn fixed_migrations() -> (Vec<SingleMigration<'static>>, Vec<SingleMigration<'static>>) {
@@ -114,27 +116,48 @@ impl<'a> ModelGenerator<'a> {
             "model/select_base.sql.tera",
         ];
 
+        let mut populate_context = self.template_context().clone();
+        populate_context.insert("populate_children", &true);
+
+        let populate_queries = if self.model.has.is_empty() {
+            vec![]
+        } else {
+            vec![
+                ("model/select_one.sql.tera", "select_one_populated.sql"),
+                ("model/list.sql.tera", "list_populated.sql"),
+            ]
+        }
+        .into_iter()
+        .map(|(infile, outfile)| {
+            (
+                Cow::Borrowed(infile),
+                outfile.to_string(),
+                &populate_context,
+            )
+        });
+
         let files = ModelSqlTemplates::iter()
             .chain(ModelRustTemplates::iter())
             .filter(|f| !skip_files.contains(&f.as_ref()))
+            .map(|f| {
+                let outfile = f
+                    .strip_prefix("model/")
+                    .unwrap()
+                    .strip_suffix(".tera")
+                    .unwrap()
+                    .to_string();
+                (f, outfile, self.template_context())
+            })
+            .chain(populate_queries)
             .collect::<Vec<_>>();
 
         let output = files
             .into_par_iter()
-            .map(|file| {
-                let filename = file
-                    .strip_prefix("model/")
-                    .unwrap()
-                    .strip_suffix(".tera")
-                    .unwrap();
-                let path = base_path.join(filename);
+            .map(|(infile, outfile, ctx)| {
+                let path = base_path.join(outfile);
+
                 self.renderer
-                    .render_with_full_path(
-                        path,
-                        &file,
-                        RenderedFileLocation::Api,
-                        &self.template_context(),
-                    )
+                    .render_with_full_path(path, &infile, RenderedFileLocation::Api, ctx)
                     .attach_printable_lazy(|| format!("Model {}", self.model.name))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -160,7 +183,12 @@ impl<'a> ModelGenerator<'a> {
             .filter(|f| f.owner_access.can_write() && !f.never_read))
     }
 
-    fn create_template_context(&mut self) -> Result<(), Error> {
+    /// Initialize the template context. This should be called immediately after all the generators
+    /// are created but before any templates are rendered.
+    pub fn create_template_context(
+        &self,
+        generators: &GeneratorMap,
+    ) -> Result<tera::Context, Error> {
         let sql_dialect = Config::default_sql_dialect();
         let full_default_sort_field = self.default_sort_field.as_deref().unwrap_or("-updated_at");
         let default_sort_field = if full_default_sort_field.starts_with('-') {
@@ -213,6 +241,31 @@ impl<'a> ModelGenerator<'a> {
 
         let base_dir = PathBuf::from("src/models").join(self.module_name());
 
+        let children = self
+            .model
+            .has
+            .iter()
+            .map(|has| {
+                let child_model = self.model_map.get(&has.model, "has")?;
+                let child_generator = generators.get(&has.model, "has")?;
+
+                Ok::<_, Error>(json!({
+                    "relationship": has,
+                    "object_id": child_model.object_id_type(),
+                    "plural": child_model.plural(),
+                    "fields": child_generator.all_fields()?.map(|f| f.template_context()).collect::<Vec<_>>(),
+                    "table": child_model.table(),
+                    "parent_field": child_model.foreign_key_id_field_name(),
+                }))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let children = if children.is_empty() {
+            json!(null)
+        } else {
+            json!(children)
+        };
+
         let json_value = json!({
             "dir": base_dir,
             "module_name": &self.model.module_name(),
@@ -224,6 +277,7 @@ impl<'a> ModelGenerator<'a> {
             "indexes": self.indexes,
             "global": self.global,
             "fields": fields,
+            "children": children,
             "owner_permission": format!("{}::owner", self.name),
             "read_permission": format!("{}::read", self.name),
             "write_permission": format!("{}::write", self.name),
@@ -244,8 +298,7 @@ impl<'a> ModelGenerator<'a> {
         let mut context = tera::Context::from_value(json_value).unwrap();
         self.add_rust_structs_to_context(&mut context)?;
 
-        self.context = Some(context);
-        Ok(())
+        Ok(context)
     }
 
     /// The fields that apply to every object

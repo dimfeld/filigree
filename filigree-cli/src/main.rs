@@ -1,8 +1,13 @@
-use std::{collections::HashSet, error::Error as _, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error as _,
+    path::PathBuf,
+};
 
 use clap::Parser;
 use config::Config;
 use error_stack::{Report, ResultExt};
+use itertools::Itertools;
 use merge_files::MergeTracker;
 use migrations::{resolve_migration, save_migration_state, SingleMigration};
 use model::Model;
@@ -81,6 +86,23 @@ impl ModelMap {
     }
 }
 
+pub struct GeneratorMap<'a>(pub std::collections::HashMap<String, &'a ModelGenerator<'a>>);
+
+impl<'a> GeneratorMap<'a> {
+    pub fn new(models: &'a [ModelGenerator]) -> Self {
+        let model_map = models.iter().map(|m| (m.model.name.clone(), m)).collect();
+
+        Self(model_map)
+    }
+
+    pub fn get(&self, name: &str, context: &str) -> Result<&ModelGenerator, Error> {
+        self.0
+            .get(name)
+            .map(|g| *g)
+            .ok_or_else(|| Error::MissingModel(name.to_string(), context.to_string()))
+    }
+}
+
 fn build_models(config: &Config, mut config_models: Vec<Model>) -> Vec<Model> {
     let mut models = Model::create_default_models(config);
     // See if any of the built-in models have been customized
@@ -124,19 +146,28 @@ pub fn main() -> Result<(), Report<Error>> {
     let models = build_models(&config, config_models);
     let model_map = ModelMap::new(&models);
 
-    let generators = models
+    let mut generators = models
         .into_iter()
         .map(|model| ModelGenerator::new(&config, &renderer, &model_map, model))
         .collect::<Result<Vec<_>, Error>>()?;
-    let all_model_contexts = generators
+
+    let generator_map = GeneratorMap::new(&generators);
+
+    // The generators may need references to each other, so we can only create the template context
+    // once they all exist.
+    let generator_contexts = generators
         .iter()
-        .map(|m| {
-            (
-                m.model.name.clone(),
-                m.template_context().clone().into_json(),
-            )
+        .map(|g| {
+            Ok((
+                g.model.name.clone(),
+                g.create_template_context(&generator_map)?,
+            ))
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<HashMap<_, _>, Error>>()?;
+
+    for g in &mut generators {
+        g.set_template_context(generator_contexts[&g.model.name].clone())
+    }
 
     let mut model_files = None;
     let mut root_files = None;
@@ -153,7 +184,7 @@ pub fn main() -> Result<(), Report<Error>> {
             root_files = Some(root::render_files(
                 &crate_name,
                 &config,
-                &all_model_contexts,
+                &generator_contexts,
                 &renderer,
             ))
         });
@@ -286,9 +317,10 @@ pub fn main() -> Result<(), Report<Error>> {
     let mut model_mod_context = tera::Context::new();
     model_mod_context.insert(
         "models",
-        &all_model_contexts
+        &generator_contexts
             .iter()
-            .map(|(_, v)| v)
+            .sorted_by(|(m1, _), (m2, _)| m1.cmp(m2))
+            .map(|(_, v)| v.clone().into_json())
             .collect::<Vec<_>>(),
     );
 

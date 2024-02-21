@@ -313,13 +313,13 @@ pub struct HasModel {
     /// during the "create", "update", and "delete" operations on this parent model.
     ///
     /// When set to "id", this adds an Option<ChildModelId> field to the model's update payload, and
-    /// for `has_many` relationships, this adds a Vec<ChildModelId> field. In this case, the child
+    /// for `many` relationships, this adds a Vec<ChildModelId> field. In this case, the child
     /// objects must be added and deleted separately, and updating the ID field here will only
     /// update the linkage to the child object.
     ///
     /// When set to "data":
-    /// For `has_one` relationships, this adds an Option<ChildModelUpdatePayload> field to the model's update payload, and
-    /// for `has_many` relationships, this adds a Vec<ChildModelUpdatePayload> field to the model.
+    /// For single relationships, this adds an Option<ChildModelUpdatePayload> field to the model's update payload, and
+    /// for `many` relationships, this adds a Vec<ChildModelUpdatePayload> field to the model.
     /// Instances of the child model will be created and deleted when they are created and deleted
     /// here.
     #[serde(default)]
@@ -343,14 +343,14 @@ impl BelongsTo {
 
     pub fn optional(&self) -> bool {
         match self {
-            BelongsTo::Simple(_) => false,
+            BelongsTo::Simple(_) => FullBelongsTo::default().optional,
             BelongsTo::Full(b) => b.optional,
         }
     }
 
     pub fn indexed(&self) -> bool {
         match self {
-            BelongsTo::Simple(_) => true,
+            BelongsTo::Simple(_) => FullBelongsTo::default().indexed,
             BelongsTo::Full(b) => b.indexed,
         }
     }
@@ -368,6 +368,16 @@ pub struct FullBelongsTo {
     /// If true, a database index will be generated for this field. Defaults to true.
     #[serde(default = "true_t")]
     indexed: bool,
+}
+
+impl Default for FullBelongsTo {
+    fn default() -> Self {
+        Self {
+            model: String::new(),
+            optional: false,
+            indexed: true,
+        }
+    }
 }
 
 fn true_t() -> bool {
