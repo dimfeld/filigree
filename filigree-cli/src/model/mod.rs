@@ -63,8 +63,9 @@ pub struct Model {
     pub joins: Option<(String, String)>,
 
     /// A parent model for this model, when the other model has a `has` relationship
+    /// This adds a field to this model that references the ID of the parent model.
     #[serde(default)]
-    pub belongs_to: Option<String>,
+    pub belongs_to: Option<BelongsTo>,
 
     /// This model links to other instances of the listed models and can optionally manage them
     /// as sub-entities, updating in the same operation as the update to the parent.
@@ -325,23 +326,50 @@ pub struct HasModel {
     pub update_with_parent: ReferenceFetchType,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct HasAndBelongsToMany {
-    /// The name of the model that acts as the parent
-    pub model: String,
-    /// The model that acts as the linking table between this object and the other object.
-    pub through: Option<String>,
-    /// If true, fetch the referenced instances of the model in the "list" endpoint
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum BelongsTo {
+    Simple(String),
+    Full(FullBelongsTo),
+}
+
+impl BelongsTo {
+    pub fn model(&self) -> &str {
+        match self {
+            BelongsTo::Simple(m) => m,
+            BelongsTo::Full(b) => &b.model,
+        }
+    }
+
+    pub fn optional(&self) -> bool {
+        match self {
+            BelongsTo::Simple(_) => false,
+            BelongsTo::Full(b) => b.optional,
+        }
+    }
+
+    pub fn indexed(&self) -> bool {
+        match self {
+            BelongsTo::Simple(_) => true,
+            BelongsTo::Full(b) => b.indexed,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FullBelongsTo {
+    /// The name of the model to link to
+    model: String,
+
+    /// If true, it's ok for this object to not be linked to a parent. Defaults to false.
     #[serde(default)]
-    fetch_on_list: ReferenceFetchType,
-    /// If true, fetch the referenced instances of the model in the "get" endpoint
-    #[serde(default)]
-    fetch_on_get: ReferenceFetchType,
-    /// If true, allow adding, updating, and deleting instances of the child model
-    /// during the "create", "update", and "delete" operations on this parent model.
-    /// For `has_one` relationships, this adds an Option<ChildModelId> field to the model, and
-    /// for `has_many` relationships, this adds a Vec<ChildModelId> field to the model.
-    /// The child objects themselves must be created and deleted separately.
-    #[serde(default)]
-    update_with_parent: bool,
+    optional: bool,
+
+    /// If true, a database index will be generated for this field. Defaults to true.
+    #[serde(default = "true_t")]
+    indexed: bool,
+}
+
+fn true_t() -> bool {
+    true
 }

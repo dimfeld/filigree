@@ -1,6 +1,5 @@
 use std::{borrow::Cow, ops::Deref, path::PathBuf};
 
-use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
 use itertools::Itertools;
 use rayon::prelude::*;
@@ -148,7 +147,7 @@ impl<'a> ModelGenerator<'a> {
             .standard_fields()?
             .map(|field| Cow::Owned(field))
             .chain(self.fields.iter().map(|field| Cow::Borrowed(field)))
-            .chain(self.reference_fields().map(|field| Cow::Owned(field)));
+            .chain(self.reference_fields()?.map(|field| Cow::Owned(field)));
 
         Ok(fields)
     }
@@ -301,11 +300,15 @@ impl<'a> ModelGenerator<'a> {
                     extra_sql_modifiers: String::new(),
                     user_access: Access::Read,
                     owner_access: Access::Read,
-                    references: Some(ModelFieldReference::new(
-                        model.table(),
-                        "id",
-                        Some(ReferentialAction::Cascade),
-                    )),
+                    references: Some(ModelFieldReference {
+                        table: model.table(),
+                        field: "id".to_string(),
+                        on_delete: Some(ReferentialAction::Cascade),
+                        on_update: None,
+                        deferrable: Some(crate::model::field::Deferrable::InitiallyImmediate),
+                        populate_on_list: false,
+                        populate_on_get: false,
+                    }),
                     default_sql: String::new(),
                     default_rust: String::new(),
                     never_read: false,
@@ -386,39 +389,43 @@ impl<'a> ModelGenerator<'a> {
         Ok(id_fields.into_iter().chain(other_fields).flatten())
     }
 
-    fn reference_fields(&self) -> impl Iterator<Item = ModelField> {
-        let belongs_to = self.belongs_to.as_ref().map(|belongs_to| {
-            let id_field_name = format!("{}_id", belongs_to.to_case(Case::Snake));
-            ModelField {
-                name: id_field_name,
-                typ: SqlType::Uuid,
-                rust_type: Some(format!("{belongs_to}Id")),
-                nullable: false,
-                unique: false,
-                indexed: true,
-                filterable: FilterableType::None,
-                sortable: super::field::SortableType::None,
-                extra_sql_modifiers: String::new(),
-                user_access: Access::Write,
-                owner_access: Access::Write,
-                references: Some(ModelFieldReference {
-                    table: "organizations".to_string(),
-                    field: "id".to_string(),
-                    on_delete: Some(ReferentialAction::Cascade),
-                    on_update: None,
-                    deferrable: None,
-                    populate_on_list: false,
-                    populate_on_get: false,
-                }),
-                default_sql: String::new(),
-                default_rust: String::new(),
-                never_read: false,
-                fixed: false,
-                previous_name: None,
-            }
-        });
+    fn reference_fields(&self) -> Result<impl Iterator<Item = ModelField>, Error> {
+        let belongs_to = self
+            .belongs_to
+            .as_ref()
+            .map(|belongs_to| {
+                let model = self.model_map.get(belongs_to.model(), "belongs_to")?;
+                Ok::<_, Error>(ModelField {
+                    name: model.foreign_key_id_field_name(),
+                    typ: SqlType::Uuid,
+                    rust_type: Some(model.object_id_type()),
+                    nullable: belongs_to.optional(),
+                    unique: false,
+                    indexed: belongs_to.indexed(),
+                    filterable: FilterableType::Exact,
+                    sortable: super::field::SortableType::None,
+                    extra_sql_modifiers: String::new(),
+                    user_access: Access::Write,
+                    owner_access: Access::Write,
+                    references: Some(ModelFieldReference {
+                        table: model.table(),
+                        field: "id".to_string(),
+                        on_delete: Some(ReferentialAction::Cascade),
+                        on_update: None,
+                        deferrable: None,
+                        populate_on_list: false,
+                        populate_on_get: false,
+                    }),
+                    default_sql: String::new(),
+                    default_rust: String::new(),
+                    never_read: false,
+                    fixed: false,
+                    previous_name: None,
+                })
+            })
+            .transpose()?;
 
-        [belongs_to].into_iter().flatten()
+        Ok([belongs_to].into_iter().flatten())
     }
 }
 
