@@ -3,29 +3,25 @@ use std::{borrow::Cow, collections::HashMap};
 use itertools::Itertools;
 use serde_json::json;
 
-use super::{field::ModelField, generator::ModelGenerator, Model};
+use super::{field::ModelField, generator::ModelGenerator};
 
 impl<'a> ModelGenerator<'a> {
-    pub(super) fn add_structs_to_rust_context(model: &Model, context: &mut tera::Context) {
-        let struct_base = model.struct_name();
-        let user_can_write_anything = model.all_fields().any(|f| f.user_access.can_write());
+    pub(super) fn add_structs_to_rust_context(&self, context: &mut tera::Context) {
+        let struct_base = self.model.struct_name();
+        let user_can_write_anything = self.all_fields().any(|f| f.user_access.can_write());
         let struct_list = [
             (
                 "AllFields",
-                Self::struct_contents(
-                    model.all_fields().filter(|f| !f.never_read),
-                    |_| false,
-                    true,
-                ),
+                Self::struct_contents(self.all_fields().filter(|f| !f.never_read), |_| false, true),
             ),
             (
                 "CreatePayload",
-                Self::struct_contents(model.write_payload_struct_fields(), |_| false, false),
+                Self::struct_contents(self.write_payload_struct_fields(), |_| false, false),
             ),
             (
                 "UpdatePayload",
                 Self::struct_contents(
-                    model.write_payload_struct_fields(),
+                    self.write_payload_struct_fields(),
                     |f| {
                         // Allow optional fields for those that the owner can write,
                         // but the user can not, so that we can accept either form of
@@ -49,7 +45,7 @@ impl<'a> ModelGenerator<'a> {
         }
 
         let owner_and_user_different_access =
-            model.all_fields().any(|f| f.owner_read() && !f.user_read());
+            self.all_fields().any(|f| f.owner_read() && !f.user_read());
         context.insert(
             "owner_and_user_different_access",
             &owner_and_user_different_access,

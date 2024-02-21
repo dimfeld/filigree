@@ -4,7 +4,7 @@ use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{ReferenceFetchType, SqlDialect};
+use super::SqlDialect;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelField {

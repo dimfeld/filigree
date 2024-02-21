@@ -57,6 +57,28 @@ pub enum Error {
     Cargo,
     #[error("Input error")]
     Input,
+    #[error("Missing model {0} in {1}")]
+    MissingModel(String, String),
+}
+
+pub struct ModelMap(pub std::collections::HashMap<String, Model>);
+
+impl ModelMap {
+    pub fn new(models: &[Model]) -> Self {
+        let model_map = models
+            .iter()
+            .cloned()
+            .map(|m| (m.name.clone(), m))
+            .collect();
+
+        Self(model_map)
+    }
+
+    pub fn get(&self, name: &str, context: &str) -> Result<&Model, Error> {
+        self.0
+            .get(name)
+            .ok_or_else(|| Error::MissingModel(name.to_string(), context.to_string()))
+    }
 }
 
 fn build_models(config: &Config, mut config_models: Vec<Model>) -> Vec<Model> {
@@ -100,14 +122,20 @@ pub fn main() -> Result<(), Report<Error>> {
     let renderer = templates::Renderer::new(&config);
 
     let models = build_models(&config, config_models);
+    let model_map = ModelMap::new(&models);
 
     let generators = models
         .into_iter()
-        .map(|model| ModelGenerator::new(&config, &renderer, model))
+        .map(|model| ModelGenerator::new(&config, &renderer, &model_map, model))
         .collect::<Vec<_>>();
     let all_model_contexts = generators
         .iter()
-        .map(|m| (m.model.name.clone(), m.context.clone().into_json()))
+        .map(|m| {
+            (
+                m.model.name.clone(),
+                m.template_context().clone().into_json(),
+            )
+        })
         .collect::<Vec<_>>();
 
     let mut model_files = None;
