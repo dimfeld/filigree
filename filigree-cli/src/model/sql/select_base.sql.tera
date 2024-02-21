@@ -6,6 +6,30 @@ SELECT
     | map(attribute='sql_full_name')
     | join(sep=', ') }}
   {% endblock select_fields %},
+  {% if populate_children and children %}
+    {% for c in children %}
+      {% if c.relationship.populate_on_get == 'id' %}
+        (
+          SELECT ARRAY_AGG({{c.table}}.id)
+          FROM {{c.table}}
+          WHERE {{c.parent_field}} = $1
+        ) AS {{c.table}}_ids,
+      {% elif c.relationship.populate_on_get == 'data' %}
+        (
+          SELECT JSONB_AGG(
+            JSONB_BUILD_OBJECT(
+              {% for field in c.fields %}
+                '{{field.rust_name}}', {{field.sql_name}},
+              {% endfor %}
+              '_permission', _permission
+            )
+          )
+          FROM {{c.table}}
+          WHERE {{c.parent_field}} = $1
+        ) AS {{c.plural}},
+      {% endif %}
+    {% endfor %}
+  {% endif %}
   _permission AS "_permission!: filigree::auth::ObjectPermission"
 FROM
   {{ table }} tb
@@ -19,7 +43,7 @@ JOIN LATERAL ({{ macros::permissions_value(
       write_perm=write_permission
   )}}) _permission ON _permission IS NOT NULL
 WHERE
-  tb.id = {% block id_param %}$1{% endblock id_param %}
+  tb.id = $1
   {% if not global %}
     AND tb.organization_id = $2
   {% endif %}
