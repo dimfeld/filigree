@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, ops::Deref, path::PathBuf};
+use std::{borrow::Cow, ops::Deref, path::PathBuf};
 
 use error_stack::{Report, ResultExt};
 use itertools::Itertools;
@@ -12,10 +12,15 @@ use super::{
 use crate::{
     config::Config,
     migrations::SingleMigration,
-    model::field::SortableType,
+    model::{field::SortableType, ReferenceFetchType},
     templates::{ModelRustTemplates, ModelSqlTemplates, Renderer},
     Error, GeneratorMap, ModelMap, RenderedFile, RenderedFileLocation,
 };
+
+pub enum ReadOperation {
+    Get,
+    List,
+}
 
 pub struct ModelGenerator<'a> {
     pub model: Model,
@@ -165,6 +170,7 @@ impl<'a> ModelGenerator<'a> {
         Ok(output)
     }
 
+    /// All fields except fields generated when populating child models
     pub fn all_fields(&self) -> Result<impl Iterator<Item = Cow<ModelField>>, Error> {
         let fields = self
             .standard_fields()?
@@ -359,8 +365,7 @@ impl<'a> ModelGenerator<'a> {
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: None,
                         deferrable: Some(crate::model::field::Deferrable::InitiallyImmediate),
-                        populate_on_list: false,
-                        populate_on_get: false,
+                        populate: None,
                     }),
                     default_sql: String::new(),
                     default_rust: String::new(),
@@ -466,8 +471,7 @@ impl<'a> ModelGenerator<'a> {
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: None,
                         deferrable: None,
-                        populate_on_list: false,
-                        populate_on_get: false,
+                        populate: None,
                     }),
                     default_sql: String::new(),
                     default_rust: String::new(),
@@ -479,6 +483,111 @@ impl<'a> ModelGenerator<'a> {
             .transpose()?;
 
         Ok([belongs_to].into_iter().flatten())
+    }
+
+    /// Fields generated when fetching an object with populated child models. These are not
+    /// included in `all_fields`.
+    pub fn populated_child_fields(
+        &self,
+        read_operation: ReadOperation,
+    ) -> Result<impl Iterator<Item = ModelField>, Error> {
+        let base_field = ModelField {
+            name: String::new(),
+            typ: SqlType::Uuid,
+            rust_type: None,
+            nullable: false,
+            unique: false,
+            extra_sql_modifiers: String::new(),
+            user_access: Access::Write,
+            owner_access: Access::Write,
+            default_sql: String::new(),
+            default_rust: String::new(),
+            indexed: false,
+            filterable: FilterableType::None,
+            sortable: SortableType::None,
+            references: None,
+            fixed: false,
+            never_read: false,
+            previous_name: None,
+        };
+
+        let has_fields = self
+            .has
+            .iter()
+            .map(|has| {
+                let populate_type = match read_operation {
+                    ReadOperation::Get => has.populate_on_get,
+                    ReadOperation::List => has.populate_on_list,
+                };
+                let model = self.model_map.get(&has.model, "has")?;
+
+                let field = match (populate_type, has.many) {
+                    (ReferenceFetchType::None, _) => None,
+                    (ReferenceFetchType::Id, true) => Some(ModelField {
+                        name: format!("{}_ids", model.table()),
+                        rust_type: Some(format!("Vec<{}>", model.object_id_type())),
+                        ..base_field.clone()
+                    }),
+                    (ReferenceFetchType::Id, false) => Some(ModelField {
+                        name: format!("{}_id", model.table()),
+                        rust_type: Some(model.object_id_type()),
+                        nullable: true,
+                        ..base_field.clone()
+                    }),
+                    (ReferenceFetchType::Data, true) => Some(ModelField {
+                        name: model.plural().to_string(),
+                        rust_type: Some(format!("Vec<{}>", model.struct_name())),
+                        ..base_field.clone()
+                    }),
+                    (ReferenceFetchType::Data, false) => Some(ModelField {
+                        name: model.name.clone(),
+                        rust_type: Some(model.struct_name()),
+                        nullable: true,
+                        ..base_field.clone()
+                    }),
+                };
+
+                Ok::<_, Error>(field)
+            })
+            .filter_map(|f| f.transpose())
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        let reference_fields = self
+            .model
+            .fields
+            .iter()
+            .map(|f| {
+                let Some(populate) = f.references.as_ref().and_then(|r| r.populate.as_ref()) else {
+                    return Ok(None);
+                };
+
+                let should_populate = match read_operation {
+                    ReadOperation::Get => populate.on_get,
+                    ReadOperation::List => populate.on_list,
+                };
+
+                if !should_populate {
+                    return Ok(None);
+                }
+
+                let model = self.model_map.get(&populate.model, "references.populate")?;
+
+                let field_name = populate
+                    .field_name
+                    .clone()
+                    .unwrap_or_else(|| format!("{}_data", f.name));
+
+                Ok(Some(ModelField {
+                    name: field_name,
+                    rust_type: Some(model.struct_name()),
+                    nullable: f.nullable,
+                    ..base_field.clone()
+                }))
+            })
+            .filter_map(|f| f.transpose())
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        Ok(has_fields.into_iter().chain(reference_fields.into_iter()))
     }
 }
 

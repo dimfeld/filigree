@@ -186,8 +186,17 @@ pub struct ModelFieldReference {
     pub on_update: Option<ReferentialAction>,
     pub deferrable: Option<Deferrable>,
 
-    pub populate_on_list: bool,
-    pub populate_on_get: bool,
+    pub populate: Option<ReferencePopulation>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ReferencePopulation {
+    pub on_get: bool,
+    pub on_list: bool,
+    /// The name of the structure member in which the populated data will be stored.
+    /// If not specified, the name of the referencing field plus "_data" will be used.
+    pub field_name: Option<String>,
+    pub model: String,
 }
 
 impl ModelFieldReference {
@@ -202,9 +211,7 @@ impl ModelFieldReference {
             on_delete,
             on_update: None,
             deferrable: None,
-
-            populate_on_get: false,
-            populate_on_list: false,
+            populate: None,
         }
     }
 
