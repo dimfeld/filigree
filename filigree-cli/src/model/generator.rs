@@ -189,9 +189,16 @@ impl<'a> ModelGenerator<'a> {
     pub fn write_payload_struct_fields(
         &self,
     ) -> Result<impl Iterator<Item = Cow<ModelField>>, Error> {
-        Ok(self
-            .all_fields()?
-            .filter(|f| f.owner_access.can_write() && !f.never_read)
+        // The ID field is only used for child models, but we just add it always, make it optional,
+        // and ignore it in the other cases.
+        let mut id_field = self.id_field();
+        id_field.nullable = true;
+
+        Ok(std::iter::once(Cow::Owned(id_field))
+            .chain(
+                self.all_fields()?
+                    .filter(|f| f.owner_access.can_write() && !f.never_read),
+            )
             .chain(self.write_payload_child_fields()?.map(Cow::Owned)))
     }
 
@@ -350,6 +357,28 @@ impl<'a> ModelGenerator<'a> {
         Ok(context)
     }
 
+    fn id_field(&self) -> ModelField {
+        ModelField {
+            name: "id".to_string(),
+            typ: SqlType::Uuid,
+            rust_type: Some(self.object_id_type()),
+            nullable: false,
+            unique: false,
+            indexed: false,
+            filterable: FilterableType::Exact,
+            sortable: SortableType::None,
+            extra_sql_modifiers: "primary key".to_string(),
+            user_access: Access::Read,
+            owner_access: Access::Read,
+            references: None,
+            default_sql: String::new(),
+            default_rust: String::new(),
+            never_read: false,
+            fixed: true,
+            previous_name: None,
+        }
+    }
+
     /// The fields that apply to every object
     fn standard_fields(&self) -> Result<impl Iterator<Item = ModelField>, Error> {
         let org_field = if self.global {
@@ -424,28 +453,7 @@ impl<'a> ModelGenerator<'a> {
 
             [Some(join_id_field(model1)), Some(join_id_field(model2))]
         } else {
-            [
-                Some(ModelField {
-                    name: "id".to_string(),
-                    typ: SqlType::Uuid,
-                    rust_type: Some(self.object_id_type()),
-                    nullable: false,
-                    unique: false,
-                    indexed: false,
-                    filterable: FilterableType::Exact,
-                    sortable: SortableType::None,
-                    extra_sql_modifiers: "primary key".to_string(),
-                    user_access: Access::Read,
-                    owner_access: Access::Read,
-                    references: None,
-                    default_sql: String::new(),
-                    default_rust: String::new(),
-                    never_read: false,
-                    fixed: true,
-                    previous_name: None,
-                }),
-                None,
-            ]
+            [Some(self.id_field()), None]
         };
 
         let other_fields = [
@@ -718,12 +726,12 @@ impl<'a> ModelGenerator<'a> {
             .iter()
             .map(|has| {
                 let has_model = self.model_map.get(&has.model, &self.model.name, "has")?;
-                if !has.update_with_parent {
+                if matches!(has.update_with_parent, ReferenceFetchType::None) {
                     return Ok(None);
                 }
 
                 let rust_type =
-                    Self::child_model_field_type(&has_model, ReferenceFetchType::Data, has.many);
+                    Self::child_model_field_type(&has_model, has.update_with_parent, has.many);
 
                 let field = if has.many {
                     ModelField {
