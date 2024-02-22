@@ -23,6 +23,28 @@ impl<'a> ModelGenerator<'a> {
                 ),
             ),
             (
+                "PopulatedGet",
+                Self::struct_contents(
+                    self.all_fields()?.filter(|f| !f.never_read).chain(
+                        self.virtual_fields(super::generator::ReadOperation::Get)?
+                            .map(Cow::Owned),
+                    ),
+                    |_| false,
+                    true,
+                ),
+            ),
+            (
+                "PopulatedList",
+                Self::struct_contents(
+                    self.all_fields()?.filter(|f| !f.never_read).chain(
+                        self.virtual_fields(super::generator::ReadOperation::List)?
+                            .map(Cow::Owned),
+                    ),
+                    |_| false,
+                    true,
+                ),
+            ),
+            (
                 "CreatePayload",
                 Self::struct_contents(self.write_payload_struct_fields()?, |_| false, false),
             ),
@@ -77,6 +99,7 @@ impl<'a> ModelGenerator<'a> {
                         .then(|| {
                             suffixes
                                 .iter()
+                                .filter(|suffix| **suffix != "AllFields")
                                 .map(|suffix| format!("{struct_base}{suffix}"))
                                 .collect::<Vec<_>>()
                         })

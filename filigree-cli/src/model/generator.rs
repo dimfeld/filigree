@@ -6,7 +6,11 @@ use rayon::prelude::*;
 use serde_json::json;
 
 use super::{
-    field::{Access, FilterableType, ModelField, ModelFieldReference, ReferentialAction, SqlType}, Model
+    field::{
+        Access, FilterableType, ModelField, ModelFieldReference, ReferencePopulation,
+        ReferentialAction, SqlType,
+    },
+    Model,
 };
 use crate::{
     config::Config,
@@ -16,6 +20,7 @@ use crate::{
     Error, GeneratorMap, ModelMap, RenderedFile, RenderedFileLocation,
 };
 
+#[derive(Debug, Clone, Copy)]
 pub enum ReadOperation {
     Get,
     List,
@@ -175,11 +180,12 @@ impl<'a> ModelGenerator<'a> {
             .standard_fields()?
             .map(|field| Cow::Owned(field))
             .chain(self.fields.iter().map(|field| Cow::Borrowed(field)))
-            .chain(self.reference_fields()?.map(|field| Cow::Owned(field)));
+            .chain(self.belongs_to_field()?.map(|field| Cow::Owned(field)));
 
         Ok(fields)
     }
 
+    /// The fields that go into the update and create structures
     pub fn write_payload_struct_fields(
         &self,
     ) -> Result<impl Iterator<Item = Cow<ModelField>>, Error> {
@@ -259,32 +265,54 @@ impl<'a> ModelGenerator<'a> {
                 let child_model = self.model_map.get(&has.model, &self.model.name, "has")?;
                 let child_generator = generators.get(&has.model, &self.model.name, "has")?;
 
-                let get_sql_field_name = has.field_name.clone().unwrap_or_else(|| 
+                let get_sql_field_name = has.field_name.clone().unwrap_or_else(|| {
                     Self::child_model_field_name(&child_model, has.populate_on_get, has.many)
-                );
+                });
 
-                let list_sql_field_name = has.field_name.clone().unwrap_or_else(||
+                let list_sql_field_name = has.field_name.clone().unwrap_or_else(|| {
                     Self::child_model_field_name(&child_model, has.populate_on_list, has.many)
-                );
+                });
 
-                Ok::<_, Error>(json!({
+                let get_field_type =
+                    Self::child_model_field_type(&child_model, has.populate_on_get, has.many);
+                let list_field_type =
+                    Self::child_model_field_type(&child_model, has.populate_on_list, has.many);
+
+                let result = json!({
                     "relationship": has,
+                    "get_field_type": get_field_type,
                     "get_sql_field_name": get_sql_field_name,
+                    "full_get_sql_field_name": format!("{get_sql_field_name}: {get_field_type}"),
+                    "list_field_type": list_field_type,
                     "list_sql_field_name": list_sql_field_name,
+                    "full_list_sql_field_name": format!("{list_sql_field_name}: {list_field_type}"),
+                    "insertable": has.update_with_parent,
                     "object_id": child_model.object_id_type(),
-                    "plural": child_model.plural(),
                     "fields": child_generator.all_fields()?.map(|f| f.template_context()).collect::<Vec<_>>(),
                     "table": child_model.table(),
-                    "parent_field": child_model.foreign_key_id_field_name(),
-                }))
+                    "parent_field": self.model.foreign_key_id_field_name(),
+                });
+
+                Ok::<_, Error>(result)
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let children = if children.is_empty() {
-            json!(null)
-        } else {
-            json!(children)
-        };
+        let references = self
+            .reference_fields()?
+            .map(|(id_field, populate, ref_model, field)| {
+                let gen = generators.get(&ref_model.name, &self.model.name, "references")?;
+                let full_name = field.qualified_sql_field_name();
+                Ok(json!({
+                    "name": field.name,
+                    "full_name": full_name,
+                    "id_field": id_field,
+                    "on_get": populate.on_get,
+                    "on_list": populate.on_list,
+                    "fields": gen.all_fields()?.map(|f| f.template_context()).collect::<Vec<_>>(),
+                    "table": ref_model.table(),
+                }))
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
 
         let json_value = json!({
             "dir": base_dir,
@@ -298,6 +326,7 @@ impl<'a> ModelGenerator<'a> {
             "global": self.global,
             "fields": fields,
             "children": children,
+            "reference_populations": references,
             "owner_permission": format!("{}::owner", self.name),
             "read_permission": format!("{}::read", self.name),
             "write_permission": format!("{}::write", self.name),
@@ -465,7 +494,7 @@ impl<'a> ModelGenerator<'a> {
         Ok(id_fields.into_iter().chain(other_fields).flatten())
     }
 
-    fn reference_fields(&self) -> Result<impl Iterator<Item = ModelField>, Error> {
+    fn belongs_to_field(&self) -> Result<impl Iterator<Item = ModelField>, Error> {
         let belongs_to = self
             .belongs_to
             .as_ref()
@@ -505,13 +534,31 @@ impl<'a> ModelGenerator<'a> {
         Ok([belongs_to].into_iter().flatten())
     }
 
-    pub fn child_model_field_name(model: &Model, fetch_type: ReferenceFetchType, many: bool) -> String {
+    pub fn child_model_field_name(
+        model: &Model,
+        fetch_type: ReferenceFetchType,
+        many: bool,
+    ) -> String {
         match (fetch_type, many) {
             (ReferenceFetchType::None, _) => String::new(),
             (ReferenceFetchType::Id, true) => format!("{}_ids", model.plural()),
             (ReferenceFetchType::Id, false) => format!("{}_id", model.plural()),
             (ReferenceFetchType::Data, true) => model.plural().to_string(),
             (ReferenceFetchType::Data, false) => model.name.clone(),
+        }
+    }
+
+    pub fn child_model_field_type(
+        model: &Model,
+        fetch_type: ReferenceFetchType,
+        many: bool,
+    ) -> String {
+        match (fetch_type, many) {
+            (ReferenceFetchType::None, _) => String::new(),
+            (ReferenceFetchType::Id, true) => format!("Vec<{}>", model.object_id_type()),
+            (ReferenceFetchType::Id, false) => model.object_id_type(),
+            (ReferenceFetchType::Data, true) => format!("Vec<{}>", model.struct_name()),
+            (ReferenceFetchType::Data, false) => model.struct_name(),
         }
     }
 
@@ -552,39 +599,65 @@ impl<'a> ModelGenerator<'a> {
                 };
                 let model = self.model_map.get(&has.model, &self.model.name, "has")?;
 
-                let name = has.field_name.clone();
-                let field = match (populate_type, has.many) {
-                    (ReferenceFetchType::None, _) => None,
-                    (ReferenceFetchType::Id, true) => Some(ModelField {
-                        name: name.unwrap_or_else(|| format!("{}_ids", model.table())),
-                        rust_type: Some(format!("Vec<{}>", model.object_id_type())),
-                        ..base_field.clone()
-                    }),
-                    (ReferenceFetchType::Id, false) => Some(ModelField {
-                        name: name.unwrap_or_else(|| format!("{}_id", model.table())),
-                        rust_type: Some(model.object_id_type()),
-                        nullable: true,
-                        ..base_field.clone()
-                    }),
-                    (ReferenceFetchType::Data, true) => Some(ModelField {
-                        name: name.unwrap_or_else(|| model.plural().to_string()),
-                        rust_type: Some(format!("Vec<{}>", model.struct_name())),
-                        ..base_field.clone()
-                    }),
-                    (ReferenceFetchType::Data, false) => Some(ModelField {
-                        name: name.unwrap_or_else(|| model.name.clone()),
-                        rust_type: Some(model.struct_name()),
-                        nullable: true,
-                        ..base_field.clone()
-                    }),
+                let name = has.field_name.clone().unwrap_or_else(|| {
+                    Self::child_model_field_name(&model, populate_type, has.many)
+                });
+                let rust_type = Self::child_model_field_type(&model, populate_type, has.many);
+
+                if name.is_empty() {
+                    return Ok(None);
+                }
+
+                let field = ModelField {
+                    name,
+                    rust_type: Some(rust_type),
+                    ..base_field.clone()
                 };
 
-                Ok::<_, Error>(field)
+                Ok::<_, Error>(Some(field))
             })
             .filter_map(|f| f.transpose())
             .collect::<Result<Vec<_>, Error>>()?;
 
         let reference_fields = self
+            .reference_fields()?
+            .filter_map(|(_, populate, _, field)| {
+                match (read_operation, populate.on_get, populate.on_list) {
+                    (ReadOperation::Get, true, _) => Some(field),
+                    (ReadOperation::List, _, true) => Some(field),
+                    _ => None,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        Ok(has_fields.into_iter().chain(reference_fields))
+    }
+
+    fn reference_fields(
+        &self,
+    ) -> Result<impl Iterator<Item = (String, &ReferencePopulation, &Model, ModelField)>, Error>
+    {
+        let base_field = ModelField {
+            name: String::new(),
+            typ: SqlType::Uuid,
+            rust_type: None,
+            nullable: false,
+            unique: false,
+            extra_sql_modifiers: String::new(),
+            user_access: Access::Write,
+            owner_access: Access::Write,
+            default_sql: String::new(),
+            default_rust: String::new(),
+            indexed: false,
+            filterable: FilterableType::None,
+            sortable: SortableType::None,
+            references: None,
+            fixed: false,
+            never_read: false,
+            previous_name: None,
+        };
+
+        let fields = self
             .model
             .fields
             .iter()
@@ -593,12 +666,7 @@ impl<'a> ModelGenerator<'a> {
                     return Ok(None);
                 };
 
-                let should_populate = match read_operation {
-                    ReadOperation::Get => populate.on_get,
-                    ReadOperation::List => populate.on_list,
-                };
-
-                if !should_populate {
+                if !populate.on_get && !populate.on_list {
                     return Ok(None);
                 }
 
@@ -606,22 +674,22 @@ impl<'a> ModelGenerator<'a> {
                     self.model_map
                         .get(&populate.model, &self.model.name, "references.populate")?;
 
-                let field_name = populate
-                    .field_name
-                    .clone()
-                    .unwrap_or_else(|| format!("{}_data", f.name));
+                let field_name = populate.field_name.clone().unwrap_or_else(|| {
+                    Self::child_model_field_name(&model, ReferenceFetchType::Data, false)
+                });
 
-                Ok(Some(ModelField {
+                let field = ModelField {
                     name: field_name,
                     rust_type: Some(model.struct_name()),
                     nullable: f.nullable,
                     ..base_field.clone()
-                }))
+                };
+                Ok(Some((f.name.clone(), populate, model, field)))
             })
             .filter_map(|f| f.transpose())
             .collect::<Result<Vec<_>, Error>>()?;
 
-        Ok(has_fields.into_iter().chain(reference_fields.into_iter()))
+        Ok(fields.into_iter())
     }
 
     pub fn write_payload_child_fields(&self) -> Result<impl Iterator<Item = ModelField>, Error> {
@@ -654,13 +722,16 @@ impl<'a> ModelGenerator<'a> {
                     return Ok(None);
                 }
 
+                let rust_type =
+                    Self::child_model_field_type(&has_model, ReferenceFetchType::Data, has.many);
+
                 let field = if has.many {
                     ModelField {
                         name: has
                             .field_name
                             .clone()
                             .unwrap_or_else(|| has_model.name.clone()),
-                        rust_type: Some(has_model.struct_name()),
+                        rust_type: Some(rust_type),
                         nullable: true,
                         ..base_field.clone()
                     }
@@ -670,7 +741,7 @@ impl<'a> ModelGenerator<'a> {
                             .field_name
                             .clone()
                             .unwrap_or_else(|| has_model.plural().to_string()),
-                        rust_type: Some(format!("Vec<{}>", has_model.struct_name())),
+                        rust_type: Some(rust_type),
                         nullable: false,
                         ..base_field.clone()
                     }

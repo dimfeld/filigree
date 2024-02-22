@@ -6,7 +6,7 @@ SELECT
     | map(attribute='sql_full_name')
     | join(sep=', ') }}
   {% endblock select_fields %},
-  {% if populate_children and children %}
+  {% if populate_children %}
     {% for c in children %}
       {% if c.relationship.populate_on_get == 'id' %}
         (
@@ -15,8 +15,9 @@ SELECT
               {{c.table}}.id
             {%- if c.relationship.many -%}){%- endif -%}
           FROM {{c.table}}
-          WHERE {{c.parent_field}} = $1
-        ) AS {{c.get_sql_field_name}},
+          WHERE {{c.parent_field}} = $1 AND organization_id=$2
+          {% if not c.relationship.many %}LIMIT 1{% endif %}
+        ) AS "{{c.full_get_sql_field_name}}",
       {% elif c.relationship.populate_on_get == 'data' %}
         (
           SELECT
@@ -29,14 +30,32 @@ SELECT
               )
             {%- if c.relationship.many -%}){%- endif -%}
           FROM {{c.table}}
-          WHERE {{c.parent_field}} = $1
-        ) AS {{c.get_sql_field_name}},
+          WHERE {{c.parent_field}} = $1 AND organization_id=$2
+          {% if not c.relationship.many %}LIMIT 1{% endif %}
+        ) AS "{{c.full_get_sql_field_name}}",
       {% endif %}
+    {% endfor %}
+
+    {% for r in reference_populations | filter(attribute="on_get", value=true) %}
+    CASE WHEN ref_{{r.name}}.id IS NOT NULL THEN
+      JSONB_BUILD_OBJECT(
+        {% for field in r.fields %}
+          '{{field.rust_name}}', ref_{{r.name}}.{{field.sql_name}},
+        {% endfor %}
+        '_permission', _permission
+      )
+      ELSE NULL
+    END AS "{{r.full_name}}",
     {% endfor %}
   {% endif %}
   _permission AS "_permission!: filigree::auth::ObjectPermission"
 FROM
   {{ table }} tb
+{% if populate_children %}
+  {% for r in reference_populations | filter(attribute="on_get", value=true) %}
+    LEFT JOIN {{r.table}} ref_{{r.name}} ON {{r.table}}.id = tb.{{r.id_field}}
+  {% endfor %}
+{% endif %}
 JOIN LATERAL ({{ macros::permissions_value(
       auth_scope=auth_scope,
       object_id="$1",

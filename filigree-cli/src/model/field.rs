@@ -120,6 +120,10 @@ impl ModelField {
 
     pub fn qualified_sql_field_name(&self) -> String {
         let field_name = self.sql_field_name();
+        self.qualified_with_field_name(field_name)
+    }
+
+    pub fn qualified_with_field_name(&self, field_name: String) -> String {
         if let Some(rust_type) = &self.rust_type {
             // If the type is different from the default SQL type, specify it explicitly.
             // Don't add Option like self.rust_type() does because sqlx will do that itself.

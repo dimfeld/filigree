@@ -13,6 +13,53 @@ SELECT
     | filter(attribute='never_read', value=false)
     | map(attribute='sql_name')
     | join(sep=',') }},
+
+  {% if populate_children %}
+    {% for c in children %}
+      {% if c.relationship.populate_on_list == 'id' %}
+        (
+          SELECT
+            {%- if c.relationship.many -%}ARRAY_AGG({%- endif -%}
+              {{c.table}}.id
+            {%- if c.relationship.many -%}){%- endif -%}
+          FROM {{c.table}}
+          WHERE {{c.parent_field}} = $1 AND organization_id=$2
+          {% if not c.relationship.many %}LIMIT 1{% endif %}
+        ) AS "{{c.full_list_sql_field_name}}",
+      {% elif c.relationship.populate_on_list == 'data' %}
+        (
+          SELECT
+            {%- if c.relationship.many -%}JSONB_AGG({%- endif -%}
+              JSONB_BUILD_OBJECT(
+                {% for field in c.fields %}
+                  '{{field.rust_name}}', {{field.sql_name}},
+                {% endfor %}
+                '_permission', _permission
+              )
+            {%- if c.relationship.many -%}){%- endif -%}
+          FROM {{c.table}}
+          WHERE {{c.parent_field}} = $1 AND organization_id=$2
+          {% if not c.relationship.many %}LIMIT 1{% endif %}
+        ) AS "{{c.full_list_sql_field_name}}",
+      {% endif %}
+    {% endfor %}
+
+    {% for r in reference_populations | filter(attribute="on_list", value=true) %}
+    (SELECT
+      JSONB_BUILD_OBJECT(
+        {% for field in r.fields %}
+          '{{field.rust_name}}', ref_{{r.name}}.{{field.sql_name}},
+        {% endfor %}
+        '_permission', _permission
+      )
+      FROM {{ r.table}} ref_{{r.name}}
+      WHERE tb.{{r_id_field}} IS NOT NULL
+        AND ref_{{r.name}}.id = tb.{{r.id_field}}
+        AND ref_{{r.name}}.organization_id = tb.organization_id
+    ) AS "{{r.full_name}}",
+    {% endfor %}
+  {% endif %}
+
   perm._permission
 FROM
   {{ table }} tb
@@ -30,7 +77,7 @@ JOIN LATERAL (
 
 WHERE
 {% if not global %}
-   organization_id = $1 
+   organization_id = $1
 {% endif %}
 {% if has_filterable %}
   AND __insertion_point_filters
