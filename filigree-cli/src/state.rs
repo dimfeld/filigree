@@ -43,6 +43,7 @@ pub struct ActiveAndRemoved {
 
 impl ActiveAndRemoved {
     /// Update the active and removed lists given a new list of active items.
+    #[allow(dead_code)] // might use this at some point
     pub fn with_updated_active_list(&self, new_list: Vec<String>) -> Self {
         let mut removed = self.removed.iter().collect::<HashSet<_>>();
 

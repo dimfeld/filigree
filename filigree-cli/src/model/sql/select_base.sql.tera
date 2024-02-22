@@ -10,23 +10,27 @@ SELECT
     {% for c in children %}
       {% if c.relationship.populate_on_get == 'id' %}
         (
-          SELECT ARRAY_AGG({{c.table}}.id)
+          SELECT
+            {%- if c.relationship.many -%}ARRAY_AGG({%- endif -%}
+              {{c.table}}.id
+            {%- if c.relationship.many -%}){%- endif -%}
           FROM {{c.table}}
           WHERE {{c.parent_field}} = $1
-        ) AS {{c.table}}_ids,
+        ) AS {{c.get_sql_field_name}},
       {% elif c.relationship.populate_on_get == 'data' %}
         (
-          SELECT JSONB_AGG(
-            JSONB_BUILD_OBJECT(
-              {% for field in c.fields %}
-                '{{field.rust_name}}', {{field.sql_name}},
-              {% endfor %}
-              '_permission', _permission
-            )
-          )
+          SELECT
+            {%- if c.relationship.many -%}JSONB_AGG({%- endif -%}
+              JSONB_BUILD_OBJECT(
+                {% for field in c.fields %}
+                  '{{field.rust_name}}', {{field.sql_name}},
+                {% endfor %}
+                '_permission', _permission
+              )
+            {%- if c.relationship.many -%}){%- endif -%}
           FROM {{c.table}}
           WHERE {{c.parent_field}} = $1
-        ) AS {{c.plural}},
+        ) AS {{c.get_sql_field_name}},
       {% endif %}
     {% endfor %}
   {% endif %}

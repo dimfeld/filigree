@@ -6,8 +6,7 @@ use rayon::prelude::*;
 use serde_json::json;
 
 use super::{
-    field::{Access, FilterableType, ModelField, ModelFieldReference, ReferentialAction, SqlType},
-    Model,
+    field::{Access, FilterableType, ModelField, ModelFieldReference, ReferentialAction, SqlType}, Model
 };
 use crate::{
     config::Config,
@@ -186,7 +185,8 @@ impl<'a> ModelGenerator<'a> {
     ) -> Result<impl Iterator<Item = Cow<ModelField>>, Error> {
         Ok(self
             .all_fields()?
-            .filter(|f| f.owner_access.can_write() && !f.never_read))
+            .filter(|f| f.owner_access.can_write() && !f.never_read)
+            .chain(self.write_payload_child_fields()?.map(Cow::Owned)))
     }
 
     /// Initialize the template context. This should be called immediately after all the generators
@@ -229,8 +229,12 @@ impl<'a> ModelGenerator<'a> {
             .collect::<Vec<_>>();
 
         let join_primary_keys = if let Some(model_names) = self.joins.as_ref() {
-            let model1 = self.model_map.get(&model_names.0, "join")?;
-            let model2 = self.model_map.get(&model_names.1, "join")?;
+            let model1 = self
+                .model_map
+                .get(&model_names.0, &self.model.name, "join")?;
+            let model2 = self
+                .model_map
+                .get(&model_names.1, &self.model.name, "join")?;
 
             let model1_id_field_name = model1.foreign_key_id_field_name();
             let model2_id_field_name = model2.foreign_key_id_field_name();
@@ -252,11 +256,21 @@ impl<'a> ModelGenerator<'a> {
             .has
             .iter()
             .map(|has| {
-                let child_model = self.model_map.get(&has.model, "has")?;
-                let child_generator = generators.get(&has.model, "has")?;
+                let child_model = self.model_map.get(&has.model, &self.model.name, "has")?;
+                let child_generator = generators.get(&has.model, &self.model.name, "has")?;
+
+                let get_sql_field_name = has.field_name.clone().unwrap_or_else(|| 
+                    Self::child_model_field_name(&child_model, has.populate_on_get, has.many)
+                );
+
+                let list_sql_field_name = has.field_name.clone().unwrap_or_else(||
+                    Self::child_model_field_name(&child_model, has.populate_on_list, has.many)
+                );
 
                 Ok::<_, Error>(json!({
                     "relationship": has,
+                    "get_sql_field_name": get_sql_field_name,
+                    "list_sql_field_name": list_sql_field_name,
                     "object_id": child_model.object_id_type(),
                     "plural": child_model.plural(),
                     "fields": child_generator.all_fields()?.map(|f| f.template_context()).collect::<Vec<_>>(),
@@ -343,8 +357,12 @@ impl<'a> ModelGenerator<'a> {
         };
 
         let id_fields = if let Some(model_names) = self.joins.as_ref() {
-            let model1 = self.model_map.get(&model_names.0, "join")?;
-            let model2 = self.model_map.get(&model_names.1, "join")?;
+            let model1 = self
+                .model_map
+                .get(&model_names.0, &self.model.name, "join")?;
+            let model2 = self
+                .model_map
+                .get(&model_names.1, &self.model.name, "join")?;
 
             fn join_id_field(model: &Model) -> ModelField {
                 ModelField {
@@ -452,7 +470,9 @@ impl<'a> ModelGenerator<'a> {
             .belongs_to
             .as_ref()
             .map(|belongs_to| {
-                let model = self.model_map.get(belongs_to.model(), "belongs_to")?;
+                let model =
+                    self.model_map
+                        .get(belongs_to.model(), &self.model.name, "belongs_to")?;
                 Ok::<_, Error>(ModelField {
                     name: model.foreign_key_id_field_name(),
                     typ: SqlType::Uuid,
@@ -485,9 +505,20 @@ impl<'a> ModelGenerator<'a> {
         Ok([belongs_to].into_iter().flatten())
     }
 
-    /// Fields generated when fetching an object with populated child models. These are not
-    /// included in `all_fields`.
-    pub fn populated_child_fields(
+    pub fn child_model_field_name(model: &Model, fetch_type: ReferenceFetchType, many: bool) -> String {
+        match (fetch_type, many) {
+            (ReferenceFetchType::None, _) => String::new(),
+            (ReferenceFetchType::Id, true) => format!("{}_ids", model.plural()),
+            (ReferenceFetchType::Id, false) => format!("{}_id", model.plural()),
+            (ReferenceFetchType::Data, true) => model.plural().to_string(),
+            (ReferenceFetchType::Data, false) => model.name.clone(),
+        }
+    }
+
+    /// Fields generated in some SQL queries, such as when populating child models, but which are
+    /// not present in the base table.
+    /// This fields are not included in `all_fields`.
+    pub fn virtual_fields(
         &self,
         read_operation: ReadOperation,
     ) -> Result<impl Iterator<Item = ModelField>, Error> {
@@ -519,28 +550,29 @@ impl<'a> ModelGenerator<'a> {
                     ReadOperation::Get => has.populate_on_get,
                     ReadOperation::List => has.populate_on_list,
                 };
-                let model = self.model_map.get(&has.model, "has")?;
+                let model = self.model_map.get(&has.model, &self.model.name, "has")?;
 
+                let name = has.field_name.clone();
                 let field = match (populate_type, has.many) {
                     (ReferenceFetchType::None, _) => None,
                     (ReferenceFetchType::Id, true) => Some(ModelField {
-                        name: format!("{}_ids", model.table()),
+                        name: name.unwrap_or_else(|| format!("{}_ids", model.table())),
                         rust_type: Some(format!("Vec<{}>", model.object_id_type())),
                         ..base_field.clone()
                     }),
                     (ReferenceFetchType::Id, false) => Some(ModelField {
-                        name: format!("{}_id", model.table()),
+                        name: name.unwrap_or_else(|| format!("{}_id", model.table())),
                         rust_type: Some(model.object_id_type()),
                         nullable: true,
                         ..base_field.clone()
                     }),
                     (ReferenceFetchType::Data, true) => Some(ModelField {
-                        name: model.plural().to_string(),
+                        name: name.unwrap_or_else(|| model.plural().to_string()),
                         rust_type: Some(format!("Vec<{}>", model.struct_name())),
                         ..base_field.clone()
                     }),
                     (ReferenceFetchType::Data, false) => Some(ModelField {
-                        name: model.name.clone(),
+                        name: name.unwrap_or_else(|| model.name.clone()),
                         rust_type: Some(model.struct_name()),
                         nullable: true,
                         ..base_field.clone()
@@ -570,7 +602,9 @@ impl<'a> ModelGenerator<'a> {
                     return Ok(None);
                 }
 
-                let model = self.model_map.get(&populate.model, "references.populate")?;
+                let model =
+                    self.model_map
+                        .get(&populate.model, &self.model.name, "references.populate")?;
 
                 let field_name = populate
                     .field_name
@@ -588,6 +622,66 @@ impl<'a> ModelGenerator<'a> {
             .collect::<Result<Vec<_>, Error>>()?;
 
         Ok(has_fields.into_iter().chain(reference_fields.into_iter()))
+    }
+
+    pub fn write_payload_child_fields(&self) -> Result<impl Iterator<Item = ModelField>, Error> {
+        let base_field = ModelField {
+            name: String::new(),
+            typ: SqlType::Uuid,
+            rust_type: None,
+            nullable: false,
+            unique: false,
+            extra_sql_modifiers: String::new(),
+            user_access: Access::Write,
+            owner_access: Access::Write,
+            default_sql: String::new(),
+            default_rust: String::new(),
+            indexed: false,
+            filterable: FilterableType::None,
+            sortable: SortableType::None,
+            references: None,
+            fixed: false,
+            never_read: false,
+            previous_name: None,
+        };
+
+        let has_fields = self
+            .has
+            .iter()
+            .map(|has| {
+                let has_model = self.model_map.get(&has.model, &self.model.name, "has")?;
+                if !has.update_with_parent {
+                    return Ok(None);
+                }
+
+                let field = if has.many {
+                    ModelField {
+                        name: has
+                            .field_name
+                            .clone()
+                            .unwrap_or_else(|| has_model.name.clone()),
+                        rust_type: Some(has_model.struct_name()),
+                        nullable: true,
+                        ..base_field.clone()
+                    }
+                } else {
+                    ModelField {
+                        name: has
+                            .field_name
+                            .clone()
+                            .unwrap_or_else(|| has_model.plural().to_string()),
+                        rust_type: Some(format!("Vec<{}>", has_model.struct_name())),
+                        nullable: false,
+                        ..base_field.clone()
+                    }
+                };
+
+                Ok(Some(field))
+            })
+            .filter_map(|f| f.transpose())
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        Ok(has_fields.into_iter())
     }
 }
 

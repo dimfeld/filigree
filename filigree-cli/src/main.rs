@@ -62,8 +62,8 @@ pub enum Error {
     Cargo,
     #[error("Input error")]
     Input,
-    #[error("Missing model {0} in {1}")]
-    MissingModel(String, String),
+    #[error("Missing model {0} in model {1} field {2}")]
+    MissingModel(String, String, String),
 }
 
 pub struct ModelMap(pub std::collections::HashMap<String, Model>);
@@ -79,10 +79,14 @@ impl ModelMap {
         Self(model_map)
     }
 
-    pub fn get(&self, name: &str, context: &str) -> Result<&Model, Error> {
-        self.0
-            .get(name)
-            .ok_or_else(|| Error::MissingModel(name.to_string(), context.to_string()))
+    pub fn get(&self, name: &str, from_model: &str, context: &str) -> Result<&Model, Error> {
+        self.0.get(name).ok_or_else(|| {
+            Error::MissingModel(
+                name.to_string(),
+                from_model.to_string(),
+                context.to_string(),
+            )
+        })
     }
 }
 
@@ -95,11 +99,19 @@ impl<'a> GeneratorMap<'a> {
         Self(model_map)
     }
 
-    pub fn get(&self, name: &str, context: &str) -> Result<&ModelGenerator, Error> {
-        self.0
-            .get(name)
-            .map(|g| *g)
-            .ok_or_else(|| Error::MissingModel(name.to_string(), context.to_string()))
+    pub fn get(
+        &self,
+        name: &str,
+        from_model: &str,
+        context: &str,
+    ) -> Result<&ModelGenerator, Error> {
+        self.0.get(name).map(|g| *g).ok_or_else(|| {
+            Error::MissingModel(
+                name.to_string(),
+                from_model.to_string(),
+                context.to_string(),
+            )
+        })
     }
 }
 
@@ -134,7 +146,7 @@ pub fn main() -> Result<(), Report<Error>> {
         state_dir,
         api_dir,
         web_dir,
-        state,
+        ..
     } = config;
     let api_merge_tracker = MergeTracker::new(state_dir.join("api"), api_dir.clone());
     let web_merge_tracker = MergeTracker::new(state_dir.join("web"), web_dir.clone());
