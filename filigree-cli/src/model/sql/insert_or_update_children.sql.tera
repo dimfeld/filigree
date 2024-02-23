@@ -1,3 +1,4 @@
+{% if belongs_to_field %}
 -- $1 = has owner permission on the model
 -- $2 = organization_id
 -- $3 = parent_id
@@ -38,4 +39,4 @@ RETURNING
 {{ fields | filter(attribute='never_read', value=false) | map(attribute='sql_full_name') |  join(sep=', ') }},
 'owner' AS "_permission!: filigree::auth::ObjectPermission"
 
-
+{% endif %}

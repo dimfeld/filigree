@@ -31,6 +31,7 @@ const DEPS: &[DepVersion] = &[
     ("schemars", "0.8.16", &["chrono", "url", "uuid1"]),
     ("serde", "1.0.193", &["derive"]),
     ("serde_json", "1.0.113", &[]),
+    ("serde_with", "3.6.1", &["json", "schemars_0_8"]),
     ("sqlx", "0.7.3", &["chrono", "postgres"]),
     ("tera", "1.19.1", &[]),
     ("thiserror", "1.0.56", &[]),

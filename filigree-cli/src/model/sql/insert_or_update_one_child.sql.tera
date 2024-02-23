@@ -1,3 +1,4 @@
+{% if belongs_to_field %}
 -- $1 = has owner permission on the model
 INSERT INTO {{table}}
 (
@@ -45,4 +46,4 @@ RETURNING
 'owner' AS "_permission!: filigree::auth::ObjectPermission"
 
 
-
+{% endif %}

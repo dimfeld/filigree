@@ -273,7 +273,7 @@ pub async fn update(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}, p
 
 {% if belongs_to_field %}
 {% if belongs_to_field.unique %}
-/// Update the single child of the given parent.
+/// Update the child of the given parent.
 pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: bool, parent_id: {{belongs_to_field.rust_type}}, payload: &Option<{{ struct_base }}UpdatePayload>) -> Result<Option<{{struct_base}}>, error_stack::Report<Error>> {
     if let Some(payload) = payload.as_ref() {
         let id = payload.id.unwrap_or_else(|| {{id_type}}::new());
@@ -301,7 +301,7 @@ pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: 
     }
 }
 {% else %}
-/// Update the multiple children of the given parent.
+/// Update the children of the given parent.
 pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: bool, parent_id: {{belongs_to_field.rust_type}}, payload: &[{{ struct_base }}UpdatePayload]) -> Result<Vec<{{struct_base}}>, error_stack::Report<Error>> {
     if payload.is_empty() {
         delete_by_parent(db, auth, parent_id).await?;
@@ -364,6 +364,7 @@ pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: 
 }
 {% endif %}
 
+/// Delete all children of the given parent. This function does not do permissions checks.
 pub async fn delete_by_parent(db: impl PgExecutor<'_>, auth: &AuthInfo, parent_id: {{belongs_to_field.rust_type}}) -> Result<(), error_stack::Report<Error>> {
     query_file!("{{dir}}/delete_all_children.sql",
         {%if not global %}

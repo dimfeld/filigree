@@ -46,12 +46,12 @@ impl<'a> ModelGenerator<'a> {
             ),
             (
                 "CreatePayload",
-                Self::struct_contents(self.write_payload_struct_fields()?, |_| false, false),
+                Self::struct_contents(self.write_payload_struct_fields(false)?, |_| false, false),
             ),
             (
                 "UpdatePayload",
                 Self::struct_contents(
-                    self.write_payload_struct_fields()?,
+                    self.write_payload_struct_fields(true)?,
                     |f| {
                         // Allow optional fields for those that the owner can write,
                         // but the user can not, so that we can accept either form of
@@ -148,12 +148,27 @@ impl<'a> ModelGenerator<'a> {
             .map(|f| {
                 let rust_field_name = f.rust_field_name();
                 let rust_type = f.rust_type();
-                let serde_rename = if rust_field_name != f.name {
-                    format!("#[serde(rename = \"{name}\")]\n", name = f.name)
-                } else {
-                    String::new()
+
+                let mut serde_attrs = Vec::new();
+                if rust_field_name != f.name {
+                    serde_attrs.push(Cow::Owned(format!("rename = \"{name}\"", name = f.name)));
                 };
-                format!("{serde_rename}pub {rust_field_name}: {rust_type},")
+
+                // Double option is used in some places to distinguish between `null` and missing
+                // members coming from JSON.
+                if rust_type.starts_with("Option<Option<") {
+                    serde_attrs.push("default".into());
+                    serde_attrs.push("skip_serializing_if = \"Option::is_none\"".into());
+                    serde_attrs.push("with = \"::serde_with::rust::double_option\"".into());
+                }
+
+                let serde_attr = if serde_attrs.is_empty() {
+                    String::new()
+                } else {
+                    format!("#[serde({})]\n", serde_attrs.join(", "))
+                };
+
+                format!("{serde_attr}pub {rust_field_name}: {rust_type},")
             })
             .join("\n");
 

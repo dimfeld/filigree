@@ -37,6 +37,14 @@ pub struct RenderedFile {
     location: RenderedFileLocation,
 }
 
+impl RenderedFile {
+    /// Return true if the file is empty after trimming whitespace.
+    pub fn is_empty(&self) -> bool {
+        let contents = String::from_utf8_lossy(&self.contents);
+        contents.trim().is_empty()
+    }
+}
+
 #[derive(Parser)]
 pub struct Cli {
     /// Override the path to the configuration directory. By default this looks for ./filigree

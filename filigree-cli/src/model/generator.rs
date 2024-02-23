@@ -188,6 +188,7 @@ impl<'a> ModelGenerator<'a> {
     /// The fields that go into the update and create structures
     pub fn write_payload_struct_fields(
         &self,
+        for_update: bool,
     ) -> Result<impl Iterator<Item = Cow<ModelField>>, Error> {
         // The ID field is only used for child models, but we just add it always, make it optional,
         // and ignore it in the other cases.
@@ -199,7 +200,7 @@ impl<'a> ModelGenerator<'a> {
                 self.all_fields()?
                     .filter(|f| f.owner_access.can_write() && !f.never_read),
             )
-            .chain(self.write_payload_child_fields()?.map(Cow::Owned)))
+            .chain(self.write_payload_child_fields(for_update)?.map(Cow::Owned)))
     }
 
     /// Initialize the template context. This should be called immediately after all the generators
@@ -727,7 +728,10 @@ impl<'a> ModelGenerator<'a> {
         Ok(fields.into_iter())
     }
 
-    pub fn write_payload_child_fields(&self) -> Result<impl Iterator<Item = ModelField>, Error> {
+    pub fn write_payload_child_fields(
+        &self,
+        for_update: bool,
+    ) -> Result<impl Iterator<Item = ModelField>, Error> {
         let base_field = ModelField {
             name: String::new(),
             typ: SqlType::Uuid,
@@ -764,6 +768,15 @@ impl<'a> ModelGenerator<'a> {
 
                 let rust_type =
                     Self::child_model_field_type(&has_model, write_payload_type, has.many);
+
+                // For the update payload, wrap a single child field in a double option so we can distinguish
+                // between null (remove the child) vs. the member being absent (don't touch the
+                // child).
+                let rust_type = if for_update && !has.many {
+                    format!("Option<{}>", rust_type)
+                } else {
+                    rust_type
+                };
 
                 let field = if has.many {
                     ModelField {
