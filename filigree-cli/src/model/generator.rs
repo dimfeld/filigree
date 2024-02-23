@@ -726,12 +726,17 @@ impl<'a> ModelGenerator<'a> {
             .iter()
             .map(|has| {
                 let has_model = self.model_map.get(&has.model, &self.model.name, "has")?;
-                if matches!(has.update_with_parent, ReferenceFetchType::None) {
+                if !has.update_with_parent {
                     return Ok(None);
                 }
 
+                let write_payload_type = match has.through {
+                    None => ReferenceFetchType::Data,
+                    Some(_) => ReferenceFetchType::Id,
+                };
+
                 let rust_type =
-                    Self::child_model_field_type(&has_model, has.update_with_parent, has.many);
+                    Self::child_model_field_type(&has_model, write_payload_type, has.many);
 
                 let field = if has.many {
                     ModelField {

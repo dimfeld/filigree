@@ -312,13 +312,13 @@ pub struct HasModel {
     /// If set, allow adding, updating, and deleting instances of the child model
     /// during the "create", "update", and "delete" operations on this parent model.
     ///
-    /// When this is `data`:
+    /// When `through` is `None`:
     /// For single relationships, this adds an Option<ChildModelUpdatePayload> field to the model's update payload, and
     /// for `many` relationships, this adds a Vec<ChildModelUpdatePayload> field to the model.
     /// Instances of the child model will be created and deleted when they are created and deleted
     /// here.
     ///
-    /// When this is `id`:
+    /// When `through` is set:
     /// For single relationships, this adds an Option<ChildModelId> field to the model's update payload, and
     /// for `many` relationships, this adds a Vec<ChildModelId> field to the model.
     /// Instances of the child model will be created and deleted when they are created and deleted
@@ -328,7 +328,7 @@ pub struct HasModel {
     /// example, when managing tags on an object.
     ///
     #[serde(default)]
-    pub update_with_parent: ReferenceFetchType,
+    pub update_with_parent: bool,
 
     /// Override the field name at which the populdated children will be placed in the model.
     pub field_name: Option<String>,
