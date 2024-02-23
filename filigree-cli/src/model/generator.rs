@@ -321,6 +321,11 @@ impl<'a> ModelGenerator<'a> {
             })
             .collect::<Result<Vec<_>, Error>>()?;
 
+        let belongs_to_field = self
+            .belongs_to_field()?
+            .next()
+            .map(|f| f.template_context());
+
         let json_value = json!({
             "dir": base_dir,
             "module_name": &self.model.module_name(),
@@ -332,6 +337,7 @@ impl<'a> ModelGenerator<'a> {
             "indexes": self.indexes,
             "global": self.global,
             "fields": fields,
+            "belongs_to_field": belongs_to_field,
             "children": children,
             "reference_populations": references,
             "owner_permission": format!("{}::owner", self.name),
@@ -502,6 +508,18 @@ impl<'a> ModelGenerator<'a> {
         Ok(id_fields.into_iter().chain(other_fields).flatten())
     }
 
+    fn belongs_to_field_name(&self) -> Result<Option<String>, Error> {
+        let Some(belongs_to) = self.belongs_to.as_ref() else {
+            return Ok(None);
+        };
+
+        let model = self
+            .model_map
+            .get(belongs_to.model(), &self.model.name, "belongs_to")?;
+
+        Ok(Some(model.foreign_key_id_field_name()))
+    }
+
     fn belongs_to_field(&self) -> Result<impl Iterator<Item = ModelField>, Error> {
         let belongs_to = self
             .belongs_to
@@ -510,12 +528,21 @@ impl<'a> ModelGenerator<'a> {
                 let model =
                     self.model_map
                         .get(belongs_to.model(), &self.model.name, "belongs_to")?;
+
+                // See if the parent model links back to this one, and if `many` is set or not.
+                let single_child = model
+                    .has
+                    .iter()
+                    .find(|has| has.model == self.model.name)
+                    .map(|has| !has.many)
+                    .unwrap_or(false);
+
                 Ok::<_, Error>(ModelField {
                     name: model.foreign_key_id_field_name(),
                     typ: SqlType::Uuid,
                     rust_type: Some(model.object_id_type()),
                     nullable: belongs_to.optional(),
-                    unique: false,
+                    unique: single_child,
                     indexed: belongs_to.indexed(),
                     filterable: FilterableType::Exact,
                     sortable: super::field::SortableType::None,

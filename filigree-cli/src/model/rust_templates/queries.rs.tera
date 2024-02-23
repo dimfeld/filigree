@@ -271,6 +271,114 @@ pub async fn update(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}, p
     Ok(result.rows_affected() > 0)
 }
 
+{% if belongs_to_field %}
+{% if belongs_to_field.unique %}
+/// Update the single child of the given parent.
+pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: bool, parent_id: {{belongs_to_field.rust_type}}, payload: &Option<{{ struct_base }}UpdatePayload>) -> Result<Option<{{struct_base}}>, error_stack::Report<Error>> {
+    if let Some(payload) = payload.as_ref() {
+        let id = payload.id.unwrap_or_else(|| {{id_type}}::new());
+        let result = query_file_as!({{struct_base}}, "{{dir}}/insert_or_update_one_child.sql",
+            is_owner,
+            id.as_uuid(),
+            {% if not global -%}
+            organization_id.as_uuid(),
+            {%- endif %}
+            {% for field in fields | filter(attribute="owner_write", value=true) %}
+                {%- if field.nullable -%}
+                    payload.{{field.rust_name}}.as_ref(){% if field.is_custom_rust_type %} as _{% endif %},
+                {%- else -%}
+                    &payload.{{field.rust_name}}{% if field.is_custom_rust_type %} as _{% endif %},
+                {%- endif -%}
+            {% endfor %}
+            )
+            .fetch_one(db)
+            .await
+            .change_context(Error::Db)?;
+        Ok(Some(result))
+    } else {
+        delete_by_parent(db, auth, parent_id).await?;
+        Ok(None)
+    }
+}
+{% else %}
+/// Update the multiple children of the given parent.
+pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: bool, parent_id: {{belongs_to_field.rust_type}}, payload: &[{{ struct_base }}UpdatePayload]) -> Result<Vec<{{struct_base}}>, error_stack::Report<Error>> {
+    if payload.is_empty() {
+        delete_by_parent(db, auth, parent_id).await?;
+        Ok(Vec::new())
+    } else {
+        // First, we upsert the existing children.
+        let q = include_str!("insert_or_update_children.sql");
+        let bindings = ValuesBuilder{
+            first_parameter: 4,
+            num_values: payload.len(),
+            num_columns: 2 + {{ fields | filter(attribute="owner_write", value=true) | length }},
+        };
+        let q = q.replace("__insertion_point_insert_values", bindings.to_string());
+
+        let mut query = sqlx::query_as::<_, {{struct_base}}>(q.as_str());
+
+        query = query
+            .bind(is_owner)
+            {%if not global %}
+            .bind(auth.organization_id.as_uuid())
+            {%endif %}
+            .bind(parent_id.as_uuid());
+
+        for p in payload {
+            let id = p.id.unwrap_or_else(|| {{id_type}}::new());
+            query = query
+                .bind(id.as_uuid())
+                .bind(auth.organization_id.as_uuid())
+                {% for field in fields | filter(attribute="owner_write", value=true) %}
+                .bind(
+                {%- if field.nullable -%}
+                    payload.{{field.rust_name}}.as_ref(){% if field.is_custom_rust_type %} as _{% endif %},
+                {%- else -%}
+                    &payload.{{field.rust_name}}{% if field.is_custom_rust_type %} as _{% endif %},
+                {%- endif -%}
+                )
+                {% endfor %}
+        }
+
+        let results = query
+            .fetch_all(db)
+            .await
+            .change_context(Error::Db)?;
+
+        // Delete any of the children that were not sent in.
+        let ids = payload.iter().map(|o| o.id.as_uuid()).collect::<Vec<_>>();
+        query_file!("{{dir}}/delete_removed_children.sql",
+            {%if not global %}
+            auth.organization_id.as_uuid(),
+            {% endif %}
+            &parent_id,
+            &ids
+            )
+            .execute(db)
+            .await
+            .change_context(Error::Db)?;
+
+        Ok(results)
+    }
+}
+{% endif %}
+
+pub async fn delete_by_parent(db: impl PgExecutor<'_>, auth: &AuthInfo, parent_id: {{belongs_to_field.rust_type}}) -> Result<(), error_stack::Report<Error>> {
+    query_file!("{{dir}}/delete_all_children.sql",
+        {%if not global %}
+        auth.organization_id.as_uuid(),
+        {% endif %}
+        &parent_id
+        )
+        .execute(db)
+        .await
+        .change_context(Error::Db)?;
+    Ok(())
+}
+
+{% endif %}
+
 pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<bool, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let result = query_file!("{{dir}}/delete.sql",
