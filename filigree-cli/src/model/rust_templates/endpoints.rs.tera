@@ -1,5 +1,5 @@
 #![allow(unused_imports, dead_code)]
-use axum::{extract::{State, Path}, http::StatusCode, response::IntoResponse, routing};
+use axum::{extract::{State, Path, Query}, http::StatusCode, response::IntoResponse, routing};
 use axum_jsonschema::Json;
 use axum_extra::extract::Query;
 use error_stack::ResultExt;
@@ -15,10 +15,13 @@ use super::{queries, types::*, {{id_type}}, CREATE_PERMISSION, OWNER_PERMISSION,
 async fn get(
     State(state): State<ServerState>,
     auth: Authed,
-    Path(id): Path<{{ id_type }}>
+    Path(id): Path<{{ id_type }}>,
     ) -> Result<impl IntoResponse, Error> {
-
+    {% if can_populate_get %}
+    let object = queries::get_populated(&state.db, &auth, id).await?;
+    {% else %}
     let object = queries::get(&state.db, &auth, id).await?;
+    {% endif %}
     Ok(Json(object))
 }
 
@@ -27,7 +30,11 @@ async fn list(
     auth: Authed,
     Query(qs): Query<queries::ListQueryFilters>,
     ) -> Result<impl IntoResponse, Error> {
+    {% if can_populate_list %}
+    let results = queries::list_populated(&state.db, &auth, &qs).await?;
+    {% else %}
     let results = queries::list(&state.db, &auth, &qs).await?;
+    {% endif %}
     Ok(Json(results))
 }
 

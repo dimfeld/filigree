@@ -329,6 +329,9 @@ impl<'a> ModelGenerator<'a> {
             .next()
             .map(|f| f.template_context());
 
+        let can_populate_get = self.virtual_fields(ReadOperation::Get)?.next().is_some();
+        let can_populate_list = self.virtual_fields(ReadOperation::List)?.next().is_some();
+
         let json_value = json!({
             "dir": base_dir,
             "module_name": &self.model.module_name(),
@@ -341,6 +344,8 @@ impl<'a> ModelGenerator<'a> {
             "global": self.global,
             "fields": fields,
             "belongs_to_field": belongs_to_field,
+            "can_populate_get": can_populate_get,
+            "can_populate_list": can_populate_list,
             "children": children,
             "reference_populations": references,
             "owner_permission": format!("{}::owner", self.name),
