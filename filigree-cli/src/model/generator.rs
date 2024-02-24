@@ -294,7 +294,9 @@ impl<'a> ModelGenerator<'a> {
                     "list_field_type": list_field_type,
                     "list_sql_field_name": list_sql_field_name,
                     "full_list_sql_field_name": format!("{list_sql_field_name}: {list_field_type}"),
+                    "write_payload_field_name": has.rust_child_field_name(&child_model),
                     "insertable": has.update_with_parent,
+                    "module": child_model.module_name(),
                     "object_id": child_model.object_id_type(),
                     "fields": child_generator.all_fields()?.map(|f| f.template_context()).collect::<Vec<_>>(),
                     "table": child_model.table(),
@@ -778,26 +780,11 @@ impl<'a> ModelGenerator<'a> {
                     rust_type
                 };
 
-                let field = if has.many {
-                    ModelField {
-                        name: has
-                            .field_name
-                            .clone()
-                            .unwrap_or_else(|| has_model.name.clone()),
-                        rust_type: Some(rust_type),
-                        nullable: true,
-                        ..base_field.clone()
-                    }
-                } else {
-                    ModelField {
-                        name: has
-                            .field_name
-                            .clone()
-                            .unwrap_or_else(|| has_model.plural().to_string()),
-                        rust_type: Some(rust_type),
-                        nullable: false,
-                        ..base_field.clone()
-                    }
+                let field = ModelField {
+                    name: has.rust_child_field_name(&has_model),
+                    rust_type: Some(rust_type),
+                    nullable: has.many,
+                    ..base_field.clone()
                 };
 
                 Ok(Some(field))

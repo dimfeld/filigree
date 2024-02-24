@@ -2,9 +2,13 @@
 use axum::{extract::{State, Path}, http::StatusCode, response::IntoResponse, routing};
 use axum_jsonschema::Json;
 use axum_extra::extract::Query;
+use error_stack::ResultExt;
 use filigree::extract::FormOrJson;
 
 use crate::{Error, auth::{Authed, has_any_permission}, server::ServerState};
+{% for child in children %}
+use crate::models::{{c.module}}::{{c.object_id}};
+{% endfor %}
 
 use super::{queries, types::*, {{id_type}}, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION, WRITE_PERMISSION };
 
@@ -32,8 +36,27 @@ async fn create(
     auth: Authed,
     FormOrJson(payload): FormOrJson<{{ struct_base }}CreatePayload>,
     ) -> Result<impl IntoResponse, Error> {
-    let result = queries::create(&state.db, &auth, &payload).await?;
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+    let result = queries::create(&mut *tx, &auth, &payload).await?;
 
+    {% for c in children %}
+        {% if c.relationship.many %}
+        let has_children = !payload.{{c.write_payload_field_name}}.is_empty();
+        {% else %}
+        let has_children = payload.{{c.write_payload_field_name}}.is_some();
+        {% endif %}
+
+        if has_children {
+            for child in payload.{{c.write_payload_field_name}}.iter_mut() {
+                child.id = Some({{c.object_id}}::new());
+                child.{{c.parent_field}} = Some(result.id);
+            }
+
+            crate::models::{{c.module}}::update_by_parent(&mut *tx, &auth, true, result.id, &payload.{{c.write_payload_field_name}}).await?;
+        }
+    {% endfor %}
+
+    tx.commit().await.change_context(Error::Db)?;
     Ok((StatusCode::CREATED, Json(result)))
 }
 
@@ -44,9 +67,21 @@ async fn update(
     FormOrJson(payload): FormOrJson<{{ struct_base }}UpdatePayload>,
     ) -> Result<impl IntoResponse, Error> {
 
-    let updated = queries::update(&state.db, &auth, id, &payload).await?;
-    let status = if updated { StatusCode::OK } else { StatusCode::NOT_FOUND };
-    Ok(status)
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
+    let updated = queries::update(&mut *tx, &auth, id, &payload).await?;
+    if !updated {
+        return Ok(StatusCode::NOT_FOUND);
+    }
+
+    {% for c in children %}
+    if let Some(children) = payload.{{c.rust_name}} {
+        crate::models::{{c.module}}::queries::update_by_parent(&mut *tx, &auth, is_owner, id, &children).await?;
+    }
+    {% endfor %}
+
+    tx.commit().await.change_context(Error::Db)?;
+    Ok(StatusCode::OK)
 }
 
 async fn delete(
@@ -55,10 +90,20 @@ async fn delete(
     Path(id): Path<{{ id_type }}>
     ) -> Result<impl IntoResponse, Error> {
 
-    let deleted = queries::delete(&state.db, &auth, id).await?;
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
 
-    let status = if deleted { StatusCode::OK } else { StatusCode::NOT_FOUND };
-    Ok(status)
+    let deleted = queries::delete(&mut *tx, &auth, id).await?;
+
+    if !deleted {
+        return Ok(StatusCode::NOT_FOUND);
+    }
+
+    {% for c in children %}
+        crate::models::{{c.module}}::queries::delete_by_parent(&mut *tx, &auth, id).await?;
+    {% endfor %}
+
+    tx.commit().await.change_context(Error::Db)?;
+    Ok(StatusCode::OK)
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {

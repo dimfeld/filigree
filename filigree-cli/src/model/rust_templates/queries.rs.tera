@@ -302,7 +302,7 @@ pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: 
 }
 {% else %}
 /// Update the children of the given parent.
-pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: bool, parent_id: {{belongs_to_field.rust_type}}, payload: &[{{ struct_base }}UpdatePayload]) -> Result<Vec<{{struct_base}}>, error_stack::Report<Error>> {
+pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: bool, parent_id: {{belongs_to_field.rust_type}}, payload: &[{{ struct_base }}UpdatePayload]) -> Result<Vec<{{struct_base}}UpdatePayload>, error_stack::Report<Error>> {
     if payload.is_empty() {
         delete_by_parent(db, auth, parent_id).await?;
         Ok(Vec::new())
