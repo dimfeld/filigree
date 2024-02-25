@@ -33,7 +33,9 @@ impl MergeTracker {
 
         let output_path = self.output_path.join(&path);
 
-        let previous_generation = std::fs::read_to_string(&base_generated_path).ok();
+        let previous_generation_result = std::fs::read_to_string(&base_generated_path);
+        let gen_exists = previous_generation_result.is_ok();
+        let previous_generation = previous_generation_result.ok();
         let users_file = std::fs::read_to_string(&output_path).ok();
 
         let merged = generate_merged_output(
@@ -63,6 +65,7 @@ impl MergeTracker {
             output_path,
             output_relative_path: path,
             this_generation: new_output,
+            gen_exists,
             empty,
             remove_user_file,
             merged,
@@ -121,6 +124,8 @@ pub struct MergeFile {
 
     pub this_generation: String,
     pub merged: MergeOutput,
+    /// If true, the previous generation file exists.
+    pub gen_exists: bool,
     /// If true, the generated file was empty after trimming whitespace.
     pub empty: bool,
     /// If true, the generated file is empty, and the user's file has not been customized at all,
@@ -130,14 +135,13 @@ pub struct MergeFile {
 
 impl MergeFile {
     pub fn write(&self) -> Result<(), Report<std::io::Error>> {
-        if self.generation_changed {
-            if self.empty {
-                std::fs::remove_file(&self.base_generated_path)
-                    .attach_printable_lazy(|| self.base_generated_path.display().to_string())?;
-            } else {
-                std::fs::write(&self.base_generated_path, self.this_generation.as_bytes())
-                    .attach_printable_lazy(|| self.base_generated_path.display().to_string())?;
+        if self.empty {
+            if self.gen_exists {
+                std::fs::remove_file(&self.base_generated_path).ok();
             }
+        } else if self.generation_changed {
+            std::fs::write(&self.base_generated_path, self.this_generation.as_bytes())
+                .attach_printable_lazy(|| self.base_generated_path.display().to_string())?;
         }
 
         if self.remove_user_file {
