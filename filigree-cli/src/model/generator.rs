@@ -1,5 +1,6 @@
 use std::{borrow::Cow, ops::Deref, path::PathBuf};
 
+use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
 use itertools::Itertools;
 use rayon::prelude::*;
@@ -237,7 +238,7 @@ impl<'a> ModelGenerator<'a> {
         let predefined_object_id =
             &["role", "user", "organization"].contains(&self.module_name().as_str());
 
-        let fields = self
+        let mut fields = self
             .all_fields()?
             .map(|field| field.template_context())
             .collect::<Vec<_>>();
@@ -286,6 +287,12 @@ impl<'a> ModelGenerator<'a> {
                 let list_field_type =
                     Self::child_model_field_type(&child_model, has.populate_on_list, has.many);
 
+                let url_path = if has.many {
+                    child_model.plural().as_ref().to_case(Case::Snake)
+                } else {
+                    child_model.name.to_case(Case::Snake)
+                };
+
                 let result = json!({
                     "relationship": has,
                     "get_field_type": get_field_type,
@@ -295,11 +302,13 @@ impl<'a> ModelGenerator<'a> {
                     "list_sql_field_name": list_sql_field_name,
                     "full_list_sql_field_name": format!("{list_sql_field_name}: {list_field_type}"),
                     "write_payload_field_name": has.rust_child_field_name(&child_model),
+                    "struct_base": child_model.struct_name(),
                     "insertable": has.update_with_parent,
                     "module": child_model.module_name(),
                     "object_id": child_model.object_id_type(),
                     "fields": child_generator.all_fields()?.map(|f| f.template_context()).collect::<Vec<_>>(),
                     "table": child_model.table(),
+                    "url_path": url_path,
                     "parent_field": self.model.foreign_key_id_field_name(),
                 });
 
@@ -332,6 +341,15 @@ impl<'a> ModelGenerator<'a> {
         let can_populate_get = self.virtual_fields(ReadOperation::Get)?.next().is_some();
         let can_populate_list = self.virtual_fields(ReadOperation::List)?.next().is_some();
 
+        if let Some(b) = &belongs_to_field {
+            let belongs_to_name = &b["sql_name"];
+            for f in fields.iter_mut() {
+                let is_belongs_to = f["name"].as_str().unwrap_or_default() == belongs_to_name;
+                f["owner_write_non_parent"] =
+                    json!(!is_belongs_to && f["owner_write"].as_bool().unwrap_or(false));
+            }
+        }
+
         let json_value = json!({
             "dir": base_dir,
             "module_name": &self.model.module_name(),
@@ -359,7 +377,7 @@ impl<'a> ModelGenerator<'a> {
             "id_type": self.object_id_type(),
             "id_prefix": self.id_prefix(),
             "predefined_object_id": predefined_object_id,
-            "url_path": self.plural().to_lowercase(),
+            "url_path": self.plural().as_ref().to_case(Case::Snake),
             "has_any_endpoints": self.endpoints.any_enabled(),
             "endpoints": self.endpoints.per_endpoint(),
             "auth_scope": self.auth_scope.unwrap_or(self.config.default_auth_scope),

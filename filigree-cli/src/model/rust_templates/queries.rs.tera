@@ -124,7 +124,7 @@ fn parse_order_by(field: &str) -> Result<(bool, OrderByField), OrderByError> {
 
 {% set_global has_filterable = false %}
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub struct ListQueryFilters {
     {%if not pagination.disable %}
     pub page: Option<u32>,
@@ -299,15 +299,34 @@ pub async fn update(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}, p
     Ok(result.rows_affected() > 0)
 }
 
+pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<bool, error_stack::Report<Error>> {
+    let actor_ids = auth.actor_ids();
+    let result = query_file!("{{dir}}/delete.sql",
+        id.as_uuid(),
+        auth.organization_id.as_uuid(),
+        &actor_ids
+        )
+        .execute(db)
+        .await
+        .change_context(Error::Db)?;
+    Ok(result.rows_affected() > 0)
+}
+
 {% if belongs_to_field %}
 {% if belongs_to_field.unique %}
 /// Update the child of the given parent.
-pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: bool, parent_id: {{belongs_to_field.rust_type}}, payload: &Option<{{ struct_base }}UpdatePayload>) -> Result<Option<{{struct_base}}>, error_stack::Report<Error>> {
+pub async fn update_with_parent(
+    db: &mut PgConnection,
+    auth: &AuthInfo,
+    is_owner: bool,
+    parent_id: {{belongs_to_field.rust_type}},
+    payload: &Option<{{ struct_base }}UpdatePayload>)
+    -> Result<Option<{{struct_base}}>, error_stack::Report<Error>> {
+
     if let Some(payload) = payload.as_ref() {
-        let id = payload.id.unwrap_or_else(|| {{id_type}}::new());
-        let result = query_file_as!({{struct_base}}, "{{dir}}/insert_or_update_one_child.sql",
+        let result = query_file_as!({{struct_base}}, "{{dir}}/upsert_single_child.sql",
             is_owner,
-            id.as_uuid(),
+            {{id_type}}::new() as _,
             {% if not global -%}
             organization_id.as_uuid(),
             {%- endif %}
@@ -324,19 +343,57 @@ pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: 
             .change_context(Error::Db)?;
         Ok(Some(result))
     } else {
-        delete_by_parent(db, auth, parent_id).await?;
+        delete_all_children_of_parent(db, auth, parent_id).await?;
         Ok(None)
     }
 }
 {% else %}
+pub async fn update_one_with_parent(
+    db: &mut PgConnection,
+    auth: &AuthInfo,
+    is_owner: bool,
+    id: {{id_type}},
+    parent_id: {{belongs_to_field.rust_type}},
+    payload: &{{ struct_base }}UpdatePayload
+    ) -> Result<Option<{{struct_base}}>, error_stack::Report<Error>> {
+
+    payload.{{c.parent_field}} = Some(parent_id);
+
+    let actor_ids = auth.actor_ids();
+    let result = query_file!("{{dir}}/update_one_with_parent.sql",
+        id.as_uuid(),
+        parent_id.as_uuid(),
+        auth.organization_id.as_uuid(),
+        &actor_ids,
+        {% for field in fields | filter(attribute="owner_write_non_parent", value=true) %}
+            {%- if field.nullable -%}
+                payload.{{field.rust_name}}.as_ref(){% if field.is_custom_rust_type %} as _{% endif %},
+            {%- else -%}
+                &payload.{{field.rust_name}} as _,
+            {%- endif -%}
+        {% endfor %}
+        )
+        .execute(db)
+        .await
+        .change_context(Error::Db)?;
+    Ok(result.rows_affected() > 0)
+
+}
+
 /// Update the children of the given parent.
-pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: bool, parent_id: {{belongs_to_field.rust_type}}, payload: &[{{ struct_base }}UpdatePayload]) -> Result<Vec<{{struct_base}}UpdatePayload>, error_stack::Report<Error>> {
+pub async fn update_with_parent(db: &mut PgConnection,
+    auth: &AuthInfo,
+    is_owner: bool,
+    parent_id: {{belongs_to_field.rust_type}},
+    payload: &[{{ struct_base }}UpdatePayload])
+    -> Result<Vec<{{struct_base}}UpdatePayload>, error_stack::Report<Error>> {
+
     if payload.is_empty() {
-        delete_by_parent(db, auth, parent_id).await?;
+        delete_all_children_of_parent(db, auth, parent_id).await?;
         Ok(Vec::new())
     } else {
         // First, we upsert the existing children.
-        let q = include_str!("insert_or_update_children.sql");
+        let q = include_str!("upsert_children.sql");
         let bindings = ValuesBuilder{
             first_parameter: 4,
             num_values: payload.len(),
@@ -390,10 +447,34 @@ pub async fn update_by_parent(db: &mut PgConnection, auth: &AuthInfo, is_owner: 
         Ok(results)
     }
 }
+
+pub async fn delete_with_parent(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    parent_id: {{belongs_to_field.rust_type}})
+    child_id: {{id_type}})
+) -> Result<(), error_stack::Report<Error>> {
+    query_file!("{{dir}}/delete_with_parent.sql",
+        {%if not global %}
+        auth.organization_id.as_uuid(),
+        {% endif %}
+        &parent_id,
+        &child_id
+        )
+        .execute(db)
+        .await
+        .change_context(Error::Db)?;
+    Ok(())
+}
 {% endif %}
 
 /// Delete all children of the given parent. This function does not do permissions checks.
-pub async fn delete_by_parent(db: impl PgExecutor<'_>, auth: &AuthInfo, parent_id: {{belongs_to_field.rust_type}}) -> Result<(), error_stack::Report<Error>> {
+pub async fn delete_all_children_of_parent(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    parent_id: {{belongs_to_field.rust_type}})
+    -> Result<(), error_stack::Report<Error>> {
+
     query_file!("{{dir}}/delete_all_children.sql",
         {%if not global %}
         auth.organization_id.as_uuid(),
@@ -408,15 +489,3 @@ pub async fn delete_by_parent(db: impl PgExecutor<'_>, auth: &AuthInfo, parent_i
 
 {% endif %}
 
-pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<bool, error_stack::Report<Error>> {
-    let actor_ids = auth.actor_ids();
-    let result = query_file!("{{dir}}/delete.sql",
-        id.as_uuid(),
-        auth.organization_id.as_uuid(),
-        &actor_ids
-        )
-        .execute(db)
-        .await
-        .change_context(Error::Db)?;
-    Ok(result.rows_affected() > 0)
-}

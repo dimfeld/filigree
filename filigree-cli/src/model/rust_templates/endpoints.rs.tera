@@ -59,7 +59,7 @@ async fn create(
                 child.{{c.parent_field}} = Some(result.id);
             }
 
-            crate::models::{{c.module}}::update_by_parent(&mut *tx, &auth, true, result.id, &payload.{{c.write_payload_field_name}}).await?;
+            crate::models::{{c.module}}::update_with_parent(&mut *tx, &auth, true, result.id, &payload.{{c.write_payload_field_name}}).await?;
         }
     {% endfor %}
 
@@ -83,7 +83,7 @@ async fn update(
 
     {% for c in children %}
     if let Some(children) = payload.{{c.rust_name}} {
-        crate::models::{{c.module}}::queries::update_by_parent(&mut *tx, &auth, is_owner, id, &children).await?;
+        crate::models::{{c.module}}::queries::update_with_parent(&mut *tx, &auth, is_owner, id, &children).await?;
     }
     {% endfor %}
 
@@ -106,12 +106,133 @@ async fn delete(
     }
 
     {% for c in children %}
-        crate::models::{{c.module}}::queries::delete_by_parent(&mut *tx, &auth, id).await?;
+        crate::models::{{c.module}}::queries::delete_all_children_of_parent(&mut *tx, &auth, id).await?;
     {% endfor %}
 
     tx.commit().await.change_context(Error::Db)?;
     Ok(StatusCode::OK)
 }
+
+{% for c in children %}
+
+async fn list_child_{{c.module}}(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path(parent_id): Path<{{id_type}}>,
+    Query(mut qs): Query<crate::models::{{c.module}}::queries::ListQueryFilters>,
+    ) -> Result<impl IntoResponse, Error> {
+
+    qs.{{parent_field}} = Some(parent_id);
+
+    let object = crate::models::{{c.module}}::queries::list(
+        &state.db,
+        &auth,
+        &qs
+        ).await?;
+
+    {% if not c.relationship.many %}
+    let object = object
+        .get(0)
+        .ok_or(Error::NotFound("{{c.relationship.model}}"))?;
+    {% endif %}
+
+    Ok(Json(object))
+}
+
+
+{% if c.relationship.many %}
+async fn create_child_{{c.module}}(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path(parent_id): Path<{{id_type}}>,
+    FormOrJson(payload): FormOrJson<{{c.struct_base}}CreatePayload>,
+    ) -> Result<impl IntoResponse, Error> {
+
+    payload.{{c.parent_field}} = Some(parent_id);
+
+    let result = crate::models::{{c.module_name}}::queries::create(
+        &state.db,
+        &auth,
+        &payload
+    ).await?;
+
+
+    Ok(Json(result))
+}
+
+async fn update_child_{{c.module}}(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path((parent_id, child_id)): Path<({{id_type}}, {{c.object_id}})>,
+    FormOrJson(payload): FormOrJson<{{c.struct_base}}UpdatePayload>,
+    ) -> Result<impl IntoResponse, Error> {
+
+    payload.id = Some(child_id);
+    payload.{{c.parent_field}} = Some(parent_id);
+
+    let result = crate::models::{{c.module}}::queries::update_one_with_parent(
+        &state.db,
+        &auth,
+        true, // TODO get the right value here
+        parent_id,
+        child_id,
+        &payload).await?;
+
+    Ok(Json(result))
+}
+
+async fn delete_child_{{c.module}}(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path((parent_id, child_id)): Path<({{id_type}}, {{c.object_id}})>,
+    ) -> Result<impl IntoResponse, Error> {
+
+    crate::models::{{c.module}}::queries::delete_with_parent(
+        &state.db,
+        &auth,
+        parent_id,
+        child_id,
+    ).await?;
+
+    Ok(StatusCode::OK)
+}
+
+{% else %}
+
+async fn upsert_child_{{c.module}}(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path(parent_id): Path<{{id_type}}>,
+    FormOrJson(payload): FormOrJson<{{c.struct_base}}UpdatePayload>,
+    ) -> Result<impl IntoResponse, Error> {
+    payload.{{c.parent_field}} = Some(parent_id);
+
+    let result = crate::models::{{c.module}}::queries::update_with_parent(
+        &state.db,
+        &auth,
+        true, // TODO get the right value here
+        parent_id,,
+        &Some(payload).await?;
+    Ok(Json(result))
+}
+
+async fn delete_child_{{c.module}}(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path(parent_id): Path<{{id_type}}>,
+    ) -> Result<impl IntoResponse, Error> {
+
+    crate::models::{{c.module}}::queries::delete_by_parent(
+        &state.db,
+        &auth,
+        parent_id).await?;
+
+    Ok(StatusCode::OK)
+}
+{% endif %}
+
+{% endfor %}
+
 
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
@@ -135,6 +256,49 @@ pub fn create_routes() -> axum::Router<ServerState> {
             routing::delete(delete)
                 .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])))
         {% endif %}
+
+    {% for c in children %}
+    {% if endpoints.list %}
+        .route("/{{url_path}}/:id/{{c.url_path}}",
+            routing::get(list_child_{{c.module}})
+                .route_layer(has_any_permission(vec![READ_PERMISSION, "org_admin"])))
+    {% endif %}
+
+    {% if endpoints.create %}
+        .route("/{{url_path}}/:id/{{c.url_path}}",
+            {% if c.relationship.many %}
+            routing::post(create_child_{{c.module}})
+            {% else %}
+            routing::post(upsert_child_{{c.module}})
+            {% endif %}
+                .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"]))
+            )
+    {% endif %}
+
+    {% if endpoints.update %}
+        {% if c.relationship.many %}
+        .route("/{{url_path}}/:id/{{c.url_path}}/:child_id",
+            routing::post(update_child_{{c.module}})
+        {% else %}
+        .route("/{{url_path}}/:id/{{c.url_path}}",
+            routing::post(upsert_child_{{c.module}})
+        {% endif %}
+                .route_layer(has_any_permission(vec![WRITE_PERMISSION, OWNER_PERMISSION, "org_admin"]))
+            )
+    {% endif %}
+
+    {% if endpoints.delete %}
+        {% if c.relationship.many %}
+        .route("/{{url_path}}/:id/{{c.url_path}}/:child_id",
+        {% else %}
+        .route("/{{url_path}}/:id/{{c.url_path}}",
+        {% endif %}
+        routing::delete(delete_child_{{c.module}})
+            .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"]))
+        )
+
+    {% endif %}
+    {% endfor %}
 }
 
 #[cfg(test)]
