@@ -1,0 +1,52 @@
+use super::{{struct_base}}CreatePayload;
+
+{% macro payload_field_value(field) %}
+    {%- if field.base_type == "text" -%}
+        format!("Test object {i}")
+    {%- elif field.base_type in ["int", "bigint", "float"] -%}
+        i as {{field.base_rust_type}}
+    {%- elif field.base_type == "boolean" -%}
+       i % 2 == 0
+    {%- elif field.base_type == "timestamp" -%}
+        chrono::Utc::now()
+    {%- elif field.base_rust_type == "serde_json::Value" -%}
+        serde_json::json!({ "key": i })
+    {%- elif field.is_custom_rust_type -%}
+        <{{field.base_rust_type}} as Default>::default()
+    {%- elif field.base_type == "uuid" -%}
+        uuid::Uuid::new_v4()
+    {%- else -%}
+        <{{field.base_rust_type}} as Default>::default()
+    {%- endif -%}
+{% endmacro %}
+
+/// Generate a {{struct_base}}CreatePayload for testing.
+/// Parameter `i` controls the value of some of the fields, just to make sure that the objects
+/// don't all look identical.
+pub fn make_create_payload(i: usize) -> {{struct_base}}CreatePayload {
+    {{struct_base}}CreatePayload {
+        {% for field in fields | filter(attribute="owner_write", value=true) -%}
+        {{field.rust_name}}:
+            {%- if field.nullable -%}(i > 1).then(|| {%endif%}
+                {{ self::payload_field_value(field=field) }}
+            {%- if field.nullable -%}){%endif%},
+        {%- endfor %}
+    }
+}
+
+/// Generate a {{struct_base}}UpdatePayload for testing.
+/// Parameter `i` controls the value of some of the fields, just to make sure that the objects
+/// don't all look identical.
+pub fn make_update_payload(i: usize) -> {{struct_base}}UpdatePayload {
+    {{struct_base}}UpdatePayload {
+        {% set uwc = fields | filter (attribute="user_write", value=true) | length -%}
+        {% for field in fields | filter (attribute="owner_write", value=true) -%}
+        {% set uopt = uwc > 0 and not field.user_write %}
+        {% set nullable = field.nullable or uopt %}
+        {{field.rust_name}}:
+            {%- if nullable %} Some({%- endif -%}
+            {{ self::payload_field_value(field=field) }}
+            {%- if nullable %}){% endif -%},
+        {%- endfor %}
+    }
+}
