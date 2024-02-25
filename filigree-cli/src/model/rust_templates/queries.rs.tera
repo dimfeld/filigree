@@ -124,7 +124,7 @@ fn parse_order_by(field: &str) -> Result<(bool, OrderByField), OrderByError> {
 
 {% set_global has_filterable = false %}
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug)]
 pub struct ListQueryFilters {
     {%if not pagination.disable %}
     pub page: Option<u32>,

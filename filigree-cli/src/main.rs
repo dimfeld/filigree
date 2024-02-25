@@ -72,6 +72,20 @@ pub enum Error {
     Input,
     #[error("Missing model {0} in model {1} field {2}")]
     MissingModel(String, String, String),
+    #[error("Model {0} has {1} but {1} has no belongs_to setting")]
+    MissingBelongsTo(String, String),
+    #[error("Model {parent} has {child} without a through table, but {child} belongs_to {child_belongs_to}")]
+    BelongsToMismatch {
+        parent: String,
+        child: String,
+        child_belongs_to: String,
+    },
+    #[error("Model {0} uses {1} as a through model, but {1} has no join setting")]
+    MissingJoin(String, String),
+    #[error(
+        "Model {0} uses {1} as a through model to {2}, but {1}'s join setting does not reference {3}"
+    )]
+    BadJoin(String, String, String, String),
 }
 
 pub struct ModelMap(pub std::collections::HashMap<String, Model>);
@@ -165,6 +179,8 @@ pub fn main() -> Result<(), Report<Error>> {
 
     let models = build_models(&config, config_models);
     let model_map = ModelMap::new(&models);
+
+    model::validate::validate_model_configuration(&model_map)?;
 
     let mut generators = models
         .into_iter()

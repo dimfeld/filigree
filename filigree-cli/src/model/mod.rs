@@ -2,6 +2,7 @@ mod base_models;
 pub mod field;
 mod generate_types;
 pub mod generator;
+pub mod validate;
 
 use std::borrow::Cow;
 
