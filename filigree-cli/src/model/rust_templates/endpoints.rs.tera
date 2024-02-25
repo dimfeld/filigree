@@ -6,7 +6,7 @@ use error_stack::ResultExt;
 use filigree::extract::FormOrJson;
 
 use crate::{Error, auth::{Authed, has_any_permission}, server::ServerState};
-{% for child in children %}
+{% for c in children %}
 use crate::models::{{c.module}}::{{c.object_id}};
 {% endfor %}
 
@@ -82,7 +82,7 @@ async fn update(
     }
 
     {% for c in children %}
-    if let Some(children) = payload.{{c.rust_name}} {
+    if let Some(children) = payload.{{c.write_payload_field_name}} {
         crate::models::{{c.module}}::queries::update_with_parent(&mut *tx, &auth, is_owner, id, &children).await?;
     }
     {% endfor %}
@@ -122,7 +122,7 @@ async fn list_child_{{c.module}}(
     Query(mut qs): Query<crate::models::{{c.module}}::queries::ListQueryFilters>,
     ) -> Result<impl IntoResponse, Error> {
 
-    qs.{{parent_field}} = Some(parent_id);
+    qs.{{c.parent_field}} = Some(parent_id);
 
     let object = crate::models::{{c.module}}::queries::list(
         &state.db,
@@ -150,7 +150,7 @@ async fn create_child_{{c.module}}(
 
     payload.{{c.parent_field}} = Some(parent_id);
 
-    let result = crate::models::{{c.module_name}}::queries::create(
+    let result = crate::models::{{c.module}}::queries::create(
         &state.db,
         &auth,
         &payload
@@ -211,8 +211,8 @@ async fn upsert_child_{{c.module}}(
         &state.db,
         &auth,
         true, // TODO get the right value here
-        parent_id,,
-        &Some(payload).await?;
+        parent_id,
+        &Some(payload)).await?;
     Ok(Json(result))
 }
 

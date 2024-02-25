@@ -370,7 +370,7 @@ pub async fn update_one_with_parent(
     payload: &{{ struct_base }}UpdatePayload
     ) -> Result<Option<{{struct_base}}>, error_stack::Report<Error>> {
 
-    payload.{{c.parent_field}} = Some(parent_id);
+    payload.{{belongs_to_field.name}} = Some(parent_id);
 
     let actor_ids = auth.actor_ids();
     let result = query_file!("{{dir}}/update_one_with_parent.sql",
@@ -464,9 +464,10 @@ pub async fn update_with_parent(db: &mut PgConnection,
 pub async fn delete_with_parent(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
-    parent_id: {{belongs_to_field.rust_type}})
+    parent_id: {{belongs_to_field.rust_type}},
     child_id: {{id_type}})
-) -> Result<(), error_stack::Report<Error>> {
+    -> Result<(), error_stack::Report<Error>> {
+
     query_file!("{{dir}}/delete_with_parent.sql",
         {%if not global %}
         auth.organization_id.as_uuid(),
