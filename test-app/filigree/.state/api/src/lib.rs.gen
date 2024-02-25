@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod cmd;
 pub mod db;
 pub mod emails;
 pub mod error;
@@ -7,6 +8,5 @@ pub mod server;
 #[cfg(test)]
 pub mod tests;
 pub mod users;
-pub mod util_cmd;
 
 pub use error::Error;

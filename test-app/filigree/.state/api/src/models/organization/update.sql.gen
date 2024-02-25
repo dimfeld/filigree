@@ -1,7 +1,7 @@
 WITH permissions AS (
   SELECT
-    bool_or(permission IN ('org_admin', 'Organization::owner')) AS is_owner,
-    bool_or(permission IN ('org_admin', 'Organization::owner', 'Organization::write')) AS is_user
+    COALESCE(bool_or(permission IN ('org_admin', 'Organization::owner')), FALSE) AS is_owner,
+    COALESCE(bool_or(permission IN ('org_admin', 'Organization::owner', 'Organization::write')), FALSE) AS is_user
   FROM
     permissions
   WHERE
@@ -33,3 +33,5 @@ WHERE
   id = $1
   AND (permissions.is_owner
     OR permissions.is_user)
+RETURNING
+  permissions.is_owner AS "is_owner!"

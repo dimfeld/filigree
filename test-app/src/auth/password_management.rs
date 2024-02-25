@@ -1,24 +1,16 @@
 use axum::{
     extract::{Host, State},
-    response::{IntoResponse, Redirect},
+    response::IntoResponse,
 };
-use axum_extra::extract::Query;
-use axum_jsonschema::Json;
 use error_stack::{Report, ResultExt};
-use filigree::{
-    auth::{password::create_reset_token, AuthError},
-    testing, EmailBody,
-};
-use serde::{Deserialize, Serialize};
-use tower_cookies::Cookies;
-use uuid::Uuid;
+use filigree::{auth::password::create_reset_token, extract::FormOrJson, EmailBody};
 
 use crate::{server::ServerState, Error};
 
 pub async fn start_password_reset(
     State(state): State<ServerState>,
     Host(host): Host,
-    Json(body): Json<EmailBody>,
+    FormOrJson(body): FormOrJson<EmailBody>,
 ) -> Result<impl IntoResponse, Error> {
     if state.host_is_allowed(&host).is_err() {
         // Bail due to some kind of hijinks
@@ -62,8 +54,9 @@ pub async fn start_password_reset(
 mod test {
     use std::str::FromStr;
 
-    use filigree::auth::endpoints::UpdatePasswordRequest;
+    use filigree::{auth::endpoints::UpdatePasswordRequest, testing};
     use serde_json::json;
+    use uuid::Uuid;
 
     use super::*;
     use crate::{

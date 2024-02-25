@@ -41,6 +41,8 @@ pub enum Error {
     WrapReport(Report<Error>),
     #[error("Missing Permission {0}")]
     MissingPermission(&'static str),
+    #[error(transparent)]
+    AuthError(#[from] filigree::auth::AuthError),
     #[error("Auth subsystem error")]
     AuthSubsystem,
     #[error("Login failure")]
@@ -87,6 +89,7 @@ impl HttpError for Error {
             Error::Shutdown => FilErrorKind::Shutdown.as_str(),
             Error::ScheduledTask => "scheduled_task",
             Error::Filter => "invalid_filter",
+            Error::AuthError(e) => e.error_kind(),
             Error::AuthSubsystem => "auth",
             Error::Login => FilErrorKind::Unauthenticated.as_str(),
             Error::MissingPermission(_) => FilErrorKind::Unauthenticated.as_str(),
@@ -104,6 +107,7 @@ impl HttpError for Error {
                 FilErrorKind::BadRequest,
                 "Invalid Request",
             )),
+            Error::AuthError(e) => e.obfuscate(),
             _ => None,
         }
     }
@@ -115,6 +119,7 @@ impl HttpError for Error {
 
         match self {
             Error::WrapReport(e) => e.current_context().status_code(),
+            Error::AuthError(e) => e.status_code(),
             Error::DbInit => StatusCode::INTERNAL_SERVER_ERROR,
             Error::Db => StatusCode::INTERNAL_SERVER_ERROR,
             Error::TaskQueue => StatusCode::INTERNAL_SERVER_ERROR,

@@ -4,6 +4,7 @@ use serde::{
     ser::{SerializeStruct, Serializer},
     Deserialize, Serialize,
 };
+use sqlx_transparent_json_decode::sqlx_json_decode;
 
 use super::OrganizationId;
 
@@ -19,6 +20,10 @@ pub struct Organization {
     pub active: bool,
     pub _permission: ObjectPermission,
 }
+
+pub type OrganizationPopulatedGet = Organization;
+
+pub type OrganizationPopulatedList = Organization;
 
 impl Organization {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
@@ -53,6 +58,8 @@ impl Organization {
     }
 }
 
+sqlx_json_decode!(Organization);
+
 impl Default for Organization {
     fn default() -> Self {
         Self {
@@ -64,45 +71,6 @@ impl Default for Organization {
             default_role: Self::default_default_role(),
             active: Self::default_active(),
             _permission: ObjectPermission::Owner,
-        }
-    }
-}
-
-#[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
-#[cfg_attr(test, derive(Serialize))]
-pub struct OrganizationCreatePayloadAndUpdatePayload {
-    pub name: String,
-    pub owner: Option<crate::models::user::UserId>,
-    pub default_role: Option<crate::models::role::RoleId>,
-}
-
-pub type OrganizationCreatePayload = OrganizationCreatePayloadAndUpdatePayload;
-
-pub type OrganizationUpdatePayload = OrganizationCreatePayloadAndUpdatePayload;
-
-impl OrganizationCreatePayloadAndUpdatePayload {
-    // The <T as Default> syntax here is weird but lets us generate from the template without needing to
-    // detect whether to add the extra :: in cases like DateTime::<Utc>::default
-
-    pub fn default_name() -> String {
-        <String as Default>::default().into()
-    }
-
-    pub fn default_owner() -> Option<crate::models::user::UserId> {
-        None
-    }
-
-    pub fn default_default_role() -> Option<crate::models::role::RoleId> {
-        None
-    }
-}
-
-impl Default for OrganizationCreatePayloadAndUpdatePayload {
-    fn default() -> Self {
-        Self {
-            name: Self::default_name(),
-            owner: Self::default_owner(),
-            default_role: Self::default_default_role(),
         }
     }
 }
@@ -130,6 +98,51 @@ impl Serialize for Organization {
             state.serialize_field("name", &self.name)?;
             state.serialize_field("_permission", &self._permission)?;
             state.end()
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
+#[cfg_attr(test, derive(Serialize))]
+pub struct OrganizationCreatePayloadAndUpdatePayload {
+    pub id: Option<OrganizationId>,
+    pub name: String,
+    pub owner: Option<crate::models::user::UserId>,
+    pub default_role: Option<crate::models::role::RoleId>,
+}
+
+pub type OrganizationCreatePayload = OrganizationCreatePayloadAndUpdatePayload;
+
+pub type OrganizationUpdatePayload = OrganizationCreatePayloadAndUpdatePayload;
+
+impl OrganizationCreatePayloadAndUpdatePayload {
+    // The <T as Default> syntax here is weird but lets us generate from the template without needing to
+    // detect whether to add the extra :: in cases like DateTime::<Utc>::default
+
+    pub fn default_id() -> Option<OrganizationId> {
+        None
+    }
+
+    pub fn default_name() -> String {
+        <String as Default>::default().into()
+    }
+
+    pub fn default_owner() -> Option<crate::models::user::UserId> {
+        None
+    }
+
+    pub fn default_default_role() -> Option<crate::models::role::RoleId> {
+        None
+    }
+}
+
+impl Default for OrganizationCreatePayloadAndUpdatePayload {
+    fn default() -> Self {
+        Self {
+            id: Self::default_id(),
+            name: Self::default_name(),
+            owner: Self::default_owner(),
+            default_role: Self::default_default_role(),
         }
     }
 }

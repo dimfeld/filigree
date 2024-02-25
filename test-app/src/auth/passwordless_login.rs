@@ -5,25 +5,22 @@ use axum::{
 use axum_extra::extract::Query;
 use axum_jsonschema::Json;
 use error_stack::ResultExt;
-use filigree::auth::{
-    passwordless_email_login::{
-        check_signup_request, perform_passwordless_login, setup_passwordless_login,
+use filigree::{
+    auth::{
+        passwordless_email_login::{
+            check_signup_request, perform_passwordless_login, setup_passwordless_login,
+        },
+        AuthError, LoginResult,
     },
-    LoginResult,
+    extract::FormOrJson,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tower_cookies::Cookies;
+use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
-use crate::{
-    models::user::{self, UserCreatePayload},
-    server::ServerState,
-    users::{
-        organization::create_new_organization, users::create_new_user_with_prehashed_password,
-    },
-    Error,
-};
+use crate::{server::ServerState, Error};
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct CreatePasswordlessLoginRequestBody {
@@ -31,10 +28,11 @@ pub struct CreatePasswordlessLoginRequestBody {
     redirect_to: Option<String>,
 }
 
+#[instrument(skip(state))]
 pub async fn request_passwordless_login(
     State(state): State<ServerState>,
     Host(host): Host,
-    Json(CreatePasswordlessLoginRequestBody { email, redirect_to }): Json<
+    FormOrJson(CreatePasswordlessLoginRequestBody { email, redirect_to }): FormOrJson<
         CreatePasswordlessLoginRequestBody,
     >,
 ) -> Result<impl IntoResponse, Error> {
@@ -49,10 +47,11 @@ pub async fn request_passwordless_login(
     let token = match token {
         Ok(token) => token,
         Err(e) => {
-            if e.current_context().is_unauthenticated() {
+            if matches!(e.current_context(), AuthError::UserNotFound) {
                 // This means that the user does not exist and public signups are disabled.
                 // Don't do anything in that case, but also don't tell the user that the email
                 // doesn't exist.
+                event!(Level::INFO, %email, "Passwordless login user not found");
                 return Ok(());
             } else {
                 return Err(e.change_context(Error::AuthSubsystem).into());
@@ -117,7 +116,7 @@ async fn accept_new_user_invite(
         email: Some(email),
         ..Default::default()
     };
-    let user_id = crate::users::users::UserCreator::create_user(&mut *tx, None, user_details)
+    let (user_id, _) = crate::users::users::UserCreator::create_user(&mut *tx, None, user_details)
         .await
         .change_context(Error::AuthSubsystem)?;
 
@@ -388,7 +387,7 @@ mod test {
         .unwrap();
 
         assert!(
-            &user_org.organization_id != organization.id.as_uuid(),
+            &user_org.organization_id.unwrap() != organization.id.as_uuid(),
             "User should be in a new organization"
         );
     }

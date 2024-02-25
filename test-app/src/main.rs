@@ -4,7 +4,7 @@ use filigree::{
     auth::{CorsSetting, SameSiteArg, SessionCookieBuilder},
     tracing_config::{configure_tracing, teardown_tracing, TracingExportConfig},
 };
-use filigree_test_app::{db, emails, server, util_cmd, Error};
+use filigree_test_app::{cmd, db, emails, server, Error};
 use tracing::{event, Level};
 
 #[derive(Parser)]
@@ -16,8 +16,8 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    Util(util_cmd::UtilCommand),
-    Db(db::DbCommand),
+    Util(cmd::util::UtilCommand),
+    Db(cmd::db::DbCommand),
     Serve(ServeCommand),
 }
 
@@ -103,6 +103,11 @@ struct ServeCommand {
     /// The base URL for OAuth redirect URLs. If omitted, `hosts[0]` is used.
     #[clap(env = "OAUTH_REDIRECT_URL_BASE")]
     oauth_redirect_host: Option<String>,
+
+    /// Whether or not to obfuscate details from internal server errors. If omitted,
+    /// the default is to obfuscate when env != "development".
+    #[clap(env = "OBFUSCATE_ERRORS")]
+    obfuscate_errors: Option<bool>,
     // tracing endpoint (if any)
     // honeycomb team
     // honeycomb dataset
@@ -154,11 +159,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         format!(
             "{}://{}",
             if cmd.insecure { "http" } else { "https" },
-            if hosts.is_empty() {
-                format!("localhost:{}", cmd.port)
-            } else {
-                hosts[0].clone()
-            }
+            hosts[0]
         )
     });
 
@@ -174,6 +175,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         email_sender,
         hosts,
         api_cors: cmd.api_cors,
+        obfuscate_errors: cmd.obfuscate_errors,
         // This will build OAuth providers based on the environment variables present.
         oauth_providers: None,
         oauth_redirect_url_base: oauth_redirect_host,
