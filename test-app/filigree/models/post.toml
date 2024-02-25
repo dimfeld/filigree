@@ -1,0 +1,30 @@
+name = "Post"
+id_prefix = "pst"
+endpoints = true
+
+[[fields]]
+name = "subject"
+type = "text"
+
+[[fields]]
+name = "body"
+type = "text"
+
+# A real app would not want to use populate for big arrays such as comments and reactions since we don't want
+# to fetch them all every time, but it is convenient for testing.
+
+[[has]]
+model = "Comment"
+many = true
+populate_on_list = "id"
+populate_on_get = "id"
+
+[[has]]
+model = "Reaction"
+many = true
+populate_on_get = "data"
+
+[[has]]
+model = "Poll"
+populate_on_list = "id"
+populate_on_get = "data"

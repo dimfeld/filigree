@@ -297,7 +297,9 @@ fn read_toml<T: DeserializeOwned>(path: &Path) -> Result<T, Report<Error>> {
     let data = std::fs::read_to_string(path)
         .change_context(Error::Config)
         .attach_printable_lazy(|| path.display().to_string())?;
-    let file: T = toml::from_str(&data).change_context(Error::Config)?;
+    let file: T = toml::from_str(&data)
+        .change_context(Error::Config)
+        .attach_printable_lazy(|| path.display().to_string())?;
     Ok(file)
 }
 

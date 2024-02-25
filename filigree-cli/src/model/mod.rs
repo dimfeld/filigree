@@ -331,7 +331,7 @@ pub struct HasModel {
     #[serde(default)]
     pub update_with_parent: bool,
 
-    /// Override the field name at which the populdated children will be placed in the model.
+    /// Override the field name at which the populated children will be placed in the model.
     pub field_name: Option<String>,
 }
 
