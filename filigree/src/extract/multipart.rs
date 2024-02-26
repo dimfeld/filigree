@@ -36,7 +36,7 @@ where
     type Rejection = Rejection;
 
     async fn from_request(req: Request<Body>, _: &S) -> Result<Self, Self::Rejection> {
-        let (mut data, files) = parse_multipart(req).await?;
+        let (data, files) = parse_multipart(req).await?;
 
         let data = crate::requests::json_schema::validate::<T>(data, true)
             .map_err(Rejection::Validation)?;

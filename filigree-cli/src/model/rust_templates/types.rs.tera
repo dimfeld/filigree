@@ -3,16 +3,18 @@ use super::{{id_type}};
 {%- if id_type != "OrganizationId" %}
 use crate::models::organization::OrganizationId;
 {% endif -%}
+{{imports}}
 use filigree::auth::ObjectPermission;
 use serde::{
     ser::{Serializer, SerializeStruct},
     Serialize, Deserialize
 };
+use sqlx_transparent_json_decode::sqlx_json_decode;
 
 {% for struct in structs %}
 
 #[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
-{% if struct.name != struct_base -%}
+{% if struct.name != struct_base and not struct.impl_serialize -%}
 #[cfg_attr(test, derive(Serialize))]
 {%- endif %}
 pub struct {{ struct.name }} {
@@ -45,6 +47,10 @@ impl {{struct.name}} {
     {% endfor %}
 }
 
+{% if struct.impl_json_decode %}
+sqlx_json_decode!({{struct.name}});
+{% endif %}
+
 impl Default for {{struct.name}} {
     fn default() -> Self {
         Self {
@@ -58,9 +64,8 @@ impl Default for {{struct.name}} {
     }
 }
 
-{% endfor %}
-
-impl Serialize for {{struct_base}} {
+{% if struct.impl_serialize %}
+impl Serialize for {{struct.name}} {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -68,8 +73,8 @@ impl Serialize for {{struct_base}} {
         {% if owner_and_user_different_access %}
         if self._permission == ObjectPermission::Owner {
         {% endif %}
-            {% set view_fields = fields | filter(attribute="owner_read", value=true) %}
-            let mut state = serializer.serialize_struct("{{struct_base}}", {{ view_fields | length + 1 }})?;
+            {% set view_fields = struct.fields | filter(attribute="owner_read", value=true) %}
+            let mut state = serializer.serialize_struct("{{struct.name}}", {{ view_fields | length + 1 }})?;
             {% for field in view_fields -%}
             state.serialize_field("{{field.name}}", &self.{{field.rust_name}})?;
             {%- endfor %}
@@ -77,8 +82,8 @@ impl Serialize for {{struct_base}} {
             state.end()
         {% if owner_and_user_different_access %}
         } else {
-            {% set view_fields = fields | filter(attribute="user_read", value=true) %}
-            let mut state = serializer.serialize_struct("{{struct_base}}", {{ view_fields | length + 1 }})?;
+            {% set view_fields = struct.fields | filter(attribute="user_read", value=true) %}
+            let mut state = serializer.serialize_struct("{{struct.name}}", {{ view_fields | length + 1 }})?;
             {% for field in view_fields -%}
             state.serialize_field("{{field.name}}", &self.{{field.rust_name}})?;
             {%- endfor %}
@@ -88,4 +93,7 @@ impl Serialize for {{struct_base}} {
         {% endif %}
     }
 }
+{% endif %}
+
+{% endfor %}
 

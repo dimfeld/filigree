@@ -6,6 +6,27 @@ use serde_json::json;
 use super::{field::ModelField, generator::ModelGenerator};
 use crate::Error;
 
+struct StructContents {
+    suffix: &'static str,
+    fields: (Vec<ModelField>, bool, String),
+    flags: ImplFlags,
+}
+
+#[derive(Default, Copy, Clone)]
+struct ImplFlags {
+    json_decode: bool,
+    serialize: bool,
+}
+
+impl ImplFlags {
+    fn or(&self, other: &Self) -> Self {
+        Self {
+            json_decode: self.json_decode || other.json_decode,
+            serialize: self.serialize || other.serialize,
+        }
+    }
+}
+
 impl<'a> ModelGenerator<'a> {
     pub(super) fn add_rust_structs_to_context(
         &self,
@@ -14,17 +35,21 @@ impl<'a> ModelGenerator<'a> {
         let struct_base = self.model.struct_name();
         let user_can_write_anything = self.all_fields()?.any(|f| f.user_access.can_write());
         let struct_list = [
-            (
-                "AllFields",
-                Self::struct_contents(
+            StructContents {
+                suffix: "AllFields",
+                fields: Self::struct_contents(
                     self.all_fields()?.filter(|f| !f.never_read),
                     |_| false,
                     true,
                 ),
-            ),
-            (
-                "PopulatedGet",
-                Self::struct_contents(
+                flags: ImplFlags {
+                    serialize: true,
+                    json_decode: true,
+                },
+            },
+            StructContents {
+                suffix: "PopulatedGet",
+                fields: Self::struct_contents(
                     self.all_fields()?.filter(|f| !f.never_read).chain(
                         self.virtual_fields(super::generator::ReadOperation::Get)?
                             .map(Cow::Owned),
@@ -32,10 +57,14 @@ impl<'a> ModelGenerator<'a> {
                     |_| false,
                     true,
                 ),
-            ),
-            (
-                "PopulatedList",
-                Self::struct_contents(
+                flags: ImplFlags {
+                    serialize: true,
+                    json_decode: true,
+                },
+            },
+            StructContents {
+                suffix: "PopulatedList",
+                fields: Self::struct_contents(
                     self.all_fields()?.filter(|f| !f.never_read).chain(
                         self.virtual_fields(super::generator::ReadOperation::List)?
                             .map(Cow::Owned),
@@ -43,14 +72,23 @@ impl<'a> ModelGenerator<'a> {
                     |_| false,
                     true,
                 ),
-            ),
-            (
-                "CreatePayload",
-                Self::struct_contents(self.write_payload_struct_fields(false)?, |_| false, false),
-            ),
-            (
-                "UpdatePayload",
-                Self::struct_contents(
+                flags: ImplFlags {
+                    serialize: true,
+                    json_decode: true,
+                },
+            },
+            StructContents {
+                suffix: "CreatePayload",
+                fields: Self::struct_contents(
+                    self.write_payload_struct_fields(false)?,
+                    |_| false,
+                    false,
+                ),
+                flags: ImplFlags::default(),
+            },
+            StructContents {
+                suffix: "UpdatePayload",
+                fields: Self::struct_contents(
                     self.write_payload_struct_fields(true)?,
                     |f| {
                         // Allow optional fields for those that the owner can write,
@@ -62,16 +100,22 @@ impl<'a> ModelGenerator<'a> {
                     },
                     false,
                 ),
-            ),
+                flags: ImplFlags::default(),
+            },
         ];
 
         let mut grouped_fields = HashMap::new();
-        for (suffix, fields) in struct_list {
-            grouped_fields
+        for StructContents {
+            suffix,
+            fields,
+            flags,
+        } in struct_list
+        {
+            let entry = grouped_fields
                 .entry(fields.2)
-                .or_insert_with(|| (fields.0, fields.1, Vec::new()))
-                .2
-                .push(suffix);
+                .or_insert_with(|| (fields.0, fields.1, flags, Vec::new()));
+            entry.2 = entry.2.or(&flags);
+            entry.3.push(suffix);
         }
 
         let owner_and_user_different_access =
@@ -84,7 +128,7 @@ impl<'a> ModelGenerator<'a> {
         let structs = grouped_fields
             .into_iter()
             .map(
-                |(fields_content, (fields, has_permission_field, suffixes))| {
+                |(fields_content, (fields, has_permission_field, flags, suffixes))| {
                     let name = if suffixes.contains(&"AllFields") {
                         // The AllFields struct should just have the base name
                         Cow::Borrowed(&struct_base)
@@ -115,6 +159,8 @@ impl<'a> ModelGenerator<'a> {
                         "fields_content": fields_content,
                         "fields": field_info,
                         "aliases": aliases,
+                        "impl_json_decode": flags.json_decode,
+                        "impl_serialize": flags.serialize,
                         "has_permission_field": has_permission_field,
                     })
                 },
@@ -149,9 +195,11 @@ impl<'a> ModelGenerator<'a> {
                 let rust_field_name = f.rust_field_name();
                 let rust_type = f.rust_type();
 
+                let mut sqlx_rename = String::new();
                 let mut serde_attrs = Vec::new();
                 if rust_field_name != f.name {
                     serde_attrs.push(Cow::Owned(format!("rename = \"{name}\"", name = f.name)));
+                    sqlx_rename = format!("#[sqlx(rename = \"{name}\")]\n", name = f.name);
                 };
 
                 // Double option is used in some places to distinguish between `null` and missing
@@ -168,7 +216,7 @@ impl<'a> ModelGenerator<'a> {
                     format!("#[serde({})]\n", serde_attrs.join(", "))
                 };
 
-                format!("{serde_attr}pub {rust_field_name}: {rust_type},")
+                format!("{serde_attr}{sqlx_rename}pub {rust_field_name}: {rust_type},")
             })
             .join("\n");
 

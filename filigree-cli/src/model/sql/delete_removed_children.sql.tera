@@ -7,7 +7,7 @@ WHERE
   organization_id = $1 AND
 {% endif %}
 
-  {{belongs_to_field.sql_name}} = ${{p + 1}}
+  {{belongs_to_field.sql_name}} = ${{p}}
   AND
-  id <> ALL (${{p + 2}})
+  id <> ALL (${{p + 1}})
 {% endif %}

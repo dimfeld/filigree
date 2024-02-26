@@ -1,3 +1,4 @@
+//! Utility functions for parsing urlencoded requests
 use form_urlencoded;
 
 /// Create a [serde_json::Value] from a form-urlencoded string

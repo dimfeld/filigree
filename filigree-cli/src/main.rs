@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     collections::{HashMap, HashSet},
     error::Error as _,
     path::PathBuf,
@@ -229,7 +230,7 @@ pub fn main() -> Result<(), Report<Error>> {
     let model_files = model_files.expect("model_files was not set")?;
     let root_files = root_files.expect("root_files was not set")?;
 
-    let model_migrations = generators
+    let mut model_migrations = generators
         .iter()
         .map(|gen| {
             let up = gen.render_up_migration()?;
@@ -244,6 +245,26 @@ pub fn main() -> Result<(), Report<Error>> {
             Ok::<_, Report<Error>>(result)
         })
         .collect::<Result<Vec<_>, _>>()?;
+
+    // When a child model belongs to a parent model, ensure that the child comes later.
+    model_migrations.sort_by(|m1, m2| {
+        let m1 = &m1.model.unwrap();
+        let m2 = &m2.model.unwrap();
+
+        if let Some(b) = &m1.belongs_to {
+            if b.model() == m2.name {
+                return Ordering::Greater;
+            }
+        }
+
+        if let Some(b) = &m2.belongs_to {
+            if b.model() == m1.name {
+                return Ordering::Less;
+            }
+        }
+
+        Ordering::Equal
+    });
 
     let (first_fixed_migrations, last_fixed_migrations) = ModelGenerator::fixed_migrations();
 

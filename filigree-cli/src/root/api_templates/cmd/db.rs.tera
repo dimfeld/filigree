@@ -1,6 +1,5 @@
 use clap::{Args, Subcommand};
 use error_stack::{Report, ResultExt};
-use sqlx::PgPool;
 
 use crate::Error;
 

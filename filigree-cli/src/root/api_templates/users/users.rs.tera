@@ -188,11 +188,11 @@ async fn update_current_user_endpoint(
     authed: Authed,
     FormOrJson(body): FormOrJson<crate::models::user::UserUpdatePayload>,
 ) -> Result<impl IntoResponse, Error> {
-    // TODO Need a permission specifically for updating self
+    // TODO Need a query specifically for updating self
     let updated =
         crate::models::user::queries::update(&state.db, &authed, authed.user_id, &body).await?;
 
-    let status = if updated {
+    let status = if updated.is_some() {
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND

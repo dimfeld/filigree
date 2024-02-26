@@ -6,8 +6,8 @@ WHERE
   {% set p = 2 %}
   organization_id = $1 AND
 {% endif %}
-  id = ${{p + 1}}
-  AND {{belongs_to_field.sql_name}} = ${{p + 2}}
+  id = ${{p}}
+  AND {{belongs_to_field.sql_name}} = ${{p + 1}}
 
 {% endif %}
 

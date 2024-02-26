@@ -1,16 +1,16 @@
 {% import "model/sql_macros.tera" as macros %}
 {% if belongs_to_field %}
 WITH permissions AS (
-  {{ macros::permissions_lookup(actor_ids="$3", organization="$2", owner_perm=owner_permission, user_perm=write_permission) }}
+  {{ macros::permissions_lookup(actor_ids="$4", organization="$3", owner_perm=owner_permission, user_perm=write_permission) }}
 )
 UPDATE
   {{table}}
 SET
   {% for field in fields | filter(attribute='owner_write_non_parent', value=true) %}
     {% if field.user_write %}
-      {{field.sql_name}} = ${{ loop.index + 3 }},
+      {{field.sql_name}} = ${{ loop.index + 4 }},
     {% else %}
-      {{field.sql_name}} = CASE WHEN permissions.is_owner THEN ${{ loop.index + 3 }} ELSE {{table}}.{{field.sql_name}} END,
+      {{field.sql_name}} = CASE WHEN permissions.is_owner THEN ${{ loop.index + 4 }} ELSE {{table}}.{{field.sql_name}} END,
     {% endif %}
   {% endfor %}
   updated_at = now()

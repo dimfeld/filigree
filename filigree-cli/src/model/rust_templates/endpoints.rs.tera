@@ -1,14 +1,12 @@
 #![allow(unused_imports, dead_code)]
-use axum::{extract::{State, Path, Query}, http::StatusCode, response::IntoResponse, routing};
+use axum::{extract::{State, Path}, http::StatusCode, response::IntoResponse, routing};
 use axum_jsonschema::Json;
 use axum_extra::extract::Query;
 use error_stack::ResultExt;
-use filigree::extract::FormOrJson;
+use filigree::{auth::ObjectPermission, extract::FormOrJson};
 
 use crate::{Error, auth::{Authed, has_any_permission}, server::ServerState};
-{% for c in children %}
-use crate::models::{{c.module}}::{{c.object_id}};
-{% endfor %}
+{{imports}}
 
 use super::{queries, types::*, {{id_type}}, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION, WRITE_PERMISSION };
 
@@ -46,20 +44,23 @@ async fn create(
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
     let result = queries::create(&mut *tx, &auth, &payload).await?;
 
-    {% for c in children %}
+    {% for c in children | filter(attribute="write_payload_field_name") %}
+        if let Some(mut children) = payload.{{c.write_payload_field_name}} {
+            
         {% if c.relationship.many %}
-        let has_children = !payload.{{c.write_payload_field_name}}.is_empty();
-        {% else %}
-        let has_children = payload.{{c.write_payload_field_name}}.is_some();
-        {% endif %}
+            if !children.is_empty() {
+                for child in children.iter_mut() {
+                    child.id = Some({{c.object_id}}::new());
+                    child.{{c.parent_field}} = result.id;
+                }
 
-        if has_children {
-            for child in payload.{{c.write_payload_field_name}}.iter_mut() {
-                child.id = Some({{c.object_id}}::new());
-                child.{{c.parent_field}} = Some(result.id);
+                crate::models::{{c.module}}::queries::update_with_parent(&mut *tx, &auth, true, result.id, &children).await?;
             }
-
-            crate::models::{{c.module}}::update_with_parent(&mut *tx, &auth, true, result.id, &payload.{{c.write_payload_field_name}}).await?;
+        {% else %}
+            children.id = Some({{c.object_id}}::new());
+            children.{{c.parent_field}} = result.id;
+            crate::models::{{c.module}}::queries::update_with_parent(&mut *tx, &auth, true, result.id, &[children]).await?;
+        {% endif %}
         }
     {% endfor %}
 
@@ -74,21 +75,36 @@ async fn update(
     FormOrJson(payload): FormOrJson<{{ struct_base }}UpdatePayload>,
     ) -> Result<impl IntoResponse, Error> {
 
+    {% if children | filter(attribute="write_payload_field_name") %}
+
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
-
-    let updated = queries::update(&mut *tx, &auth, id, &payload).await?;
-    if !updated {
+    let is_owner = queries::update(&mut *tx, &auth, id, &payload).await?;
+    let Some(is_owner) = is_owner else {
         return Ok(StatusCode::NOT_FOUND);
-    }
+    };
 
-    {% for c in children %}
+    {% for c in children | filter(attribute="write_payload_field_name") %}
     if let Some(children) = payload.{{c.write_payload_field_name}} {
-        crate::models::{{c.module}}::queries::update_with_parent(&mut *tx, &auth, is_owner, id, &children).await?;
+        crate::models::{{c.module}}::queries::update_with_parent(
+            &mut *tx,
+            &auth,
+            is_owner,
+            id,
+            &children).await?;
     }
     {% endfor %}
 
     tx.commit().await.change_context(Error::Db)?;
     Ok(StatusCode::OK)
+
+    {% else %}
+    let result = queries::update(&state.db, &auth, id, &payload).await?;
+    if result.is_none() {
+        Ok(StatusCode::NOT_FOUND)
+    } else {
+        Ok(StatusCode::OK)
+    }
+    {% endif %}
 }
 
 async fn delete(
@@ -122,7 +138,7 @@ async fn list_child_{{c.module}}(
     Query(mut qs): Query<crate::models::{{c.module}}::queries::ListQueryFilters>,
     ) -> Result<impl IntoResponse, Error> {
 
-    qs.{{c.parent_field}} = Some(parent_id);
+    qs.{{c.parent_field}} = vec![parent_id];
 
     let object = crate::models::{{c.module}}::queries::list(
         &state.db,
@@ -132,7 +148,8 @@ async fn list_child_{{c.module}}(
 
     {% if not c.relationship.many %}
     let object = object
-        .get(0)
+        .into_iter()
+        .next()
         .ok_or(Error::NotFound("{{c.relationship.model}}"))?;
     {% endif %}
 
@@ -145,10 +162,10 @@ async fn create_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
     Path(parent_id): Path<{{id_type}}>,
-    FormOrJson(payload): FormOrJson<{{c.struct_base}}CreatePayload>,
+    FormOrJson(mut payload): FormOrJson<{{c.struct_base}}CreatePayload>,
     ) -> Result<impl IntoResponse, Error> {
 
-    payload.{{c.parent_field}} = Some(parent_id);
+    payload.{{c.parent_field}} = parent_id;
 
     let result = crate::models::{{c.module}}::queries::create(
         &state.db,
@@ -164,11 +181,11 @@ async fn update_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
     Path((parent_id, child_id)): Path<({{id_type}}, {{c.object_id}})>,
-    FormOrJson(payload): FormOrJson<{{c.struct_base}}UpdatePayload>,
+    FormOrJson(mut payload): FormOrJson<{{c.struct_base}}UpdatePayload>,
     ) -> Result<impl IntoResponse, Error> {
 
     payload.id = Some(child_id);
-    payload.{{c.parent_field}} = Some(parent_id);
+    payload.{{c.parent_field}} = parent_id;
 
     let result = crate::models::{{c.module}}::queries::update_one_with_parent(
         &state.db,
@@ -176,7 +193,7 @@ async fn update_child_{{c.module}}(
         true, // TODO get the right value here
         parent_id,
         child_id,
-        &payload).await?;
+        payload).await?;
 
     Ok(Json(result))
 }
@@ -203,14 +220,23 @@ async fn upsert_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
     Path(parent_id): Path<{{id_type}}>,
-    FormOrJson(payload): FormOrJson<{{c.struct_base}}UpdatePayload>,
+    FormOrJson(mut payload): FormOrJson<{{c.struct_base}}UpdatePayload>,
     ) -> Result<impl IntoResponse, Error> {
-    payload.{{c.parent_field}} = Some(parent_id);
+    payload.{{c.parent_field}} = parent_id;
+
+    let object_perm = queries::lookup_object_permissions(
+        &state.db,
+        &auth,
+        parent_id,
+    ).await?
+    .unwrap_or(ObjectPermission::Read);
+
+    object_perm.must_be_writable(WRITE_PERMISSION)?;
 
     let result = crate::models::{{c.module}}::queries::update_with_parent(
         &state.db,
         &auth,
-        true, // TODO get the right value here
+        object_perm == ObjectPermission::Owner,
         parent_id,
         &Some(payload)).await?;
     Ok(Json(result))
@@ -221,8 +247,16 @@ async fn delete_child_{{c.module}}(
     auth: Authed,
     Path(parent_id): Path<{{id_type}}>,
     ) -> Result<impl IntoResponse, Error> {
+    let object_perm = queries::lookup_object_permissions(
+        &state.db,
+        &auth,
+        parent_id,
+    ).await?
+    .unwrap_or(ObjectPermission::Read);
 
-    crate::models::{{c.module}}::queries::delete_by_parent(
+    object_perm.must_be_writable(WRITE_PERMISSION)?;
+
+    crate::models::{{c.module}}::queries::delete_all_children_of_parent(
         &state.db,
         &auth,
         parent_id).await?;
@@ -308,7 +342,7 @@ mod test {
     use tracing::{event, Level};
 
     use super::*;
-    use super::testing::{make_create_payload, make_update_payload};
+    use super::super::testing::{make_create_payload, make_update_payload};
     use crate::{
         {% if model_name != "Organization" %}
         models::organization::OrganizationId,

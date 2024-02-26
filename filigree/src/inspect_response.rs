@@ -2,8 +2,11 @@ use async_trait::async_trait;
 use reqwest::Response;
 use tracing::Level;
 
+/// Code to simply inspect the body of an error response.
+/// This trait is implemented for [reqwest::Response]
 #[async_trait]
 pub trait InspectResponseError {
+    /// Log the error for a failed request
     async fn print_error_for_status(self) -> reqwest::Result<Response>;
 }
 

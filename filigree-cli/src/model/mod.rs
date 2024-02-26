@@ -94,8 +94,24 @@ impl Model {
             .unwrap_or_else(|| Cow::Owned(self.name.to_lowercase().chars().take(3).collect()))
     }
 
+    pub fn qualified_object_id_type(&self) -> String {
+        format!(
+            "crate::models::{}::{}",
+            self.module_name(),
+            self.object_id_type()
+        )
+    }
+
     pub fn object_id_type(&self) -> String {
         format!("{}Id", self.name.to_case(Case::Pascal))
+    }
+
+    pub fn qualified_struct_name(&self) -> String {
+        format!(
+            "crate::models::{}::{}",
+            self.module_name(),
+            self.struct_name()
+        )
     }
 
     pub fn struct_name(&self) -> String {

@@ -33,6 +33,7 @@ const DEPS: &[DepVersion] = &[
     ("serde_json", "1.0.113", &[]),
     ("serde_with", "3.6.1", &["json", "schemars_0_8"]),
     ("sqlx", "0.7.3", &["chrono", "postgres"]),
+    ("sqlx-transparent-json-decode", "2.1.0", &[]),
     ("tera", "1.19.1", &[]),
     ("thiserror", "1.0.56", &[]),
     ("tokio", "1.36.0", &["full"]),

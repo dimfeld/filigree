@@ -1,3 +1,4 @@
+//! Functions for parsing file uploads
 use std::{fmt::Debug, ops::Deref};
 
 use base64::Engine as _;
@@ -17,6 +18,7 @@ impl Debug for FileData {
 }
 
 impl FileData {
+    /// Return the inner buffer from the FileData
     pub fn into_inner(self) -> Vec<u8> {
         self.0
     }
@@ -66,12 +68,16 @@ impl<'de> Visitor<'de> for FileDataVisitor {
     }
 }
 
-/// A file upload
+/// A file upload from a Multipart form submission
 #[derive(Deserialize, Clone, PartialEq)]
 pub struct FileUpload {
+    /// The name of the file control from the form
     pub name: String,
+    /// The filename of the file
     pub filename: String,
+    /// The content type of the file
     pub content_type: String,
+    /// The file data
     pub data: FileData,
 }
 

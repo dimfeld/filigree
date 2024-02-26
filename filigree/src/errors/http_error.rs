@@ -82,27 +82,47 @@ pub enum ErrorKind {
     FailedPredicate,
     /// An OAuth login seemed to work, but fetching the user's details failed.
     FetchOAuthUserDetails,
+    /// The password was incorrect. In production this should be obfuscated
     IncorrectPassword,
+    /// The API key provided in a request was invalid or disabled
     InvalidApiKey,
+    /// The Host header supplied in a request did not match an expected host
     InvalidHostHeader,
+    /// The token provided in a reset request was invalid or expired
     InvalidToken,
+    /// The requested operation requires a permission that the client does not have
     MissingPermission,
+    /// The requested object was not found
     NotFound,
+    /// The user's account has not yet been verified
     NotVerified,
+    /// An error roccurred exchanging an OAuith refresh token for a new access token
     OAuthExchangeError,
+    /// The requested OAuth provider is not supported
     OAuthProviderNotSupported,
+    /// The OAuth session provided in a request was invalid or expired
     OAuthSessionExpired,
+    /// The OAuth session provided in a request was not found
     OAuthSessionNotFound,
+    /// The client requested a sort order that is not supported for the given model
     OrderBy,
+    /// The password and confirmation fields supplied by the client do not match.
     PasswordConfirmMismatch,
+    /// Internal error with the password hashing mechanism
     PasswordHasherError,
+    /// Failed to start the server
     ServerStart,
+    /// Internal error with the session backend
     SessionBackend,
-    SessionBackendError,
+    /// Error while shutting down the server
     Shutdown,
+    /// Creation of new user accounts is disabled
     SignupDisabled,
+    /// The user is not logged in
     Unauthenticated,
+    /// Internal error while creating a user
     UserCreationError,
+    /// The requested user does not exist
     UserNotFound,
 }
 
@@ -134,7 +154,6 @@ impl ErrorKind {
             Self::PasswordHasherError => "password_hash_internal",
             Self::ServerStart => "server",
             Self::SessionBackend => "session_backend",
-            Self::SessionBackendError => "session_backend_error",
             Self::Shutdown => "shutdown",
             Self::SignupDisabled => "signup_disabled",
             Self::Unauthenticated => "unauthenticated",

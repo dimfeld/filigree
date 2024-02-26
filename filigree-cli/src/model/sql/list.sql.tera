@@ -29,7 +29,7 @@ SELECT
       {% elif c.relationship.populate_on_list == 'data' %}
         (
           SELECT
-            {%- if c.relationship.many -%}JSONB_AGG({%- endif -%}
+            {%- if c.relationship.many -%}ARRAY_AGG({%- endif -%}
               JSONB_BUILD_OBJECT(
                 {% for field in c.fields %}
                   '{{field.rust_name}}', {{field.sql_name}},

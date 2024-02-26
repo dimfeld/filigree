@@ -11,9 +11,9 @@ SELECT
       {% if c.relationship.populate_on_get == 'id' %}
         (
           SELECT
-            {%- if c.relationship.many -%}ARRAY_AGG({%- endif -%}
+            {% if c.relationship.many -%}COALESCE(ARRAY_AGG({%- endif -%}
               {{c.table}}.id
-            {%- if c.relationship.many -%}){%- endif -%}
+            {%- if c.relationship.many -%}), ARRAY[]::uuid[]){%- endif -%}
           FROM {{c.table}}
           WHERE {{c.parent_field}} = $1 AND organization_id=$2
           {% if not c.relationship.many %}LIMIT 1{% endif %}
@@ -21,14 +21,14 @@ SELECT
       {% elif c.relationship.populate_on_get == 'data' %}
         (
           SELECT
-            {%- if c.relationship.many -%}JSONB_AGG({%- endif -%}
+            {% if c.relationship.many -%}COALESCE(ARRAY_AGG({%- endif -%}
               JSONB_BUILD_OBJECT(
                 {% for field in c.fields %}
                   '{{field.rust_name}}', {{field.sql_name}},
                 {% endfor %}
                 '_permission', _permission
               )
-            {%- if c.relationship.many -%}){%- endif -%}
+            {%- if c.relationship.many -%}), ARRAY[]::jsonb[]){%- endif -%}
           FROM {{c.table}}
           WHERE {{c.parent_field}} = $1 AND organization_id=$2
           {% if not c.relationship.many %}LIMIT 1{% endif %}

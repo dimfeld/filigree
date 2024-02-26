@@ -1,4 +1,9 @@
-use super::{{struct_base}}CreatePayload;
+use super::{
+    {{id_type}},
+    {{struct_base}}CreatePayload,
+    {{struct_base}}UpdatePayload,
+};
+{{imports}}
 
 {% macro payload_field_value(field) %}
     {%- if field.base_type == "text" -%}
@@ -25,6 +30,7 @@ use super::{{struct_base}}CreatePayload;
 /// don't all look identical.
 pub fn make_create_payload(i: usize) -> {{struct_base}}CreatePayload {
     {{struct_base}}CreatePayload {
+        id: None,
         {% for field in fields | filter(attribute="owner_write", value=true) -%}
         {{field.rust_name}}:
             {%- if field.nullable -%}(i > 1).then(|| {%endif%}
@@ -39,10 +45,11 @@ pub fn make_create_payload(i: usize) -> {{struct_base}}CreatePayload {
 /// don't all look identical.
 pub fn make_update_payload(i: usize) -> {{struct_base}}UpdatePayload {
     {{struct_base}}UpdatePayload {
-        {% set uwc = fields | filter (attribute="user_write", value=true) | length -%}
+        id: None,
+        {%- set uwc = fields | filter (attribute="user_write", value=true) | length -%}
         {% for field in fields | filter (attribute="owner_write", value=true) -%}
-        {% set uopt = uwc > 0 and not field.user_write %}
-        {% set nullable = field.nullable or uopt %}
+        {%- set uopt = uwc > 0 and not field.user_write -%}
+        {%- set nullable = field.nullable or uopt -%}
         {{field.rust_name}}:
             {%- if nullable %} Some({%- endif -%}
             {{ self::payload_field_value(field=field) }}

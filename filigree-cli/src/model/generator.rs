@@ -1,4 +1,4 @@
-use std::{borrow::Cow, ops::Deref, path::PathBuf};
+use std::{borrow::Cow, collections::HashSet, ops::Deref, path::PathBuf};
 
 use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
@@ -210,6 +210,7 @@ impl<'a> ModelGenerator<'a> {
         &self,
         generators: &GeneratorMap,
     ) -> Result<tera::Context, Error> {
+        let mut imports = HashSet::new();
         let sql_dialect = Config::default_sql_dialect();
         let full_default_sort_field = self.default_sort_field.as_deref().unwrap_or("-updated_at");
         let default_sort_field = if full_default_sort_field.starts_with('-') {
@@ -274,6 +275,11 @@ impl<'a> ModelGenerator<'a> {
                 let child_model = self.model_map.get(&has.model, &self.model.name, "has")?;
                 let child_generator = generators.get(&has.model, &self.model.name, "has")?;
 
+                imports.insert(child_model.qualified_struct_name());
+                imports.insert(format!("{}CreatePayload", child_model.qualified_struct_name()));
+                imports.insert(format!("{}UpdatePayload", child_model.qualified_struct_name()));
+                imports.insert(child_model.qualified_object_id_type());
+
                 let get_sql_field_name = has.field_name.clone().unwrap_or_else(|| {
                     Self::child_model_field_name(&child_model, has.populate_on_get, has.many)
                 });
@@ -283,9 +289,10 @@ impl<'a> ModelGenerator<'a> {
                 });
 
                 let get_field_type =
-                    Self::child_model_field_type(&child_model, has.populate_on_get, has.many);
+                    Self::child_model_field_type(&child_model, has.populate_on_get, has.many, "");
                 let list_field_type =
-                    Self::child_model_field_type(&child_model, has.populate_on_list, has.many);
+                    Self::child_model_field_type(&child_model, has.populate_on_list, has.many, "");
+                let exc = if has.many { "!" } else { "" };
 
                 let url_path = if has.many {
                     child_model.plural().as_ref().to_case(Case::Snake)
@@ -297,11 +304,11 @@ impl<'a> ModelGenerator<'a> {
                     "relationship": has,
                     "get_field_type": get_field_type,
                     "get_sql_field_name": get_sql_field_name,
-                    "full_get_sql_field_name": format!("{get_sql_field_name}: {get_field_type}"),
+                    "full_get_sql_field_name": format!("{get_sql_field_name}{exc}: {get_field_type}"),
                     "list_field_type": list_field_type,
                     "list_sql_field_name": list_sql_field_name,
-                    "full_list_sql_field_name": format!("{list_sql_field_name}: {list_field_type}"),
-                    "write_payload_field_name": has.rust_child_field_name(&child_model),
+                    "full_list_sql_field_name": format!("{list_sql_field_name}{exc}: {list_field_type}"),
+                    "write_payload_field_name": has.update_with_parent.then(|| has.rust_child_field_name(&child_model)),
                     "struct_base": child_model.struct_name(),
                     "insertable": has.update_with_parent,
                     "module": child_model.module_name(),
@@ -321,6 +328,10 @@ impl<'a> ModelGenerator<'a> {
             .map(|(id_field, populate, ref_model, field)| {
                 let gen = generators.get(&ref_model.name, &self.model.name, "references")?;
                 let full_name = field.qualified_sql_field_name();
+
+                imports.insert(gen.model.qualified_struct_name());
+                imports.insert(gen.model.qualified_object_id_type());
+
                 Ok(json!({
                     "name": field.name,
                     "full_name": full_name,
@@ -332,6 +343,13 @@ impl<'a> ModelGenerator<'a> {
                 }))
             })
             .collect::<Result<Vec<_>, Error>>()?;
+
+        if let Some(b) = &self.belongs_to {
+            let model = self
+                .model_map
+                .get(b.model(), &self.model.name, "belongs_to")?;
+            imports.insert(model.qualified_object_id_type());
+        }
 
         let belongs_to_field = self
             .belongs_to_field()?
@@ -350,6 +368,12 @@ impl<'a> ModelGenerator<'a> {
             }
         }
 
+        let imports = imports
+            .into_iter()
+            .map(|i| format!("use {i};"))
+            .sorted()
+            .join("\n");
+
         let json_value = json!({
             "dir": base_dir,
             "module_name": &self.model.module_name(),
@@ -361,6 +385,7 @@ impl<'a> ModelGenerator<'a> {
             "indexes": self.indexes,
             "global": self.global,
             "fields": fields,
+            "imports": imports,
             "belongs_to_field": belongs_to_field,
             "can_populate_get": can_populate_get,
             "can_populate_list": can_populate_list,
@@ -534,18 +559,6 @@ impl<'a> ModelGenerator<'a> {
         Ok(id_fields.into_iter().chain(other_fields).flatten())
     }
 
-    fn belongs_to_field_name(&self) -> Result<Option<String>, Error> {
-        let Some(belongs_to) = self.belongs_to.as_ref() else {
-            return Ok(None);
-        };
-
-        let model = self
-            .model_map
-            .get(belongs_to.model(), &self.model.name, "belongs_to")?;
-
-        Ok(Some(model.foreign_key_id_field_name()))
-    }
-
     fn belongs_to_field(&self) -> Result<impl Iterator<Item = ModelField>, Error> {
         let belongs_to = self
             .belongs_to
@@ -573,8 +586,8 @@ impl<'a> ModelGenerator<'a> {
                     filterable: FilterableType::Exact,
                     sortable: super::field::SortableType::None,
                     extra_sql_modifiers: String::new(),
-                    user_access: Access::Write,
-                    owner_access: Access::Write,
+                    user_access: Access::ReadWrite,
+                    owner_access: Access::ReadWrite,
                     references: Some(ModelFieldReference {
                         table: model.table(),
                         field: "id".to_string(),
@@ -602,10 +615,14 @@ impl<'a> ModelGenerator<'a> {
     ) -> String {
         match (fetch_type, many) {
             (ReferenceFetchType::None, _) => String::new(),
-            (ReferenceFetchType::Id, true) => format!("{}_ids", model.plural()),
-            (ReferenceFetchType::Id, false) => format!("{}_id", model.plural()),
-            (ReferenceFetchType::Data, true) => model.plural().to_string(),
-            (ReferenceFetchType::Data, false) => model.name.clone(),
+            (ReferenceFetchType::Id, true) => {
+                format!("{}_ids", model.name.to_case(Case::Snake))
+            }
+            (ReferenceFetchType::Id, false) => {
+                format!("{}_id", model.name.to_case(Case::Snake))
+            }
+            (ReferenceFetchType::Data, true) => model.plural().to_case(Case::Snake),
+            (ReferenceFetchType::Data, false) => model.name.to_case(Case::Snake),
         }
     }
 
@@ -613,13 +630,14 @@ impl<'a> ModelGenerator<'a> {
         model: &Model,
         fetch_type: ReferenceFetchType,
         many: bool,
+        suffix: &str,
     ) -> String {
         match (fetch_type, many) {
             (ReferenceFetchType::None, _) => String::new(),
             (ReferenceFetchType::Id, true) => format!("Vec<{}>", model.object_id_type()),
             (ReferenceFetchType::Id, false) => model.object_id_type(),
-            (ReferenceFetchType::Data, true) => format!("Vec<{}>", model.struct_name()),
-            (ReferenceFetchType::Data, false) => model.struct_name(),
+            (ReferenceFetchType::Data, true) => format!("Vec<{}{suffix}>", model.struct_name()),
+            (ReferenceFetchType::Data, false) => format!("{}{suffix}", model.struct_name()),
         }
     }
 
@@ -637,8 +655,8 @@ impl<'a> ModelGenerator<'a> {
             nullable: false,
             unique: false,
             extra_sql_modifiers: String::new(),
-            user_access: Access::Write,
-            owner_access: Access::Write,
+            user_access: Access::ReadWrite,
+            owner_access: Access::ReadWrite,
             default_sql: String::new(),
             default_rust: String::new(),
             indexed: false,
@@ -663,7 +681,7 @@ impl<'a> ModelGenerator<'a> {
                 let name = has.field_name.clone().unwrap_or_else(|| {
                     Self::child_model_field_name(&model, populate_type, has.many)
                 });
-                let rust_type = Self::child_model_field_type(&model, populate_type, has.many);
+                let rust_type = Self::child_model_field_type(&model, populate_type, has.many, "");
 
                 if name.is_empty() {
                     return Ok(None);
@@ -672,6 +690,7 @@ impl<'a> ModelGenerator<'a> {
                 let field = ModelField {
                     name,
                     rust_type: Some(rust_type),
+                    nullable: !has.many,
                     ..base_field.clone()
                 };
 
@@ -705,8 +724,8 @@ impl<'a> ModelGenerator<'a> {
             nullable: false,
             unique: false,
             extra_sql_modifiers: String::new(),
-            user_access: Access::Write,
-            owner_access: Access::Write,
+            user_access: Access::ReadWrite,
+            owner_access: Access::ReadWrite,
             default_sql: String::new(),
             default_rust: String::new(),
             indexed: false,
@@ -764,8 +783,8 @@ impl<'a> ModelGenerator<'a> {
             nullable: false,
             unique: false,
             extra_sql_modifiers: String::new(),
-            user_access: Access::Write,
-            owner_access: Access::Write,
+            user_access: Access::ReadWrite,
+            owner_access: Access::ReadWrite,
             default_sql: String::new(),
             default_rust: String::new(),
             indexed: false,
@@ -791,8 +810,13 @@ impl<'a> ModelGenerator<'a> {
                     Some(_) => ReferenceFetchType::Id,
                 };
 
+                let suffix = if for_update {
+                    "UpdatePayload"
+                } else {
+                    "CreatePayload"
+                };
                 let rust_type =
-                    Self::child_model_field_type(&has_model, write_payload_type, has.many);
+                    Self::child_model_field_type(&has_model, write_payload_type, has.many, suffix);
 
                 // For the update payload, wrap a single child field in a double option so we can distinguish
                 // between null (remove the child) vs. the member being absent (don't touch the
