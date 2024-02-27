@@ -21,6 +21,12 @@ use crate::{
     Error, GeneratorMap, ModelMap, RenderedFile, RenderedFileLocation,
 };
 
+pub struct ChildField<'a> {
+    field: ModelField,
+    model: &'a Model,
+    many: bool,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum ReadOperation {
     Get,
@@ -201,7 +207,10 @@ impl<'a> ModelGenerator<'a> {
                 self.all_fields()?
                     .filter(|f| f.owner_access.can_write() && !f.never_read),
             )
-            .chain(self.write_payload_child_fields(for_update)?.map(Cow::Owned)))
+            .chain(
+                self.write_payload_child_fields(for_update)?
+                    .map(|f| Cow::Owned(f.field)),
+            ))
     }
 
     /// Initialize the template context. This should be called immediately after all the generators
@@ -374,6 +383,25 @@ impl<'a> ModelGenerator<'a> {
             .sorted()
             .join("\n");
 
+        let create_payload_fields = self
+            .write_payload_child_fields(false)?
+            .map(|f| {
+                let mut context = f.field.template_context();
+                context["many"] = f.many.into();
+                context["module"] = f.model.module_name().into();
+                context
+            })
+            .collect::<Vec<_>>();
+        let update_payload_fields = self
+            .write_payload_child_fields(false)?
+            .map(|f| {
+                let mut context = f.field.template_context();
+                context["many"] = f.many.into();
+                context["module"] = f.model.module_name().into();
+                context
+            })
+            .collect::<Vec<_>>();
+
         let json_value = json!({
             "dir": base_dir,
             "module_name": &self.model.module_name(),
@@ -385,6 +413,8 @@ impl<'a> ModelGenerator<'a> {
             "indexes": self.indexes,
             "global": self.global,
             "fields": fields,
+            "create_payload_fields": create_payload_fields,
+            "update_payload_fields": update_payload_fields,
             "imports": imports,
             "belongs_to_field": belongs_to_field,
             "can_populate_get": can_populate_get,
@@ -775,7 +805,7 @@ impl<'a> ModelGenerator<'a> {
     pub fn write_payload_child_fields(
         &self,
         for_update: bool,
-    ) -> Result<impl Iterator<Item = ModelField>, Error> {
+    ) -> Result<impl Iterator<Item = ChildField>, Error> {
         let base_field = ModelField {
             name: String::new(),
             typ: SqlType::Uuid,
@@ -827,11 +857,17 @@ impl<'a> ModelGenerator<'a> {
                     rust_type
                 };
 
-                let field = ModelField {
+                let model_field = ModelField {
                     name: has.rust_child_field_name(&has_model),
                     rust_type: Some(rust_type),
                     nullable: has.many,
                     ..base_field.clone()
+                };
+
+                let field = ChildField {
+                    model: has_model,
+                    many: has.many,
+                    field: model_field,
                 };
 
                 Ok(Some(field))

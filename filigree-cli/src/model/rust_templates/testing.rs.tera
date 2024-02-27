@@ -37,6 +37,22 @@ pub fn make_create_payload(i: usize) -> {{struct_base}}CreatePayload {
                 {{ self::payload_field_value(field=field) }}
             {%- if field.nullable -%}){%endif%},
         {%- endfor %}
+
+        {% for field in create_payload_fields %}
+        {% if field.many %}
+        {{field.rust_name}}: match i {
+            0 => None,
+            1 => Some(vec![crate::models::{{field.module}}::testing::make_create_payload(i)]),
+            _ => Some(vec![
+                crate::models::{{field.module}}::testing::make_create_payload(i),
+                crate::models::{{field.module}}::testing::make_create_payload(i + 1)]),
+        },
+        {% else %}
+        {{field.rust_name}}: (i > 0).then(||
+            crate::models::{{field.module}}::testing::make_create_payload(i)
+        ),
+        {% endif %}
+        {% endfor %}
     }
 }
 
@@ -55,5 +71,21 @@ pub fn make_update_payload(i: usize) -> {{struct_base}}UpdatePayload {
             {{ self::payload_field_value(field=field) }}
             {%- if nullable %}){% endif -%},
         {%- endfor %}
+
+        {% for field in update_payload_fields %}
+        {% if field.many %}
+        {{field.rust_name}}: match i {
+            0 => None,
+            1 => Some(vec![crate::models::{{field.module}}::testing::make_update_payload(i)]),
+            _ => Some(vec![
+                crate::models::{{field.module}}::testing::make_update_payload(i),
+                crate::models::{{field.module}}::testing::make_update_payload(i + 1)]),
+        },
+        {% else %}
+        {{field.rust_name}}: (i > 0).then(||
+            crate::models::{{field.module}}::testing::make_update_payload(i)
+        ),
+        {% endif %}
+        {% endfor %}
     }
 }
