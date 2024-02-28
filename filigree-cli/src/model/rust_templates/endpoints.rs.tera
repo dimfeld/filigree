@@ -365,7 +365,7 @@ mod test {
         db: &sqlx::PgPool,
         organization_id: OrganizationId,
         count: usize,
-    ) -> Vec<{{struct_base}}> {
+    ) -> Vec<({{struct_base}}CreatePayload, {{struct_base}})> {
         // TODO if this model belongs_to another, then create the parent object for it
 
         futures::stream::iter(1..=count)
@@ -373,13 +373,15 @@ mod test {
             .and_then(|i| async move {
                 let id = {{id_type}}::new();
                 event!(Level::INFO, %id, "Creating test object {}", i);
-                super::queries::create_raw(
+                let payload = make_create_payload(i);
+                let result = super::queries::create_raw(
                     db,
                     id,
                     organization_id,
-                    &make_create_payload(i),
+                    &payload,
                 )
-                .await
+                .await?;
+                Ok::<_, error_stack::Report<Error>>((payload, result))
             })
             .try_collect::<Vec<_>>()
             .await
@@ -443,7 +445,7 @@ mod test {
         assert_eq!(results.len(), added_objects.len());
 
         for result in results {
-            let added = added_objects.iter().find(|i| i.id.to_string() == result["id"].as_str().unwrap())
+            let (payload, added) = added_objects.iter().find(|i| i.1.id.to_string() == result["id"].as_str().unwrap())
                 .expect("Returned object did not match any of the added objects");
             {% for field in fields | filter (attribute="owner_read", value=true) -%}
             assert_eq!(
@@ -451,6 +453,13 @@ mod test {
                 serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
                 "field {{field.rust_name}}"
             );
+            {% if field.owner_write %}
+            assert_eq!(
+                payload.{{field.rust_name}},
+                added.{{field.rust_name}},
+                "create result field {{field.rust_name}}"
+            );
+            {% endif %}
             {%- endfor %}
             assert_eq!(result["_permission"], "owner");
 
@@ -497,16 +506,47 @@ mod test {
         {% endif %}
 
         for result in results {
-            let added = added_objects.iter().find(|i| i.id.to_string() == result["id"].as_str().unwrap())
+            let (payload, added) = added_objects.iter().find(|i| i.1.id.to_string() == result["id"].as_str().unwrap())
                 .expect("Returned object did not match any of the added objects");
             {% for field in fields | filter (attribute="user_read", value=true) -%}
             assert_eq!(
                 result["{{field.rust_name}}"],
                 serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
-                "field {{field.rust_name}}"
+                "list result field {{field.rust_name}}"
             );
             {%- endfor %}
             assert_eq!(result["_permission"], "write");
+
+            {% for child in children %}
+            {% if child.relationship.populate_on_list == "id" %}
+                {% if child.write_payload_field_name %}
+                let ids = payload.{{child.write_payload_field_name}}.as_ref().map(|v| v.iter().map(|o| o.id).collect::<Vec<_>>()).unwrap_or_default();
+                let ids = serde_json::to_value(&ids).unwrap();
+                {% else %}
+                let ids = serde_json::json!([]);
+                {% endif %}
+                assert_eq!(
+                    result["{{child.list_sql_field_name}}"],
+                    ids,
+                    "field {{child.list_sql_field_name}}"
+                );
+            {% elif child.relationship.populate_on_list == "data" %}
+                assert_eq!(
+                    result["{{child.list_sql_field_name}}"],
+                    {% if child.write_payload_field_name %}
+                    serde_json::to_value(&payload.{{child.write_payload_field_name}}).unwrap(),
+                    {% else %}
+                    serde_json::json!([]),
+                    {% endif %}
+                    "field {{child.list_sql_field_name}}"
+                );
+            {% elif chil %}
+                // Check all the possibilities for a child field being populated
+                {% for f in child.possible_child_field_names -%}
+                assert!(result.get("{{f}}").is_none());
+                {%- endfor %}
+            {% endif %}
+            {% endfor %}
 
             // Check that we don't return any fields which are supposed to be omitted.
             {% for field in fields | filter (attribute="user_read", value=false) -%}
@@ -546,8 +586,8 @@ mod test {
             .client
             .get("{{url_path}}")
             .query(&[
-                ("id", added_objects[0].id),
-                ("id", added_objects[2].id),
+                ("id", added_objects[0].1.id),
+                ("id", added_objects[2].1.id),
             ])
             .send()
             .await
@@ -560,8 +600,8 @@ mod test {
             .unwrap();
 
         assert_eq!(results.len(), 2);
-        assert!(results.iter().any(|o| o["id"] == added_objects[0].id.to_string()));
-        assert!(results.iter().any(|o| o["id"] == added_objects[2].id.to_string()));
+        assert!(results.iter().any(|o| o["id"] == added_objects[0].1.id.to_string()));
+        assert!(results.iter().any(|o| o["id"] == added_objects[2].1.id.to_string()));
     }
 
     #[sqlx::test]
@@ -595,7 +635,7 @@ mod test {
 
         let result = admin_user
             .client
-            .get(&format!("{{url_path}}/{}", added_objects[1].id))
+            .get(&format!("{{url_path}}/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap()
@@ -606,15 +646,53 @@ mod test {
             .await
             .unwrap();
 
-        let added = &added_objects[1];
+        let (payload, added) = &added_objects[1];
         {% for field in fields | filter (attribute="owner_read", value=true) -%}
         assert_eq!(
             result["{{field.rust_name}}"],
             serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
-            "field {{field.rust_name}}"
+            "get result field {{field.rust_name}}"
         );
+        {% if field.owner_write %}
+        assert_eq!(
+            added.{{field.rust_name}},
+            payload.{{field.rust_name}},
+            "create result field {{field.rust_name}}"
+        );
+        {% endif %}
         {%- endfor %}
         assert_eq!(result["_permission"], "owner");
+
+        {% for child in children %}
+        {% if child.relationship.populate_on_get == "id" %}
+            {% if child.write_payload_field_name %}
+            let ids = payload.{{child.write_payload_field_name}}.as_ref().map(|v| v.iter().map(|o| o.id).collect::<Vec<_>>()).unwrap_or_default();
+            let ids = serde_json::to_value(&ids).unwrap();
+            {%- else %}
+            let ids = serde_json::json!([]);
+            {%- endif %}
+            assert_eq!(
+                result["{{child.get_sql_field_name}}"],
+                ids,
+                "field {{child.get_sql_field_name}}"
+            );
+        {% elif child.relationship.populate_on_get == "data" %}
+            assert_eq!(
+                result["{{child.get_sql_field_name}}"],
+                {% if child.write_payload_field_name %}
+                serde_json::to_value(&payload.{{child.write_payload_field_name}}).unwrap(),
+                {% else %}
+                serde_json::json!([]),
+                {% endif %}
+                "field {{child.get_sql_field_name}}"
+            );
+        {% else %}
+            // Check all the possibilities for a child field being populated
+            {% for f in child.possible_child_field_names -%}
+            assert!(result.get("{{f}}").is_none());
+            {%- endfor %}
+        {% endif %}
+        {% endfor %}
 
         // Check that we don't return any fields which are supposed to be omitted.
         {% for field in fields | filter (attribute="owner_read", value=false) -%}
@@ -627,7 +705,7 @@ mod test {
 
         let result = user
             .client
-            .get(&format!("{{url_path}}/{}", added_objects[1].id))
+            .get(&format!("{{url_path}}/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap()
@@ -638,12 +716,12 @@ mod test {
             .await
             .unwrap();
 
-        let added = &added_objects[1];
+        let (payload, added) = &added_objects[1];
         {% for field in fields | filter (attribute="user_read", value=true) -%}
         assert_eq!(
             result["{{field.rust_name}}"],
             serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
-            "field {{field.rust_name}}"
+            "get result field {{field.rust_name}}"
         );
         {%- endfor %}
         assert_eq!(result["_permission"], "write");
@@ -659,7 +737,7 @@ mod test {
 
         let response = no_roles_user
             .client
-            .get(&format!("{{url_path}}/{}", added_objects[1].id))
+            .get(&format!("{{url_path}}/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap();
@@ -686,7 +764,7 @@ mod test {
         let update_payload = make_update_payload(20);
         admin_user
             .client
-            .put(&format!("{{url_path}}/{}", added_objects[1].id))
+            .put(&format!("{{url_path}}/{}", added_objects[1].1.id))
             .json(&update_payload)
             .send()
             .await
@@ -697,7 +775,7 @@ mod test {
 
         let updated: serde_json::Value = admin_user
             .client
-            .get(&format!("{{url_path}}/{}", added_objects[1].id))
+            .get(&format!("{{url_path}}/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap()
@@ -723,7 +801,7 @@ mod test {
         // Make sure that no other objects were updated
         let non_updated : serde_json::Value = admin_user
             .client
-            .get(&format!("{{url_path}}/{}", added_objects[0].id))
+            .get(&format!("{{url_path}}/{}", added_objects[0].1.id))
             .send()
             .await
             .unwrap()
@@ -737,7 +815,7 @@ mod test {
         {% for field in fields | filter (attribute="owner_read", value=true) -%}
         assert_eq!(
             non_updated["{{field.rust_name}}"],
-            serde_json::to_value(&added_objects[0].{{field.rust_name}}).unwrap(),
+            serde_json::to_value(&added_objects[0].1.{{field.rust_name}}).unwrap(),
             "field {{field.rust_name}}"
         );
         {%- endfor %}
@@ -745,7 +823,7 @@ mod test {
 
         let response = no_roles_user
             .client
-            .put(&format!("{{url_path}}/{}", added_objects[1].id))
+            .put(&format!("{{url_path}}/{}", added_objects[1].1.id))
             .json(&update_payload)
             .send()
             .await
@@ -843,7 +921,7 @@ mod test {
 
         admin_user
             .client
-            .delete(&format!("{{url_path}}/{}", added_objects[1].id))
+            .delete(&format!("{{url_path}}/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap()
@@ -853,7 +931,7 @@ mod test {
 
         let response = admin_user
             .client
-            .get(&format!("{{url_path}}/{}", added_objects[1].id))
+            .get(&format!("{{url_path}}/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap();
@@ -862,7 +940,7 @@ mod test {
         // Delete should not happen without permissions
         let response = no_roles_user
             .client
-            .delete(&format!("{{url_path}}/{}", added_objects[0].id))
+            .delete(&format!("{{url_path}}/{}", added_objects[0].1.id))
             .send()
             .await
             .unwrap();
@@ -872,7 +950,7 @@ mod test {
         // Make sure other objects still exist
         let response = admin_user
             .client
-            .get(&format!("{{url_path}}/{}", added_objects[0].id))
+            .get(&format!("{{url_path}}/{}", added_objects[0].1.id))
             .send()
             .await
             .unwrap();

@@ -309,6 +309,13 @@ impl<'a> ModelGenerator<'a> {
                     child_model.name.to_case(Case::Snake)
                 };
 
+                let possible_child_field_names = vec![
+                    Self::child_model_field_name(&child_model, ReferenceFetchType::Id, false),
+                    Self::child_model_field_name(&child_model, ReferenceFetchType::Id, true),
+                    Self::child_model_field_name(&child_model, ReferenceFetchType::Data, false),
+                    Self::child_model_field_name(&child_model, ReferenceFetchType::Data, true),
+                ];
+
                 let result = json!({
                     "relationship": has,
                     "get_field_type": get_field_type,
@@ -320,6 +327,7 @@ impl<'a> ModelGenerator<'a> {
                     "struct_base": child_model.struct_name(),
                     "insertable": has.update_with_parent,
                     "module": child_model.module_name(),
+                    "possible_child_field_names": possible_child_field_names,
                     "object_id": child_model.object_id_type(),
                     "fields": child_generator.all_fields()?.map(|f| f.template_context()).collect::<Vec<_>>(),
                     "table": child_model.table(),

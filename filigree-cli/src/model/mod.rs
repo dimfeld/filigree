@@ -355,9 +355,9 @@ impl HasModel {
     pub fn rust_child_field_name(&self, model: &Model) -> String {
         self.field_name.clone().unwrap_or_else(|| {
             if self.many {
-                model.name.to_case(Case::Snake)
-            } else {
                 model.plural().to_case(Case::Snake)
+            } else {
+                model.name.to_case(Case::Snake)
             }
         })
     }
