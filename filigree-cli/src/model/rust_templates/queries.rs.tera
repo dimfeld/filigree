@@ -7,7 +7,7 @@ use filigree::{
 };
 use serde::Deserialize;
 use sqlx::{PgConnection, PgExecutor, postgres::PgRow, query_file, query_file_as, query_file_scalar};
-use tracing::{event, Level};
+use tracing::{event, instrument, Level};
 
 use std::str::FromStr;
 
@@ -24,6 +24,7 @@ use crate::Error;
 type QueryAs<'q, T> = sqlx::query::QueryAs<'q, sqlx::Postgres, T, <sqlx::Postgres as sqlx::database::HasArguments<'q>>::Arguments>;
 
 /// Get a {{model_name}} from the database
+#[instrument(skip(db))]
 pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let object = query_file_as!({{struct_base}}, "{{dir}}/select_one.sql",
@@ -41,6 +42,7 @@ pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> R
 
 {% if can_populate_get %}
 /// Get a populated {{model_name}} from the database
+#[instrument(skip(db))]
 pub async fn get_populated(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}PopulatedGet, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let object = query_file_as!({{struct_base}}PopulatedGet, "{{dir}}/select_one_populated.sql",
@@ -211,6 +213,7 @@ impl ListQueryFilters {
     }
 }
 
+#[instrument(skip(db))]
 pub async fn list(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
@@ -221,10 +224,11 @@ pub async fn list(
 }
 
 {% if can_populate_list %}
+#[instrument(skip(db))]
 pub async fn list_populated(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
-    filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}PopulatedGet>, error_stack::Report<Error>> {
+    filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}PopulatedList>, error_stack::Report<Error>> {
 
     let q = include_str!("list_populated.sql");
     list_internal(q, db, auth, filters).await
@@ -253,7 +257,10 @@ where
 
     let actor_ids = auth.actor_ids();
     event!(Level::DEBUG, organization_id=?auth.organization_id, actor_ids=?actor_ids);
-    query = query.bind(&auth.organization_id)
+    query = query
+        {% if not global %}
+        .bind(&auth.organization_id)
+        {% endif %}
         .bind(&actor_ids);
 
     query = filters.bind_to_query(query);
@@ -266,6 +273,7 @@ where
     Ok(results)
 }
 
+/// Create a new {{struct_base}} in the database.
 pub async fn create(db: impl PgExecutor<'_>, auth: &AuthInfo, payload: &{{struct_base}}CreatePayload) -> Result<{{struct_base}}, error_stack::Report<Error>> {
     // TODO create permissions auth check
     let id = {{id_type}}::new();
@@ -273,6 +281,7 @@ pub async fn create(db: impl PgExecutor<'_>, auth: &AuthInfo, payload: &{{struct
 }
 
 /// Create a new {{struct_base}} in the database, allowing the ID to be explicitly specified.
+#[instrument(skip(db))]
 pub async fn create_raw(
     db: impl PgExecutor<'_>,
     id: {{id_type}},
@@ -299,6 +308,7 @@ pub async fn create_raw(
     Ok(result)
 }
 
+#[instrument(skip(db))]
 pub async fn update(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
@@ -325,6 +335,7 @@ pub async fn update(
     Ok(result)
 }
 
+#[instrument(skip(db))]
 pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<bool, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let result = query_file!("{{dir}}/delete.sql",
@@ -338,6 +349,7 @@ pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -
     Ok(result.rows_affected() > 0)
 }
 
+#[instrument(skip(db))]
 pub async fn lookup_object_permissions(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
@@ -364,6 +376,7 @@ pub async fn lookup_object_permissions(
 {% if belongs_to_field %}
 {% if belongs_to_field.unique %}
 /// Update the child of the given parent.
+#[instrument(skip(db))]
 pub async fn update_with_parent(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
@@ -399,6 +412,7 @@ pub async fn update_with_parent(
     }
 }
 {% else %}
+#[instrument(skip(db))]
 pub async fn update_one_with_parent(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
@@ -432,6 +446,7 @@ pub async fn update_one_with_parent(
 }
 
 /// Update the children of the given parent.
+#[instrument(skip(db))]
 pub async fn update_with_parent(
     db: &mut PgConnection,
     auth: &AuthInfo,
@@ -500,6 +515,8 @@ pub async fn update_with_parent(
     }
 }
 
+/// Delete a child object, making sure that its parent ID matches.
+#[instrument(skip(db))]
 pub async fn delete_with_parent(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
@@ -522,6 +539,7 @@ pub async fn delete_with_parent(
 {% endif %}
 
 /// Delete all children of the given parent. This function does not do permissions checks.
+#[instrument(skip(db))]
 pub async fn delete_all_children_of_parent(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,

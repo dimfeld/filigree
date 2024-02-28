@@ -19,28 +19,28 @@ SELECT
       {% if c.relationship.populate_on_list == 'id' %}
         (
           SELECT
-            {%- if c.relationship.many -%}ARRAY_AGG({%- endif -%}
+            {% if c.relationship.many %}COALESCE(ARRAY_AGG({%- endif -%}
               {{c.table}}.id
-            {%- if c.relationship.many -%}){%- endif -%}
+            {% if c.relationship.many %}), ARRAY[]::uuid[]){% endif %}
           FROM {{c.table}}
-          WHERE {{c.parent_field}} = $1 AND organization_id=$2
+          WHERE {{c.parent_field}} = tb.id {% if not global %}AND organization_id=$1{% endif %}
           {% if not c.relationship.many %}LIMIT 1{% endif %}
-        ) AS "{{c.full_list_sql_field_name}}",
+        ) AS "{{c.list_sql_field_name}}",
       {% elif c.relationship.populate_on_list == 'data' %}
         (
           SELECT
-            {%- if c.relationship.many -%}ARRAY_AGG({%- endif -%}
+            {% if c.relationship.many -%}COALESCE(ARRAY_AGG({%- endif -%}
               JSONB_BUILD_OBJECT(
                 {% for field in c.fields %}
                   '{{field.rust_name}}', {{field.sql_name}},
                 {% endfor %}
                 '_permission', _permission
               )
-            {%- if c.relationship.many -%}){%- endif -%}
+            {%- if c.relationship.many -%}), ARRAY[]::jsonb[]){%- endif %}
           FROM {{c.table}}
-          WHERE {{c.parent_field}} = $1 AND organization_id=$2
+          WHERE {{c.parent_field}} = tb.id {% if not global %} AND organization_id=$1{% endif %}
           {% if not c.relationship.many %}LIMIT 1{% endif %}
-        ) AS "{{c.full_list_sql_field_name}}",
+        ) AS "{{c.list_sql_field_name}}",
       {% endif %}
     {% endfor %}
 

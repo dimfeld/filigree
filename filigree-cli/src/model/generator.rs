@@ -316,7 +316,6 @@ impl<'a> ModelGenerator<'a> {
                     "full_get_sql_field_name": format!("{get_sql_field_name}{exc}: {get_field_type}"),
                     "list_field_type": list_field_type,
                     "list_sql_field_name": list_sql_field_name,
-                    "full_list_sql_field_name": format!("{list_sql_field_name}{exc}: {list_field_type}"),
                     "write_payload_field_name": has.update_with_parent.then(|| has.rust_child_field_name(&child_model)),
                     "struct_base": child_model.struct_name(),
                     "insertable": has.update_with_parent,

@@ -36,7 +36,7 @@ WHERE
 {% endif %}
 
 RETURNING
-{{ fields | filter(attribute='never_read', value=false) | map(attribute='sql_full_name') |  join(sep=', ') }},
-'owner' AS "_permission!: filigree::auth::ObjectPermission"
+{{ fields | filter(attribute='never_read', value=false) | map(attribute='sql_name') |  join(sep=', ') }},
+'owner' AS "_permission"
 
 {% endif %}
