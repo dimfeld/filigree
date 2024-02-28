@@ -1,3 +1,4 @@
+{% if has_any_endpoints -%}
 #![allow(unused_imports, dead_code)]
 use axum::{extract::{State, Path}, http::StatusCode, response::IntoResponse, routing};
 use axum_jsonschema::Json;
@@ -879,3 +880,4 @@ mod test {
     }
     {% endif %}
 }
+{% endif %}{# if has_any_endpoints #}
