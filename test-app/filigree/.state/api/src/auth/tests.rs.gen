@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use crate::tests::{start_app, BootstrappedData};
+use crate::tests::{start_app, start_app_with_options, BootstrappedData, TestAppOptions};
 
 pub fn extract_token_from_email(email: &filigree::email::Email) -> &str {
     email
@@ -102,7 +102,13 @@ async fn login_with_password_and_logout(db: sqlx::PgPool) {
 #[sqlx::test]
 #[cfg_attr(not(feature = "test_password"), ignore = "slow password test")]
 async fn login_with_nonexistent_email(db: sqlx::PgPool) {
-    let (app, BootstrappedData { admin_user, .. }) = start_app(db).await;
+    let (app, BootstrappedData { admin_user, .. }) = start_app_with_options(
+        db,
+        TestAppOptions {
+            obfuscate_errors: Some(true),
+        },
+    )
+    .await;
 
     let client = &app.client;
     let response = client
@@ -112,12 +118,31 @@ async fn login_with_nonexistent_email(db: sqlx::PgPool) {
         .await
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+    let data: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(
+        data,
+        json!({
+            "error": {
+                "message": "Unauthenticated",
+                "kind": "unauthenticated",
+                "details": null,
+            },
+            "form": { "email": "nobody@example.com" },
+        })
+    );
 }
 
 #[sqlx::test]
 #[cfg_attr(not(feature = "test_password"), ignore = "slow password test")]
 async fn login_with_wrong_password(db: sqlx::PgPool) {
-    let (app, BootstrappedData { admin_user, .. }) = start_app(db).await;
+    let (app, BootstrappedData { admin_user, .. }) = start_app_with_options(
+        db,
+        TestAppOptions {
+            obfuscate_errors: Some(true),
+        },
+    )
+    .await;
 
     let client = &app.client;
     let response = client
@@ -127,6 +152,19 @@ async fn login_with_wrong_password(db: sqlx::PgPool) {
         .await
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+    let data: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(
+        data,
+        json!({
+            "error": {
+                "message": "Unauthenticated",
+                "kind": "unauthenticated",
+                "details": null,
+            },
+            "form": { "email": admin_user.email },
+        })
+    );
 }
 
 #[sqlx::test]

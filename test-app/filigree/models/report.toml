@@ -16,3 +16,10 @@ nullable = true
 name = "ui"
 type = "json"
 user_access = "read"
+
+[[has]]
+model = "ReportSection"
+many = true
+populate_on_list = "id"
+populate_on_get = "data"
+update_with_parent = true

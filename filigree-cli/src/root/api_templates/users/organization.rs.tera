@@ -59,11 +59,13 @@ pub async fn create_new_organization(
         .change_context(Error::Db)?;
 
     let admin_role = role::RoleCreatePayload {
+        id: None,
         name: "Admin".to_string(),
         description: None,
     };
 
     let user_role = role::RoleCreatePayload {
+        id: None,
         name: "User".to_string(),
         description: None,
     };

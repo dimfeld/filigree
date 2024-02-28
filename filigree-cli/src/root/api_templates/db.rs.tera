@@ -111,6 +111,7 @@ async fn create_superuser_role(
 ) -> Result<RoleId, Error> {
     let superuser_role_id = RoleId::new();
     let superuser_role = role::RoleCreatePayload {
+        id: None,
         name: "Superuser".to_string(),
         description: None,
     };

@@ -176,9 +176,16 @@ pub struct Config {
     pub pg_pool: PgPool,
 
     pub cookie_configuration: SessionCookieBuilder,
+    /// When user sessions should expire.
     pub session_expiry: ExpiryStyle,
+    /// Flags controlling how new users are able to sign up or be invited.
     pub new_user_flags: filigree::server::NewUserFlags,
+    /// The email sending service to use.
     pub email_sender: filigree::email::services::EmailSender,
+
+    /// Whether or not to obfuscate details from internal server errors. If omitted,
+    /// the default is to obfuscate when env != "development".
+    pub obfuscate_errors: Option<bool>,
 
     pub hosts: Vec<String>,
     pub api_cors: filigree::auth::CorsSetting,
@@ -196,6 +203,7 @@ pub struct Config {
 /// Create the server and return it, ready to run.
 pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
     let production = config.env != "development" && !cfg!(debug_assertions);
+    let obfuscate_errors = config.obfuscate_errors.unwrap_or(production);
 
     let host_values = config
         .hosts
@@ -205,18 +213,25 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .change_context(Error::ServerStart)
         .attach_printable("Unable to parse hosts list")?;
 
-    let oauth_redirect_base = format!("{}/api/auth/oauth/login", config.oauth_redirect_url_base);
+    let oauth_redirect_base = format!("{}/auth/oauth/login", config.oauth_redirect_url_base);
+    let http_client = reqwest::Client::builder()
+        .user_agent("Filigree Test App")
+        .build()
+        .unwrap();
     let state = ServerState(Arc::new(ServerStateInner {
         production,
         filigree: Arc::new(FiligreeState {
-            http_client: reqwest::Client::new(),
+            http_client,
             db: config.pg_pool.clone(),
             email: config.email_sender,
             new_user_flags: config.new_user_flags,
             hosts: config.hosts,
             user_creator: Box::new(crate::users::users::UserCreator),
             oauth_providers: config.oauth_providers.unwrap_or_else(|| {
-                filigree::auth::oauth::providers::create_supported_providers(&oauth_redirect_base)
+                filigree::auth::oauth::providers::create_supported_providers(
+                    "",
+                    &oauth_redirect_base,
+                )
             }),
             session_backend: SessionBackend::new(
                 config.pg_pool.clone(),
@@ -254,7 +269,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             ServiceBuilder::new()
                 .layer(panic_handler(production))
                 .layer(ObfuscateErrorLayer::new(ObfuscateErrorLayerSettings {
-                    enabled: production,
+                    enabled: obfuscate_errors,
                     ..Default::default()
                 }))
                 .layer(

@@ -12,8 +12,8 @@
 
 {% macro permissions_lookup(actor_ids, organization, owner_perm, user_perm) %}
 SELECT
-  bool_or(permission in ('org_admin', {{owner_perm | to_sql}}) ) as is_owner,
-  bool_or(permission in ('org_admin', {{owner_perm | to_sql}}, {{user_perm | to_sql}}) ) as is_user
+  COALESCE(bool_or(permission in ('org_admin', {{owner_perm | to_sql}}) ), false) as is_owner,
+  COALESCE(bool_or(permission in ('org_admin', {{owner_perm | to_sql}}, {{user_perm | to_sql}}) ), false) as is_user
 FROM permissions
 WHERE
     organization_id = {{organization}}

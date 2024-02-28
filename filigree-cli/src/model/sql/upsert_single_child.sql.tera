@@ -1,0 +1,54 @@
+{% if belongs_to_field %}
+
+{% set p = 1 %}
+{% if owner_and_user_different_access %}
+-- $1 = has owner permission on the model
+{% set p = 2 %}
+{% endif %}
+
+INSERT INTO {{table}}
+(
+  id,
+  {% if not global %}
+  organization_id,
+  {% endif %}
+  {{ fields
+    | filter(attribute='owner_write', value=true)
+    | map(attribute='sql_name')
+    | join(sep=', ') }}
+)
+
+VALUES
+(
+  ${{p}}
+  {% if not global %}
+    {% set p = p + 1 %}
+    ,  ${{p}}
+  {% endif %}
+
+{% for field in fields | filter(attribute='owner_write', value=true) %}
+  , ${{loop.index + p}}
+{% endfor %}
+)
+
+ON CONFLICT({{belongs_to_field.sql_name}}) DO UPDATE
+SET
+  {% for field in fields | filter(attribute='owner_write', value=true) %}
+    {% if field.user_write %}
+      {{field.sql_name}} = EXCLUDED.{{field.sql_name}},
+    {% else %}
+      {{field.sql_name}} = CASE WHEN $1 THEN EXCLUDED.{{field.sql_name}} ELSE {{table}}.{{field.sql_name}} END,
+    {% endif %}
+  {% endfor %}
+  updated_at = now()
+WHERE
+{% if not global %}
+  {{table}}.organization_id = ${{p}}
+{% endif %}
+
+RETURNING
+{{ fields | filter(attribute='never_read', value=false) | map(attribute='sql_full_name') |  join(sep=', ') }},
+'owner' AS "_permission!: filigree::auth::ObjectPermission"
+
+
+{% endif %}

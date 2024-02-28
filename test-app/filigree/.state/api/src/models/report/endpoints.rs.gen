@@ -7,6 +7,9 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use axum_jsonschema::Json;
+use error_stack::ResultExt;
+use filigree::{auth::ObjectPermission, extract::FormOrJson};
+use tracing::{event, Level};
 
 use super::{
     queries, types::*, ReportId, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION,
@@ -14,6 +17,9 @@ use super::{
 };
 use crate::{
     auth::{has_any_permission, Authed},
+    models::report_section::{
+        ReportSection, ReportSectionCreatePayload, ReportSectionId, ReportSectionUpdatePayload,
+    },
     server::ServerState,
     Error,
 };
@@ -23,7 +29,8 @@ async fn get(
     auth: Authed,
     Path(id): Path<ReportId>,
 ) -> Result<impl IntoResponse, Error> {
-    let object = queries::get(&state.db, &auth, id).await?;
+    let object = queries::get_populated(&state.db, &auth, id).await?;
+
     Ok(Json(object))
 }
 
@@ -32,17 +39,34 @@ async fn list(
     auth: Authed,
     Query(qs): Query<queries::ListQueryFilters>,
 ) -> Result<impl IntoResponse, Error> {
-    let results = queries::list(&state.db, &auth, &qs).await?;
+    let results = queries::list_populated(&state.db, &auth, &qs).await?;
+
     Ok(Json(results))
 }
 
 async fn create(
     State(state): State<ServerState>,
     auth: Authed,
-    Json(payload): Json<ReportCreatePayload>,
+    FormOrJson(payload): FormOrJson<ReportCreatePayload>,
 ) -> Result<impl IntoResponse, Error> {
-    let result = queries::create(&state.db, &auth, &payload).await?;
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+    let result = queries::create(&mut *tx, &auth, &payload).await?;
 
+    if let Some(mut children) = payload.report_section {
+        if !children.is_empty() {
+            for child in children.iter_mut() {
+                child.id = Some(ReportSectionId::new());
+                child.report_id = result.id;
+            }
+
+            crate::models::report_section::queries::update_with_parent(
+                &mut *tx, &auth, true, result.id, &children,
+            )
+            .await?;
+        }
+    }
+
+    tx.commit().await.change_context(Error::Db)?;
     Ok((StatusCode::CREATED, Json(result)))
 }
 
@@ -50,15 +74,27 @@ async fn update(
     State(state): State<ServerState>,
     auth: Authed,
     Path(id): Path<ReportId>,
-    Json(payload): Json<ReportUpdatePayload>,
+    FormOrJson(payload): FormOrJson<ReportUpdatePayload>,
 ) -> Result<impl IntoResponse, Error> {
-    let updated = queries::update(&state.db, &auth, id, &payload).await?;
-    let status = if updated {
-        StatusCode::OK
-    } else {
-        StatusCode::NOT_FOUND
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+    let is_owner = queries::update(&mut *tx, &auth, id, &payload).await?;
+    let Some(is_owner) = is_owner else {
+        return Ok(StatusCode::NOT_FOUND);
     };
-    Ok(status)
+
+    if let Some(mut children) = payload.report_section {
+        for child in children.iter_mut() {
+            child.report_id = id;
+        }
+
+        crate::models::report_section::queries::update_with_parent(
+            &mut *tx, &auth, is_owner, id, &children,
+        )
+        .await?;
+    }
+
+    tx.commit().await.change_context(Error::Db)?;
+    Ok(StatusCode::OK)
 }
 
 async fn delete(
@@ -66,14 +102,76 @@ async fn delete(
     auth: Authed,
     Path(id): Path<ReportId>,
 ) -> Result<impl IntoResponse, Error> {
-    let deleted = queries::delete(&state.db, &auth, id).await?;
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
 
-    let status = if deleted {
-        StatusCode::OK
-    } else {
-        StatusCode::NOT_FOUND
-    };
-    Ok(status)
+    let deleted = queries::delete(&mut *tx, &auth, id).await?;
+
+    if !deleted {
+        return Ok(StatusCode::NOT_FOUND);
+    }
+
+    crate::models::report_section::queries::delete_all_children_of_parent(&mut *tx, &auth, id)
+        .await?;
+
+    tx.commit().await.change_context(Error::Db)?;
+    Ok(StatusCode::OK)
+}
+
+async fn list_child_report_section(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path(parent_id): Path<ReportId>,
+    Query(mut qs): Query<crate::models::report_section::queries::ListQueryFilters>,
+) -> Result<impl IntoResponse, Error> {
+    qs.report_id = vec![parent_id];
+
+    let object = crate::models::report_section::queries::list(&state.db, &auth, &qs).await?;
+
+    Ok(Json(object))
+}
+
+async fn create_child_report_section(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path(parent_id): Path<ReportId>,
+    FormOrJson(mut payload): FormOrJson<ReportSectionCreatePayload>,
+) -> Result<impl IntoResponse, Error> {
+    payload.report_id = parent_id;
+
+    let result = crate::models::report_section::queries::create(&state.db, &auth, &payload).await?;
+
+    Ok(Json(result))
+}
+
+async fn update_child_report_section(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path((parent_id, child_id)): Path<(ReportId, ReportSectionId)>,
+    FormOrJson(mut payload): FormOrJson<ReportSectionUpdatePayload>,
+) -> Result<impl IntoResponse, Error> {
+    payload.id = Some(child_id);
+    payload.report_id = parent_id;
+
+    let result = crate::models::report_section::queries::update_one_with_parent(
+        &state.db, &auth, true, // TODO get the right value here
+        parent_id, child_id, payload,
+    )
+    .await?;
+
+    Ok(Json(result))
+}
+
+async fn delete_child_report_section(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path((parent_id, child_id)): Path<(ReportId, ReportSectionId)>,
+) -> Result<impl IntoResponse, Error> {
+    crate::models::report_section::queries::delete_with_parent(
+        &state.db, &auth, parent_id, child_id,
+    )
+    .await?;
+
+    Ok(StatusCode::OK)
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {
@@ -104,6 +202,29 @@ pub fn create_routes() -> axum::Router<ServerState> {
             routing::delete(delete)
                 .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
         )
+        .route(
+            "/reports/:id/report_sections",
+            routing::get(list_child_report_section)
+                .route_layer(has_any_permission(vec![READ_PERMISSION, "org_admin"])),
+        )
+        .route(
+            "/reports/:id/report_sections",
+            routing::post(create_child_report_section)
+                .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
+        )
+        .route(
+            "/reports/:id/report_sections/:child_id",
+            routing::put(update_child_report_section).route_layer(has_any_permission(vec![
+                WRITE_PERMISSION,
+                OWNER_PERMISSION,
+                "org_admin",
+            ])),
+        )
+        .route(
+            "/reports/:id/report_sections/:child_id",
+            routing::delete(delete_child_report_section)
+                .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
+        )
 }
 
 #[cfg(test)]
@@ -112,25 +233,22 @@ mod test {
     use futures::{StreamExt, TryStreamExt};
     use tracing::{event, Level};
 
-    use super::*;
+    use super::{
+        super::testing::{make_create_payload, make_update_payload},
+        *,
+    };
     use crate::{
         models::organization::OrganizationId,
         tests::{start_app, BootstrappedData},
     };
-
-    fn make_create_payload(i: usize) -> ReportCreatePayload {
-        ReportCreatePayload {
-            title: format!("Test object {i}"),
-            description: (i > 1).then(|| format!("Test object {i}")),
-            ui: serde_json::json!({ "key": i }),
-        }
-    }
 
     async fn setup_test_objects(
         db: &sqlx::PgPool,
         organization_id: OrganizationId,
         count: usize,
     ) -> Vec<Report> {
+        // TODO if this model belongs_to another, then create the parent object for it
+
         futures::stream::iter(1..=count)
             .map(Ok)
             .and_then(|i| async move {
@@ -472,15 +590,7 @@ mod test {
 
         let added_objects = setup_test_objects(&pool, organization.id, 2).await;
 
-        let i = 20;
-        let update_payload = ReportUpdatePayload {
-            title: format!("Test object {i}"),
-
-            description: Some(format!("Test object {i}")),
-
-            ui: Some(serde_json::json!({ "key": i })),
-        };
-
+        let update_payload = make_update_payload(20);
         admin_user
             .client
             .put(&format!("reports/{}", added_objects[1].id))

@@ -13,3 +13,5 @@ build-test-app-and-db *FLAGS:
   cd filigree-cli && cargo build
   cd test-app && ../target/debug/filigree && (yes | sqlx database reset) && cargo test {{FLAGS}}
 
+build-web-types:
+  true

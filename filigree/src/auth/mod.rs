@@ -220,6 +220,33 @@ pub enum ObjectPermission {
     Owner,
 }
 
+impl ObjectPermission {
+    /// Create an ObjectPermission from a string, returning None if the value does not match.
+    pub fn from_str_infallible(perm: &str) -> Option<ObjectPermission> {
+        match perm {
+            "owner" => Some(ObjectPermission::Owner),
+            "read" => Some(ObjectPermission::Read),
+            "write" => Some(ObjectPermission::Write),
+            _ => None,
+        }
+    }
+
+    /// Return true if the permission is Write or Owner
+    pub fn can_write(&self) -> bool {
+        matches!(self, ObjectPermission::Write | ObjectPermission::Owner)
+    }
+
+    /// Return an error if this [ObjectPermission] does not allow writing. The permission_name
+    /// parameter is only used to return a better error message, and does not factor into the logic here.
+    pub fn must_be_writable(&self, permission_name: &'static str) -> Result<(), AuthError> {
+        if self.can_write() {
+            Ok(())
+        } else {
+            Err(AuthError::MissingPermission(Cow::Borrowed(permission_name)))
+        }
+    }
+}
+
 /// The result of a login, with an optional place to redirect to
 #[derive(Debug, Serialize)]
 pub struct LoginResult {

@@ -1,11 +1,13 @@
+#![allow(unused_imports, unused_variables, dead_code)]
 use error_stack::ResultExt;
 use filigree::{
+    auth::ObjectPermission,
     errors::OrderByError,
-    sql::{BindingOperator, FilterBuilder}
+    sql::{BindingOperator, FilterBuilder, ValuesBuilder}
 };
 use serde::Deserialize;
-use sqlx::{PgExecutor, query_file, query_file_as};
-use tracing::{event, Level};
+use sqlx::{PgConnection, PgExecutor, postgres::PgRow, query_file, query_file_as, query_file_scalar};
+use tracing::{event, instrument, Level};
 
 use std::str::FromStr;
 
@@ -17,10 +19,12 @@ use super::types::*;
 
 use crate::auth::AuthInfo;
 use crate::Error;
+{{imports}}
 
 type QueryAs<'q, T> = sqlx::query::QueryAs<'q, sqlx::Postgres, T, <sqlx::Postgres as sqlx::database::HasArguments<'q>>::Arguments>;
 
 /// Get a {{model_name}} from the database
+#[instrument(skip(db))]
 pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let object = query_file_as!({{struct_base}}, "{{dir}}/select_one.sql",
@@ -35,6 +39,25 @@ pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> R
 
     Ok(object)
 }
+
+{% if can_populate_get %}
+/// Get a populated {{model_name}} from the database
+#[instrument(skip(db))]
+pub async fn get_populated(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}PopulatedGet, error_stack::Report<Error>> {
+    let actor_ids = auth.actor_ids();
+    let object = query_file_as!({{struct_base}}PopulatedGet, "{{dir}}/select_one_populated.sql",
+        id.as_uuid(),
+        auth.organization_id.as_uuid(),
+        &actor_ids
+        )
+        .fetch_optional(db)
+        .await
+        .change_context(Error::Db)?
+        .ok_or(Error::NotFound("{{model_name}}"))?;
+
+    Ok(object)
+}
+{% endif %}
 
 #[derive(Debug, Default)]
 enum OrderByField {
@@ -190,22 +213,54 @@ impl ListQueryFilters {
     }
 }
 
-pub async fn list(db: impl PgExecutor<'_>, auth: &AuthInfo, filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}>, error_stack::Report<Error>> {
+#[instrument(skip(db))]
+pub async fn list(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}>, error_stack::Report<Error>> {
+
     let q = include_str!("list.sql");
+    list_internal(q, db, auth, filters).await
+}
+
+{% if can_populate_list %}
+#[instrument(skip(db))]
+pub async fn list_populated(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}PopulatedList>, error_stack::Report<Error>> {
+
+    let q = include_str!("list_populated.sql");
+    list_internal(q, db, auth, filters).await
+}
+{% endif %}
+
+async fn list_internal<T>(
+    query_template: &str,
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    filters: &ListQueryFilters)
+-> Result<Vec<T>, error_stack::Report<Error>>
+where
+    T: for<'r> sqlx::FromRow<'r, PgRow> + Send + Unpin,
+{
 
     let (descending, order_by_field) = parse_order_by(filters.order_by.as_deref().unwrap_or("{{full_default_sort_field}}"))
         .change_context(Error::Filter)?;
     let order_direction = if descending { "DESC" } else { "ASC" };
 
-    let q = q.replace("__insertion_point_order_by", &format!("{} {}", order_by_field.as_str(), order_direction));
+    let q = query_template.replace("__insertion_point_order_by", &format!("{} {}", order_by_field.as_str(), order_direction));
     {% if has_filterable %}
         let q = q.replace("__insertion_point_filters", &filters.build_where_clause());
     {% endif %}
-    let mut query = sqlx::query_as::<_, {{struct_base}}>(q.as_str());
+    let mut query = sqlx::query_as::<_, T>(q.as_str());
 
     let actor_ids = auth.actor_ids();
     event!(Level::DEBUG, organization_id=?auth.organization_id, actor_ids=?actor_ids);
-    query = query.bind(&auth.organization_id)
+    query = query
+        {% if not global %}
+        .bind(&auth.organization_id)
+        {% endif %}
         .bind(&actor_ids);
 
     query = filters.bind_to_query(query);
@@ -218,6 +273,7 @@ pub async fn list(db: impl PgExecutor<'_>, auth: &AuthInfo, filters: &ListQueryF
     Ok(results)
 }
 
+/// Create a new {{struct_base}} in the database.
 pub async fn create(db: impl PgExecutor<'_>, auth: &AuthInfo, payload: &{{struct_base}}CreatePayload) -> Result<{{struct_base}}, error_stack::Report<Error>> {
     // TODO create permissions auth check
     let id = {{id_type}}::new();
@@ -225,6 +281,7 @@ pub async fn create(db: impl PgExecutor<'_>, auth: &AuthInfo, payload: &{{struct
 }
 
 /// Create a new {{struct_base}} in the database, allowing the ID to be explicitly specified.
+#[instrument(skip(db))]
 pub async fn create_raw(
     db: impl PgExecutor<'_>,
     id: {{id_type}},
@@ -251,9 +308,15 @@ pub async fn create_raw(
     Ok(result)
 }
 
-pub async fn update(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}, payload: &{{ struct_base }}UpdatePayload) -> Result<bool, error_stack::Report<Error>> {
+#[instrument(skip(db))]
+pub async fn update(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    id: {{id_type}},
+    payload: &{{ struct_base }}UpdatePayload)
+-> Result<Option<bool>, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
-    let result = query_file!("{{dir}}/update.sql",
+    let result = query_file_scalar!("{{dir}}/update.sql",
         id.as_uuid(),
         auth.organization_id.as_uuid(),
         &actor_ids,
@@ -265,12 +328,14 @@ pub async fn update(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}, p
             {%- endif -%}
         {% endfor %}
         )
-        .execute(db)
+        .fetch_optional(db)
         .await
         .change_context(Error::Db)?;
-    Ok(result.rows_affected() > 0)
+
+    Ok(result)
 }
 
+#[instrument(skip(db))]
 pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<bool, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let result = query_file!("{{dir}}/delete.sql",
@@ -283,3 +348,215 @@ pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -
         .change_context(Error::Db)?;
     Ok(result.rows_affected() > 0)
 }
+
+#[instrument(skip(db))]
+pub async fn lookup_object_permissions(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    #[allow(unused_variables)]
+    id: {{id_type}},
+) -> Result<Option<ObjectPermission>, error_stack::Report<Error>> {
+    let actor_ids = auth.actor_ids();
+    let result = query_file_scalar!(
+        "{{dir}}/lookup_object_permissions.sql",
+        auth.organization_id.as_uuid(),
+        &actor_ids,
+        {% if auth_scope == "object" %}
+        id.as_uuid(),
+        {% endif %}
+        )
+        .fetch_one(db)
+        .await
+        .change_context(Error::Db)?;
+
+    let perm = result.and_then(|r| ObjectPermission::from_str_infallible(&r));
+    Ok(perm)
+}
+
+{% if belongs_to_field %}
+{% if belongs_to_field.unique %}
+/// Update the child of the given parent.
+#[instrument(skip(db))]
+pub async fn update_with_parent(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    is_owner: bool,
+    parent_id: {{belongs_to_field.rust_type}},
+    payload: &Option<{{ struct_base }}UpdatePayload>)
+    -> Result<Option<{{struct_base}}>, error_stack::Report<Error>> {
+
+    if let Some(payload) = payload.as_ref() {
+        let result = query_file_as!({{struct_base}}, "{{dir}}/upsert_single_child.sql",
+            {% if owner_and_user_different_access %}
+            is_owner,
+            {% endif %}
+            {{id_type}}::new() as _,
+            {% if not global -%}
+            auth.organization_id.as_uuid(),
+            {%- endif %}
+            {% for field in fields | filter(attribute="owner_write", value=true) %}
+                {%- if field.nullable -%}
+                    payload.{{field.rust_name}}.as_ref(){% if field.is_custom_rust_type %} as _{% endif %},
+                {%- else -%}
+                    &payload.{{field.rust_name}}{% if field.is_custom_rust_type %} as _{% endif %},
+                {%- endif -%}
+            {% endfor %}
+            )
+            .fetch_one(db)
+            .await
+            .change_context(Error::Db)?;
+        Ok(Some(result))
+    } else {
+        delete_all_children_of_parent(db, auth, parent_id).await?;
+        Ok(None)
+    }
+}
+{% else %}
+#[instrument(skip(db))]
+pub async fn update_one_with_parent(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    is_owner: bool,
+    parent_id: {{belongs_to_field.rust_type}},
+    id: {{id_type}},
+    mut payload: {{ struct_base }}UpdatePayload
+    ) -> Result<bool, error_stack::Report<Error>> {
+
+    payload.{{belongs_to_field.name}} = parent_id;
+
+    let actor_ids = auth.actor_ids();
+    let result = query_file!("{{dir}}/update_one_with_parent.sql",
+        id.as_uuid(),
+        parent_id.as_uuid(),
+        auth.organization_id.as_uuid(),
+        &actor_ids,
+        {% for field in fields | filter(attribute="owner_write_non_parent", value=true) %}
+            {%- if field.nullable -%}
+                payload.{{field.rust_name}}.as_ref(){% if field.is_custom_rust_type %} as _{% endif %},
+            {%- else -%}
+                &payload.{{field.rust_name}} as _,
+            {%- endif -%}
+        {% endfor %}
+        )
+        .execute(db)
+        .await
+        .change_context(Error::Db)?;
+
+    Ok(result.rows_affected() > 0)
+}
+
+/// Update the children of the given parent.
+#[instrument(skip(db))]
+pub async fn update_with_parent(
+    db: &mut PgConnection,
+    auth: &AuthInfo,
+    is_owner: bool,
+    parent_id: {{belongs_to_field.rust_type}},
+    payload: &[{{ struct_base }}UpdatePayload])
+    -> Result<Vec<{{struct_base}}>, error_stack::Report<Error>> {
+
+    if payload.is_empty() {
+        delete_all_children_of_parent(db, auth, parent_id).await?;
+        Ok(Vec::new())
+    } else {
+        // First, we upsert the existing children.
+        let q = include_str!("upsert_children.sql");
+        let bindings = ValuesBuilder{
+            first_parameter: 4,
+            num_values: payload.len(),
+            num_columns: 2 + {{ fields | filter(attribute="owner_write", value=true) | length }},
+        };
+        let q = q.replace("__insertion_point_insert_values", &bindings.to_string());
+
+        let mut query = sqlx::query_as::<_, {{struct_base}}>(q.as_str());
+
+        query = query
+            .bind(is_owner)
+            {%if not global %}
+            .bind(auth.organization_id.as_uuid())
+            {%endif %}
+            .bind(parent_id.as_uuid());
+
+        for p in payload {
+            let id = p.id.unwrap_or_else(|| {{id_type}}::new());
+            query = query
+                .bind(id)
+                .bind(auth.organization_id)
+                {% for field in fields | filter(attribute="owner_write", value=true) %}
+                .bind(
+                {%- if field.nullable -%}
+                    p.{{field.rust_name}}.as_ref(),
+                {%- else -%}
+                    &p.{{field.rust_name}},
+                {%- endif -%}
+                )
+                {% endfor %}
+        }
+
+        let results = query
+            .fetch_all(&mut *db)
+            .await
+            .change_context(Error::Db)?;
+
+        // Delete any of the children that were not sent in.
+        let ids = results.iter().map(|o| o.id.as_uuid().clone()).collect::<Vec<_>>();
+        query_file!("{{dir}}/delete_removed_children.sql",
+            {%if not global %}
+            auth.organization_id.as_uuid(),
+            {% endif %}
+            parent_id.as_uuid(),
+            &ids
+            )
+            .execute(db)
+            .await
+            .change_context(Error::Db)?;
+
+        Ok(results)
+    }
+}
+
+/// Delete a child object, making sure that its parent ID matches.
+#[instrument(skip(db))]
+pub async fn delete_with_parent(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    parent_id: {{belongs_to_field.rust_type}},
+    child_id: {{id_type}})
+    -> Result<(), error_stack::Report<Error>> {
+
+    query_file!("{{dir}}/delete_with_parent.sql",
+        {%if not global %}
+        auth.organization_id.as_uuid(),
+        {% endif %}
+        parent_id.as_uuid(),
+        child_id.as_uuid()
+        )
+        .execute(db)
+        .await
+        .change_context(Error::Db)?;
+    Ok(())
+}
+{% endif %}
+
+/// Delete all children of the given parent. This function does not do permissions checks.
+#[instrument(skip(db))]
+pub async fn delete_all_children_of_parent(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    parent_id: {{belongs_to_field.rust_type}})
+    -> Result<(), error_stack::Report<Error>> {
+
+    query_file!("{{dir}}/delete_all_children.sql",
+        {%if not global %}
+        auth.organization_id.as_uuid(),
+        {% endif %}
+        parent_id.as_uuid()
+        )
+        .execute(db)
+        .await
+        .change_context(Error::Db)?;
+    Ok(())
+}
+
+{% endif %}
+

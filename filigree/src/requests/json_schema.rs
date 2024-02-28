@@ -1,3 +1,4 @@
+//! Code for validating requests against JSON schemas
 // Schema caching code in this file originally inspired by [axum-jsonschema](https://github.com/tamasfe/aide/blob/master/crates/axum-jsonschema/src/lib.rs).
 
 use std::{

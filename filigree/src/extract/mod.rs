@@ -19,15 +19,24 @@ mod multipart;
 pub use form_or_json::*;
 pub use multipart::*;
 
+/// Types of errors that the extraction middleware can return
 #[derive(Debug)]
 pub enum Rejection {
+    /// Encountered validation errors on a request payload
     Validation((serde_json::Value, SchemaErrors)),
+    /// Failed while reading a request body
     ReadBody(axum::Error),
+    /// Failed to deserialize a JSON payload
     Json(JsonRejection),
+    /// Failed to deserialize a Form payload
     Form(FormRejection),
+    /// Failed to deserialize a Multipart payload
     Multipart(MultipartRejection),
+    /// Failed to deserialize a field in a Multipart payload
     MultipartField(MultipartError),
+    /// Failed to deserialize a JSON payload
     Serde(serde_path_to_error::Error<serde_json::Error>),
+    /// The client passed a content-type header which we don't support
     UnsupportedContentType,
 }
 
@@ -67,7 +76,7 @@ impl IntoResponse for Rejection {
             )
                 .into_response(),
 
-            Rejection::ReadBody(inner) => (
+            Rejection::ReadBody(_) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponseData::new(
                     "request_terminated_early",

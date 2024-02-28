@@ -88,3 +88,61 @@ impl<'a> Display for FilterBuilder<'a> {
         Ok(())
     }
 }
+
+/// Build a series of VALUES entries for a SQL INSERT query
+pub struct ValuesBuilder {
+    /// The index of the first binding to generate
+    pub first_parameter: usize,
+    /// The number of rows to generate
+    pub num_values: usize,
+    /// The number of columns in each row
+    pub num_columns: usize,
+}
+
+impl Display for ValuesBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut binding = self.first_parameter;
+        for i in 0..self.num_values {
+            if i > 0 {
+                f.write_str(",\n")?;
+            }
+
+            f.write_char('(')?;
+            for j in 0..self.num_columns {
+                if j > 0 {
+                    f.write_char(',')?;
+                }
+
+                f.write_char('$')?;
+                write!(f, "{}", binding)?;
+                binding += 1;
+            }
+            f.write_char(')')?;
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    mod values_builder {
+        #[test]
+        #[ignore = "todo"]
+        fn single_row() {
+            todo!()
+        }
+
+        #[test]
+        #[ignore = "todo"]
+        fn single_column() {
+            todo!()
+        }
+
+        #[test]
+        #[ignore = "todo"]
+        fn multiple_rows() {
+            todo!()
+        }
+    }
+}

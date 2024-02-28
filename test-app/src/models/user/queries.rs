@@ -1,13 +1,17 @@
+#![allow(unused_imports, unused_variables, dead_code)]
 use std::str::FromStr;
 
 use error_stack::ResultExt;
 use filigree::{
+    auth::ObjectPermission,
     errors::OrderByError,
-    sql::{BindingOperator, FilterBuilder},
+    sql::{BindingOperator, FilterBuilder, ValuesBuilder},
 };
 use serde::Deserialize;
-use sqlx::{query_file, query_file_as, PgExecutor};
-use tracing::{event, Level};
+use sqlx::{
+    postgres::PgRow, query_file, query_file_as, query_file_scalar, PgConnection, PgExecutor,
+};
+use tracing::{event, instrument, Level};
 
 use super::{types::*, UserId};
 use crate::{auth::AuthInfo, models::organization::OrganizationId, Error};
@@ -20,6 +24,7 @@ type QueryAs<'q, T> = sqlx::query::QueryAs<
 >;
 
 /// Get a User from the database
+#[instrument(skip(db))]
 pub async fn get(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
@@ -175,26 +180,38 @@ impl ListQueryFilters {
     }
 }
 
+#[instrument(skip(db))]
 pub async fn list(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     filters: &ListQueryFilters,
 ) -> Result<Vec<User>, error_stack::Report<Error>> {
     let q = include_str!("list.sql");
+    list_internal(q, db, auth, filters).await
+}
 
+async fn list_internal<T>(
+    query_template: &str,
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    filters: &ListQueryFilters,
+) -> Result<Vec<T>, error_stack::Report<Error>>
+where
+    T: for<'r> sqlx::FromRow<'r, PgRow> + Send + Unpin,
+{
     let (descending, order_by_field) =
         parse_order_by(filters.order_by.as_deref().unwrap_or("name"))
             .change_context(Error::Filter)?;
     let order_direction = if descending { "DESC" } else { "ASC" };
 
-    let q = q.replace(
+    let q = query_template.replace(
         "__insertion_point_order_by",
         &format!("{} {}", order_by_field.as_str(), order_direction),
     );
 
     let q = q.replace("__insertion_point_filters", &filters.build_where_clause());
 
-    let mut query = sqlx::query_as::<_, User>(q.as_str());
+    let mut query = sqlx::query_as::<_, T>(q.as_str());
 
     let actor_ids = auth.actor_ids();
     event!(Level::DEBUG, organization_id=?auth.organization_id, actor_ids=?actor_ids);
@@ -207,6 +224,7 @@ pub async fn list(
     Ok(results)
 }
 
+/// Create a new User in the database.
 pub async fn create(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
@@ -218,6 +236,7 @@ pub async fn create(
 }
 
 /// Create a new User in the database, allowing the ID to be explicitly specified.
+#[instrument(skip(db))]
 pub async fn create_raw(
     db: impl PgExecutor<'_>,
     id: UserId,
@@ -240,14 +259,15 @@ pub async fn create_raw(
     Ok(result)
 }
 
+#[instrument(skip(db))]
 pub async fn update(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: UserId,
     payload: &UserUpdatePayload,
-) -> Result<bool, error_stack::Report<Error>> {
+) -> Result<Option<bool>, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
-    let result = query_file!(
+    let result = query_file_scalar!(
         "src/models/user/update.sql",
         id.as_uuid(),
         auth.organization_id.as_uuid(),
@@ -256,12 +276,14 @@ pub async fn update(
         payload.email.as_ref(),
         payload.avatar_url.as_ref(),
     )
-    .execute(db)
+    .fetch_optional(db)
     .await
     .change_context(Error::Db)?;
-    Ok(result.rows_affected() > 0)
+
+    Ok(result)
 }
 
+#[instrument(skip(db))]
 pub async fn delete(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
@@ -278,4 +300,24 @@ pub async fn delete(
     .await
     .change_context(Error::Db)?;
     Ok(result.rows_affected() > 0)
+}
+
+#[instrument(skip(db))]
+pub async fn lookup_object_permissions(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    #[allow(unused_variables)] id: UserId,
+) -> Result<Option<ObjectPermission>, error_stack::Report<Error>> {
+    let actor_ids = auth.actor_ids();
+    let result = query_file_scalar!(
+        "src/models/user/lookup_object_permissions.sql",
+        auth.organization_id.as_uuid(),
+        &actor_ids,
+    )
+    .fetch_one(db)
+    .await
+    .change_context(Error::Db)?;
+
+    let perm = result.and_then(|r| ObjectPermission::from_str_infallible(&r));
+    Ok(perm)
 }

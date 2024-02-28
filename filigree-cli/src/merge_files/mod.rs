@@ -33,7 +33,9 @@ impl MergeTracker {
 
         let output_path = self.output_path.join(&path);
 
-        let previous_generation = std::fs::read_to_string(&base_generated_path).ok();
+        let previous_generation_result = std::fs::read_to_string(&base_generated_path);
+        let gen_exists = previous_generation_result.is_ok();
+        let previous_generation = previous_generation_result.ok();
         let users_file = std::fs::read_to_string(&output_path).ok();
 
         let merged = generate_merged_output(
@@ -42,8 +44,19 @@ impl MergeTracker {
             users_file.as_deref(),
         );
 
+        let empty = new_output.trim().is_empty();
+        // Can remove the user file if it hadn't changed since the previous generation, and this
+        // one is empty.
+        let remove_user_file = users_file
+            .as_ref()
+            .zip(previous_generation.as_ref())
+            .map(|u| empty && u.0.trim() == u.1.trim())
+            .unwrap_or(false);
         let generation_changed = previous_generation.map(|p| p != new_output).unwrap_or(true);
-        let output_changed = users_file.map(|u| u != merged.output).unwrap_or(true);
+        let output_changed = users_file
+            .as_ref()
+            .map(|u| u.trim() != merged.output.trim())
+            .unwrap_or(!empty);
 
         MergeFile {
             generation_changed,
@@ -52,6 +65,9 @@ impl MergeTracker {
             output_path,
             output_relative_path: path,
             this_generation: new_output,
+            gen_exists,
+            empty,
+            remove_user_file,
             merged,
         }
     }
@@ -108,16 +124,31 @@ pub struct MergeFile {
 
     pub this_generation: String,
     pub merged: MergeOutput,
+    /// If true, the previous generation file exists.
+    pub gen_exists: bool,
+    /// If true, the generated file was empty after trimming whitespace.
+    pub empty: bool,
+    /// If true, the generated file is empty, and the user's file has not been customized at all,
+    /// so it's safe to remove it.
+    pub remove_user_file: bool,
 }
 
 impl MergeFile {
     pub fn write(&self) -> Result<(), Report<std::io::Error>> {
-        if self.generation_changed {
+        if self.empty {
+            if self.gen_exists {
+                std::fs::remove_file(&self.base_generated_path).ok();
+            }
+        } else if self.generation_changed {
             std::fs::write(&self.base_generated_path, self.this_generation.as_bytes())
                 .attach_printable_lazy(|| self.base_generated_path.display().to_string())?;
         }
 
-        if self.output_changed {
+        if self.remove_user_file {
+            println!("Removing file {}", self.output_relative_path.display());
+            std::fs::remove_file(&self.output_path)
+                .attach_printable_lazy(|| self.output_path.display().to_string())?;
+        } else if self.output_changed {
             println!("Writing file {}", self.output_relative_path.display());
             std::fs::write(&self.output_path, self.merged.output.as_bytes())
                 .attach_printable_lazy(|| self.output_path.display().to_string())?;

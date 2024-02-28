@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use convert_case::{Case, Casing};
 use error_stack::Report;
@@ -14,7 +14,7 @@ use crate::{
 pub fn render_files(
     crate_name: &str,
     config: &Config,
-    models: &[(String, serde_json::Value)],
+    models: &HashMap<String, tera::Context>,
     renderer: &Renderer,
 ) -> Result<Vec<RenderedFile>, Report<Error>> {
     let mut context = tera::Context::new();
@@ -46,27 +46,21 @@ pub fn render_files(
     context.insert("users", &config.users);
     context.insert("db", &config.database);
 
-    let user_model = &models
-        .iter()
-        .find(|(name, _)| name == "User")
-        .expect("User model not found")
-        .1;
-    let role_model = &models
-        .iter()
-        .find(|(name, _)| name == "Role")
-        .expect("Role model not found")
-        .1;
-    let org_model = &models
-        .iter()
-        .find(|(name, _)| name == "Organization")
-        .expect("Organization model not found")
-        .1;
+    let user_model = models.get("User").expect("User model not found");
+    let role_model = models.get("Role").expect("Role model not found");
+    let org_model = models
+        .get("Organization")
+        .expect("Organization model not found");
 
-    let all_models = models.iter().map(|(_, value)| value).collect::<Vec<_>>();
+    let all_models = models
+        .iter()
+        .sorted_by(|(m1, _), (m2, _)| m1.cmp(m2))
+        .map(|(_, value)| value.clone().into_json())
+        .collect::<Vec<_>>();
     context.insert("models", &all_models);
-    context.insert("user_model", user_model);
-    context.insert("role_model", role_model);
-    context.insert("org_model", org_model);
+    context.insert("user_model", &user_model.clone().into_json());
+    context.insert("role_model", &role_model.clone().into_json());
+    context.insert("org_model", &org_model.clone().into_json());
 
     let base_path = PathBuf::from("src");
 

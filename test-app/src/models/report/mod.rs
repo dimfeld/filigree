@@ -1,5 +1,8 @@
 pub mod endpoints;
+
 pub mod queries;
+#[cfg(test)]
+pub mod testing;
 pub mod types;
 
 pub use types::*;

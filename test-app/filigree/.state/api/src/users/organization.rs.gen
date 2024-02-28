@@ -14,14 +14,24 @@ use crate::{
 
 const ADMIN_DEFAULT_PERMISSIONS: &[&str] = &["org_admin"];
 const USER_DEFAULT_PERMISSIONS: &[&str] = &[
-    "User::read",
-    "User::write",
+    "Comment::read",
+    "Comment::write",
     "Organization::read",
     "Organization::write",
-    "Role::read",
-    "Role::write",
+    "Poll::read",
+    "Poll::write",
+    "Post::read",
+    "Post::write",
+    "Reaction::read",
+    "Reaction::write",
     "Report::read",
     "Report::write",
+    "ReportSection::read",
+    "ReportSection::write",
+    "Role::read",
+    "Role::write",
+    "User::read",
+    "User::write",
 ];
 
 pub struct CreatedOrganization {
@@ -63,11 +73,13 @@ pub async fn create_new_organization(
         .change_context(Error::Db)?;
 
     let admin_role = role::RoleCreatePayload {
+        id: None,
         name: "Admin".to_string(),
         description: None,
     };
 
     let user_role = role::RoleCreatePayload {
+        id: None,
         name: "User".to_string(),
         description: None,
     };

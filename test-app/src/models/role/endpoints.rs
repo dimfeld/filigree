@@ -7,6 +7,9 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use axum_jsonschema::Json;
+use error_stack::ResultExt;
+use filigree::{auth::ObjectPermission, extract::FormOrJson};
+use tracing::{event, Level};
 
 use super::{
     queries, types::*, RoleId, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION,
@@ -24,6 +27,7 @@ async fn get(
     Path(id): Path<RoleId>,
 ) -> Result<impl IntoResponse, Error> {
     let object = queries::get(&state.db, &auth, id).await?;
+
     Ok(Json(object))
 }
 
@@ -33,16 +37,19 @@ async fn list(
     Query(qs): Query<queries::ListQueryFilters>,
 ) -> Result<impl IntoResponse, Error> {
     let results = queries::list(&state.db, &auth, &qs).await?;
+
     Ok(Json(results))
 }
 
 async fn create(
     State(state): State<ServerState>,
     auth: Authed,
-    Json(payload): Json<RoleCreatePayload>,
+    FormOrJson(payload): FormOrJson<RoleCreatePayload>,
 ) -> Result<impl IntoResponse, Error> {
-    let result = queries::create(&state.db, &auth, &payload).await?;
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+    let result = queries::create(&mut *tx, &auth, &payload).await?;
 
+    tx.commit().await.change_context(Error::Db)?;
     Ok((StatusCode::CREATED, Json(result)))
 }
 
@@ -50,15 +57,14 @@ async fn update(
     State(state): State<ServerState>,
     auth: Authed,
     Path(id): Path<RoleId>,
-    Json(payload): Json<RoleUpdatePayload>,
+    FormOrJson(payload): FormOrJson<RoleUpdatePayload>,
 ) -> Result<impl IntoResponse, Error> {
-    let updated = queries::update(&state.db, &auth, id, &payload).await?;
-    let status = if updated {
-        StatusCode::OK
+    let result = queries::update(&state.db, &auth, id, &payload).await?;
+    if result.is_none() {
+        Ok(StatusCode::NOT_FOUND)
     } else {
-        StatusCode::NOT_FOUND
-    };
-    Ok(status)
+        Ok(StatusCode::OK)
+    }
 }
 
 async fn delete(
@@ -66,14 +72,16 @@ async fn delete(
     auth: Authed,
     Path(id): Path<RoleId>,
 ) -> Result<impl IntoResponse, Error> {
-    let deleted = queries::delete(&state.db, &auth, id).await?;
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
 
-    let status = if deleted {
-        StatusCode::OK
-    } else {
-        StatusCode::NOT_FOUND
-    };
-    Ok(status)
+    let deleted = queries::delete(&mut *tx, &auth, id).await?;
+
+    if !deleted {
+        return Ok(StatusCode::NOT_FOUND);
+    }
+
+    tx.commit().await.change_context(Error::Db)?;
+    Ok(StatusCode::OK)
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {
@@ -112,24 +120,22 @@ mod test {
     use futures::{StreamExt, TryStreamExt};
     use tracing::{event, Level};
 
-    use super::*;
+    use super::{
+        super::testing::{make_create_payload, make_update_payload},
+        *,
+    };
     use crate::{
         models::organization::OrganizationId,
         tests::{start_app, BootstrappedData},
     };
-
-    fn make_create_payload(i: usize) -> RoleCreatePayload {
-        RoleCreatePayload {
-            name: format!("Test object {i}"),
-            description: (i > 1).then(|| format!("Test object {i}")),
-        }
-    }
 
     async fn setup_test_objects(
         db: &sqlx::PgPool,
         organization_id: OrganizationId,
         count: usize,
     ) -> Vec<Role> {
+        // TODO if this model belongs_to another, then create the parent object for it
+
         futures::stream::iter(1..=count)
             .map(Ok)
             .and_then(|i| async move {
@@ -474,13 +480,7 @@ mod test {
 
         let added_objects = setup_test_objects(&pool, organization.id, 2).await;
 
-        let i = 20;
-        let update_payload = RoleUpdatePayload {
-            name: format!("Test object {i}"),
-
-            description: Some(format!("Test object {i}")),
-        };
-
+        let update_payload = make_update_payload(20);
         admin_user
             .client
             .put(&format!("roles/{}", added_objects[1].id))

@@ -64,6 +64,9 @@ pub struct ModelField {
 
     /// A field in another model that this field references. This sets up a foreign
     /// key in the SQL definition.
+    ///
+    /// For true parent-child relationships, you may prefer to use `has` and `belongs_to` in the
+    /// model definitions.
     pub references: Option<ModelFieldReference>,
 
     /// Fields such as updated_at which are fixed for each model and can not be updated.
@@ -117,10 +120,13 @@ impl ModelField {
 
     pub fn qualified_sql_field_name(&self) -> String {
         let field_name = self.sql_field_name();
+        let rust_name = self.rust_field_name();
         if let Some(rust_type) = &self.rust_type {
             // If the type is different from the default SQL type, specify it explicitly.
             // Don't add Option like self.rust_type() does because sqlx will do that itself.
-            format!(r##"{field_name} as "{field_name}: {rust_type}""##)
+            format!(r##"{field_name} as "{rust_name}: {rust_type}""##)
+        } else if rust_name != field_name {
+            format!(r##"{field_name} as "{rust_name}""##)
         } else {
             field_name
         }
@@ -177,11 +183,23 @@ impl ModelField {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelFieldReference {
-    table: String,
-    field: String,
-    on_delete: Option<ReferentialAction>,
-    on_update: Option<ReferentialAction>,
-    deferrable: Option<Deferrable>,
+    pub table: String,
+    pub field: String,
+    pub on_delete: Option<ReferentialAction>,
+    pub on_update: Option<ReferentialAction>,
+    pub deferrable: Option<Deferrable>,
+
+    pub populate: Option<ReferencePopulation>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ReferencePopulation {
+    pub on_get: bool,
+    pub on_list: bool,
+    /// The name of the structure member in which the populated data will be stored.
+    /// If not specified, the name of the referencing field plus "_data" will be used.
+    pub field_name: Option<String>,
+    pub model: String,
 }
 
 impl ModelFieldReference {
@@ -196,6 +214,7 @@ impl ModelFieldReference {
             on_delete,
             on_update: None,
             deferrable: None,
+            populate: None,
         }
     }
 

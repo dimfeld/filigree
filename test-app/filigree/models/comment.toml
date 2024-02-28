@@ -1,0 +1,9 @@
+name = "Comment"
+id_prefix = "cmt"
+endpoints = true
+belongs_to = "Post"
+
+[[fields]]
+name = "body"
+type = "text"
+

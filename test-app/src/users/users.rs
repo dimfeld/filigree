@@ -4,6 +4,7 @@ use axum_jsonschema::Json;
 use error_stack::{Report, ResultExt};
 use filigree::{
     auth::password::{new_hash, HashedPassword},
+    extract::FormOrJson,
     users::{
         organization::add_user_to_organization,
         roles::add_default_role_to_user,
@@ -22,6 +23,8 @@ use crate::{
     Error,
 };
 
+/// Create a new user, with the given password. This only creates the user object, and
+/// does not add any entries to other related tables such as email_logins or organization_members.
 pub async fn create_new_user_with_plaintext_password(
     db: impl PgExecutor<'_>,
     user_id: UserId,
@@ -29,20 +32,21 @@ pub async fn create_new_user_with_plaintext_password(
     payload: UserCreatePayload,
     password_plaintext: String,
 ) -> Result<User, Report<Error>> {
-    let password_hash = filigree::auth::password::new_hash(password_plaintext)
-        .await
-        .change_context(Error::AuthSubsystem)?;
+    let password_hash = if password_plaintext.is_empty() {
+        let hash = filigree::auth::password::new_hash(password_plaintext)
+            .await
+            .change_context(Error::AuthSubsystem)?;
+        Some(hash)
+    } else {
+        None
+    };
 
-    create_new_user_with_prehashed_password(
-        db,
-        user_id,
-        organization_id,
-        payload,
-        Some(password_hash),
-    )
-    .await
+    create_new_user_with_prehashed_password(db, user_id, organization_id, payload, password_hash)
+        .await
 }
 
+/// Create a new user, optionally with the given password. This only creates the user object, and
+/// does not add any entries to other related tables such as email_logins or organization_members.
 pub async fn create_new_user_with_prehashed_password(
     db: impl PgExecutor<'_>,
     user_id: UserId,
@@ -74,7 +78,7 @@ impl UserCreator {
         tx: &mut PgConnection,
         add_to_organization: Option<OrganizationId>,
         details: CreateUserDetails,
-    ) -> Result<UserId, Report<UserCreatorError>> {
+    ) -> Result<(UserId, OrganizationId), Report<UserCreatorError>> {
         let user_id = UserId::new();
         let organization_fut = async {
             match add_to_organization {
@@ -146,7 +150,7 @@ impl UserCreator {
                 .change_context(UserCreatorError)?;
         }
 
-        Ok(user_id)
+        Ok((user_id, organization_id))
     }
 }
 
@@ -158,7 +162,9 @@ impl filigree::users::users::UserCreator for UserCreator {
         add_to_organization: Option<OrganizationId>,
         details: CreateUserDetails,
     ) -> Result<UserId, Report<UserCreatorError>> {
-        Self::create_user(tx, add_to_organization, details).await
+        Self::create_user(tx, add_to_organization, details)
+            .await
+            .map(|(user_id, _)| user_id)
     }
 }
 
@@ -176,13 +182,13 @@ async fn get_current_user_endpoint(
 async fn update_current_user_endpoint(
     State(state): State<ServerState>,
     authed: Authed,
-    Json(body): Json<crate::models::user::UserUpdatePayload>,
+    FormOrJson(body): FormOrJson<crate::models::user::UserUpdatePayload>,
 ) -> Result<impl IntoResponse, Error> {
-    // TODO Need a permission specifically for updating self
+    // TODO Need a query specifically for updating self
     let updated =
         crate::models::user::queries::update(&state.db, &authed, authed.user_id, &body).await?;
 
-    let status = if updated {
+    let status = if updated.is_some() {
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND

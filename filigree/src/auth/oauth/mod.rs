@@ -105,7 +105,7 @@ impl HttpError for OAuthError {
             Self::SessionExpired => ErrorKind::OAuthSessionExpired,
             Self::SessionNotFound => ErrorKind::OAuthSessionNotFound,
             Self::SessionCookieMismatch => ErrorKind::OAuthSessionNotFound,
-            Self::SessionBackend => ErrorKind::SessionBackendError,
+            Self::SessionBackend => ErrorKind::SessionBackend,
             Self::FetchUserDetails => ErrorKind::FetchOAuthUserDetails,
             Self::ExchangeError => ErrorKind::OAuthExchangeError,
             Self::UserCreation => ErrorKind::UserCreationError,

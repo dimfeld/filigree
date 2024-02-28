@@ -1,8 +1,14 @@
-use std::{collections::HashSet, error::Error as _, path::PathBuf};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    error::Error as _,
+    path::PathBuf,
+};
 
 use clap::Parser;
 use config::Config;
 use error_stack::{Report, ResultExt};
+use itertools::Itertools;
 use merge_files::MergeTracker;
 use migrations::{resolve_migration, save_migration_state, SingleMigration};
 use model::Model;
@@ -32,6 +38,14 @@ pub struct RenderedFile {
     location: RenderedFileLocation,
 }
 
+impl RenderedFile {
+    /// Return true if the file is empty after trimming whitespace.
+    pub fn is_empty(&self) -> bool {
+        let contents = String::from_utf8_lossy(&self.contents);
+        contents.trim().is_empty()
+    }
+}
+
 #[derive(Parser)]
 pub struct Cli {
     /// Override the path to the configuration directory. By default this looks for ./filigree
@@ -57,6 +71,71 @@ pub enum Error {
     Cargo,
     #[error("Input error")]
     Input,
+    #[error("Missing model {0} in model {1} field {2}")]
+    MissingModel(String, String, String),
+    #[error("Model {0} has {1} but {1} has no belongs_to setting")]
+    MissingBelongsTo(String, String),
+    #[error("Model {parent} has {child} without a through table, but {child} belongs_to {child_belongs_to}")]
+    BelongsToMismatch {
+        parent: String,
+        child: String,
+        child_belongs_to: String,
+    },
+    #[error("Model {0} uses {1} as a through model, but {1} has no join setting")]
+    MissingJoin(String, String),
+    #[error(
+        "Model {0} uses {1} as a through model to {2}, but {1}'s join setting does not reference {3}"
+    )]
+    BadJoin(String, String, String, String),
+}
+
+pub struct ModelMap(pub std::collections::HashMap<String, Model>);
+
+impl ModelMap {
+    pub fn new(models: &[Model]) -> Self {
+        let model_map = models
+            .iter()
+            .cloned()
+            .map(|m| (m.name.clone(), m))
+            .collect();
+
+        Self(model_map)
+    }
+
+    pub fn get(&self, name: &str, from_model: &str, context: &str) -> Result<&Model, Error> {
+        self.0.get(name).ok_or_else(|| {
+            Error::MissingModel(
+                name.to_string(),
+                from_model.to_string(),
+                context.to_string(),
+            )
+        })
+    }
+}
+
+pub struct GeneratorMap<'a>(pub std::collections::HashMap<String, &'a ModelGenerator<'a>>);
+
+impl<'a> GeneratorMap<'a> {
+    pub fn new(models: &'a [ModelGenerator]) -> Self {
+        let model_map = models.iter().map(|m| (m.model.name.clone(), m)).collect();
+
+        Self(model_map)
+    }
+
+    pub fn get(
+        &self,
+        name: &str,
+        from_model: &str,
+        context: &str,
+    ) -> Result<&ModelGenerator, Error> {
+        self.0.get(name).map(|g| *g).ok_or_else(|| {
+            Error::MissingModel(
+                name.to_string(),
+                from_model.to_string(),
+                context.to_string(),
+            )
+        })
+    }
 }
 
 fn build_models(config: &Config, mut config_models: Vec<Model>) -> Vec<Model> {
@@ -90,7 +169,7 @@ pub fn main() -> Result<(), Report<Error>> {
         state_dir,
         api_dir,
         web_dir,
-        state,
+        ..
     } = config;
     let api_merge_tracker = MergeTracker::new(state_dir.join("api"), api_dir.clone());
     let web_merge_tracker = MergeTracker::new(state_dir.join("web"), web_dir.clone());
@@ -100,15 +179,32 @@ pub fn main() -> Result<(), Report<Error>> {
     let renderer = templates::Renderer::new(&config);
 
     let models = build_models(&config, config_models);
+    let model_map = ModelMap::new(&models);
 
-    let generators = models
+    model::validate::validate_model_configuration(&model_map)?;
+
+    let mut generators = models
         .into_iter()
-        .map(|model| ModelGenerator::new(&config, &renderer, model))
-        .collect::<Vec<_>>();
-    let all_model_contexts = generators
+        .map(|model| ModelGenerator::new(&config, &renderer, &model_map, model))
+        .collect::<Result<Vec<_>, Error>>()?;
+
+    let generator_map = GeneratorMap::new(&generators);
+
+    // The generators may need references to each other, so we can only create the template context
+    // once they all exist.
+    let generator_contexts = generators
         .iter()
-        .map(|m| (m.model.name.clone(), m.context.clone().into_json()))
-        .collect::<Vec<_>>();
+        .map(|g| {
+            Ok((
+                g.model.name.clone(),
+                g.create_template_context(&generator_map)?,
+            ))
+        })
+        .collect::<Result<HashMap<_, _>, Error>>()?;
+
+    for g in &mut generators {
+        g.set_template_context(generator_contexts[&g.model.name].clone())
+    }
 
     let mut model_files = None;
     let mut root_files = None;
@@ -125,7 +221,7 @@ pub fn main() -> Result<(), Report<Error>> {
             root_files = Some(root::render_files(
                 &crate_name,
                 &config,
-                &all_model_contexts,
+                &generator_contexts,
                 &renderer,
             ))
         });
@@ -134,7 +230,7 @@ pub fn main() -> Result<(), Report<Error>> {
     let model_files = model_files.expect("model_files was not set")?;
     let root_files = root_files.expect("root_files was not set")?;
 
-    let model_migrations = generators
+    let mut model_migrations = generators
         .iter()
         .map(|gen| {
             let up = gen.render_up_migration()?;
@@ -149,6 +245,26 @@ pub fn main() -> Result<(), Report<Error>> {
             Ok::<_, Report<Error>>(result)
         })
         .collect::<Result<Vec<_>, _>>()?;
+
+    // When a child model belongs to a parent model, ensure that the child comes later.
+    model_migrations.sort_by(|m1, m2| {
+        let m1 = &m1.model.unwrap();
+        let m2 = &m2.model.unwrap();
+
+        if let Some(b) = &m1.belongs_to {
+            if b.model() == m2.name {
+                return Ordering::Greater;
+            }
+        }
+
+        if let Some(b) = &m2.belongs_to {
+            if b.model() == m1.name {
+                return Ordering::Less;
+            }
+        }
+
+        Ordering::Equal
+    });
 
     let (first_fixed_migrations, last_fixed_migrations) = ModelGenerator::fixed_migrations();
 
@@ -258,9 +374,10 @@ pub fn main() -> Result<(), Report<Error>> {
     let mut model_mod_context = tera::Context::new();
     model_mod_context.insert(
         "models",
-        &all_model_contexts
+        &generator_contexts
             .iter()
-            .map(|(_, v)| v)
+            .sorted_by(|(m1, _), (m2, _)| m1.cmp(m2))
+            .map(|(_, v)| v.clone().into_json())
             .collect::<Vec<_>>(),
     );
 

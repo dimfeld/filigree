@@ -1,5 +1,9 @@
+{% if has_any_endpoints %}
 pub mod endpoints;
+{% endif %}
 pub mod queries;
+#[cfg(test)]
+pub mod testing;
 pub mod types;
 
 pub use types::*;
