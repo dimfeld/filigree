@@ -87,6 +87,30 @@ impl<'a> ModelGenerator<'a> {
                 flags: ImplFlags::default(),
             },
             StructContents {
+                suffix: "CreateResult",
+                fields: Self::struct_contents(
+                    self.all_fields()?.filter(|f| !f.never_read).chain(
+                        self.write_payload_child_fields(false)?.map(|f| {
+                            let mut field = f.field;
+                            field.nullable = !f.many;
+                            field.rust_type = Some(Self::child_model_field_type(
+                                &f.model,
+                                super::ReferenceFetchType::Data,
+                                f.many,
+                                "",
+                            ));
+                            Cow::Owned(field)
+                        }),
+                    ),
+                    |_| false,
+                    true,
+                ),
+                flags: ImplFlags {
+                    serialize: true,
+                    ..Default::default()
+                },
+            },
+            StructContents {
                 suffix: "UpdatePayload",
                 fields: Self::struct_contents(
                     self.write_payload_struct_fields(true)?,

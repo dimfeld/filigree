@@ -315,7 +315,7 @@ mod test {
         db: &sqlx::PgPool,
         organization_id: OrganizationId,
         count: usize,
-    ) -> Vec<({{struct_base}}CreatePayload, {{struct_base}})> {
+    ) -> Vec<({{struct_base}}CreatePayload, {{struct_base}}CreateResult)> {
         // TODO if this model belongs_to another, then create the parent object for it
 
         let mut tx = db.begin().await.unwrap();
@@ -472,10 +472,18 @@ mod test {
             {% for child in children %}
             {% if child.relationship.populate_on_list == "id" %}
                 {% if child.write_payload_field_name %}
-                let ids = payload.{{child.write_payload_field_name}}.as_ref().map(|v| v.iter().map(|o| o.id).collect::<Vec<_>>()).unwrap_or_default();
-                let ids = serde_json::to_value(&ids).unwrap();
-                {% else %}
+                    {% if child.relationship.many %}
+                    let ids = added.{{child.write_payload_field_name}}
+                        .iter()
+                        .map(|o| o.id).collect::<Vec<_>>();
+                    {% else %}
+                    let ids = added.{{child.write_payload_field_name}};
+                    {% endif %}
+                    let ids = serde_json::to_value(&ids).unwrap();
+                {%- elif child.relationship.many %}
                 let ids = serde_json::json!([]);
+                {% else %}
+                let ids = serde_json::json!(null);
                 {% endif %}
                 assert_eq!(
                     result["{{child.list_sql_field_name}}"],
@@ -618,11 +626,20 @@ mod test {
         {% for child in children %}
         {% if child.relationship.populate_on_get == "id" %}
             {% if child.write_payload_field_name %}
-            let ids = payload.{{child.write_payload_field_name}}.as_ref().map(|v| v.iter().map(|o| o.id).collect::<Vec<_>>()).unwrap_or_default();
-            let ids = serde_json::to_value(&ids).unwrap();
-            {%- else %}
+                {% if child.relationship.many %}
+                let ids = added.{{child.write_payload_field_name}}
+                    .iter()
+                    .map(|o| o.id)
+                    .collect::<Vec<_>>();
+                {% else %}
+                let ids = added.{{child.write_payload_field_name}};
+                {% endif %}
+                let ids = serde_json::to_value(&ids).unwrap();
+            {%- elif child.relationship.many %}
             let ids = serde_json::json!([]);
-            {%- endif %}
+            {% else %}
+            let ids = serde_json::json!(null);
+            {% endif %}
             assert_eq!(
                 result["{{child.get_sql_field_name}}"],
                 ids,
@@ -632,9 +649,11 @@ mod test {
             assert_eq!(
                 result["{{child.get_sql_field_name}}"],
                 {% if child.write_payload_field_name %}
-                serde_json::to_value(&payload.{{child.write_payload_field_name}}).unwrap(),
-                {% else %}
+                serde_json::to_value(&added.{{child.write_payload_field_name}}).unwrap(),
+                {% elif child.relationship.many %}
                 serde_json::json!([]),
+                {% else %}
+                serde_json::json!(null),
                 {% endif %}
                 "field {{child.get_sql_field_name}}"
             );
