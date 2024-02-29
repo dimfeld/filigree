@@ -52,9 +52,9 @@ async fn create(
     FormOrJson(payload): FormOrJson<PostCreatePayload>,
 ) -> Result<impl IntoResponse, Error> {
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
-    let result = queries::create(&mut *tx, &auth, &payload).await?;
-
+    let result = queries::create(&mut *tx, &auth, payload).await?;
     tx.commit().await.change_context(Error::Db)?;
+
     Ok((StatusCode::CREATED, Json(result)))
 }
 
@@ -64,11 +64,16 @@ async fn update(
     Path(id): Path<PostId>,
     FormOrJson(payload): FormOrJson<PostUpdatePayload>,
 ) -> Result<impl IntoResponse, Error> {
-    let result = queries::update(&state.db, &auth, id, &payload).await?;
-    if result.is_none() {
-        Ok(StatusCode::NOT_FOUND)
-    } else {
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
+    let result = queries::update(&mut *tx, &auth, id, payload).await?;
+
+    tx.commit().await.change_context(Error::Db)?;
+
+    if result {
         Ok(StatusCode::OK)
+    } else {
+        Ok(StatusCode::NOT_FOUND)
     }
 }
 
@@ -84,12 +89,6 @@ async fn delete(
     if !deleted {
         return Ok(StatusCode::NOT_FOUND);
     }
-
-    crate::models::comment::queries::delete_all_children_of_parent(&mut *tx, &auth, id).await?;
-
-    crate::models::reaction::queries::delete_all_children_of_parent(&mut *tx, &auth, id).await?;
-
-    crate::models::poll::queries::delete_all_children_of_parent(&mut *tx, &auth, id).await?;
 
     tx.commit().await.change_context(Error::Db)?;
     Ok(StatusCode::OK)
@@ -116,7 +115,9 @@ async fn create_child_comment(
 ) -> Result<impl IntoResponse, Error> {
     payload.post_id = parent_id;
 
-    let result = crate::models::comment::queries::create(&state.db, &auth, &payload).await?;
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+    let result = crate::models::comment::queries::create(&mut *tx, &auth, payload).await?;
+    tx.commit().await.change_context(Error::Db)?;
 
     Ok(Json(result))
 }
@@ -171,7 +172,9 @@ async fn create_child_reaction(
 ) -> Result<impl IntoResponse, Error> {
     payload.post_id = parent_id;
 
-    let result = crate::models::reaction::queries::create(&state.db, &auth, &payload).await?;
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+    let result = crate::models::reaction::queries::create(&mut *tx, &auth, payload).await?;
+    tx.commit().await.change_context(Error::Db)?;
 
     Ok(Json(result))
 }
@@ -236,7 +239,7 @@ async fn upsert_child_poll(
 
     let result = crate::models::poll::queries::update_with_parent(
         &state.db,
-        &auth,
+        auth.organization_id,
         object_perm == ObjectPermission::Owner,
         parent_id,
         &Some(payload),
@@ -256,8 +259,12 @@ async fn delete_child_poll(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
-    crate::models::poll::queries::delete_all_children_of_parent(&state.db, &auth, parent_id)
-        .await?;
+    crate::models::poll::queries::delete_all_children_of_parent(
+        &state.db,
+        auth.organization_id,
+        parent_id,
+    )
+    .await?;
 
     Ok(StatusCode::OK)
 }
@@ -380,19 +387,24 @@ mod test {
         db: &sqlx::PgPool,
         organization_id: OrganizationId,
         count: usize,
-    ) -> Vec<Post> {
+    ) -> Vec<(PostCreatePayload, Post)> {
         // TODO if this model belongs_to another, then create the parent object for it
 
-        futures::stream::iter(1..=count)
-            .map(Ok)
-            .and_then(|i| async move {
-                let id = PostId::new();
-                event!(Level::INFO, %id, "Creating test object {}", i);
-                super::queries::create_raw(db, id, organization_id, &make_create_payload(i)).await
-            })
-            .try_collect::<Vec<_>>()
-            .await
-            .unwrap()
+        let mut tx = db.begin().await.unwrap();
+        let mut objects = Vec::with_capacity(count);
+        for i in 1..=count {
+            let id = PostId::new();
+            event!(Level::INFO, %id, "Creating test object {}", i);
+            let payload = make_create_payload(i);
+            let result = super::queries::create_raw(&mut *tx, id, organization_id, payload.clone())
+                .await
+                .expect("Creating test object failed");
+
+            objects.push((payload, result));
+        }
+
+        tx.commit().await.unwrap();
+        objects
     }
 
     #[sqlx::test]
@@ -426,9 +438,9 @@ mod test {
         assert_eq!(results.len(), added_objects.len());
 
         for result in results {
-            let added = added_objects
+            let (payload, added) = added_objects
                 .iter()
-                .find(|i| i.id.to_string() == result["id"].as_str().unwrap())
+                .find(|i| i.1.id.to_string() == result["id"].as_str().unwrap())
                 .expect("Returned object did not match any of the added objects");
             assert_eq!(
                 result["id"],
@@ -455,11 +467,19 @@ mod test {
                 serde_json::to_value(&added.subject).unwrap(),
                 "field subject"
             );
+
+            assert_eq!(
+                payload.subject, added.subject,
+                "create result field subject"
+            );
             assert_eq!(
                 result["body"],
                 serde_json::to_value(&added.body).unwrap(),
                 "field body"
             );
+
+            assert_eq!(payload.body, added.body, "create result field body");
+
             assert_eq!(result["_permission"], "owner");
 
             // Check that we don't return any fields which are supposed to be omitted.
@@ -479,41 +499,49 @@ mod test {
             .unwrap();
 
         for result in results {
-            let added = added_objects
+            let (payload, added) = added_objects
                 .iter()
-                .find(|i| i.id.to_string() == result["id"].as_str().unwrap())
+                .find(|i| i.1.id.to_string() == result["id"].as_str().unwrap())
                 .expect("Returned object did not match any of the added objects");
             assert_eq!(
                 result["id"],
                 serde_json::to_value(&added.id).unwrap(),
-                "field id"
+                "list result field id"
             );
             assert_eq!(
                 result["organization_id"],
                 serde_json::to_value(&added.organization_id).unwrap(),
-                "field organization_id"
+                "list result field organization_id"
             );
             assert_eq!(
                 result["updated_at"],
                 serde_json::to_value(&added.updated_at).unwrap(),
-                "field updated_at"
+                "list result field updated_at"
             );
             assert_eq!(
                 result["created_at"],
                 serde_json::to_value(&added.created_at).unwrap(),
-                "field created_at"
+                "list result field created_at"
             );
             assert_eq!(
                 result["subject"],
                 serde_json::to_value(&added.subject).unwrap(),
-                "field subject"
+                "list result field subject"
             );
             assert_eq!(
                 result["body"],
                 serde_json::to_value(&added.body).unwrap(),
-                "field body"
+                "list result field body"
             );
             assert_eq!(result["_permission"], "write");
+
+            let ids = serde_json::json!([]);
+
+            assert_eq!(result["comment_ids"], ids, "field comment_ids");
+
+            let ids = serde_json::json!([]);
+
+            assert_eq!(result["poll_id"], ids, "field poll_id");
 
             // Check that we don't return any fields which are supposed to be omitted.
         }
@@ -537,7 +565,7 @@ mod test {
         let results = user
             .client
             .get("posts")
-            .query(&[("id", added_objects[0].id), ("id", added_objects[2].id)])
+            .query(&[("id", added_objects[0].1.id), ("id", added_objects[2].1.id)])
             .send()
             .await
             .unwrap()
@@ -551,10 +579,10 @@ mod test {
         assert_eq!(results.len(), 2);
         assert!(results
             .iter()
-            .any(|o| o["id"] == added_objects[0].id.to_string()));
+            .any(|o| o["id"] == added_objects[0].1.id.to_string()));
         assert!(results
             .iter()
-            .any(|o| o["id"] == added_objects[2].id.to_string()));
+            .any(|o| o["id"] == added_objects[2].1.id.to_string()));
     }
 
     #[sqlx::test]
@@ -586,7 +614,7 @@ mod test {
 
         let result = admin_user
             .client
-            .get(&format!("posts/{}", added_objects[1].id))
+            .get(&format!("posts/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap()
@@ -597,44 +625,63 @@ mod test {
             .await
             .unwrap();
 
-        let added = &added_objects[1];
+        let (payload, added) = &added_objects[1];
         assert_eq!(
             result["id"],
             serde_json::to_value(&added.id).unwrap(),
-            "field id"
+            "get result field id"
         );
         assert_eq!(
             result["organization_id"],
             serde_json::to_value(&added.organization_id).unwrap(),
-            "field organization_id"
+            "get result field organization_id"
         );
         assert_eq!(
             result["updated_at"],
             serde_json::to_value(&added.updated_at).unwrap(),
-            "field updated_at"
+            "get result field updated_at"
         );
         assert_eq!(
             result["created_at"],
             serde_json::to_value(&added.created_at).unwrap(),
-            "field created_at"
+            "get result field created_at"
         );
         assert_eq!(
             result["subject"],
             serde_json::to_value(&added.subject).unwrap(),
-            "field subject"
+            "get result field subject"
+        );
+
+        assert_eq!(
+            added.subject, payload.subject,
+            "create result field subject"
         );
         assert_eq!(
             result["body"],
             serde_json::to_value(&added.body).unwrap(),
-            "field body"
+            "get result field body"
         );
+
+        assert_eq!(added.body, payload.body, "create result field body");
+
         assert_eq!(result["_permission"], "owner");
+
+        let ids = serde_json::json!([]);
+        assert_eq!(result["comment_ids"], ids, "field comment_ids");
+
+        assert_eq!(
+            result["reactions"],
+            serde_json::json!([]),
+            "field reactions"
+        );
+
+        assert_eq!(result["poll"], serde_json::json!([]), "field poll");
 
         // Check that we don't return any fields which are supposed to be omitted.
 
         let result = user
             .client
-            .get(&format!("posts/{}", added_objects[1].id))
+            .get(&format!("posts/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap()
@@ -645,36 +692,36 @@ mod test {
             .await
             .unwrap();
 
-        let added = &added_objects[1];
+        let (payload, added) = &added_objects[1];
         assert_eq!(
             result["id"],
             serde_json::to_value(&added.id).unwrap(),
-            "field id"
+            "get result field id"
         );
         assert_eq!(
             result["organization_id"],
             serde_json::to_value(&added.organization_id).unwrap(),
-            "field organization_id"
+            "get result field organization_id"
         );
         assert_eq!(
             result["updated_at"],
             serde_json::to_value(&added.updated_at).unwrap(),
-            "field updated_at"
+            "get result field updated_at"
         );
         assert_eq!(
             result["created_at"],
             serde_json::to_value(&added.created_at).unwrap(),
-            "field created_at"
+            "get result field created_at"
         );
         assert_eq!(
             result["subject"],
             serde_json::to_value(&added.subject).unwrap(),
-            "field subject"
+            "get result field subject"
         );
         assert_eq!(
             result["body"],
             serde_json::to_value(&added.body).unwrap(),
-            "field body"
+            "get result field body"
         );
         assert_eq!(result["_permission"], "write");
 
@@ -682,7 +729,7 @@ mod test {
 
         let response = no_roles_user
             .client
-            .get(&format!("posts/{}", added_objects[1].id))
+            .get(&format!("posts/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap();
@@ -707,7 +754,7 @@ mod test {
         let update_payload = make_update_payload(20);
         admin_user
             .client
-            .put(&format!("posts/{}", added_objects[1].id))
+            .put(&format!("posts/{}", added_objects[1].1.id))
             .json(&update_payload)
             .send()
             .await
@@ -718,7 +765,7 @@ mod test {
 
         let updated: serde_json::Value = admin_user
             .client
-            .get(&format!("posts/{}", added_objects[1].id))
+            .get(&format!("posts/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap()
@@ -747,7 +794,7 @@ mod test {
         // Make sure that no other objects were updated
         let non_updated: serde_json::Value = admin_user
             .client
-            .get(&format!("posts/{}", added_objects[0].id))
+            .get(&format!("posts/{}", added_objects[0].1.id))
             .send()
             .await
             .unwrap()
@@ -760,39 +807,39 @@ mod test {
 
         assert_eq!(
             non_updated["id"],
-            serde_json::to_value(&added_objects[0].id).unwrap(),
+            serde_json::to_value(&added_objects[0].1.id).unwrap(),
             "field id"
         );
         assert_eq!(
             non_updated["organization_id"],
-            serde_json::to_value(&added_objects[0].organization_id).unwrap(),
+            serde_json::to_value(&added_objects[0].1.organization_id).unwrap(),
             "field organization_id"
         );
         assert_eq!(
             non_updated["updated_at"],
-            serde_json::to_value(&added_objects[0].updated_at).unwrap(),
+            serde_json::to_value(&added_objects[0].1.updated_at).unwrap(),
             "field updated_at"
         );
         assert_eq!(
             non_updated["created_at"],
-            serde_json::to_value(&added_objects[0].created_at).unwrap(),
+            serde_json::to_value(&added_objects[0].1.created_at).unwrap(),
             "field created_at"
         );
         assert_eq!(
             non_updated["subject"],
-            serde_json::to_value(&added_objects[0].subject).unwrap(),
+            serde_json::to_value(&added_objects[0].1.subject).unwrap(),
             "field subject"
         );
         assert_eq!(
             non_updated["body"],
-            serde_json::to_value(&added_objects[0].body).unwrap(),
+            serde_json::to_value(&added_objects[0].1.body).unwrap(),
             "field body"
         );
         assert_eq!(non_updated["_permission"], "owner");
 
         let response = no_roles_user
             .client
-            .put(&format!("posts/{}", added_objects[1].id))
+            .put(&format!("posts/{}", added_objects[1].1.id))
             .json(&update_payload)
             .send()
             .await
@@ -905,7 +952,7 @@ mod test {
 
         admin_user
             .client
-            .delete(&format!("posts/{}", added_objects[1].id))
+            .delete(&format!("posts/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap()
@@ -915,7 +962,7 @@ mod test {
 
         let response = admin_user
             .client
-            .get(&format!("posts/{}", added_objects[1].id))
+            .get(&format!("posts/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap();
@@ -924,7 +971,7 @@ mod test {
         // Delete should not happen without permissions
         let response = no_roles_user
             .client
-            .delete(&format!("posts/{}", added_objects[0].id))
+            .delete(&format!("posts/{}", added_objects[0].1.id))
             .send()
             .await
             .unwrap();
@@ -934,7 +981,7 @@ mod test {
         // Make sure other objects still exist
         let response = admin_user
             .client
-            .get(&format!("posts/{}", added_objects[0].id))
+            .get(&format!("posts/{}", added_objects[0].1.id))
             .send()
             .await
             .unwrap();

@@ -102,7 +102,7 @@ pub struct ReportCreatePayload {
     pub title: String,
     pub description: Option<String>,
     pub ui: serde_json::Value,
-    pub report_section: Option<Vec<ReportSectionCreatePayload>>,
+    pub report_sections: Option<Vec<ReportSectionCreatePayload>>,
 }
 
 impl ReportCreatePayload {
@@ -125,7 +125,7 @@ impl ReportCreatePayload {
         <serde_json::Value as Default>::default().into()
     }
 
-    pub fn default_report_section() -> Option<Vec<ReportSectionCreatePayload>> {
+    pub fn default_report_sections() -> Option<Vec<ReportSectionCreatePayload>> {
         None
     }
 }
@@ -137,7 +137,7 @@ impl Default for ReportCreatePayload {
             title: Self::default_title(),
             description: Self::default_description(),
             ui: Self::default_ui(),
-            report_section: Self::default_report_section(),
+            report_sections: Self::default_report_sections(),
         }
     }
 }
@@ -325,7 +325,7 @@ pub struct ReportUpdatePayload {
     pub title: String,
     pub description: Option<String>,
     pub ui: Option<serde_json::Value>,
-    pub report_section: Option<Vec<ReportSectionUpdatePayload>>,
+    pub report_sections: Option<Vec<ReportSectionUpdatePayload>>,
 }
 
 impl ReportUpdatePayload {
@@ -348,7 +348,7 @@ impl ReportUpdatePayload {
         None
     }
 
-    pub fn default_report_section() -> Option<Vec<ReportSectionUpdatePayload>> {
+    pub fn default_report_sections() -> Option<Vec<ReportSectionUpdatePayload>> {
         None
     }
 }
@@ -360,7 +360,7 @@ impl Default for ReportUpdatePayload {
             title: Self::default_title(),
             description: Self::default_description(),
             ui: Self::default_ui(),
-            report_section: Self::default_report_section(),
+            report_sections: Self::default_report_sections(),
         }
     }
 }

@@ -238,22 +238,22 @@ where
 
 /// Create a new Poll in the database.
 pub async fn create(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     auth: &AuthInfo,
-    payload: &PollCreatePayload,
+    payload: PollCreatePayload,
 ) -> Result<Poll, error_stack::Report<Error>> {
     // TODO create permissions auth check
     let id = PollId::new();
-    create_raw(db, id, auth.organization_id, payload).await
+    create_raw(&mut *db, id, auth.organization_id, payload).await
 }
 
 /// Create a new Poll in the database, allowing the ID to be explicitly specified.
 #[instrument(skip(db))]
 pub async fn create_raw(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     id: PollId,
     organization_id: OrganizationId,
-    payload: &PollCreatePayload,
+    payload: PollCreatePayload,
 ) -> Result<Poll, error_stack::Report<Error>> {
     let result = query_file_as!(
         Poll,
@@ -264,7 +264,7 @@ pub async fn create_raw(
         &payload.answers,
         &payload.post_id as _,
     )
-    .fetch_one(db)
+    .fetch_one(&mut *db)
     .await
     .change_context(Error::Db)?;
 
@@ -273,11 +273,11 @@ pub async fn create_raw(
 
 #[instrument(skip(db))]
 pub async fn update(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     auth: &AuthInfo,
     id: PollId,
-    payload: &PollUpdatePayload,
-) -> Result<Option<bool>, error_stack::Report<Error>> {
+    payload: PollUpdatePayload,
+) -> Result<bool, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let result = query_file_scalar!(
         "src/models/poll/update.sql",
@@ -288,11 +288,15 @@ pub async fn update(
         &payload.answers as _,
         &payload.post_id as _,
     )
-    .fetch_optional(db)
+    .fetch_optional(&mut *db)
     .await
     .change_context(Error::Db)?;
 
-    Ok(result)
+    let Some(is_owner) = result else {
+        return Ok(false);
+    };
+
+    Ok(true)
 }
 
 #[instrument(skip(db))]
@@ -338,7 +342,7 @@ pub async fn lookup_object_permissions(
 #[instrument(skip(db))]
 pub async fn update_with_parent(
     db: impl PgExecutor<'_>,
-    auth: &AuthInfo,
+    organization_id: OrganizationId,
     is_owner: bool,
     parent_id: PostId,
     payload: &Option<PollUpdatePayload>,
@@ -348,7 +352,7 @@ pub async fn update_with_parent(
             Poll,
             "src/models/poll/upsert_single_child.sql",
             PollId::new() as _,
-            auth.organization_id.as_uuid(),
+            organization_id.as_uuid(),
             &payload.question,
             &payload.answers,
             &payload.post_id as _,
@@ -358,7 +362,7 @@ pub async fn update_with_parent(
         .change_context(Error::Db)?;
         Ok(Some(result))
     } else {
-        delete_all_children_of_parent(db, auth, parent_id).await?;
+        delete_all_children_of_parent(db, organization_id, parent_id).await?;
         Ok(None)
     }
 }
@@ -367,12 +371,12 @@ pub async fn update_with_parent(
 #[instrument(skip(db))]
 pub async fn delete_all_children_of_parent(
     db: impl PgExecutor<'_>,
-    auth: &AuthInfo,
+    organization_id: OrganizationId,
     parent_id: PostId,
 ) -> Result<(), error_stack::Report<Error>> {
     query_file!(
         "src/models/poll/delete_all_children.sql",
-        auth.organization_id.as_uuid(),
+        organization_id.as_uuid(),
         parent_id.as_uuid()
     )
     .execute(db)

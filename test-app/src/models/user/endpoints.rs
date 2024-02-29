@@ -47,9 +47,9 @@ async fn create(
     FormOrJson(payload): FormOrJson<UserCreatePayload>,
 ) -> Result<impl IntoResponse, Error> {
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
-    let result = queries::create(&mut *tx, &auth, &payload).await?;
-
+    let result = queries::create(&mut *tx, &auth, payload).await?;
     tx.commit().await.change_context(Error::Db)?;
+
     Ok((StatusCode::CREATED, Json(result)))
 }
 
@@ -59,11 +59,16 @@ async fn update(
     Path(id): Path<UserId>,
     FormOrJson(payload): FormOrJson<UserUpdatePayload>,
 ) -> Result<impl IntoResponse, Error> {
-    let result = queries::update(&state.db, &auth, id, &payload).await?;
-    if result.is_none() {
-        Ok(StatusCode::NOT_FOUND)
-    } else {
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
+    let result = queries::update(&mut *tx, &auth, id, payload).await?;
+
+    tx.commit().await.change_context(Error::Db)?;
+
+    if result {
         Ok(StatusCode::OK)
+    } else {
+        Ok(StatusCode::NOT_FOUND)
     }
 }
 
@@ -128,19 +133,24 @@ mod test {
         db: &sqlx::PgPool,
         organization_id: OrganizationId,
         count: usize,
-    ) -> Vec<User> {
+    ) -> Vec<(UserCreatePayload, User)> {
         // TODO if this model belongs_to another, then create the parent object for it
 
-        futures::stream::iter(1..=count)
-            .map(Ok)
-            .and_then(|i| async move {
-                let id = UserId::new();
-                event!(Level::INFO, %id, "Creating test object {}", i);
-                super::queries::create_raw(db, id, organization_id, &make_create_payload(i)).await
-            })
-            .try_collect::<Vec<_>>()
-            .await
-            .unwrap()
+        let mut tx = db.begin().await.unwrap();
+        let mut objects = Vec::with_capacity(count);
+        for i in 1..=count {
+            let id = UserId::new();
+            event!(Level::INFO, %id, "Creating test object {}", i);
+            let payload = make_create_payload(i);
+            let result = super::queries::create_raw(&mut *tx, id, organization_id, payload.clone())
+                .await
+                .expect("Creating test object failed");
+
+            objects.push((payload, result));
+        }
+
+        tx.commit().await.unwrap();
+        objects
     }
 
     #[sqlx::test]
@@ -188,9 +198,9 @@ mod test {
         assert_eq!(results.len(), added_objects.len());
 
         for result in results {
-            let added = added_objects
+            let (payload, added) = added_objects
                 .iter()
-                .find(|i| i.id.to_string() == result["id"].as_str().unwrap())
+                .find(|i| i.1.id.to_string() == result["id"].as_str().unwrap())
                 .expect("Returned object did not match any of the added objects");
             assert_eq!(
                 result["id"],
@@ -217,16 +227,26 @@ mod test {
                 serde_json::to_value(&added.name).unwrap(),
                 "field name"
             );
+
+            assert_eq!(payload.name, added.name, "create result field name");
             assert_eq!(
                 result["email"],
                 serde_json::to_value(&added.email).unwrap(),
                 "field email"
             );
+
+            assert_eq!(payload.email, added.email, "create result field email");
             assert_eq!(
                 result["avatar_url"],
                 serde_json::to_value(&added.avatar_url).unwrap(),
                 "field avatar_url"
             );
+
+            assert_eq!(
+                payload.avatar_url, added.avatar_url,
+                "create result field avatar_url"
+            );
+
             assert_eq!(result["_permission"], "owner");
 
             // Check that we don't return any fields which are supposed to be omitted.
@@ -265,44 +285,44 @@ mod test {
             .collect::<Vec<_>>();
 
         for result in results {
-            let added = added_objects
+            let (payload, added) = added_objects
                 .iter()
-                .find(|i| i.id.to_string() == result["id"].as_str().unwrap())
+                .find(|i| i.1.id.to_string() == result["id"].as_str().unwrap())
                 .expect("Returned object did not match any of the added objects");
             assert_eq!(
                 result["id"],
                 serde_json::to_value(&added.id).unwrap(),
-                "field id"
+                "list result field id"
             );
             assert_eq!(
                 result["organization_id"],
                 serde_json::to_value(&added.organization_id).unwrap(),
-                "field organization_id"
+                "list result field organization_id"
             );
             assert_eq!(
                 result["updated_at"],
                 serde_json::to_value(&added.updated_at).unwrap(),
-                "field updated_at"
+                "list result field updated_at"
             );
             assert_eq!(
                 result["created_at"],
                 serde_json::to_value(&added.created_at).unwrap(),
-                "field created_at"
+                "list result field created_at"
             );
             assert_eq!(
                 result["name"],
                 serde_json::to_value(&added.name).unwrap(),
-                "field name"
+                "list result field name"
             );
             assert_eq!(
                 result["email"],
                 serde_json::to_value(&added.email).unwrap(),
-                "field email"
+                "list result field email"
             );
             assert_eq!(
                 result["avatar_url"],
                 serde_json::to_value(&added.avatar_url).unwrap(),
-                "field avatar_url"
+                "list result field avatar_url"
             );
             assert_eq!(result["_permission"], "write");
 
@@ -333,7 +353,7 @@ mod test {
         let results = user
             .client
             .get("users")
-            .query(&[("id", added_objects[0].id), ("id", added_objects[2].id)])
+            .query(&[("id", added_objects[0].1.id), ("id", added_objects[2].1.id)])
             .send()
             .await
             .unwrap()
@@ -347,10 +367,10 @@ mod test {
         assert_eq!(results.len(), 2);
         assert!(results
             .iter()
-            .any(|o| o["id"] == added_objects[0].id.to_string()));
+            .any(|o| o["id"] == added_objects[0].1.id.to_string()));
         assert!(results
             .iter()
-            .any(|o| o["id"] == added_objects[2].id.to_string()));
+            .any(|o| o["id"] == added_objects[2].1.id.to_string()));
     }
 
     #[sqlx::test]
@@ -382,7 +402,7 @@ mod test {
 
         let result = admin_user
             .client
-            .get(&format!("users/{}", added_objects[1].id))
+            .get(&format!("users/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap()
@@ -393,42 +413,52 @@ mod test {
             .await
             .unwrap();
 
-        let added = &added_objects[1];
+        let (payload, added) = &added_objects[1];
         assert_eq!(
             result["id"],
             serde_json::to_value(&added.id).unwrap(),
-            "field id"
+            "get result field id"
         );
         assert_eq!(
             result["organization_id"],
             serde_json::to_value(&added.organization_id).unwrap(),
-            "field organization_id"
+            "get result field organization_id"
         );
         assert_eq!(
             result["updated_at"],
             serde_json::to_value(&added.updated_at).unwrap(),
-            "field updated_at"
+            "get result field updated_at"
         );
         assert_eq!(
             result["created_at"],
             serde_json::to_value(&added.created_at).unwrap(),
-            "field created_at"
+            "get result field created_at"
         );
         assert_eq!(
             result["name"],
             serde_json::to_value(&added.name).unwrap(),
-            "field name"
+            "get result field name"
         );
+
+        assert_eq!(added.name, payload.name, "create result field name");
         assert_eq!(
             result["email"],
             serde_json::to_value(&added.email).unwrap(),
-            "field email"
+            "get result field email"
         );
+
+        assert_eq!(added.email, payload.email, "create result field email");
         assert_eq!(
             result["avatar_url"],
             serde_json::to_value(&added.avatar_url).unwrap(),
-            "field avatar_url"
+            "get result field avatar_url"
         );
+
+        assert_eq!(
+            added.avatar_url, payload.avatar_url,
+            "create result field avatar_url"
+        );
+
         assert_eq!(result["_permission"], "owner");
 
         // Check that we don't return any fields which are supposed to be omitted.
@@ -440,7 +470,7 @@ mod test {
 
         let result = user
             .client
-            .get(&format!("users/{}", added_objects[1].id))
+            .get(&format!("users/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap()
@@ -451,41 +481,41 @@ mod test {
             .await
             .unwrap();
 
-        let added = &added_objects[1];
+        let (payload, added) = &added_objects[1];
         assert_eq!(
             result["id"],
             serde_json::to_value(&added.id).unwrap(),
-            "field id"
+            "get result field id"
         );
         assert_eq!(
             result["organization_id"],
             serde_json::to_value(&added.organization_id).unwrap(),
-            "field organization_id"
+            "get result field organization_id"
         );
         assert_eq!(
             result["updated_at"],
             serde_json::to_value(&added.updated_at).unwrap(),
-            "field updated_at"
+            "get result field updated_at"
         );
         assert_eq!(
             result["created_at"],
             serde_json::to_value(&added.created_at).unwrap(),
-            "field created_at"
+            "get result field created_at"
         );
         assert_eq!(
             result["name"],
             serde_json::to_value(&added.name).unwrap(),
-            "field name"
+            "get result field name"
         );
         assert_eq!(
             result["email"],
             serde_json::to_value(&added.email).unwrap(),
-            "field email"
+            "get result field email"
         );
         assert_eq!(
             result["avatar_url"],
             serde_json::to_value(&added.avatar_url).unwrap(),
-            "field avatar_url"
+            "get result field avatar_url"
         );
         assert_eq!(result["_permission"], "write");
 
@@ -498,7 +528,7 @@ mod test {
 
         let response = no_roles_user
             .client
-            .get(&format!("users/{}", added_objects[1].id))
+            .get(&format!("users/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap();
@@ -523,7 +553,7 @@ mod test {
         let update_payload = make_update_payload(20);
         admin_user
             .client
-            .put(&format!("users/{}", added_objects[1].id))
+            .put(&format!("users/{}", added_objects[1].1.id))
             .json(&update_payload)
             .send()
             .await
@@ -534,7 +564,7 @@ mod test {
 
         let updated: serde_json::Value = admin_user
             .client
-            .get(&format!("users/{}", added_objects[1].id))
+            .get(&format!("users/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap()
@@ -568,7 +598,7 @@ mod test {
         // Make sure that no other objects were updated
         let non_updated: serde_json::Value = admin_user
             .client
-            .get(&format!("users/{}", added_objects[0].id))
+            .get(&format!("users/{}", added_objects[0].1.id))
             .send()
             .await
             .unwrap()
@@ -581,44 +611,44 @@ mod test {
 
         assert_eq!(
             non_updated["id"],
-            serde_json::to_value(&added_objects[0].id).unwrap(),
+            serde_json::to_value(&added_objects[0].1.id).unwrap(),
             "field id"
         );
         assert_eq!(
             non_updated["organization_id"],
-            serde_json::to_value(&added_objects[0].organization_id).unwrap(),
+            serde_json::to_value(&added_objects[0].1.organization_id).unwrap(),
             "field organization_id"
         );
         assert_eq!(
             non_updated["updated_at"],
-            serde_json::to_value(&added_objects[0].updated_at).unwrap(),
+            serde_json::to_value(&added_objects[0].1.updated_at).unwrap(),
             "field updated_at"
         );
         assert_eq!(
             non_updated["created_at"],
-            serde_json::to_value(&added_objects[0].created_at).unwrap(),
+            serde_json::to_value(&added_objects[0].1.created_at).unwrap(),
             "field created_at"
         );
         assert_eq!(
             non_updated["name"],
-            serde_json::to_value(&added_objects[0].name).unwrap(),
+            serde_json::to_value(&added_objects[0].1.name).unwrap(),
             "field name"
         );
         assert_eq!(
             non_updated["email"],
-            serde_json::to_value(&added_objects[0].email).unwrap(),
+            serde_json::to_value(&added_objects[0].1.email).unwrap(),
             "field email"
         );
         assert_eq!(
             non_updated["avatar_url"],
-            serde_json::to_value(&added_objects[0].avatar_url).unwrap(),
+            serde_json::to_value(&added_objects[0].1.avatar_url).unwrap(),
             "field avatar_url"
         );
         assert_eq!(non_updated["_permission"], "owner");
 
         let response = no_roles_user
             .client
-            .put(&format!("users/{}", added_objects[1].id))
+            .put(&format!("users/{}", added_objects[1].1.id))
             .json(&update_payload)
             .send()
             .await
@@ -643,7 +673,7 @@ mod test {
 
         admin_user
             .client
-            .delete(&format!("users/{}", added_objects[1].id))
+            .delete(&format!("users/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap()
@@ -653,7 +683,7 @@ mod test {
 
         let response = admin_user
             .client
-            .get(&format!("users/{}", added_objects[1].id))
+            .get(&format!("users/{}", added_objects[1].1.id))
             .send()
             .await
             .unwrap();
@@ -662,7 +692,7 @@ mod test {
         // Delete should not happen without permissions
         let response = no_roles_user
             .client
-            .delete(&format!("users/{}", added_objects[0].id))
+            .delete(&format!("users/{}", added_objects[0].1.id))
             .send()
             .await
             .unwrap();
@@ -672,7 +702,7 @@ mod test {
         // Make sure other objects still exist
         let response = admin_user
             .client
-            .get(&format!("users/{}", added_objects[0].id))
+            .get(&format!("users/{}", added_objects[0].1.id))
             .send()
             .await
             .unwrap();

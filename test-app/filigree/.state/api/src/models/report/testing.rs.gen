@@ -13,7 +13,7 @@ pub fn make_create_payload(i: usize) -> ReportCreatePayload {
         description: (i > 1).then(|| format!("Test object {i}")),
         ui: serde_json::json!({ "key": i }),
 
-        report_section: match i {
+        report_sections: match i {
             0 => None,
             1 => Some(vec![
                 crate::models::report_section::testing::make_create_payload(i),
@@ -36,7 +36,7 @@ pub fn make_update_payload(i: usize) -> ReportUpdatePayload {
         description: Some(format!("Test object {i}")),
         ui: Some(serde_json::json!({ "key": i })),
 
-        report_section: match i {
+        report_sections: match i {
             0 => None,
             1 => Some(vec![
                 crate::models::report_section::testing::make_update_payload(i),

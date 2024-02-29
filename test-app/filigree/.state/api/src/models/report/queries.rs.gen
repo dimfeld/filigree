@@ -265,22 +265,22 @@ where
 
 /// Create a new Report in the database.
 pub async fn create(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     auth: &AuthInfo,
-    payload: &ReportCreatePayload,
+    payload: ReportCreatePayload,
 ) -> Result<Report, error_stack::Report<Error>> {
     // TODO create permissions auth check
     let id = ReportId::new();
-    create_raw(db, id, auth.organization_id, payload).await
+    create_raw(&mut *db, id, auth.organization_id, payload).await
 }
 
 /// Create a new Report in the database, allowing the ID to be explicitly specified.
 #[instrument(skip(db))]
 pub async fn create_raw(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     id: ReportId,
     organization_id: OrganizationId,
-    payload: &ReportCreatePayload,
+    payload: ReportCreatePayload,
 ) -> Result<Report, error_stack::Report<Error>> {
     let result = query_file_as!(
         Report,
@@ -291,20 +291,49 @@ pub async fn create_raw(
         payload.description.as_ref(),
         &payload.ui,
     )
-    .fetch_one(db)
+    .fetch_one(&mut *db)
     .await
     .change_context(Error::Db)?;
+
+    create_payload_children(&mut *db, id, organization_id, payload).await?;
 
     Ok(result)
 }
 
+async fn create_payload_children(
+    db: &mut PgConnection,
+    parent_id: ReportId,
+    organization_id: OrganizationId,
+    mut payload: ReportCreatePayload,
+) -> Result<(), error_stack::Report<Error>> {
+    if let Some(mut children) = payload.report_sections {
+        if !children.is_empty() {
+            for child in children.iter_mut() {
+                child.id = Some(ReportSectionId::new());
+                child.report_id = parent_id;
+            }
+
+            crate::models::report_section::queries::update_with_parent(
+                &mut *db,
+                organization_id,
+                true,
+                parent_id,
+                &children,
+            )
+            .await?;
+        }
+    }
+
+    Ok(())
+}
+
 #[instrument(skip(db))]
 pub async fn update(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     auth: &AuthInfo,
     id: ReportId,
-    payload: &ReportUpdatePayload,
-) -> Result<Option<bool>, error_stack::Report<Error>> {
+    payload: ReportUpdatePayload,
+) -> Result<bool, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let result = query_file_scalar!(
         "src/models/report/update.sql",
@@ -315,11 +344,42 @@ pub async fn update(
         payload.description.as_ref(),
         &payload.ui as _,
     )
-    .fetch_optional(db)
+    .fetch_optional(&mut *db)
     .await
     .change_context(Error::Db)?;
 
-    Ok(result)
+    let Some(is_owner) = result else {
+        return Ok(false);
+    };
+
+    update_payload_children(&mut *db, auth.organization_id, id, is_owner, payload).await?;
+
+    Ok(true)
+}
+
+async fn update_payload_children(
+    db: &mut PgConnection,
+    organization_id: OrganizationId,
+    parent_id: ReportId,
+    is_owner: bool,
+    payload: ReportUpdatePayload,
+) -> Result<(), error_stack::Report<Error>> {
+    if let Some(mut children) = payload.report_sections {
+        for child in children.iter_mut() {
+            child.report_id = parent_id;
+        }
+
+        crate::models::report_section::queries::update_with_parent(
+            &mut *db,
+            organization_id,
+            is_owner,
+            parent_id,
+            &children,
+        )
+        .await?;
+    }
+
+    Ok(())
 }
 
 #[instrument(skip(db))]
