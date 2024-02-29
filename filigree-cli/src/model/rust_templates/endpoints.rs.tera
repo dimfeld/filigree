@@ -44,30 +44,9 @@ async fn create(
     FormOrJson(payload): FormOrJson<{{ struct_base }}CreatePayload>,
     ) -> Result<impl IntoResponse, Error> {
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
-    let result = queries::create(&mut *tx, &auth, &payload).await?;
-
-    {% for c in children | filter(attribute="write_payload_field_name") %}
-        if let Some(mut children) = payload.{{c.write_payload_field_name}} {
-            
-        {% if c.relationship.many %}
-            if !children.is_empty() {
-                for child in children.iter_mut() {
-                    child.id = Some({{c.object_id}}::new());
-                    child.{{c.parent_field}} = result.id;
-                }
-
-                crate::models::{{c.module}}::queries::update_with_parent(&mut *tx, &auth, true, result.id, &children).await?;
-            }
-        {% else %}
-            tracing::event!(Level::DEBUG, ?children, "Creating child {{c.module}}");
-            children.id = Some({{c.object_id}}::new());
-            children.{{c.parent_field}} = result.id;
-            crate::models::{{c.module}}::queries::update_with_parent(&mut *tx, &auth, true, result.id, &[children]).await?;
-        {% endif %}
-        }
-    {% endfor %}
-
+    let result = queries::create(&mut *tx, &auth, payload).await?;
     tx.commit().await.change_context(Error::Db)?;
+
     Ok((StatusCode::CREATED, Json(result)))
 }
 
@@ -78,44 +57,17 @@ async fn update(
     FormOrJson(payload): FormOrJson<{{ struct_base }}UpdatePayload>,
     ) -> Result<impl IntoResponse, Error> {
 
-    {% if children | filter(attribute="write_payload_field_name") %}
-
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
-    let is_owner = queries::update(&mut *tx, &auth, id, &payload).await?;
-    let Some(is_owner) = is_owner else {
-        return Ok(StatusCode::NOT_FOUND);
-    };
 
-    {% for c in children | filter(attribute="write_payload_field_name") %}
-    if let Some(mut children) = payload.{{c.write_payload_field_name}} {
-        {% if c.relationship.many %}
-        for child in children.iter_mut() {
-            child.{{c.parent_field}} = id;
-        }
-        {% else %}
-        children.{{c.parent_field}} = id;
-        {% endif %}
-
-        crate::models::{{c.module}}::queries::update_with_parent(
-            &mut *tx,
-            &auth,
-            is_owner,
-            id,
-            &children).await?;
-    }
-    {% endfor %}
+    let result = queries::update(&mut *tx, &auth, id, payload).await?;
 
     tx.commit().await.change_context(Error::Db)?;
-    Ok(StatusCode::OK)
 
-    {% else %}
-    let result = queries::update(&state.db, &auth, id, &payload).await?;
-    if result.is_none() {
-        Ok(StatusCode::NOT_FOUND)
-    } else {
+    if result {
         Ok(StatusCode::OK)
+    } else {
+        Ok(StatusCode::NOT_FOUND)
     }
-    {% endif %}
 }
 
 async fn delete(
@@ -131,10 +83,6 @@ async fn delete(
     if !deleted {
         return Ok(StatusCode::NOT_FOUND);
     }
-
-    {% for c in children %}
-        crate::models::{{c.module}}::queries::delete_all_children_of_parent(&mut *tx, &auth, id).await?;
-    {% endfor %}
 
     tx.commit().await.change_context(Error::Db)?;
     Ok(StatusCode::OK)
@@ -178,11 +126,13 @@ async fn create_child_{{c.module}}(
 
     payload.{{c.parent_field}} = parent_id;
 
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
     let result = crate::models::{{c.module}}::queries::create(
-        &state.db,
+        &mut *tx,
         &auth,
-        &payload
+        payload
     ).await?;
+    tx.commit().await.change_context(Error::Db)?;
 
 
     Ok(Json(result))
@@ -246,7 +196,7 @@ async fn upsert_child_{{c.module}}(
 
     let result = crate::models::{{c.module}}::queries::update_with_parent(
         &state.db,
-        &auth,
+        auth.organization_id,
         object_perm == ObjectPermission::Owner,
         parent_id,
         &Some(payload)).await?;
@@ -269,7 +219,7 @@ async fn delete_child_{{c.module}}(
 
     crate::models::{{c.module}}::queries::delete_all_children_of_parent(
         &state.db,
-        &auth,
+        auth.organization_id,
         parent_id).await?;
 
     Ok(StatusCode::OK)
@@ -368,24 +318,26 @@ mod test {
     ) -> Vec<({{struct_base}}CreatePayload, {{struct_base}})> {
         // TODO if this model belongs_to another, then create the parent object for it
 
-        futures::stream::iter(1..=count)
-            .map(Ok)
-            .and_then(|i| async move {
-                let id = {{id_type}}::new();
-                event!(Level::INFO, %id, "Creating test object {}", i);
-                let payload = make_create_payload(i);
-                let result = super::queries::create_raw(
-                    db,
-                    id,
-                    organization_id,
-                    &payload,
-                )
-                .await?;
-                Ok::<_, error_stack::Report<Error>>((payload, result))
-            })
-            .try_collect::<Vec<_>>()
+        let mut tx = db.begin().await.unwrap();
+        let mut objects = Vec::with_capacity(count);
+        for i in 1..=count {
+            let id = {{id_type}}::new();
+            event!(Level::INFO, %id, "Creating test object {}", i);
+            let payload = make_create_payload(i);
+            let result = super::queries::create_raw(
+                &mut *tx,
+                id,
+                organization_id,
+                payload.clone(),
+            )
             .await
-            .unwrap()
+            .expect("Creating test object failed");
+
+            objects.push((payload, result));
+        }
+
+        tx.commit().await.unwrap();
+        objects
     }
 
     {% if endpoints.list %}

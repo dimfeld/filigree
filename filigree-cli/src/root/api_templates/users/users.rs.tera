@@ -189,10 +189,12 @@ async fn update_current_user_endpoint(
     FormOrJson(body): FormOrJson<crate::models::user::UserUpdatePayload>,
 ) -> Result<impl IntoResponse, Error> {
     // TODO Need a query specifically for updating self
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
     let updated =
-        crate::models::user::queries::update(&state.db, &authed, authed.user_id, &body).await?;
+        crate::models::user::queries::update(&mut *tx, &authed, authed.user_id, body).await?;
+    tx.commit().await.change_context(Error::Db)?;
 
-    let status = if updated.is_some() {
+    let status = if updated {
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND
