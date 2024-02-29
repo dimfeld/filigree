@@ -3,6 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
     error::Error as _,
     path::PathBuf,
+    sync::Arc,
 };
 
 use clap::Parser;
@@ -13,6 +14,7 @@ use merge_files::MergeTracker;
 use migrations::{resolve_migration, save_migration_state, SingleMigration};
 use model::Model;
 use rayon::prelude::*;
+use state::GeneratedFiles;
 use thiserror::Error;
 
 use crate::{config::FullConfig, model::generator::ModelGenerator};
@@ -61,6 +63,8 @@ pub enum Error {
     ReadConfigFile,
     #[error("Failed to read migration files")]
     ReadMigrationFiles,
+    #[error("Failed to read generated state archive")]
+    ReadGeneratedState,
     #[error("Failed to write file")]
     WriteFile,
     #[error("{0}{}", .0.source().map(|e| format!("\n{e}")).unwrap_or_default())]
@@ -171,8 +175,11 @@ pub fn main() -> Result<(), Report<Error>> {
         web_dir,
         ..
     } = config;
-    let api_merge_tracker = MergeTracker::new(state_dir.join("api"), api_dir.clone());
-    let web_merge_tracker = MergeTracker::new(state_dir.join("web"), web_dir.clone());
+    let generated_files = Arc::new(GeneratedFiles::read(&state_dir)?);
+    let api_merge_tracker =
+        MergeTracker::new(generated_files.clone(), "api".to_string(), api_dir.clone());
+    let web_merge_tracker =
+        MergeTracker::new(generated_files.clone(), "web".to_string(), web_dir.clone());
 
     add_deps::add_deps(&crate_manifest)?;
 
@@ -350,14 +357,6 @@ pub fn main() -> Result<(), Report<Error>> {
                                 format!("Unable to create directory {}", dir.display())
                             })?;
                         created_dirs.insert(dir);
-
-                        let gen_cache_dir = merge_tracker.base_generated_path.join(&dir);
-
-                        std::fs::create_dir_all(&gen_cache_dir)
-                            .change_context(Error::WriteFile)
-                            .attach_printable_lazy(|| {
-                                format!("Unable to create directory {}", dir.display())
-                            })?;
                     }
                 }
             }
@@ -408,6 +407,8 @@ pub fn main() -> Result<(), Report<Error>> {
         .into_par_iter()
         .try_for_each(|file| file.write())
         .change_context(Error::WriteFile)?;
+
+    generated_files.write(&state_dir)?;
 
     if !conflict_files.is_empty() {
         println!("=== Files with conflicts");
