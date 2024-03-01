@@ -401,6 +401,8 @@ mod test {
         let response = no_roles_user.client.get("reports").send().await.unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // TODO test list endpoint of child report_section objects
     }
 
     #[sqlx::test]
@@ -594,6 +596,8 @@ mod test {
             .unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // TODO test get of child report_section object
     }
 
     #[sqlx::test]
@@ -715,6 +719,8 @@ mod test {
             .unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // TODO test update endpoint of child report_section object
     }
 
     #[sqlx::test]
@@ -812,6 +818,8 @@ mod test {
             .await
             .unwrap();
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // TODO test create endpoint of child report_section object
     }
 
     #[sqlx::test]
@@ -864,5 +872,7 @@ mod test {
             .await
             .unwrap();
         assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+        // TODO test delete endpoint of child report_section object
     }
 }

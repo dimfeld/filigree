@@ -527,6 +527,10 @@ mod test {
             .unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+        {% for c in children | filter (attribute="relationship.many", value=true) %}
+        // TODO test list endpoint of child {{c.module}} objects
+        {% endfor %}
     }
 
     #[sqlx::test]
@@ -714,6 +718,10 @@ mod test {
             .unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+        {% for c in children %}
+        // TODO test get of child {{c.module}} object
+        {% endfor %}
     }
     {% endif %}
 
@@ -801,6 +809,10 @@ mod test {
             .unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+        {% for c in children %}
+        // TODO test update endpoint of child {{c.module}} object
+        {% endfor %}
     }
     {% endif %}
 
@@ -872,6 +884,10 @@ mod test {
             .await
             .unwrap();
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+        {% for c in children %}
+        // TODO test create endpoint of child {{c.module}} object
+        {% endfor %}
     }
     {% endif %}
 
@@ -926,6 +942,10 @@ mod test {
             .await
             .unwrap();
         assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+        {% for c in children %}
+        // TODO test delete endpoint of child {{c.module}} object
+        {% endfor %}
     }
     {% endif %}
 }

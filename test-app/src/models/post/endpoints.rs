@@ -549,6 +549,10 @@ mod test {
         let response = no_roles_user.client.get("posts").send().await.unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // TODO test list endpoint of child comment objects
+
+        // TODO test list endpoint of child reaction objects
     }
 
     #[sqlx::test]
@@ -736,6 +740,12 @@ mod test {
             .unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // TODO test get of child comment object
+
+        // TODO test get of child reaction object
+
+        // TODO test get of child poll object
     }
 
     #[sqlx::test]
@@ -847,6 +857,12 @@ mod test {
             .unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // TODO test update endpoint of child comment object
+
+        // TODO test update endpoint of child reaction object
+
+        // TODO test update endpoint of child poll object
     }
 
     #[sqlx::test]
@@ -935,6 +951,12 @@ mod test {
             .await
             .unwrap();
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // TODO test create endpoint of child comment object
+
+        // TODO test create endpoint of child reaction object
+
+        // TODO test create endpoint of child poll object
     }
 
     #[sqlx::test]
@@ -987,5 +1009,11 @@ mod test {
             .await
             .unwrap();
         assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+        // TODO test delete endpoint of child comment object
+
+        // TODO test delete endpoint of child reaction object
+
+        // TODO test delete endpoint of child poll object
     }
 }
