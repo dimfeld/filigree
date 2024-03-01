@@ -26,6 +26,8 @@ pub struct Post {
     pub _permission: ObjectPermission,
 }
 
+pub type PostCreateResult = Post;
+
 impl Post {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
     // detect whether to add the extra :: in cases like DateTime::<Utc>::default

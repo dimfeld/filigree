@@ -226,23 +226,23 @@ where
 
 /// Create a new User in the database.
 pub async fn create(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     auth: &AuthInfo,
-    payload: &UserCreatePayload,
-) -> Result<User, error_stack::Report<Error>> {
+    payload: UserCreatePayload,
+) -> Result<UserCreateResult, error_stack::Report<Error>> {
     // TODO create permissions auth check
     let id = UserId::new();
-    create_raw(db, id, auth.organization_id, payload).await
+    create_raw(&mut *db, id, auth.organization_id, payload).await
 }
 
 /// Create a new User in the database, allowing the ID to be explicitly specified.
 #[instrument(skip(db))]
 pub async fn create_raw(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     id: UserId,
     organization_id: OrganizationId,
-    payload: &UserCreatePayload,
-) -> Result<User, error_stack::Report<Error>> {
+    payload: UserCreatePayload,
+) -> Result<UserCreateResult, error_stack::Report<Error>> {
     let result = query_file_as!(
         User,
         "src/models/user/insert.sql",
@@ -252,7 +252,7 @@ pub async fn create_raw(
         payload.email.as_ref(),
         payload.avatar_url.as_ref(),
     )
-    .fetch_one(db)
+    .fetch_one(&mut *db)
     .await
     .change_context(Error::Db)?;
 
@@ -261,11 +261,11 @@ pub async fn create_raw(
 
 #[instrument(skip(db))]
 pub async fn update(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     auth: &AuthInfo,
     id: UserId,
-    payload: &UserUpdatePayload,
-) -> Result<Option<bool>, error_stack::Report<Error>> {
+    payload: UserUpdatePayload,
+) -> Result<bool, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let result = query_file_scalar!(
         "src/models/user/update.sql",
@@ -276,11 +276,15 @@ pub async fn update(
         payload.email.as_ref(),
         payload.avatar_url.as_ref(),
     )
-    .fetch_optional(db)
+    .fetch_optional(&mut *db)
     .await
     .change_context(Error::Db)?;
 
-    Ok(result)
+    let Some(is_owner) = result else {
+        return Ok(false);
+    };
+
+    Ok(true)
 }
 
 #[instrument(skip(db))]

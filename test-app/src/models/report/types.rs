@@ -102,7 +102,7 @@ pub struct ReportCreatePayload {
     pub title: String,
     pub description: Option<String>,
     pub ui: serde_json::Value,
-    pub report_section: Option<Vec<ReportSectionCreatePayload>>,
+    pub report_sections: Option<Vec<ReportSectionCreatePayload>>,
 }
 
 impl ReportCreatePayload {
@@ -125,7 +125,7 @@ impl ReportCreatePayload {
         <serde_json::Value as Default>::default().into()
     }
 
-    pub fn default_report_section() -> Option<Vec<ReportSectionCreatePayload>> {
+    pub fn default_report_sections() -> Option<Vec<ReportSectionCreatePayload>> {
         None
     }
 }
@@ -137,14 +137,14 @@ impl Default for ReportCreatePayload {
             title: Self::default_title(),
             description: Self::default_description(),
             ui: Self::default_ui(),
-            report_section: Self::default_report_section(),
+            report_sections: Self::default_report_sections(),
         }
     }
 }
 
 #[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 
-pub struct ReportPopulatedGet {
+pub struct ReportPopulatedGetAndCreateResult {
     pub id: ReportId,
     pub organization_id: crate::models::organization::OrganizationId,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -156,7 +156,11 @@ pub struct ReportPopulatedGet {
     pub _permission: ObjectPermission,
 }
 
-impl ReportPopulatedGet {
+pub type ReportPopulatedGet = ReportPopulatedGetAndCreateResult;
+
+pub type ReportCreateResult = ReportPopulatedGetAndCreateResult;
+
+impl ReportPopulatedGetAndCreateResult {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
     // detect whether to add the extra :: in cases like DateTime::<Utc>::default
 
@@ -193,9 +197,9 @@ impl ReportPopulatedGet {
     }
 }
 
-sqlx_json_decode!(ReportPopulatedGet);
+sqlx_json_decode!(ReportPopulatedGetAndCreateResult);
 
-impl Default for ReportPopulatedGet {
+impl Default for ReportPopulatedGetAndCreateResult {
     fn default() -> Self {
         Self {
             id: Self::default_id(),
@@ -211,12 +215,12 @@ impl Default for ReportPopulatedGet {
     }
 }
 
-impl Serialize for ReportPopulatedGet {
+impl Serialize for ReportPopulatedGetAndCreateResult {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("ReportPopulatedGet", 9)?;
+        let mut state = serializer.serialize_struct("ReportPopulatedGetAndCreateResult", 9)?;
         state.serialize_field("id", &self.id)?;
         state.serialize_field("organization_id", &self.organization_id)?;
         state.serialize_field("updated_at", &self.updated_at)?;
@@ -325,7 +329,7 @@ pub struct ReportUpdatePayload {
     pub title: String,
     pub description: Option<String>,
     pub ui: Option<serde_json::Value>,
-    pub report_section: Option<Vec<ReportSectionUpdatePayload>>,
+    pub report_sections: Option<Vec<ReportSectionUpdatePayload>>,
 }
 
 impl ReportUpdatePayload {
@@ -348,7 +352,7 @@ impl ReportUpdatePayload {
         None
     }
 
-    pub fn default_report_section() -> Option<Vec<ReportSectionUpdatePayload>> {
+    pub fn default_report_sections() -> Option<Vec<ReportSectionUpdatePayload>> {
         None
     }
 }
@@ -360,7 +364,7 @@ impl Default for ReportUpdatePayload {
             title: Self::default_title(),
             description: Self::default_description(),
             ui: Self::default_ui(),
-            report_section: Self::default_report_section(),
+            report_sections: Self::default_report_sections(),
         }
     }
 }

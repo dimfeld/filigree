@@ -27,6 +27,8 @@ pub type ReactionPopulatedGet = Reaction;
 
 pub type ReactionPopulatedList = Reaction;
 
+pub type ReactionCreateResult = Reaction;
+
 impl Reaction {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
     // detect whether to add the extra :: in cases like DateTime::<Utc>::default
