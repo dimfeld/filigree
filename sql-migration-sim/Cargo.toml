@@ -12,9 +12,9 @@ documentation = "https://docs.rs/sql-migration-sim"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "1.0.195", optional = true }
+serde = { version = "1.0.197", optional = true }
 sqlparser = "0.43.1"
-thiserror = "1.0.56"
+thiserror = "1.0.57"
 
 [features]
 default = []
