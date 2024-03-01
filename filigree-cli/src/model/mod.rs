@@ -20,6 +20,7 @@ pub struct Model {
     /// A prefix of a few characters for the ID of this type.
     /// Defaults to the first three characters of the name
     pub id_prefix: Option<String>,
+    #[serde(default)]
     pub fields: Vec<ModelField>,
     /// If true, generate API endpoints for this model.
     pub endpoints: Endpoints,

@@ -6,7 +6,7 @@ CREATE TABLE {{table}} (
     {%- if field.default_sql %} DEFAULT {{ field.default_sql }} {% endif -%}
     {%- if field.extra_sql_modifiers %} {{ field.extra_sql_modifiers }} {% endif -%}
     {%- if field.foreign_key_sql %} {{ field.foreign_key_sql }} {% endif %}
-    {% if not loop.last and not extra_create_table_sql %},{% endif %}
+    {% if not loop.last or extra_create_table_sql %},{% endif %}
   {%- endfor %}
 
   {{ extra_create_table_sql }}
