@@ -274,7 +274,7 @@ where
 }
 
 /// Create a new {{struct_base}} in the database.
-pub async fn create(db: &mut PgConnection, auth: &AuthInfo, payload: {{struct_base}}CreatePayload) -> Result<{{struct_base}}, error_stack::Report<Error>> {
+pub async fn create(db: &mut PgConnection, auth: &AuthInfo, payload: {{struct_base}}CreatePayload) -> Result<{{struct_base}}CreateResult, error_stack::Report<Error>> {
     // TODO create permissions auth check
     let id = {{id_type}}::new();
     create_raw(&mut *db, id, auth.organization_id, payload).await
@@ -287,7 +287,7 @@ pub async fn create_raw(
     id: {{id_type}},
     organization_id: OrganizationId,
     payload: {{struct_base}}CreatePayload
-) -> Result<{{struct_base}}, error_stack::Report<Error>> {
+) -> Result<{{struct_base}}CreateResult, error_stack::Report<Error>> {
 
     let result = query_file_as!({{struct_base}}, "{{dir}}/insert.sql",
         id.as_uuid(),
@@ -307,22 +307,44 @@ pub async fn create_raw(
         .change_context(Error::Db)?;
 
     {% if create_payload_fields %}
-    create_payload_children(&mut *db, id, organization_id, payload).await?;
+    let child_result = create_payload_children(&mut *db, id, organization_id, payload).await?;
+
+    let result = {{struct_base}}CreateResult {
+        {% for f in fields | filter(attribute="never_read", value=false) -%}
+        {{f.rust_name}}: result.{{f.rust_name}},
+        {%- endfor -%}
+        {% for c in children | filter(attribute="write_payload_field_name") -%}
+        {{c.write_payload_field_name}}: child_result.{{c.write_payload_field_name}},
+        {%- endfor %}
+        _permission: result._permission,
+    };
     {% endif %}
 
     Ok(result)
 }
 
 {% if create_payload_fields %}
-{# TODO make this fill in a result payload and return it #}
+
+#[derive(Default)]
+struct {{struct_base}}CreatePayloadChildrenResult {
+    {%- for c in children | filter(attribute="write_payload_field_name") -%}
+    {%- if c.relationship.many %}
+    {{c.write_payload_field_name}}: Vec<{{c.struct_base}}>,
+    {% else %}
+    {{c.write_payload_field_name}}: Option<{{c.struct_base}}>,
+    {%- endif -%}
+    {%- endfor -%}
+}
+
 async fn create_payload_children(
     db: &mut PgConnection,
     parent_id: {{id_type}},
     organization_id: OrganizationId,
     mut payload: {{struct_base}}CreatePayload
-) -> Result<(), error_stack::Report<Error>> {
+) -> Result<{{struct_base}}CreatePayloadChildrenResult, error_stack::Report<Error>> {
+
     {% for c in children | filter(attribute="write_payload_field_name") %}
-        if let Some(mut children) = payload.{{c.write_payload_field_name}} {
+        let {{c.write_payload_field_name}}_result = if let Some(mut children) = payload.{{c.write_payload_field_name}} {
 
         {% if c.relationship.many %}
             if !children.is_empty() {
@@ -331,18 +353,32 @@ async fn create_payload_children(
                     child.{{c.parent_field}} = parent_id;
                 }
 
-                crate::models::{{c.module}}::queries::update_with_parent(&mut *db, organization_id, true, parent_id, &children).await?;
+                crate::models::{{c.module}}::queries::update_with_parent(&mut *db, organization_id, true, parent_id, &children).await?
+            } else {
+                vec![]
             }
         {% else %}
             tracing::event!(Level::DEBUG, ?children, "Creating child {{c.module}}");
             children.id = Some({{c.object_id}}::new());
             children.{{c.parent_field}} = parent_id;
-            crate::models::{{c.module}}::queries::update_with_parent(&mut *db, organization_id, true, parent_id, &[children]).await?;
+            crate::models::{{c.module}}::queries::update_with_parent(&mut *db, organization_id, true, parent_id, &[children]).await?
         {% endif %}
-        }
+        } else {
+            {% if c.relationship.many %}
+            vec![]
+            {% else %}
+            None
+            {% endif %}
+        };
     {% endfor %}
 
-    Ok(())
+    let result = {{struct_base}}CreatePayloadChildrenResult {
+        {% for c in children | filter(attribute="write_payload_field_name") -%}
+        {{c.write_payload_field_name}}: {{c.write_payload_field_name}}_result,
+        {%- endfor %} 
+    };
+
+    Ok(result)
 }
 {% endif %}
 

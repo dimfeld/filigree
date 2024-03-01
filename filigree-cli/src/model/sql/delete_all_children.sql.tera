@@ -8,5 +8,4 @@ WHERE
 {% endif %}
 
   {{belongs_to_field.sql_name}} = ${{p}}
-
 {% endif %}

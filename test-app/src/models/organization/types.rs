@@ -25,6 +25,8 @@ pub type OrganizationPopulatedGet = Organization;
 
 pub type OrganizationPopulatedList = Organization;
 
+pub type OrganizationCreateResult = Organization;
+
 impl Organization {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
     // detect whether to add the extra :: in cases like DateTime::<Utc>::default

@@ -238,23 +238,23 @@ where
 
 /// Create a new Comment in the database.
 pub async fn create(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     auth: &AuthInfo,
-    payload: &CommentCreatePayload,
-) -> Result<Comment, error_stack::Report<Error>> {
+    payload: CommentCreatePayload,
+) -> Result<CommentCreateResult, error_stack::Report<Error>> {
     // TODO create permissions auth check
     let id = CommentId::new();
-    create_raw(db, id, auth.organization_id, payload).await
+    create_raw(&mut *db, id, auth.organization_id, payload).await
 }
 
 /// Create a new Comment in the database, allowing the ID to be explicitly specified.
 #[instrument(skip(db))]
 pub async fn create_raw(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     id: CommentId,
     organization_id: OrganizationId,
-    payload: &CommentCreatePayload,
-) -> Result<Comment, error_stack::Report<Error>> {
+    payload: CommentCreatePayload,
+) -> Result<CommentCreateResult, error_stack::Report<Error>> {
     let result = query_file_as!(
         Comment,
         "src/models/comment/insert.sql",
@@ -263,7 +263,7 @@ pub async fn create_raw(
         &payload.body,
         &payload.post_id as _,
     )
-    .fetch_one(db)
+    .fetch_one(&mut *db)
     .await
     .change_context(Error::Db)?;
 
@@ -272,11 +272,11 @@ pub async fn create_raw(
 
 #[instrument(skip(db))]
 pub async fn update(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     auth: &AuthInfo,
     id: CommentId,
-    payload: &CommentUpdatePayload,
-) -> Result<Option<bool>, error_stack::Report<Error>> {
+    payload: CommentUpdatePayload,
+) -> Result<bool, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let result = query_file_scalar!(
         "src/models/comment/update.sql",
@@ -286,11 +286,15 @@ pub async fn update(
         &payload.body as _,
         &payload.post_id as _,
     )
-    .fetch_optional(db)
+    .fetch_optional(&mut *db)
     .await
     .change_context(Error::Db)?;
 
-    Ok(result)
+    let Some(is_owner) = result else {
+        return Ok(false);
+    };
+
+    Ok(true)
 }
 
 #[instrument(skip(db))]
@@ -363,13 +367,13 @@ pub async fn update_one_with_parent(
 #[instrument(skip(db))]
 pub async fn update_with_parent(
     db: &mut PgConnection,
-    auth: &AuthInfo,
+    organization_id: OrganizationId,
     is_owner: bool,
     parent_id: PostId,
     payload: &[CommentUpdatePayload],
 ) -> Result<Vec<Comment>, error_stack::Report<Error>> {
     if payload.is_empty() {
-        delete_all_children_of_parent(db, auth, parent_id).await?;
+        delete_all_children_of_parent(db, organization_id, parent_id).await?;
         Ok(Vec::new())
     } else {
         // First, we upsert the existing children.
@@ -385,14 +389,14 @@ pub async fn update_with_parent(
 
         query = query
             .bind(is_owner)
-            .bind(auth.organization_id.as_uuid())
+            .bind(organization_id.as_uuid())
             .bind(parent_id.as_uuid());
 
         for p in payload {
             let id = p.id.unwrap_or_else(|| CommentId::new());
             query = query
                 .bind(id)
-                .bind(auth.organization_id)
+                .bind(organization_id)
                 .bind(&p.body)
                 .bind(&p.post_id)
         }
@@ -406,7 +410,7 @@ pub async fn update_with_parent(
             .collect::<Vec<_>>();
         query_file!(
             "src/models/comment/delete_removed_children.sql",
-            auth.organization_id.as_uuid(),
+            organization_id.as_uuid(),
             parent_id.as_uuid(),
             &ids
         )
@@ -442,12 +446,12 @@ pub async fn delete_with_parent(
 #[instrument(skip(db))]
 pub async fn delete_all_children_of_parent(
     db: impl PgExecutor<'_>,
-    auth: &AuthInfo,
+    organization_id: OrganizationId,
     parent_id: PostId,
 ) -> Result<(), error_stack::Report<Error>> {
     query_file!(
         "src/models/comment/delete_all_children.sql",
-        auth.organization_id.as_uuid(),
+        organization_id.as_uuid(),
         parent_id.as_uuid()
     )
     .execute(db)

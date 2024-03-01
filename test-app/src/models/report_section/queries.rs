@@ -238,23 +238,23 @@ where
 
 /// Create a new ReportSection in the database.
 pub async fn create(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     auth: &AuthInfo,
-    payload: &ReportSectionCreatePayload,
-) -> Result<ReportSection, error_stack::Report<Error>> {
+    payload: ReportSectionCreatePayload,
+) -> Result<ReportSectionCreateResult, error_stack::Report<Error>> {
     // TODO create permissions auth check
     let id = ReportSectionId::new();
-    create_raw(db, id, auth.organization_id, payload).await
+    create_raw(&mut *db, id, auth.organization_id, payload).await
 }
 
 /// Create a new ReportSection in the database, allowing the ID to be explicitly specified.
 #[instrument(skip(db))]
 pub async fn create_raw(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     id: ReportSectionId,
     organization_id: OrganizationId,
-    payload: &ReportSectionCreatePayload,
-) -> Result<ReportSection, error_stack::Report<Error>> {
+    payload: ReportSectionCreatePayload,
+) -> Result<ReportSectionCreateResult, error_stack::Report<Error>> {
     let result = query_file_as!(
         ReportSection,
         "src/models/report_section/insert.sql",
@@ -265,7 +265,7 @@ pub async fn create_raw(
         &payload.options,
         &payload.report_id as _,
     )
-    .fetch_one(db)
+    .fetch_one(&mut *db)
     .await
     .change_context(Error::Db)?;
 
@@ -274,11 +274,11 @@ pub async fn create_raw(
 
 #[instrument(skip(db))]
 pub async fn update(
-    db: impl PgExecutor<'_>,
+    db: &mut PgConnection,
     auth: &AuthInfo,
     id: ReportSectionId,
-    payload: &ReportSectionUpdatePayload,
-) -> Result<Option<bool>, error_stack::Report<Error>> {
+    payload: ReportSectionUpdatePayload,
+) -> Result<bool, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let result = query_file_scalar!(
         "src/models/report_section/update.sql",
@@ -290,11 +290,15 @@ pub async fn update(
         &payload.options as _,
         &payload.report_id as _,
     )
-    .fetch_optional(db)
+    .fetch_optional(&mut *db)
     .await
     .change_context(Error::Db)?;
 
-    Ok(result)
+    let Some(is_owner) = result else {
+        return Ok(false);
+    };
+
+    Ok(true)
 }
 
 #[instrument(skip(db))]
@@ -370,13 +374,13 @@ pub async fn update_one_with_parent(
 #[instrument(skip(db))]
 pub async fn update_with_parent(
     db: &mut PgConnection,
-    auth: &AuthInfo,
+    organization_id: OrganizationId,
     is_owner: bool,
     parent_id: ReportId,
     payload: &[ReportSectionUpdatePayload],
 ) -> Result<Vec<ReportSection>, error_stack::Report<Error>> {
     if payload.is_empty() {
-        delete_all_children_of_parent(db, auth, parent_id).await?;
+        delete_all_children_of_parent(db, organization_id, parent_id).await?;
         Ok(Vec::new())
     } else {
         // First, we upsert the existing children.
@@ -392,14 +396,14 @@ pub async fn update_with_parent(
 
         query = query
             .bind(is_owner)
-            .bind(auth.organization_id.as_uuid())
+            .bind(organization_id.as_uuid())
             .bind(parent_id.as_uuid());
 
         for p in payload {
             let id = p.id.unwrap_or_else(|| ReportSectionId::new());
             query = query
                 .bind(id)
-                .bind(auth.organization_id)
+                .bind(organization_id)
                 .bind(&p.name)
                 .bind(&p.viz)
                 .bind(&p.options)
@@ -415,7 +419,7 @@ pub async fn update_with_parent(
             .collect::<Vec<_>>();
         query_file!(
             "src/models/report_section/delete_removed_children.sql",
-            auth.organization_id.as_uuid(),
+            organization_id.as_uuid(),
             parent_id.as_uuid(),
             ids.as_slice()
         )
@@ -451,12 +455,12 @@ pub async fn delete_with_parent(
 #[instrument(skip(db))]
 pub async fn delete_all_children_of_parent(
     db: impl PgExecutor<'_>,
-    auth: &AuthInfo,
+    organization_id: OrganizationId,
     parent_id: ReportId,
 ) -> Result<(), error_stack::Report<Error>> {
     query_file!(
         "src/models/report_section/delete_all_children.sql",
-        auth.organization_id.as_uuid(),
+        organization_id.as_uuid(),
         parent_id.as_uuid()
     )
     .execute(db)

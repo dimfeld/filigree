@@ -11,7 +11,7 @@ use super::{
         Access, FilterableType, ModelField, ModelFieldReference, ReferencePopulation,
         ReferentialAction, SqlType,
     },
-    Endpoints, Model,
+    Endpoints, HasModel, Model,
 };
 use crate::{
     config::Config,
@@ -22,9 +22,9 @@ use crate::{
 };
 
 pub struct ChildField<'a> {
-    field: ModelField,
-    model: &'a Model,
-    many: bool,
+    pub field: ModelField,
+    pub model: &'a Model,
+    pub many: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -817,6 +817,35 @@ impl<'a> ModelGenerator<'a> {
         Ok(fields.into_iter())
     }
 
+    pub fn write_payload_child_field_type(
+        has_model: &Model,
+        has: &HasModel,
+        for_update: bool,
+    ) -> String {
+        let suffix = if for_update {
+            "UpdatePayload"
+        } else {
+            "CreatePayload"
+        };
+
+        let write_payload_type = match has.through {
+            None => ReferenceFetchType::Data,
+            Some(_) => ReferenceFetchType::Id,
+        };
+
+        let rust_type =
+            Self::child_model_field_type(has_model, write_payload_type, has.many, suffix);
+
+        // For the update payload, wrap a single child field in a double option so we can distinguish
+        // between null (remove the child) vs. the member being absent (don't touch the
+        // child).
+        if for_update && !has.many {
+            format!("Option<{}>", rust_type)
+        } else {
+            rust_type
+        }
+    }
+
     pub fn write_payload_child_fields(
         &self,
         for_update: bool,
@@ -850,27 +879,7 @@ impl<'a> ModelGenerator<'a> {
                     return Ok(None);
                 }
 
-                let write_payload_type = match has.through {
-                    None => ReferenceFetchType::Data,
-                    Some(_) => ReferenceFetchType::Id,
-                };
-
-                let suffix = if for_update {
-                    "UpdatePayload"
-                } else {
-                    "CreatePayload"
-                };
-                let rust_type =
-                    Self::child_model_field_type(&has_model, write_payload_type, has.many, suffix);
-
-                // For the update payload, wrap a single child field in a double option so we can distinguish
-                // between null (remove the child) vs. the member being absent (don't touch the
-                // child).
-                let rust_type = if for_update && !has.many {
-                    format!("Option<{}>", rust_type)
-                } else {
-                    rust_type
-                };
+                let rust_type = Self::write_payload_child_field_type(has_model, has, for_update);
 
                 let model_field = ModelField {
                     name: has.rust_child_field_name(&has_model),

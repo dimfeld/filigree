@@ -25,6 +25,8 @@ pub type CommentPopulatedGet = Comment;
 
 pub type CommentPopulatedList = Comment;
 
+pub type CommentCreateResult = Comment;
+
 impl Comment {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
     // detect whether to add the extra :: in cases like DateTime::<Utc>::default

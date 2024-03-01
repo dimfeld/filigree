@@ -27,6 +27,8 @@ pub type ReportSectionPopulatedGet = ReportSection;
 
 pub type ReportSectionPopulatedList = ReportSection;
 
+pub type ReportSectionCreateResult = ReportSection;
+
 impl ReportSection {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
     // detect whether to add the extra :: in cases like DateTime::<Utc>::default
