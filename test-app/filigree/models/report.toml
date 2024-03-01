@@ -23,3 +23,10 @@ many = true
 populate_on_list = "id"
 populate_on_get = "data"
 update_with_parent = true
+
+[[has]]
+model = "Tag"
+many = true
+populate_on_list = "id"
+populate_on_get = "data"
+through = "ReportTag"

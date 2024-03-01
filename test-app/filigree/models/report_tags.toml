@@ -1,0 +1,6 @@
+name = "ReportTag"
+id_prefix = "reptag"
+endpoints = true
+
+joins = ["Report", "Tag"]
+
