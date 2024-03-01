@@ -340,7 +340,7 @@ async fn create_payload_children(
     db: &mut PgConnection,
     parent_id: {{id_type}},
     organization_id: OrganizationId,
-    mut payload: {{struct_base}}CreatePayload
+    payload: {{struct_base}}CreatePayload
 ) -> Result<{{struct_base}}CreatePayloadChildrenResult, error_stack::Report<Error>> {
 
     {% for c in children | filter(attribute="write_payload_field_name") %}

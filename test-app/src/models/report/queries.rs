@@ -321,7 +321,7 @@ async fn create_payload_children(
     db: &mut PgConnection,
     parent_id: ReportId,
     organization_id: OrganizationId,
-    mut payload: ReportCreatePayload,
+    payload: ReportCreatePayload,
 ) -> Result<ReportCreatePayloadChildrenResult, error_stack::Report<Error>> {
     let report_sections_result = if let Some(mut children) = payload.report_sections {
         if !children.is_empty() {
