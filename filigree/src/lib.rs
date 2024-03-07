@@ -26,6 +26,8 @@ pub mod requests;
 pub mod server;
 /// Utilities for working with SQL queries
 pub mod sql;
+/// Cloud object storage
+pub mod storage;
 /// Functionality to help test your app
 pub mod testing;
 /// Tracing configuration
