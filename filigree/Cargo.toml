@@ -57,13 +57,13 @@ url = "2.5.0"
 uuid = { version = "1.7.0", features = ["serde", "v7"] }
 
 [features]
-default = ["tracing", "tracing_honeycomb", "tracing_jaeger", "email_resend"]
+default = ["tracing", "tracing_honeycomb", "tracing_jaeger", "email_provider_resend"]
 tracing = ["dep:log", "dep:tracing-subscriber", "dep:tracing-error", "dep:tracing-log"]
 opentelemetry = ["tracing", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
 tracing_honeycomb = ["tracing", "opentelemetry", "dep:tonic", "dep:opentelemetry-otlp"]
 tracing_jaeger = ["tracing", "opentelemetry", "dep:opentelemetry-jaeger"]
 email_provider = []
-email_resend = ["email_provider"]
+email_provider_resend = ["email_provider"]
 test_slow = []
 test_password = []
 
