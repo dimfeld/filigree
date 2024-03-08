@@ -1,4 +1,4 @@
-use error_stack::{Report, ResultExt};
+//! S3 storage configuration for object_store
 use http::{
     uri::{Authority, Scheme},
     Uri,
@@ -27,10 +27,7 @@ pub struct S3StoreConfig {
 /// Create a new S3 store. This function is mostly designed to make it easier to use S3-compatible
 /// services from other providers. For real S3, it may be simpler to just use
 /// [AmazonS3Builder::from_env()] or a similar function.
-pub fn create_store<'a>(
-    config: &S3StoreConfig,
-    bucket: &'a str,
-) -> Result<AmazonS3, Report<StorageError>> {
+pub fn create_store<'a>(config: &S3StoreConfig, bucket: &'a str) -> Result<AmazonS3, StorageError> {
     let mut builder = object_store::aws::AmazonS3Builder::new()
         .with_virtual_hosted_style_request(config.virtual_host_style)
         .with_bucket_name(bucket);
@@ -42,7 +39,9 @@ pub fn create_store<'a>(
                 .with_secret_access_key(secret_key.as_str());
         }
         (Some(_), None) | (None, Some(_)) => {
-            return Err(Report::new(StorageError::AccessAndSecretKey));
+            return Err(StorageError::Configuration(
+                "Must provide both or none of access_key_id and secret_key",
+            ));
         }
         (None, None) => {}
     };
@@ -77,5 +76,6 @@ pub fn create_store<'a>(
         builder = builder.with_region(region.as_str());
     }
 
-    builder.build().change_context(StorageError::BuildingClient)
+    let store = builder.build()?;
+    Ok(store)
 }

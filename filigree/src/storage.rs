@@ -1,16 +1,44 @@
-use axum::{
-    body::{Body, BodyDataStream},
-    extract::Request,
-    response::Response,
-};
+use axum::body::{Body, BodyDataStream};
 use bytes::Bytes;
-use futures::TryStreamExt;
+use futures::{Future, TryFutureExt, TryStreamExt};
 use object_store::{path::Path, GetResult, MultipartId, ObjectStore as _, PutResult};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tracing::instrument;
 
+use self::in_memory::InMemoryStore;
+
+pub(crate) mod in_memory;
 #[cfg(feature = "storage_aws")]
 pub mod s3;
+
+/// An error that may occur during a storage operation
+#[derive(Debug, thiserror::Error)]
+pub enum StorageError {
+    /// I/O error while writing to storage
+    #[error("I/O error: {0}")]
+    StorageIo(#[from] tokio::io::Error),
+    /// I/O error while reading the request body
+    #[error("Request body error: {0}")]
+    Body(#[from] axum::Error),
+    /// Object was not found
+    #[error("Object not found")]
+    NotFound(#[source] object_store::Error),
+    /// Storage backend error
+    #[error("Storage backend error")]
+    ObjectStore(#[source] object_store::Error),
+    /// Invalid configuration
+    #[error("Invalid configuration: {0}")]
+    Configuration(&'static str),
+}
+
+impl From<object_store::Error> for StorageError {
+    fn from(value: object_store::Error) -> Self {
+        match value {
+            object_store::Error::NotFound { .. } => Self::NotFound(value),
+            _ => Self::ObjectStore(value),
+        }
+    }
+}
 
 /// An abstraction over a storage provider for a particular bucket. This is a thin layer over
 /// [object_store].
@@ -24,10 +52,7 @@ pub struct Storage {
 impl Storage {
     #[cfg(feature = "storage_aws")]
     /// Create a new Storage for an S3 bucket
-    pub fn new_s3(
-        options: &s3::S3StoreConfig,
-        bucket: String,
-    ) -> Result<Self, object_store::Error> {
+    pub fn new_s3(options: &s3::S3StoreConfig, bucket: String) -> Result<Self, StorageError> {
         let store = s3::create_store(options, &bucket)?;
         Ok(Self {
             bucket,
@@ -44,15 +69,23 @@ impl Storage {
         })
     }
 
+    /// Create a new in-memory store for testing
+    pub fn new_memory() -> Self {
+        Self {
+            bucket: "memory".to_string(),
+            store: ObjectStore::Memory(InMemoryStore::new()),
+        }
+    }
+
     /// Get an object from the store
-    #[instrument(skip(self), fields(bucket=%self.bucket))]
+    #[instrument]
     pub async fn get(&self, location: &str) -> Result<GetResult, object_store::Error> {
         let location = Path::from(location);
         self.store.get(&location).await
     }
 
     /// Write an object to the store
-    #[instrument(skip(self, bytes), fields(bucket=%self.bucket))]
+    #[instrument(skip(bytes))]
     pub async fn put(
         &self,
         location: &str,
@@ -63,7 +96,7 @@ impl Storage {
     }
 
     /// Write an object to the store as a stream
-    #[instrument(skip(self), fields(bucket=%self.bucket))]
+    #[instrument]
     pub async fn put_multipart(
         &self,
         location: &str,
@@ -72,9 +105,16 @@ impl Storage {
         self.store.put_multipart(&location).await
     }
 
+    /// Delete an object from the store
+    #[instrument]
+    pub async fn delete(&self, location: &str) -> Result<(), object_store::Error> {
+        let location = Path::from(location);
+        self.store.delete(&location).await
+    }
+
     /// Abort a streaming upload. This tells the storage provider to drop any chunks that have been
     /// uploaded so far.
-    #[instrument(skip(self))]
+    #[instrument]
     pub async fn abort_multipart(
         &self,
         location: &str,
@@ -96,13 +136,36 @@ impl Storage {
     }
 
     /// Stream a request body into object storage
-    pub async fn save_request_body(
+    pub async fn save_request_body<E, F, Fut>(
         &self,
         location: &str,
         body: BodyDataStream,
-    ) -> Result<usize, object_store::Error> {
-        let (upload_id, mut writer) = self.put_multipart(location).await?;
-        let result = self.handle_upload(&mut writer, body).await;
+    ) -> Result<usize, StorageError> {
+        self.save_and_inspect_request_body(
+            location,
+            body,
+            |_| async move { Ok::<_, StorageError>(()) },
+        )
+        .await
+    }
+
+    /// Stream a request body into object storage
+    pub async fn save_and_inspect_request_body<E, F, Fut>(
+        &self,
+        location: &str,
+        body: BodyDataStream,
+        inspect: F,
+    ) -> Result<usize, E>
+    where
+        E: From<StorageError>,
+        F: FnMut(&Bytes) -> Fut,
+        Fut: Future<Output = Result<(), E>>,
+    {
+        let (upload_id, mut writer) = self
+            .put_multipart(location)
+            .await
+            .map_err(StorageError::from)?;
+        let result = self.upload_body(&mut writer, body, inspect).await;
         if let Err(_) = &result {
             self.abort_multipart(location, &upload_id).await.ok();
         }
@@ -110,18 +173,29 @@ impl Storage {
         result
     }
 
-    async fn handle_upload(
+    async fn upload_body<E, F, Fut>(
         &self,
         upload: &mut Box<dyn AsyncWrite + Unpin + Send>,
         mut stream: BodyDataStream,
-    ) -> Result<usize, object_store::Error> {
+        mut inspect: F,
+    ) -> Result<usize, E>
+    where
+        E: From<StorageError>,
+        F: FnMut(&Bytes) -> Fut,
+        Fut: Future<Output = Result<(), E>>,
+    {
         let mut total_size = 0;
-        while let Some(chunk) = stream.try_next().await? {
+        while let Some(chunk) = stream.try_next().await.map_err(StorageError::from)? {
             total_size += chunk.len();
-            upload.write_all(&chunk).await?;
+            tokio::try_join!(
+                inspect(&chunk),
+                upload
+                    .write_all(&chunk)
+                    .map_err(|e| E::from(StorageError::from(e)))
+            )?;
         }
 
-        upload.shutdown().await?;
+        upload.shutdown().await.map_err(StorageError::from)?;
 
         Ok(total_size)
     }
@@ -132,6 +206,7 @@ impl Storage {
 enum ObjectStore {
     Local(object_store::local::LocalFileSystem),
     S3(object_store::aws::AmazonS3),
+    Memory(InMemoryStore),
 }
 
 impl std::fmt::Debug for ObjectStore {
@@ -139,6 +214,7 @@ impl std::fmt::Debug for ObjectStore {
         match self {
             Self::Local(_) => f.debug_tuple("Local").finish(),
             Self::S3(_) => f.debug_tuple("S3").finish(),
+            Self::Memory(_) => f.debug_tuple("Memory").finish(),
         }
     }
 }
@@ -148,6 +224,7 @@ impl ObjectStore {
         match self {
             ObjectStore::Local(local) => local.get(location).await,
             ObjectStore::S3(s3) => s3.get(location).await,
+            ObjectStore::Memory(mem) => mem.get(location).await,
         }
     }
 
@@ -155,6 +232,7 @@ impl ObjectStore {
         match self {
             ObjectStore::Local(local) => local.put(location, data).await,
             ObjectStore::S3(s3) => s3.put(location, data).await,
+            ObjectStore::Memory(mem) => mem.put(location, data).await,
         }
     }
 
@@ -165,6 +243,7 @@ impl ObjectStore {
         match self {
             ObjectStore::Local(local) => local.put_multipart(location).await,
             ObjectStore::S3(s3) => s3.put_multipart(location).await,
+            ObjectStore::Memory(mem) => mem.put_multipart(location).await,
         }
     }
 
@@ -176,6 +255,15 @@ impl ObjectStore {
         match self {
             ObjectStore::Local(local) => local.abort_multipart(location, id).await,
             ObjectStore::S3(s3) => s3.abort_multipart(location, id).await,
+            ObjectStore::Memory(_) => Ok(()),
+        }
+    }
+
+    pub async fn delete(&self, location: &Path) -> object_store::Result<()> {
+        match self {
+            ObjectStore::Local(local) => local.delete(location).await,
+            ObjectStore::S3(s3) => s3.delete(location).await,
+            ObjectStore::Memory(mem) => mem.delete(location).await,
         }
     }
 
