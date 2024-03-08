@@ -67,3 +67,11 @@ pub fn prefixed_env_var(prefix: &str, key: &str) -> Result<String, VarError> {
         std::env::var(format!("{prefix}{key}"))
     }
 }
+
+/// Parse an `Option<String>`, returning an error if the value is present and fails to parse to the expected type.
+pub fn parse_option<T: std::str::FromStr>(value: Option<String>) -> Result<Option<T>, T::Err> {
+    match value {
+        Some(v) => Ok(Some(v.parse()?)),
+        None => Ok(None),
+    }
+}

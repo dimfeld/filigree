@@ -1,18 +1,17 @@
 //! S3 storage configuration for object_store
-use http::{
-    uri::{Authority, Scheme},
-    Uri,
-};
 use object_store::aws::AmazonS3;
+use serde::{Deserialize, Serialize};
 use tracing::{event, Level};
+use url::Url;
 
 use super::StorageError;
+use crate::{parse_option, prefixed_env_var};
 
 /// Configuration for an S3 store
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct S3StoreConfig {
     /// The endpoint to use when connecting to the service, if not the default AWS S3 endpoint.
-    pub endpoint: Option<Uri>,
+    pub endpoint: Option<Url>,
     /// The region to connect to
     pub region: Option<String>,
     /// The access key id to authenticate with
@@ -21,15 +20,70 @@ pub struct S3StoreConfig {
     pub secret_key: Option<String>,
     /// If this service requires connecting with "virtual host" style, in which the bucket name is
     /// part of the URL.
-    pub virtual_host_style: bool,
+    #[serde(default)]
+    pub virtual_host_style: Option<bool>,
+}
+
+impl S3StoreConfig {
+    /// Overwrite this configuration's values with environment values, if set.
+    pub fn merge_env(&mut self, prefix: &str) -> Result<(), StorageError> {
+        let from_env = S3StoreConfig::from_env(prefix)?;
+        if from_env.endpoint.is_some() {
+            self.endpoint = from_env.endpoint;
+        }
+
+        if from_env.region.is_some() {
+            self.region = from_env.region;
+        }
+
+        if from_env.access_key_id.is_some() {
+            self.access_key_id = from_env.access_key_id;
+        }
+
+        if from_env.secret_key.is_some() {
+            self.secret_key = from_env.secret_key;
+        }
+
+        if from_env.virtual_host_style.is_some() {
+            self.virtual_host_style = from_env.virtual_host_style;
+        }
+
+        Ok(())
+    }
+
+    /// Create a new S3StoreConfig from environment variables
+    pub fn from_env(prefix: &str) -> Result<Self, StorageError> {
+        let config = S3StoreConfig {
+            endpoint: parse_option(prefixed_env_var(prefix, "S3_ENDPOINT").ok())
+                .map_err(|_| StorageError::Configuration("S3 endpoint must be a URI"))?,
+            region: prefixed_env_var(prefix, "S3_REGION").ok(),
+            access_key_id: prefixed_env_var(prefix, "S3_ACCESS_KEY_ID").ok(),
+            secret_key: prefixed_env_var(prefix, "S3_SECRET_KEY").ok(),
+            virtual_host_style: parse_option(
+                prefixed_env_var(prefix, "S3_VIRTUAL_HOST_STYLE").ok(),
+            )
+            .map_err(|_| {
+                StorageError::Configuration("S3_VIRTUAL_HOST_STYLE must be true or false")
+            })?,
+        };
+
+        match (config.access_key_id.is_some(), config.secret_key.is_some()) {
+            (true, true) => Ok(config),
+            (false, false) => Ok(config),
+            _ => Err(StorageError::Configuration(
+                "Must provide both or none of access_key_id and secret_key",
+            )),
+        }
+    }
 }
 
 /// Create a new S3 store. This function is mostly designed to make it easier to use S3-compatible
 /// services from other providers. For real S3, it may be simpler to just use
 /// [AmazonS3Builder::from_env()] or a similar function.
 pub fn create_store<'a>(config: &S3StoreConfig, bucket: &'a str) -> Result<AmazonS3, StorageError> {
+    let virtual_host_style = config.virtual_host_style.unwrap_or(false);
     let mut builder = object_store::aws::AmazonS3Builder::new()
-        .with_virtual_hosted_style_request(config.virtual_host_style)
+        .with_virtual_hosted_style_request(virtual_host_style)
         .with_bucket_name(bucket);
 
     match (config.access_key_id.as_ref(), config.secret_key.as_ref()) {
@@ -48,23 +102,21 @@ pub fn create_store<'a>(config: &S3StoreConfig, bucket: &'a str) -> Result<Amazo
 
     if let Some(endpoint) = config.endpoint.as_ref() {
         event!(Level::DEBUG, ?endpoint);
-        let needs_scheme = endpoint.scheme().is_none();
 
-        let e = if config.virtual_host_style {
-            // When using virtual host style, object_store requires us to prepend the bucket name
-            // to the endpoint.
-            let parts = endpoint.to_owned().into_parts();
-            let authority = parts
-                .authority
-                .unwrap_or_else(|| Authority::from_static("missing-host"));
-            let new_domain = format!("{}.{}", bucket, authority.as_str());
-            let scheme = parts.scheme.unwrap_or(Scheme::HTTPS);
+        // When using virtual host style, object_store requires us to prepend the bucket name
+        // to the endpoint.
+        let host = endpoint.host_str().ok_or(StorageError::Configuration(
+            "Missing host in S3 endpoint URL",
+        ))?;
 
-            format!("{}://{}", scheme.as_str(), new_domain)
-        } else if needs_scheme {
-            // We tolerate a missing https:// in the endpoint, but object_store will panic without it.
-            let parts = endpoint.to_owned().into_parts();
-            format!("https://{}", parts.authority.unwrap().as_str())
+        let e = if virtual_host_style && !host.starts_with(bucket) {
+            let mut endpoint = endpoint.clone();
+            let new_domain = format!("{bucket}.{host}");
+            endpoint
+                .set_host(Some(&new_domain))
+                .map_err(|_| StorageError::Configuration("Unable to construct S3 Endpoint URL"))?;
+
+            endpoint.to_string()
         } else {
             endpoint.to_string()
         };
