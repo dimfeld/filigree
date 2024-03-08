@@ -1144,6 +1144,7 @@ dependencies = [
  "dialoguer",
  "diffy",
  "error-stack",
+ "filigree",
  "glob",
  "ignore",
  "itertools 0.12.1",

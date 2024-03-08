@@ -19,7 +19,7 @@ const DEPS: &[DepVersion] = &[
     ("chrono", "0.4.33", &[]),
     ("clap", "4.4.11", &["env", "derive"]),
     ("dotenvy", "0.15.7", &[]),
-    ("error-stack", "0.4.1", &[]),
+    ("error-stack", "0.4.1", &["spantrace"]),
     ("eyre", "0.6.11", &[]),
     ("filigree", "0.0.1", &[]),
     ("futures", "0.3.30", &[]),
