@@ -1,9 +1,12 @@
+pub mod storage;
+
 use std::path::{Path, PathBuf};
 
 use error_stack::{Report, ResultExt};
 use glob::glob;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
+use self::storage::{ConfigStorageProvider, Storage};
 use crate::{
     format::Formatters,
     model::{field::ModelField, Model, ModelAuthScope, SqlDialect},
@@ -57,6 +60,14 @@ pub struct Config {
     /// Configuration that extends built-in models
     #[serde(default)]
     pub extend: ExtendConfig,
+
+    /// Storage locations that the application uses
+    #[serde(default)]
+    pub storage: Vec<Storage>,
+
+    /// Storage providers, if not using the preconfigured options.
+    #[serde(default)]
+    pub storage_providers: Vec<ConfigStorageProvider>,
 }
 
 impl Config {
