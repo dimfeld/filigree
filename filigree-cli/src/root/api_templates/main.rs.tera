@@ -202,7 +202,8 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         },
         pg_pool,
         {% if storage -%}
-        storage: {{crate_name}}::storage::AppStorageConfig::new()?,
+        storage: {{crate_name}}::storage::AppStorageConfig::new()
+            .change_context(Error::ServerStart)?,
         {%- endif %}
     })
     .await?;

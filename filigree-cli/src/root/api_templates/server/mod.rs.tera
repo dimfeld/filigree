@@ -37,13 +37,10 @@ use tower_http::{
 };
 use tracing::{event, Level};
 
-use crate::error::Error;
+use crate::{error::Error, storage};
 
 mod health;
 mod meta;
-{% if storage %}
-mod storage;
-{% endif %}
 #[cfg(test)]
 mod tests;
 
@@ -58,10 +55,10 @@ pub struct ServerStateInner {
     pub filigree: Arc<FiligreeState>,
     /// The Postgres database connection pool
     pub db: PgPool,
-    {% if storage %}
+    {% if storage -%}
     /// Object storage providers
     pub storage: storage::AppStorage,
-    {% endif %}
+    {%- endif %}
 }
 
 impl ServerStateInner {

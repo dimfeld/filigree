@@ -38,7 +38,7 @@ impl R2Jurisdiction {
 /// but left as Options here to facilitate merging envirionment variables into fixed defaults.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "preset")]
-pub enum StorageProvider {
+pub enum StoragePreset {
     /// AWS S3
     S3 {
         /// The AWS region
@@ -64,29 +64,43 @@ pub enum StorageProvider {
     },
 }
 
-impl StorageProvider {
+impl StoragePreset {
     #[cfg(feature = "filigree-cli")]
     /// Recreate the structure in Rust code.
     pub fn template_text(&self) -> String {
+        use crate::templates::OptionAsString;
+
         match self {
-            StorageProvider::S3 { region } => {
-                format!("StorageProvider::S3 {{ region: {:?} }}", region)
-            }
-            StorageProvider::DigitalOceanSpaces { region } => {
+            StoragePreset::S3 { region } => {
                 format!(
-                    "StorageProvider::DigitalOceanSpaces {{ region: {:?} }}",
-                    region
+                    "filigree::storage::StoragePreset::S3 {{
+                        region: {},
+                    }}",
+                    OptionAsString(region),
                 )
             }
-            StorageProvider::BackblazeB2 { region } => {
-                format!("StorageProvider::BackblazeB2 {{ region: {:?} }}", region)
+            StoragePreset::DigitalOceanSpaces { region } => {
+                format!(
+                    "filigree::storage::StoragePreset::DigitalOceanSpaces {{ region: {} }}",
+                    OptionAsString(region),
+                )
             }
-            StorageProvider::CloudflareR2 {
+            StoragePreset::BackblazeB2 { region } => {
+                format!(
+                    "filigree::storage::StoragePreset::BackblazeB2 {{ region: {} }}",
+                    OptionAsString(region),
+                )
+            }
+            StoragePreset::CloudflareR2 {
                 account_id,
                 jurisdiction,
             } => format!(
-                "StorageProvider::CloudflareR2 {{ account_id: {:?}, jurisdiction: {:?} }}",
-                account_id, jurisdiction
+                "filigree::storage::StoragePreset::CloudflareR2 {{
+                    account_id: {},
+                    jurisdiction: {:?}
+                }}",
+                OptionAsString(account_id),
+                jurisdiction
             ),
         }
     }
@@ -94,16 +108,16 @@ impl StorageProvider {
     /// Merge environment variables into this provider
     pub fn merge_env(&mut self, prefix: &str) -> Result<(), StorageError> {
         match self {
-            StorageProvider::S3 { region } => {
+            StoragePreset::S3 { region } => {
                 merge_option_if_set(region, prefixed_env_var(prefix, "REGION").ok());
             }
-            StorageProvider::DigitalOceanSpaces { region } => {
+            StoragePreset::DigitalOceanSpaces { region } => {
                 merge_option_if_set(region, prefixed_env_var(prefix, "REGION").ok());
             }
-            StorageProvider::BackblazeB2 { region } => {
+            StoragePreset::BackblazeB2 { region } => {
                 merge_option_if_set(region, prefixed_env_var(prefix, "REGION").ok());
             }
-            StorageProvider::CloudflareR2 {
+            StoragePreset::CloudflareR2 {
                 account_id,
                 jurisdiction,
             } => {
@@ -186,7 +200,7 @@ impl StorageProvider {
 
 /// Configuration for [Storage]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum StorageConfig {
     #[cfg(feature = "storage_aws")]
     /// S3-compatible storage configuration

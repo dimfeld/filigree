@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use convert_case::{Case, Casing};
-use filigree::storage::StorageProvider;
+use filigree::storage::StoragePreset;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -13,7 +13,7 @@ pub enum StorageConfigError {
     ProviderRequired { bucket: String },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StorageConfig {
     /// Storage buckets
     /// The key is the name inside the application code for this storage location.
@@ -21,7 +21,7 @@ pub struct StorageConfig {
     /// variables to configure the location will be prefixed with
     /// `{env_prefix}STORAGE_{name}_`.
     #[serde(default)]
-    pub buckets: HashMap<String, StorageBucketConfig>,
+    pub bucket: HashMap<String, StorageBucketConfig>,
 
     /// Storage providers, if not using the preconfigured options.
     #[serde(default)]
@@ -54,7 +54,7 @@ pub struct StorageBucketConfig {
 #[serde(untagged)]
 pub enum StorageProviderConfig {
     /// A known storage provider with pre-filled defaults for endpoint, virtual host style, etc.
-    Preconfigured(StorageProvider),
+    Preconfigured(StoragePreset),
     /// A custom storage provider, which can be set up by modifying the generated code or by
     /// setting environment variables.
     Custom(filigree::storage::StorageConfig),
@@ -87,7 +87,7 @@ impl StorageConfig {
 
         let can_omit_provider = self.provider.len() == 1;
         let buckets = self
-            .buckets
+            .bucket
             .iter()
             .map(|(name, bucket)| {
                 let (provider_name, provider) =

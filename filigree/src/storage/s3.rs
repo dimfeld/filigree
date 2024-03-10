@@ -70,19 +70,21 @@ impl S3StoreConfig {
     #[cfg(feature = "filigree-cli")]
     /// Recreate the structure in Rust code.
     pub fn template_text(&self) -> String {
+        use crate::templates::{OptionAsStorageUrl, OptionAsString};
+
         format!(
-            "S3StoreConfig {{
-                endpoint: {:?},
-                region: {:?},
-                access_key_id: {:?},
-                secret_key: {:?},
+            "StorageConfig::S3(filigree::storage::s3::S3StoreConfig {{
+                endpoint: {},
+                region: {},
+                access_key_id: {},
+                secret_key: {},
                 virtual_host_style: {:?},
                 s3_express: {:?},
-            }}",
-            self.endpoint,
-            self.region,
-            self.access_key_id,
-            self.secret_key,
+            }})",
+            OptionAsStorageUrl(&self.endpoint),
+            OptionAsString(&self.region),
+            OptionAsString(&self.access_key_id),
+            OptionAsString(&self.secret_key),
             self.virtual_host_style,
             self.s3_express
         )

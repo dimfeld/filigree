@@ -29,6 +29,9 @@ pub mod server;
 pub mod sql;
 /// Cloud object storage
 pub mod storage;
+#[cfg(feature = "filigree-cli")]
+/// Template code generation helpers for the Filigree CLI
+pub mod templates;
 /// Functionality to help test your app
 pub mod testing;
 /// Tracing configuration

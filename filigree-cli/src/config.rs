@@ -6,7 +6,7 @@ use error_stack::{Report, ResultExt};
 use glob::glob;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use self::storage::{StorageConfig, StorageProviderConfig};
+use self::storage::StorageConfig;
 use crate::{
     format::Formatters,
     model::{field::ModelField, Model, ModelAuthScope, SqlDialect},

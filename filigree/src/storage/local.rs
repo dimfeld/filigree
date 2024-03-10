@@ -35,6 +35,11 @@ impl LocalStoreConfig {
     #[cfg(feature = "filigree-cli")]
     /// Recreate the structure in Rust code.
     pub fn template_text(&self) -> String {
-        format!("LocalStoreConfig {{ base_path: {:?} }}", self.base_path)
+        use crate::templates::OptionAsString;
+
+        format!(
+            "StorageConfig::Local(filigree::storage::local::LocalStoreConfig {{ base_path: {} }})",
+            OptionAsString(&self.base_path)
+        )
     }
 }

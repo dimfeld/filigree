@@ -106,7 +106,7 @@ pub async fn start_app_with_options(pg_pool: PgPool, options: TestAppOptions) ->
             Box::new(email_service),
         ),
         {% if storage -%}
-        storage: {{crate_name}}::storage::AppStorageConfig::new_in_memory(),
+        storage: crate::storage::AppStorageConfig::new_in_memory(),
         {%- endif %}
     };
 

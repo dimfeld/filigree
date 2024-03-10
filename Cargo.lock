@@ -1035,6 +1035,7 @@ checksum = "27a72baa257b5e0e2de241967bc5ee8f855d6072351042688621081d66b2a76b"
 dependencies = [
  "anyhow",
  "rustc_version",
+ "tracing-error",
 ]
 
 [[package]]
