@@ -2,17 +2,18 @@ use axum::body::{Body, BodyDataStream};
 use bytes::Bytes;
 use futures::{Future, TryFutureExt, TryStreamExt};
 use object_store::{path::Path, GetResult, MultipartId, ObjectStore as _, PutResult};
-use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tracing::instrument;
-use url::Url;
 
 use self::in_memory::InMemoryStore;
 
+pub mod config;
 pub(crate) mod in_memory;
 pub mod local;
 #[cfg(feature = "storage_aws")]
 pub mod s3;
+
+pub use config::*;
 
 /// An error that may occur during a storage operation
 #[derive(Debug, thiserror::Error)]
@@ -43,81 +44,6 @@ impl From<object_store::Error> for StorageError {
     }
 }
 
-/// Known storage providers
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "name")]
-pub enum StorageProvider {
-    /// AWS S3
-    S3 {
-        /// The AWS region
-        region: Option<String>,
-    },
-    /// Digital Ocean Spaces
-    DigitalOcean {
-        /// The DO region
-        region: String,
-    },
-    /// Backblaze B2
-    Backblaze {
-        /// The B2 region
-        region: String,
-    },
-    /// Filesystem Storage
-    Local {
-        /// The base path where files should be stored
-        path: String,
-    },
-}
-
-impl StorageProvider {
-    /// The name of this storage provider
-    pub fn name(&self) -> &'static str {
-        match self {
-            Self::S3 { .. } => "aws",
-            Self::DigitalOcean { .. } => "digital_ocean",
-            Self::Backblaze { .. } => "b2",
-            Self::Local { .. } => "local",
-        }
-    }
-
-    /// Generate a [StorageConfig] for this provider
-    pub fn into_config(self) -> StorageConfig {
-        match self {
-            Self::S3 { region } => StorageConfig::S3(s3::S3StoreConfig {
-                region,
-                ..Default::default()
-            }),
-            Self::DigitalOcean { region } => StorageConfig::S3(s3::S3StoreConfig {
-                endpoint: Some(
-                    Url::parse(&format!("https://{region}.digitaloceanspaces.com")).unwrap(),
-                ),
-                virtual_host_style: Some(true),
-                ..Default::default()
-            }),
-            Self::Backblaze { region } => StorageConfig::S3(s3::S3StoreConfig {
-                endpoint: Some(
-                    Url::parse(&format!("https://s3.{region}.backblazeb2.com")).unwrap(),
-                ),
-                virtual_host_style: Some(true),
-                ..Default::default()
-            }),
-            Self::Local { path } => {
-                StorageConfig::Local(local::LocalStoreConfig { base_path: path })
-            }
-        }
-    }
-}
-
-/// Configuration for [Storage]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum StorageConfig {
-    #[cfg(feature = "storage_aws")]
-    /// S3-compatible storage configuration
-    S3(s3::S3StoreConfig),
-    /// Local filesystem storage
-    Local(local::LocalStoreConfig),
-}
-
 /// An abstraction over a storage provider for a particular bucket. This is a thin layer over
 /// [object_store].
 #[derive(Debug)]
@@ -134,6 +60,7 @@ impl Storage {
             #[cfg(feature = "storage_aws")]
             StorageConfig::S3(options) => Self::new_s3(options, bucket),
             StorageConfig::Local(options) => Self::new_local(options, bucket),
+            StorageConfig::Memory => Ok(Self::new_memory()),
         }
     }
 
@@ -152,10 +79,10 @@ impl Storage {
         options: &local::LocalStoreConfig,
         bucket: String,
     ) -> Result<Self, StorageError> {
-        let path = std::path::Path::new(&options.base_path).join(&bucket);
+        let path = std::path::Path::new(options.base_path.as_deref().unwrap_or(".")).join(&bucket);
         let store = object_store::local::LocalFileSystem::new_with_prefix(path)?;
         Ok(Self {
-            bucket: options.base_path.clone(),
+            bucket,
             store: ObjectStore::Local(store),
         })
     }

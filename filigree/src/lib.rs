@@ -75,3 +75,19 @@ pub fn parse_option<T: std::str::FromStr>(value: Option<String>) -> Result<Optio
         None => Ok(None),
     }
 }
+
+/// Try two options for an environment variable, or fallback to a default value. This is used
+/// when setting up storage providers.
+pub fn double_env_var_fallback<T: std::str::FromStr>(
+    first: &str,
+    second: &str,
+    fallback_value: T,
+) -> Result<T, T::Err> {
+    if let Ok(val) = std::env::var(first) {
+        val.parse()
+    } else if let Ok(val) = std::env::var(second) {
+        val.parse()
+    } else {
+        Ok(fallback_value)
+    }
+}

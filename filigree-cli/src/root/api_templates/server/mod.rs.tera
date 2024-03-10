@@ -41,6 +41,9 @@ use crate::error::Error;
 
 mod health;
 mod meta;
+{% if storage %}
+mod storage;
+{% endif %}
 #[cfg(test)]
 mod tests;
 
@@ -55,6 +58,9 @@ pub struct ServerStateInner {
     pub filigree: Arc<FiligreeState>,
     /// The Postgres database connection pool
     pub db: PgPool,
+    {% if storage %}
+    pub storage: AppStorage,
+    {% endif %}
 }
 
 impl ServerStateInner {
@@ -198,6 +204,10 @@ pub struct Config {
     ///
     /// OAuth can be disabled, regardless of environment variable settings, but passing `Some(Vec::new())`.
     pub oauth_providers: Option<Vec<Box<dyn OAuthProvider>>>,
+
+    {% if storage %}
+    pub storage: AppStorageConfig,
+    {% endif %}
 }
 
 /// Create the server and return it, ready to run.

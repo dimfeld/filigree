@@ -1,0 +1,67 @@
+{% if storage %}
+use filigree::storage::{Storage, StorageConfig, StorageError};
+
+pub struct AppStorage {
+{% for s in storage %}
+    pub {{s.name}}: Storage,
+{% endfor %}
+}
+
+impl AppStorage {
+    pub fn new(config: AppStorageConfig) -> Result<AppStorage, StorageError> {
+        AppStorage {
+            {% for s in storage %}
+            {{s.name}}: Storage::new(&config.{{s.name}}.config, &config.{{s.name}}.bucket)?,
+            {% endfor %}
+        }
+    }
+}
+
+pub struct AppStorageConfigEntry {
+    pub config: StorageConfig,
+    pub bucket: String,
+}
+
+pub struct AppStorageConfig {
+{% for s in storage %}
+    pub {{s.name}}: AppStorageConfigEntry,
+{% endfor %}
+}
+
+impl AppStorageConfig {
+    /// Create the application storage configuration based on the filigree configuration files
+    /// and environment variables.
+    pub fn new() -> AppStorageConfig {
+        {% for s in storage %}
+        let {{s.name}}_config = StorageConfig::from_env(
+            // TODO default settings from the configured storage provider
+            "{{env_prefix}}STORAGE_{{s.name}}",
+            "{{env_prefix}}STORAGE_PROVIDER_{{s.provider_name}}"
+        )?;
+
+        let {{s.name}}_bucket = prefixed_env_var("{{env_prefix}}STORAGE_{{s.name}}_BUCKET")
+            .unwrap_or_else(|| "{{s.bucket}}".to_string());
+        {% endfor %}
+
+        AppStorageConfig {
+            {% for s in storage -%}
+            {{s.name}}: AppStorageConfigEntry {
+                config: {{s.name}}_config,
+                bucket: {{s.name}}_bucket,
+            },
+            {%- endfor %}
+        }
+    }
+
+    #[cfg(test)]
+    /// A test configuration that forces all storage providers to be in-memory.
+    pub fn new_in_memory(config: &Config) -> AppStorageConfig {
+        AppStorageConfig {
+            {% for s in storage %}
+            {{s.name}}: StorageConfig::Memory,
+            {% endfor %}
+        }
+    }
+}
+
+{% endif %}
