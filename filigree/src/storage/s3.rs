@@ -5,7 +5,7 @@ use tracing::{event, Level};
 use url::Url;
 
 use super::StorageError;
-use crate::{parse_option, prefixed_env_var};
+use crate::config::{merge_option_if_set, parse_option, prefixed_env_var};
 
 /// Configuration for an S3 store
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -22,31 +22,20 @@ pub struct S3StoreConfig {
     /// part of the URL.
     #[serde(default)]
     pub virtual_host_style: Option<bool>,
+    /// If true, configure the client for an AWS S3 Express zone bucket
+    pub s3_express: Option<bool>,
 }
 
 impl S3StoreConfig {
     /// Overwrite this configuration's values with environment values, if set.
     pub fn merge_env(&mut self, prefix: &str) -> Result<(), StorageError> {
         let from_env = S3StoreConfig::from_env(prefix)?;
-        if from_env.endpoint.is_some() {
-            self.endpoint = from_env.endpoint;
-        }
-
-        if from_env.region.is_some() {
-            self.region = from_env.region;
-        }
-
-        if from_env.access_key_id.is_some() {
-            self.access_key_id = from_env.access_key_id;
-        }
-
-        if from_env.secret_key.is_some() {
-            self.secret_key = from_env.secret_key;
-        }
-
-        if from_env.virtual_host_style.is_some() {
-            self.virtual_host_style = from_env.virtual_host_style;
-        }
+        merge_option_if_set(&mut self.endpoint, from_env.endpoint);
+        merge_option_if_set(&mut self.region, from_env.region);
+        merge_option_if_set(&mut self.access_key_id, from_env.access_key_id);
+        merge_option_if_set(&mut self.secret_key, from_env.secret_key);
+        merge_option_if_set(&mut self.virtual_host_style, from_env.virtual_host_style);
+        merge_option_if_set(&mut self.s3_express, from_env.s3_express);
 
         Ok(())
     }
@@ -58,7 +47,9 @@ impl S3StoreConfig {
                 .map_err(|_| StorageError::Configuration("S3 endpoint must be a URI"))?,
             region: prefixed_env_var(prefix, "S3_REGION").ok(),
             access_key_id: prefixed_env_var(prefix, "S3_ACCESS_KEY_ID").ok(),
-            secret_key: prefixed_env_var(prefix, "S3_SECRET_KEY").ok(),
+            secret_key: prefixed_env_var(prefix, "S3_SECRET_ACCESS_KEY").ok(),
+            s3_express: parse_option(prefixed_env_var(prefix, "S3_EXPRESS").ok())
+                .map_err(|_| StorageError::Configuration("S3_EXPRESS must be true or false"))?,
             virtual_host_style: parse_option(
                 prefixed_env_var(prefix, "S3_VIRTUAL_HOST_STYLE").ok(),
             )
@@ -75,6 +66,27 @@ impl S3StoreConfig {
             )),
         }
     }
+
+    #[cfg(feature = "filigree-cli")]
+    /// Recreate the structure in Rust code.
+    pub fn template_text(&self) -> String {
+        format!(
+            "S3StoreConfig {{
+                endpoint: {:?},
+                region: {:?},
+                access_key_id: {:?},
+                secret_key: {:?},
+                virtual_host_style: {:?},
+                s3_express: {:?},
+            }}",
+            self.endpoint,
+            self.region,
+            self.access_key_id,
+            self.secret_key,
+            self.virtual_host_style,
+            self.s3_express
+        )
+    }
 }
 
 /// Create a new S3 store. This function is mostly designed to make it easier to use S3-compatible
@@ -84,7 +96,8 @@ pub fn create_store<'a>(config: &S3StoreConfig, bucket: &'a str) -> Result<Amazo
     let virtual_host_style = config.virtual_host_style.unwrap_or(false);
     let mut builder = object_store::aws::AmazonS3Builder::new()
         .with_virtual_hosted_style_request(virtual_host_style)
-        .with_bucket_name(bucket);
+        .with_bucket_name(bucket)
+        .with_s3_express(config.s3_express.unwrap_or(false));
 
     match (config.access_key_id.as_ref(), config.secret_key.as_ref()) {
         (Some(access_key_id), Some(secret_key)) => {
@@ -101,7 +114,7 @@ pub fn create_store<'a>(config: &S3StoreConfig, bucket: &'a str) -> Result<Amazo
     };
 
     if let Some(endpoint) = config.endpoint.as_ref() {
-        event!(Level::DEBUG, ?endpoint);
+        event!(Level::TRACE, ?endpoint);
 
         // When using virtual host style, object_store requires us to prepend the bucket name
         // to the endpoint.
@@ -112,9 +125,9 @@ pub fn create_store<'a>(config: &S3StoreConfig, bucket: &'a str) -> Result<Amazo
         let e = if virtual_host_style && !host.starts_with(bucket) {
             let mut endpoint = endpoint.clone();
             let new_domain = format!("{bucket}.{host}");
-            endpoint
-                .set_host(Some(&new_domain))
-                .map_err(|_| StorageError::Configuration("Unable to construct S3 Endpoint URL"))?;
+            endpoint.set_host(Some(&new_domain)).map_err(|_| {
+                StorageError::Configuration("Unable to construct virtual host S3 Endpoint URL")
+            })?;
 
             endpoint.to_string()
         } else {

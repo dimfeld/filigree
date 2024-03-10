@@ -65,6 +65,8 @@ tracing = ["dep:log", "dep:tracing-subscriber", "dep:tracing-error", "dep:tracin
 opentelemetry = ["tracing", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
 tracing_honeycomb = ["tracing", "opentelemetry", "dep:tonic", "dep:opentelemetry-otlp"]
 tracing_jaeger = ["tracing", "opentelemetry", "dep:opentelemetry-jaeger"]
+# Code only needed when running the Filigree CLI
+filigree-cli = []
 # Enable support for AWS S3 and compatible APIs
 storage_aws = ["object_store/aws"]
 # Enable support for Google Cloud Storage

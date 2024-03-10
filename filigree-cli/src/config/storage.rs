@@ -1,6 +1,17 @@
 use filigree::storage::StorageProvider;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorageConfig {
+    /// Storage buckets
+    #[serde(default)]
+    pub buckets: Vec<StorageBucketConfig>,
+
+    /// Storage providers, if not using the preconfigured options.
+    #[serde(default)]
+    pub provider: Vec<StorageProviderConfig>,
+}
+
 /// A storage location to access.
 /// Configuration for storage involves setting a provider and, for most scenarios, authentication
 /// settings.
@@ -15,20 +26,22 @@ use serde::{Deserialize, Serialize};
 ///
 /// In this case, `env_prefix` indicates the value from the top-level configuration, if set.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StorageConfig {
-    /// The name of this storage location. It will be accessible under this name in the server
-    /// state, and environment variables to configure the location will be prefixed with
-    /// `STORAGE_{name}_`.
+pub struct StorageBucketConfig {
+    /// The name inside the application code for this storage location.
+    /// It will be accessible under this name in the server state, and environment
+    /// variables to configure the location will be prefixed with
+    /// `{env_prefix}STORAGE_{name}_`.
     name: String,
     /// The name of an entry in storage_providers, or one of the preconfigured providers.
-    provider: String,
-    /// The bucket within the storage provider to access.
+    /// This can be omitted if there is only a single provider.
+    provider: Option<String>,
+    /// The bucket within the storage provider that this location corresponds to.
     bucket: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum ConfigStorageProvider {
+pub enum StorageProviderConfig {
     /// A known storage provider with pre-filled defaults for endpoint, virtual host style, etc.
     Preconfigured(StorageProvider),
     /// A custom storage provider, which can be set up by modifying the generated code or by
@@ -36,18 +49,12 @@ pub enum ConfigStorageProvider {
     Custom(filigree::storage::StorageConfig),
 }
 
-impl ConfigStorageProvider {
+impl StorageProviderConfig {
+    /// Regenerate this structure as Rust code
     pub fn template_text(&self) -> String {
-        let config = match self {
-            Self::Preconfigured(provider) => {
-                // recreate the provider in code
-                // Might need to make more of the StorageProvider settings optional
-            }
-            Self::Custom(config) => {
-                // recreate the config in code
-            }
-        };
-
-        todo!();
+        match self {
+            Self::Preconfigured(provider) => provider.template_text(),
+            Self::Custom(config) => config.template_text(),
+        }
     }
 }

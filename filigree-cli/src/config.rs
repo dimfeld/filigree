@@ -6,7 +6,7 @@ use error_stack::{Report, ResultExt};
 use glob::glob;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use self::storage::{ConfigStorageProvider, StorageConfig};
+use self::storage::{StorageConfig, StorageProviderConfig};
 use crate::{
     format::Formatters,
     model::{field::ModelField, Model, ModelAuthScope, SqlDialect},
@@ -61,13 +61,9 @@ pub struct Config {
     #[serde(default)]
     pub extend: ExtendConfig,
 
-    /// Storage locations that the application uses
+    /// Storage locations and providers that the application uses
     #[serde(default)]
-    pub storage: Vec<StorageConfig>,
-
-    /// Storage providers, if not using the preconfigured options.
-    #[serde(default)]
-    pub storage_providers: Vec<ConfigStorageProvider>,
+    pub storage: StorageConfig,
 }
 
 impl Config {

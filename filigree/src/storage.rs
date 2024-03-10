@@ -7,7 +7,7 @@ use tracing::instrument;
 
 use self::in_memory::InMemoryStore;
 
-pub mod config;
+mod config;
 pub(crate) mod in_memory;
 pub mod local;
 #[cfg(feature = "storage_aws")]
@@ -45,7 +45,7 @@ impl From<object_store::Error> for StorageError {
 }
 
 /// An abstraction over a storage provider for a particular bucket. This is a thin layer over
-/// [object_store].
+/// [object_store], with some additional functionality added that is useful for web applications.
 #[derive(Debug)]
 pub struct Storage {
     /// The bucket managed by this Storage instance
@@ -220,7 +220,7 @@ impl Storage {
 }
 
 /// Dispatch to different stores. We use this instead of a dyn trait so that we can get both
-/// [ObjectStore] and [Signer] methods, for providers that support them.
+/// [object_store::ObjectStore] and [object_store::Signer] trait methods, for providers that support them.
 enum ObjectStore {
     Local(object_store::local::LocalFileSystem),
     S3(object_store::aws::AmazonS3),
