@@ -1,7 +1,17 @@
 use std::collections::HashMap;
 
+use convert_case::{Case, Casing};
 use filigree::storage::StorageProvider;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum StorageConfigError {
+    #[error("Bucket {bucket} references unknown storage provider {provider}")]
+    UnknownProvider { bucket: String, provider: String },
+    #[error("Bucket {bucket} does not reference a storage provider")]
+    ProviderRequired { bucket: String },
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
@@ -57,5 +67,66 @@ impl StorageProviderConfig {
             Self::Preconfigured(provider) => provider.template_text(),
             Self::Custom(config) => config.template_text(),
         }
+    }
+}
+
+impl StorageConfig {
+    pub fn template_context(&self) -> Result<serde_json::Value, StorageConfigError> {
+        let configs = self
+            .provider
+            .iter()
+            .map(|(name, provider)| {
+                serde_json::json!({
+                    "name": name.to_case(Case::Snake),
+                    "name_upper": name.to_case(Case::ScreamingSnake),
+                    "config_struct": provider.template_text(),
+                    "is_preset": matches!(provider, StorageProviderConfig::Preconfigured(_))
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let can_omit_provider = self.provider.len() == 1;
+        let buckets = self
+            .buckets
+            .iter()
+            .map(|(name, bucket)| {
+                let (provider_name, provider) =
+                    match (bucket.provider.as_deref(), can_omit_provider) {
+                        (None, true) => self
+                            .provider
+                            .iter()
+                            .map(|(k, v)| (k.as_str(), v))
+                            .next()
+                            .unwrap(),
+                        (None, false) => Err(StorageConfigError::ProviderRequired {
+                            bucket: bucket.bucket.clone(),
+                        })?,
+                        (Some(provider_name), _) => {
+                            let provider = self.provider.get(provider_name).ok_or(
+                                StorageConfigError::UnknownProvider {
+                                    bucket: name.to_string(),
+                                    provider: provider_name.to_string(),
+                                },
+                            )?;
+                            (provider_name, provider)
+                        }
+                    };
+
+                Ok(serde_json::json!({
+                    "name": name.to_case(Case::Snake),
+                    "provider_name": provider_name.to_case(Case::Snake),
+                    "name_upper": name.to_case(Case::ScreamingSnake),
+                    "provider_name_upper": provider_name.to_case(Case::ScreamingSnake),
+                    "bucket": bucket.bucket,
+                    "config_struct": provider.template_text(),
+                    "is_preset": matches!(provider, StorageProviderConfig::Preconfigured(_))
+                }))
+            })
+            .collect::<Result<Vec<_>, StorageConfigError>>()?;
+
+        Ok(json!({
+            "buckets": buckets,
+            "configs": configs,
+        }))
     }
 }

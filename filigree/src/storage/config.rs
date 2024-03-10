@@ -202,11 +202,10 @@ impl StorageConfig {
     /// settings.
     pub fn from_env(
         default_settings: StorageConfig,
-        storage_prefix: &str,
-        provider_prefix: &str,
+        env_prefix: &str,
     ) -> Result<Self, StorageError> {
         let mut settings =
-            if let Ok(provider_type) = std::env::var(format!("{storage_prefix}PROVIDER_TYPE")) {
+            if let Ok(provider_type) = std::env::var(format!("{env_prefix}PROVIDER_TYPE")) {
                 // The provider type may be overridden, so create a new settings object if it has
                 // been changed from the default.
                 match provider_type.to_uppercase().as_str() {
@@ -227,8 +226,7 @@ impl StorageConfig {
                 default_settings
             };
 
-        settings.merge_env(provider_prefix)?;
-        settings.merge_env(storage_prefix)?;
+        settings.merge_env(env_prefix)?;
 
         Ok(settings)
     }
