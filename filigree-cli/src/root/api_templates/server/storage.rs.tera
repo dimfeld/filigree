@@ -1,5 +1,7 @@
 {% if storage %}
+//! Object storage configuration
 use filigree::storage::{Storage, StorageConfig, StorageError};
+use error_stack::{Report, ResultExt};
 
 pub struct AppStorage {
 {% for s in storage.buckets %}
@@ -11,15 +13,16 @@ pub struct AppStorage {
 }
 
 impl AppStorage {
-    pub fn new(config: AppStorageConfig) -> Result<AppStorage, StorageError> {
-        AppStorage {
+    pub fn new(config: AppStorageConfig) -> Result<AppStorage, Report<StorageError>> {
+        Ok(AppStorage {
             {% for s in storage.buckets %}
-            {{s.name}}: Storage::new(&config.{{s.name}}.config, &config.{{s.name}}.bucket)?,
+            {{s.name}}: Storage::new(&config.{{s.name}}.config, &config.{{s.name}}.bucket)
+                .attach_printable("Unable to create storage for {{s.name}}")?,
             {% endfor %}
             {% for c in storage.configs %}
             config_{{c.name}}: config.config_{{c.name}},
             {% endfor %}
-        }
+        })
     }
 }
 
@@ -69,7 +72,6 @@ impl AppStorageConfig {
         })
     }
 
-    #[cfg(test)]
     /// A test configuration that forces all storage providers to be in-memory.
     pub fn new_in_memory(config: &Config) -> AppStorageConfig {
         AppStorageConfig {

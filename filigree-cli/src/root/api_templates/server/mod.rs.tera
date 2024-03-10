@@ -59,7 +59,8 @@ pub struct ServerStateInner {
     /// The Postgres database connection pool
     pub db: PgPool,
     {% if storage %}
-    pub storage: AppStorage,
+    /// Object storage providers
+    pub storage: storage::AppStorage,
     {% endif %}
 }
 
@@ -206,7 +207,7 @@ pub struct Config {
     pub oauth_providers: Option<Vec<Box<dyn OAuthProvider>>>,
 
     {% if storage %}
-    pub storage: AppStorageConfig,
+    pub storage: storage::AppStorageConfig,
     {% endif %}
 }
 
@@ -251,6 +252,10 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         }),
         insecure: config.insecure,
         db: config.pg_pool.clone(),
+        {% if storage %}
+        storage: storage::AppStorage::new(config.storage)
+            .change_context(Error::ServerStart)?,
+        {% endif %}
     }));
 
     let auth_queries = Arc::new(crate::auth::AuthQueries::new(
