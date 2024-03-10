@@ -1,15 +1,21 @@
+use std::collections::HashMap;
+
 use filigree::storage::StorageProvider;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
     /// Storage buckets
+    /// The key is the name inside the application code for this storage location.
+    /// It will be accessible under this name in the server state, and environment
+    /// variables to configure the location will be prefixed with
+    /// `{env_prefix}STORAGE_{name}_`.
     #[serde(default)]
-    pub buckets: Vec<StorageBucketConfig>,
+    pub buckets: HashMap<String, StorageBucketConfig>,
 
     /// Storage providers, if not using the preconfigured options.
     #[serde(default)]
-    pub provider: Vec<StorageProviderConfig>,
+    pub provider: HashMap<String, StorageProviderConfig>,
 }
 
 /// A storage location to access.
@@ -27,15 +33,10 @@ pub struct StorageConfig {
 /// In this case, `env_prefix` indicates the value from the top-level configuration, if set.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageBucketConfig {
-    /// The name inside the application code for this storage location.
-    /// It will be accessible under this name in the server state, and environment
-    /// variables to configure the location will be prefixed with
-    /// `{env_prefix}STORAGE_{name}_`.
-    name: String,
     /// The name of an entry in storage_providers, or one of the preconfigured providers.
     /// This can be omitted if there is only a single provider.
     provider: Option<String>,
-    /// The bucket within the storage provider that this location corresponds to.
+    /// The name of the bucket within the storage provider
     bucket: String,
 }
 

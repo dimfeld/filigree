@@ -34,7 +34,7 @@ impl AppStorageConfig {
     pub fn new() -> AppStorageConfig {
         {% for s in storage %}
         let {{s.name}}_config = StorageConfig::from_env(
-            // TODO default settings from the configured storage provider
+            {{s.config_struct}}{% if s.is_preset %}.into_config(){% endif %},
             "{{env_prefix}}STORAGE_{{s.name}}",
             "{{env_prefix}}STORAGE_PROVIDER_{{s.provider_name}}"
         )?;
