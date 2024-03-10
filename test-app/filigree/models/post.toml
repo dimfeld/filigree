@@ -29,6 +29,6 @@ model = "Poll"
 populate_on_list = "id"
 populate_on_get = "data"
 
-[[has]]
-model = "Tag"
-through = "PostTag"
+# [[has]]
+# model = "Tag"
+# through = "PostTag"
