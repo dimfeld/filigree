@@ -1095,6 +1095,7 @@ dependencies = [
  "chrono",
  "clap",
  "css-inline",
+ "digest",
  "error-stack",
  "form_urlencoded",
  "futures",

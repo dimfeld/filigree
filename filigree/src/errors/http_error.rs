@@ -90,6 +90,8 @@ pub enum ErrorKind {
     InvalidHostHeader,
     /// The token provided in a reset request was invalid or expired
     InvalidToken,
+    /// I/O error
+    IO,
     /// The requested operation requires a permission that the client does not have
     MissingPermission,
     /// The requested object was not found
@@ -120,6 +122,8 @@ pub enum ErrorKind {
     SignupDisabled,
     /// The user is not logged in
     Unauthenticated,
+    /// An uploaded file was larger than the configured limit
+    UploadTooLarge,
     /// Internal error while creating a user
     UserCreationError,
     /// The requested user does not exist
@@ -142,6 +146,7 @@ impl ErrorKind {
             Self::InvalidApiKey => "invalid_api_key",
             Self::InvalidHostHeader => "invalid_host_header",
             Self::InvalidToken => "invalid_token",
+            Self::IO => "io_error",
             Self::MissingPermission => "missing_permission",
             Self::NotFound => "not_found",
             Self::NotVerified => "not_verified",
@@ -157,6 +162,7 @@ impl ErrorKind {
             Self::Shutdown => "shutdown",
             Self::SignupDisabled => "signup_disabled",
             Self::Unauthenticated => "unauthenticated",
+            Self::UploadTooLarge => "upload_too_large",
             Self::UserCreationError => "user_creation_error",
             Self::UserNotFound => "user_not_found",
         }
