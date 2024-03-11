@@ -3,7 +3,7 @@ _list:
 
 build-test-app:
   cd filigree-cli && cargo lbuild
-  cd test-app && ../target/debug/filigree
+  cd test-app && ../target/debug/filigree && cargo lcheck
 
 build-and-test *FLAGS:
   @just build-test-app
