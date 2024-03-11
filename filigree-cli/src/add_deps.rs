@@ -4,9 +4,9 @@ use semver::{Version, VersionReq};
 
 use crate::Error;
 
-type DepVersion = (&'static str, &'static str, &'static [&'static str]);
+pub type DepVersion<'a> = (&'a str, &'a str, &'a [&'a str]);
 
-const DEPS: &[DepVersion] = &[
+const DEPS: &[DepVersion<'static>] = &[
     ("async-trait", "0.1.75", &[]),
     ("axum", "0.7.3", &["tokio", "http1", "http2", "macros"]),
     ("axum-extra", "0.9.2", &["query"]),
@@ -46,44 +46,53 @@ const DEPS: &[DepVersion] = &[
     ("uuid", "1.6.1", &[]),
 ];
 
-pub fn add_deps(manifest: &Manifest) -> Result<(), Report<Error>> {
-    for (name, version, features) in DEPS {
-        let existing = manifest.dependencies.get(*name);
-        let Some(existing) = existing else {
-            run_cargo_add(name, version, features)?;
-            continue;
-        };
+pub fn add_fixed_deps(manifest: &Manifest) -> Result<(), Report<Error>> {
+    for dep in DEPS {
+        add_dep(manifest, dep)?;
+    }
 
-        if !existing.is_crates_io() {
-            // This is a git or path dependency, so don't change it.
-            continue;
-        }
+    Ok(())
+}
 
-        let desired = VersionReq::parse(version).expect("version requirement");
+pub fn add_dep(
+    manifest: &Manifest,
+    (name, version, features): &DepVersion,
+) -> Result<(), Report<Error>> {
+    let existing = manifest.dependencies.get(*name);
+    let Some(existing) = existing else {
+        run_cargo_add(name, version, features)?;
+        return Ok(());
+    };
 
-        let Ok(existing_version) = Version::parse(existing.req()) else {
-            // Let the user know that we were unable to parse the version in Cargo.toml
-            // but don't fail since it could be intentionally this way.
-            eprintln!(
+    if !existing.is_crates_io() {
+        // This is a git or path dependency, so don't change it.
+        return Ok(());
+    }
+
+    let desired = VersionReq::parse(version).expect("version requirement");
+
+    let Ok(existing_version) = Version::parse(existing.req()) else {
+        // Let the user know that we were unable to parse the version in Cargo.toml
+        // but don't fail since it could be intentionally this way.
+        eprintln!(
                 "WARN: Unable to parse version {} for {name} in Cargo.toml. Only plain versions are supported.",
                 existing.req()
             );
-            return Ok(());
-        };
+        return Ok(());
+    };
 
-        if !desired.matches(&existing_version) {
-            run_cargo_add(name, version, features)?;
-            continue;
-        }
+    if !desired.matches(&existing_version) {
+        run_cargo_add(name, version, features)?;
+        return Ok(());
+    }
 
-        let existing_features = existing.req_features();
-        if !features
-            .iter()
-            .all(|feature| existing_features.iter().any(|f| f == feature))
-        {
-            run_cargo_add(name, version, features)?;
-            continue;
-        }
+    let existing_features = existing.req_features();
+    if !features
+        .iter()
+        .all(|feature| existing_features.iter().any(|f| f == feature))
+    {
+        run_cargo_add(name, version, features)?;
+        return Ok(());
     }
 
     Ok(())

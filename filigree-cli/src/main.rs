@@ -174,14 +174,17 @@ pub fn main() -> Result<(), Report<Error>> {
     let api_merge_tracker = MergeTracker::new(state_dir.join("api"), api_dir.clone());
     let web_merge_tracker = MergeTracker::new(state_dir.join("web"), web_dir.clone());
 
-    add_deps::add_deps(&crate_manifest)?;
-
     let renderer = templates::Renderer::new(&config);
 
     let models = build_models(&config, config_models);
     let model_map = ModelMap::new(&models);
 
     model::validate::validate_model_configuration(&model_map)?;
+
+    add_deps::add_fixed_deps(&crate_manifest)?;
+    for model in &models {
+        model.add_deps(&crate_manifest)?;
+    }
 
     let mut generators = models
         .into_iter()

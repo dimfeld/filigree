@@ -318,6 +318,7 @@ impl<'a> ModelGenerator<'a> {
 
                 let result = json!({
                     "relationship": has,
+                    "is_file_upload": child_model.file_upload.is_some(),
                     "get_field_type": get_field_type,
                     "get_sql_field_name": get_sql_field_name,
                     "full_get_sql_field_name": format!("{get_sql_field_name}{exc}: {get_field_type}"),
@@ -451,6 +452,7 @@ impl<'a> ModelGenerator<'a> {
             "has_any_endpoints": endpoints.any_enabled(),
             "endpoints": endpoints.per_endpoint(),
             "auth_scope": self.auth_scope.unwrap_or(self.config.default_auth_scope),
+            "file_upload": self.file_upload.as_ref().map(|f| f.template_context()),
         });
 
         let mut context = tera::Context::from_value(json_value).unwrap();
