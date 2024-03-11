@@ -3,7 +3,11 @@
 #![allow(unused_imports)]
 
 use error_stack::{Report, ResultExt};
-use filigree::storage::{Storage, StorageConfig, StorageError, StoragePreset};
+use filigree::{
+    config::parse_option,
+    storage::{Storage, StorageConfig, StorageError, StoragePreset},
+};
+use url::Url;
 
 pub struct AppStorage {
     pub image_hosting: Storage,
@@ -17,11 +21,14 @@ impl AppStorage {
     pub fn new(config: AppStorageConfig) -> Result<AppStorage, Report<StorageError>> {
         Ok(AppStorage {
             image_hosting: Storage::new(&config.image_hosting.config, config.image_hosting.bucket)
-                .attach_printable("Unable to create storage for image_hosting")?,
+                .attach_printable("Unable to create storage for image_hosting")?
+                .with_public_url(config.image_hosting.public_url),
             image_uploads: Storage::new(&config.image_uploads.config, config.image_uploads.bucket)
-                .attach_printable("Unable to create storage for image_uploads")?,
+                .attach_printable("Unable to create storage for image_uploads")?
+                .with_public_url(config.image_uploads.public_url),
             pdfs: Storage::new(&config.pdfs.config, config.pdfs.bucket)
-                .attach_printable("Unable to create storage for pdfs")?,
+                .attach_printable("Unable to create storage for pdfs")?
+                .with_public_url(config.pdfs.public_url),
             config_cdn: config.config_cdn,
             config_disk: config.config_disk,
         })
@@ -31,6 +38,7 @@ impl AppStorage {
 pub struct AppStorageConfigEntry {
     pub config: StorageConfig,
     pub bucket: String,
+    pub public_url: Option<Url>,
 }
 
 pub struct AppStorageConfig {
@@ -67,11 +75,25 @@ impl AppStorageConfig {
         let image_hosting_bucket = std::env::var("STORAGE_IMAGE_HOSTING_BUCKET")
             .unwrap_or_else(|_| "fl-test-image-input".to_string());
 
+        let image_hosting_public_url: Option<Url> =
+            parse_option(std::env::var("STORAGE_IMAGE_HOSTING_PUBLIC_URL").ok())
+                .map_err(|_| {
+                    StorageError::Configuration("Invalid URL in STORAGE_IMAGE_HOSTING_PUBLIC_URL")
+                })?
+                .or(Some(
+                    Url::parse("https://cdn.example.com/").expect("URL from template was invalid"),
+                ));
+
         let mut bucket_config_image_uploads = config_disk.clone();
         bucket_config_image_uploads.merge_env("STORAGE_IMAGE_UPLOADS_")?;
 
         let image_uploads_bucket = std::env::var("STORAGE_IMAGE_UPLOADS_BUCKET")
             .unwrap_or_else(|_| "fl-test-image-uploads".to_string());
+
+        let image_uploads_public_url: Option<Url> =
+            parse_option(std::env::var("STORAGE_IMAGE_UPLOADS_PUBLIC_URL").ok()).map_err(|_| {
+                StorageError::Configuration("Invalid URL in STORAGE_IMAGE_UPLOADS_PUBLIC_URL")
+            })?;
 
         let mut bucket_config_pdfs = config_disk.clone();
         bucket_config_pdfs.merge_env("STORAGE_PDFS_")?;
@@ -79,18 +101,26 @@ impl AppStorageConfig {
         let pdfs_bucket =
             std::env::var("STORAGE_PDFS_BUCKET").unwrap_or_else(|_| "fl-test-pdfs".to_string());
 
+        let pdfs_public_url: Option<Url> =
+            parse_option(std::env::var("STORAGE_PDFS_PUBLIC_URL").ok()).map_err(|_| {
+                StorageError::Configuration("Invalid URL in STORAGE_PDFS_PUBLIC_URL")
+            })?;
+
         Ok(AppStorageConfig {
             image_hosting: AppStorageConfigEntry {
                 config: bucket_config_image_hosting,
                 bucket: image_hosting_bucket,
+                public_url: image_hosting_public_url,
             },
             image_uploads: AppStorageConfigEntry {
                 config: bucket_config_image_uploads,
                 bucket: image_uploads_bucket,
+                public_url: image_uploads_public_url,
             },
             pdfs: AppStorageConfigEntry {
                 config: bucket_config_pdfs,
                 bucket: pdfs_bucket,
+                public_url: pdfs_public_url,
             },
             config_cdn,
             config_disk,
@@ -103,14 +133,19 @@ impl AppStorageConfig {
             image_hosting: AppStorageConfigEntry {
                 config: StorageConfig::Memory,
                 bucket: "fl-test-image-input".to_string(),
+                public_url: Some(
+                    Url::parse("https://cdn.example.com/").expect("URL from template was invalid"),
+                ),
             },
             image_uploads: AppStorageConfigEntry {
                 config: StorageConfig::Memory,
                 bucket: "fl-test-image-uploads".to_string(),
+                public_url: None,
             },
             pdfs: AppStorageConfigEntry {
                 config: StorageConfig::Memory,
                 bucket: "fl-test-pdfs".to_string(),
+                public_url: None,
             },
             config_cdn: StorageConfig::Memory,
             config_disk: StorageConfig::Memory,

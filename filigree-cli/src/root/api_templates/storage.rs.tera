@@ -4,9 +4,11 @@
 #![allow(unused_imports)]
 
 use filigree::{
+    config::parse_option,
     storage::{Storage, StorageConfig, StorageError, StoragePreset}
 };
 use error_stack::{Report, ResultExt};
+use url::Url;
 
 pub struct AppStorage {
 {% for s in storage.buckets -%}
@@ -22,7 +24,8 @@ impl AppStorage {
         Ok(AppStorage {
             {% for s in storage.buckets -%}
             {{s.name}}: Storage::new(&config.{{s.name}}.config, config.{{s.name}}.bucket)
-                .attach_printable("Unable to create storage for {{s.name}}")?,
+                .attach_printable("Unable to create storage for {{s.name}}")?
+                .with_public_url(config.{{s.name}}.public_url),
             {%- endfor %}
             {% for c in storage.configs -%}
             config_{{c.name}}: config.config_{{c.name}},
@@ -34,6 +37,7 @@ impl AppStorage {
 pub struct AppStorageConfigEntry {
     pub config: StorageConfig,
     pub bucket: String,
+    pub public_url: Option<Url>,
 }
 
 pub struct AppStorageConfig {
@@ -62,6 +66,13 @@ impl AppStorageConfig {
 
         let {{s.name}}_bucket = std::env::var("{{env_prefix}}STORAGE_{{s.name_upper}}_BUCKET")
             .unwrap_or_else(|_| "{{s.bucket}}".to_string());
+
+        let {{s.name}}_public_url: Option<Url> = parse_option(std::env::var("{{env_prefix}}STORAGE_{{s.name_upper}}_PUBLIC_URL").ok())
+            .map_err(|_| StorageError::Configuration("Invalid URL in {{env_prefix}}STORAGE_{{s.name_upper}}_PUBLIC_URL"))?
+            {% if s.public_url %}
+            .or(Some(Url::parse("{{s.public_url}}").expect("URL from template was invalid")))
+            {%- endif %};
+
         {% endfor %}
 
         Ok(AppStorageConfig {
@@ -69,6 +80,7 @@ impl AppStorageConfig {
             {{s.name}}: AppStorageConfigEntry {
                 config: bucket_config_{{s.name}},
                 bucket: {{s.name}}_bucket,
+                public_url: {{s.name}}_public_url,
             },
             {%- endfor %}
             {% for c in storage.configs -%}
@@ -84,6 +96,11 @@ impl AppStorageConfig {
             {{s.name}}: AppStorageConfigEntry {
                 config: StorageConfig::Memory,
                 bucket: "{{s.bucket}}".to_string(),
+                public_url: {% if s.public_url -%}
+                    Some(Url::parse("{{s.public_url}}").expect("URL from template was invalid"))
+                {%- else -%}
+                    None
+                {%- endif -%},
             },
             {%- endfor %}
             {% for s in storage.configs -%}

@@ -28,6 +28,7 @@ provider = "disk"
 
 [storage.bucket.image_hosting]
 bucket = "fl-test-image-input"
+public_url = "https://cdn.example.com"
 provider = "cdn"
 
 [storage.provider.disk]

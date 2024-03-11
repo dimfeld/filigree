@@ -4,6 +4,7 @@ use futures::{Future, TryFutureExt, TryStreamExt};
 use object_store::{path::Path, GetResult, MultipartId, ObjectStore as _, PutResult};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tracing::instrument;
+use url::Url;
 
 use self::in_memory::InMemoryStore;
 
@@ -50,6 +51,8 @@ impl From<object_store::Error> for StorageError {
 pub struct Storage {
     /// The bucket managed by this Storage instance
     pub bucket: String,
+    /// A public URL where this bucket may be accessed
+    pub public_url: Option<Url>,
     store: ObjectStore,
 }
 
@@ -64,6 +67,12 @@ impl Storage {
         }
     }
 
+    /// Associate a public URL with this Storage location.
+    pub fn with_public_url(mut self, url: Option<Url>) -> Self {
+        self.public_url = url;
+        self
+    }
+
     #[cfg(feature = "storage_aws")]
     /// Create a new Storage for an S3 bucket
     pub fn new_s3(options: &s3::S3StoreConfig, bucket: String) -> Result<Self, StorageError> {
@@ -71,6 +80,7 @@ impl Storage {
         Ok(Self {
             bucket,
             store: ObjectStore::S3(store),
+            public_url: None,
         })
     }
 
@@ -84,6 +94,7 @@ impl Storage {
         Ok(Self {
             bucket,
             store: ObjectStore::Local(store),
+            public_url: None,
         })
     }
 
@@ -92,6 +103,7 @@ impl Storage {
         Self {
             bucket: "memory".to_string(),
             store: ObjectStore::Memory(InMemoryStore::new()),
+            public_url: None,
         }
     }
 

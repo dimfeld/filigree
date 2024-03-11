@@ -42,6 +42,7 @@ const DEPS: &[DepVersion] = &[
     ("tower-http", "0.5.1", &["full"]),
     ("tracing", "0.1.40", &[]),
     ("tracing-subscriber", "0.3.18", &["chrono"]),
+    ("url", "2.5.0", &[]),
     ("uuid", "1.6.1", &[]),
 ];
 

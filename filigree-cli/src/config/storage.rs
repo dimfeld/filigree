@@ -4,6 +4,7 @@ use convert_case::{Case, Casing};
 use filigree::storage::StoragePreset;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use url::Url;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum StorageConfigError {
@@ -48,6 +49,8 @@ pub struct StorageBucketConfig {
     provider: Option<String>,
     /// The name of the bucket within the storage provider
     bucket: String,
+    /// The base URL of this bucket, if it is publically accessible to the internet
+    public_url: Option<Url>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +125,7 @@ impl StorageConfig {
                     "provider_name": provider_name.to_case(Case::Snake),
                     "name_upper": name.to_case(Case::ScreamingSnake),
                     "bucket": bucket.bucket,
+                    "public_url": bucket.public_url,
                 }))
             })
             .collect::<Result<Vec<_>, StorageConfigError>>()?;
