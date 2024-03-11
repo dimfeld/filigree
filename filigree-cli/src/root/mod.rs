@@ -62,13 +62,11 @@ pub fn render_files(
     context.insert("role_model", &role_model.clone().into_json());
     context.insert("org_model", &org_model.clone().into_json());
 
-    if !config.storage.provider.is_empty() || !config.storage.bucket.is_empty() {
-        let storage_context = config
-            .storage
-            .template_context()
-            .change_context(Error::Config)?;
-        context.insert("storage", &storage_context);
-    }
+    let storage_context = config
+        .storage
+        .template_context()
+        .change_context(Error::Config)?;
+    context.insert("storage", &storage_context);
 
     let base_path = PathBuf::from("src");
 

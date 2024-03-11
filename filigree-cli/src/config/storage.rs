@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use convert_case::{Case, Casing};
 use filigree::storage::StoragePreset;
@@ -21,11 +21,11 @@ pub struct StorageConfig {
     /// variables to configure the location will be prefixed with
     /// `{env_prefix}STORAGE_{name}_`.
     #[serde(default)]
-    pub bucket: HashMap<String, StorageBucketConfig>,
+    pub bucket: BTreeMap<String, StorageBucketConfig>,
 
     /// Storage providers, if not using the preconfigured options.
     #[serde(default)]
-    pub provider: HashMap<String, StorageProviderConfig>,
+    pub provider: BTreeMap<String, StorageProviderConfig>,
 }
 
 /// A storage location to access.
@@ -72,6 +72,10 @@ impl StorageProviderConfig {
 
 impl StorageConfig {
     pub fn template_context(&self) -> Result<serde_json::Value, StorageConfigError> {
+        if self.bucket.is_empty() && self.provider.is_empty() {
+            return Ok(json!(null));
+        }
+
         let configs = self
             .provider
             .iter()

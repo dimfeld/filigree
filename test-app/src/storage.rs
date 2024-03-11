@@ -9,8 +9,8 @@ pub struct AppStorage {
     pub image_hosting: Storage,
     pub image_uploads: Storage,
     pub pdfs: Storage,
-    pub config_disk: StorageConfig,
     pub config_cdn: StorageConfig,
+    pub config_disk: StorageConfig,
 }
 
 impl AppStorage {
@@ -22,8 +22,8 @@ impl AppStorage {
                 .attach_printable("Unable to create storage for image_uploads")?,
             pdfs: Storage::new(&config.pdfs.config, config.pdfs.bucket)
                 .attach_printable("Unable to create storage for pdfs")?,
-            config_disk: config.config_disk,
             config_cdn: config.config_cdn,
+            config_disk: config.config_disk,
         })
     }
 }
@@ -37,28 +37,28 @@ pub struct AppStorageConfig {
     pub image_hosting: AppStorageConfigEntry,
     pub image_uploads: AppStorageConfigEntry,
     pub pdfs: AppStorageConfigEntry,
-    pub config_disk: StorageConfig,
     pub config_cdn: StorageConfig,
+    pub config_disk: StorageConfig,
 }
 
 impl AppStorageConfig {
     /// Create the application storage configuration based on the filigree configuration files
     /// and environment variables.
     pub fn new() -> Result<AppStorageConfig, StorageError> {
-        let mut config_disk = StorageConfig::from_env(
-            StorageConfig::Local(filigree::storage::local::LocalStoreConfig {
-                base_path: Some(r##"/tmp/filigree-test-storage/internal"##.to_string()),
-            }),
-            "STORAGE_PROVIDER_DISK_",
-        )?;
-
-        let mut config_cdn = StorageConfig::from_env(
+        let config_cdn = StorageConfig::from_env(
             filigree::storage::StoragePreset::CloudflareR2 {
                 account_id: Some(r##"define-in-env"##.to_string()),
                 jurisdiction: None,
             }
             .into_config()?,
             "STORAGE_PROVIDER_CDN_",
+        )?;
+
+        let config_disk = StorageConfig::from_env(
+            StorageConfig::Local(filigree::storage::local::LocalStoreConfig {
+                base_path: Some(r##"/tmp/filigree-test-storage/internal"##.to_string()),
+            }),
+            "STORAGE_PROVIDER_DISK_",
         )?;
 
         let mut bucket_config_image_hosting = config_cdn.clone();
@@ -92,8 +92,8 @@ impl AppStorageConfig {
                 config: bucket_config_pdfs,
                 bucket: pdfs_bucket,
             },
-            config_disk,
             config_cdn,
+            config_disk,
         })
     }
 
@@ -112,8 +112,8 @@ impl AppStorageConfig {
                 config: StorageConfig::Memory,
                 bucket: "fl-test-pdfs".to_string(),
             },
-            config_disk: StorageConfig::Memory,
             config_cdn: StorageConfig::Memory,
+            config_disk: StorageConfig::Memory,
         }
     }
 }

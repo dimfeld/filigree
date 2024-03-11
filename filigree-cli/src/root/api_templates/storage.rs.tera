@@ -50,7 +50,7 @@ impl AppStorageConfig {
     /// and environment variables.
     pub fn new() -> Result<AppStorageConfig, StorageError> {
         {% for c in storage.configs %}
-        let mut config_{{c.name}} = StorageConfig::from_env(
+        let config_{{c.name}} = StorageConfig::from_env(
             {{c.config_struct}}{% if c.is_preset %}.into_config()?{% endif %},
             "{{env_prefix}}STORAGE_PROVIDER_{{c.name_upper}}_",
         )?;
