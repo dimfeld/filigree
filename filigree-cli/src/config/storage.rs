@@ -94,36 +94,34 @@ impl StorageConfig {
             .bucket
             .iter()
             .map(|(name, bucket)| {
-                let (provider_name, provider) =
-                    match (bucket.provider.as_deref(), can_omit_provider) {
-                        (None, true) => self
-                            .provider
-                            .iter()
-                            .map(|(k, v)| (k.as_str(), v))
-                            .next()
-                            .unwrap(),
-                        (None, false) => Err(StorageConfigError::ProviderRequired {
-                            bucket: bucket.bucket.clone(),
-                        })?,
-                        (Some(provider_name), _) => {
-                            let provider = self.provider.get(provider_name).ok_or(
-                                StorageConfigError::UnknownProvider {
-                                    bucket: name.to_string(),
-                                    provider: provider_name.to_string(),
-                                },
-                            )?;
-                            (provider_name, provider)
+                let provider_name = match (bucket.provider.as_deref(), can_omit_provider) {
+                    // If there's only one provider, then just use that one.
+                    (None, true) => self
+                        .provider
+                        .iter()
+                        .map(|(k, _)| k.as_str())
+                        .next()
+                        .unwrap(),
+                    (None, false) => Err(StorageConfigError::ProviderRequired {
+                        bucket: bucket.bucket.clone(),
+                    })?,
+                    (Some(provider_name), _) => {
+                        if !self.provider.contains_key(provider_name) {
+                            return Err(StorageConfigError::UnknownProvider {
+                                bucket: name.to_string(),
+                                provider: provider_name.to_string(),
+                            });
                         }
-                    };
+
+                        provider_name
+                    }
+                };
 
                 Ok(serde_json::json!({
                     "name": name.to_case(Case::Snake),
                     "provider_name": provider_name.to_case(Case::Snake),
                     "name_upper": name.to_case(Case::ScreamingSnake),
-                    "provider_name_upper": provider_name.to_case(Case::ScreamingSnake),
                     "bucket": bucket.bucket,
-                    "config_struct": provider.template_text(),
-                    "is_preset": matches!(provider, StorageProviderConfig::Preconfigured(_))
                 }))
             })
             .collect::<Result<Vec<_>, StorageConfigError>>()?;
