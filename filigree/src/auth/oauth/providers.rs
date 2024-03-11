@@ -8,7 +8,7 @@ use oauth2::{
 use url::Url;
 
 use super::OAuthError;
-use crate::prefixed_env_var;
+use crate::config::prefixed_env_var;
 
 mod github;
 mod google;

@@ -105,6 +105,9 @@ pub async fn start_app_with_options(pg_pool: PgPool, options: TestAppOptions) ->
             crate::emails::create_tera(),
             Box::new(email_service),
         ),
+        {% if storage -%}
+        storage: crate::storage::AppStorageConfig::new_in_memory(),
+        {%- endif %}
     };
 
     let server = crate::server::create_server(config)

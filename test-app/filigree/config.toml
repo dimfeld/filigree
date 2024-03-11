@@ -17,3 +17,24 @@ migrate_on_start = true
 [email]
 provider = "resend"
 from = "support@example.com"
+
+[storage.bucket.pdfs]
+bucket = "fl-test-pdfs"
+provider = "disk"
+
+[storage.bucket.image_uploads]
+bucket = "fl-test-image-uploads"
+provider = "disk"
+
+[storage.bucket.image_hosting]
+bucket = "fl-test-image-input"
+provider = "cdn"
+
+[storage.provider.disk]
+type = "local"
+base_path = "/tmp/filigree-test-storage/internal"
+
+[storage.provider.cdn]
+preset = "cloudflare_r2"
+# define account id below, or via environment: STORAGE_PROVIDER_CDN_ACCOUNT_ID=the-account-id
+account_id = "define-in-env"

@@ -187,6 +187,8 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
                 .same_org_invites_require_email_verification,
         },
         pg_pool,
+        storage: filigree_test_app::storage::AppStorageConfig::new()
+            .change_context(Error::ServerStart)?,
     })
     .await?;
 

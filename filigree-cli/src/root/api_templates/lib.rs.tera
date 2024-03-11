@@ -5,6 +5,9 @@ pub mod emails;
 pub mod error;
 pub mod models;
 pub mod server;
+{% if storage -%}
+pub mod storage;
+{%- endif %}
 #[cfg(test)]
 pub mod tests;
 pub mod users;

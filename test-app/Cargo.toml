@@ -22,7 +22,7 @@ axum-sqlx-tx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustl
 chrono = "0.4.34"
 clap = { version = "4.5.1", features = ["derive", "env"] }
 dotenvy = "0.15.7"
-error-stack = "0.4.1"
+error-stack = { version = "0.4.1", features = ["spantrace"] }
 eyre = "0.6.12"
 filigree = { version = "0.0.2", path = "../filigree" }
 futures = "0.3.30"

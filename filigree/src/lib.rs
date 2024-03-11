@@ -1,13 +1,14 @@
 #![warn(missing_docs)]
 //! The non-generated components of the Filigree web framework
 
-use std::{borrow::Cow, env::VarError};
+use std::borrow::Cow;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Authentication and Authorization
 pub mod auth;
+pub mod config;
 /// Email templates and sending
 pub mod email;
 /// Error handling
@@ -26,6 +27,11 @@ pub mod requests;
 pub mod server;
 /// Utilities for working with SQL queries
 pub mod sql;
+/// Cloud object storage
+pub mod storage;
+#[cfg(feature = "filigree-cli")]
+/// Template code generation helpers for the Filigree CLI
+pub mod templates;
 /// Functionality to help test your app
 pub mod testing;
 /// Tracing configuration
@@ -55,13 +61,4 @@ pub struct EmailBody {
     /// The email address
     #[validate(email)]
     pub email: String,
-}
-
-/// Get an environment variable with an optional prefix
-pub fn prefixed_env_var(prefix: &str, key: &str) -> Result<String, VarError> {
-    if prefix.is_empty() {
-        std::env::var(key)
-    } else {
-        std::env::var(format!("{prefix}{key}"))
-    }
 }

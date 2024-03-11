@@ -111,6 +111,7 @@ pub async fn start_app_with_options(
             crate::emails::create_tera(),
             Box::new(email_service),
         ),
+        storage: crate::storage::AppStorageConfig::new_in_memory(),
     };
 
     let server = crate::server::create_server(config)

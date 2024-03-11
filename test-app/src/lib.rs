@@ -5,6 +5,7 @@ pub mod emails;
 pub mod error;
 pub mod models;
 pub mod server;
+pub mod storage;
 #[cfg(test)]
 pub mod tests;
 pub mod users;

@@ -37,7 +37,7 @@ use tower_http::{
 };
 use tracing::{event, Level};
 
-use crate::error::Error;
+use crate::{error::Error, storage};
 
 mod health;
 mod meta;
@@ -55,6 +55,8 @@ pub struct ServerStateInner {
     pub filigree: Arc<FiligreeState>,
     /// The Postgres database connection pool
     pub db: PgPool,
+    /// Object storage providers
+    pub storage: storage::AppStorage,
 }
 
 impl ServerStateInner {
@@ -198,6 +200,8 @@ pub struct Config {
     ///
     /// OAuth can be disabled, regardless of environment variable settings, but passing `Some(Vec::new())`.
     pub oauth_providers: Option<Vec<Box<dyn OAuthProvider>>>,
+
+    pub storage: storage::AppStorageConfig,
 }
 
 /// Create the server and return it, ready to run.
@@ -241,6 +245,8 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         }),
         insecure: config.insecure,
         db: config.pg_pool.clone(),
+
+        storage: storage::AppStorage::new(config.storage).change_context(Error::ServerStart)?,
     }));
 
     let auth_queries = Arc::new(crate::auth::AuthQueries::new(
