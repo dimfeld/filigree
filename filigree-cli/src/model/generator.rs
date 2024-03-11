@@ -488,14 +488,13 @@ impl<'a> ModelGenerator<'a> {
         let org_field = if self.global {
             None
         } else {
-            let org_id_nullable = self.name == "User";
-            let org_id_foreign_key = self.name != "User";
+            let locked_to_single_org = self.name != "User";
 
             Some(ModelField {
                 name: "organization_id".to_string(),
                 typ: SqlType::Uuid,
                 rust_type: Some("crate::models::organization::OrganizationId".to_string()),
-                nullable: org_id_nullable,
+                nullable: !locked_to_single_org,
                 unique: false,
                 indexed: true,
                 sortable: SortableType::None,
@@ -508,7 +507,7 @@ impl<'a> ModelGenerator<'a> {
                 never_read: false,
                 fixed: true,
                 previous_name: None,
-                references: org_id_foreign_key.then(|| {
+                references: locked_to_single_org.then(|| {
                     ModelFieldReference::new(
                         "organizations",
                         "id",

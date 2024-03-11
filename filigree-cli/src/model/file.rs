@@ -10,7 +10,7 @@ use crate::Error;
 pub struct FileModelOptions {
     /// The storage bucket where the files should be stored. This must be one of the keys
     /// of [storage.bucket] in the primary configuration file.
-    bucket: String,
+    pub bucket: String,
 
     /// How to determine the keey at which an uploaded file will be stored.
     ///
@@ -23,23 +23,24 @@ pub struct FileModelOptions {
     ///
     /// The default template is "{id}-{filename}". This helps to guarantee
     /// unique file names, while still aiding manual inspection.
+    ///
+    /// Note that the only guaranteed way to ensure uniqueness is to use `{id}` in the template,
+    /// and you risk overwriting existing files if you do not use it. This might be ok based on
+    /// your use case, but it should be a conscious decision. The original filename (when known)
+    /// is still stored in this model, so even if the filename_template does not reflect the
+    /// original filename, it can still be retained and used when sending the file back to the
+    /// user.
     #[serde(default = "default_filename_template")]
-    filename_template: String,
+    pub filename_template: String,
 
-    /// Generate a `file_size` field in this model and set it automatically when a file
-    /// is uploaded.
     #[serde(default)]
-    record_size: bool,
-
-    /// Add a field to hash the file with the specified algorithm as it is uploaded.
-    hash: Option<HashType>,
+    pub meta: FileUploadRecordMetadata,
 }
 
 impl FileModelOptions {
     pub fn add_deps(&self, manifest: &Manifest) -> Result<(), Report<Error>> {
-        if let Some(hash) = &self.hash {
-            let (crate_name, crate_version) = hash.crate_name();
-            crate::add_deps::add_dep(manifest, &(crate_name, crate_version, &[]))?;
+        if let Some(hash) = &self.meta.hash {
+            hash.add_deps(manifest)?;
         }
 
         Ok(())
@@ -49,13 +50,30 @@ impl FileModelOptions {
         serde_json::json!({
             "bucket": self.bucket,
             "filename_template": self.filename_template,
-            "hash": self.hash.as_ref().map(|h| h.template_context()),
+            "hash": self.meta.hash.as_ref().map(|h| h.template_context()),
         })
     }
 }
 
 fn default_filename_template() -> String {
     String::from("{id}-{filename}")
+}
+
+/// Metadata that we might want to record about the uploaded file. Setting these fields will
+/// add code to calculate the metadata and add fields to the model in which to record it.
+#[derive(Deserialize, Default, Clone, Debug)]
+pub struct FileUploadRecordMetadata {
+    /// Generate a `filename` field in the model, and record the original filename of the uploaded file, if it is known.
+    #[serde(default)]
+    pub filename: bool,
+
+    /// Generate a `size` field in this model and set it automatically when a file
+    /// is uploaded.
+    #[serde(default)]
+    pub size: bool,
+
+    /// Add a `hash` field to the model, and hash the file with the specified algorithm as it is uploaded.
+    pub hash: Option<HashType>,
 }
 
 /// The hashing algorithm to use when uploading files
@@ -70,28 +88,32 @@ pub enum HashType {
 
 impl HashType {
     fn template_context(&self) -> serde_json::Value {
+        let crate_name = self.crate_name().0;
+        let hasher = format!("{}::{}", crate_name, self.crate_member());
         json!({
             "crate": self.crate_name().0,
-            "crate_member": self.crate_member(),
+            "hasher": hasher,
             "use_statement": self.use_statement(),
         })
     }
 
-    fn use_statement(&self) -> &'static str {
-        match self {
-            HashType::Sha3_224 | HashType::Sha3_256 | HashType::Sha3_384 | HashType::Sha3_512 => {
-                "use sha3::Digest as _;"
-            }
-            HashType::Blake3 => "",
-        }
+    fn add_deps(&self, manifest: &Manifest) -> Result<(), Report<Error>> {
+        let crate_dep = self.crate_name();
+        crate::add_deps::add_dep(manifest, &crate_dep)?;
+        crate::add_deps::add_dep(manifest, &("digest", "0.10.7", &[]))?;
+        Ok(())
     }
 
-    fn crate_name(&self) -> (&'static str, &'static str) {
+    fn use_statement(&self) -> &'static str {
+        "use digest::Digest;"
+    }
+
+    fn crate_name(&self) -> (&'static str, &'static str, &[&'static str]) {
         match self {
             HashType::Sha3_224 | HashType::Sha3_256 | HashType::Sha3_384 | HashType::Sha3_512 => {
-                ("sha3", "0.10.8")
+                ("sha3", "0.10.8", &[])
             }
-            HashType::Blake3 => ("blake3", "1.5.0"),
+            HashType::Blake3 => ("blake3", "1.5.0", &["traits-preview"]),
         }
     }
 
