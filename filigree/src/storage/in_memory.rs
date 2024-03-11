@@ -130,3 +130,79 @@ impl AsyncWrite for MultipartWriter {
         std::task::Poll::Ready(Ok(()))
     }
 }
+
+#[cfg(test)]
+mod test {
+    use bytes::Bytes;
+    use tokio::io::AsyncWriteExt;
+
+    #[tokio::test]
+    async fn basic_ops() {
+        let store = super::InMemoryStore::new();
+        store
+            .put(&object_store::path::Path::from("foo"), Bytes::from("bar"))
+            .await
+            .unwrap();
+
+        let get_result = store
+            .get(&object_store::path::Path::from("foo"))
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap();
+
+        assert_eq!(get_result, Bytes::from("bar"));
+        store
+            .delete(&object_store::path::Path::from("foo"))
+            .await
+            .unwrap();
+
+        let get_result = store
+            .get(&object_store::path::Path::from("foo"))
+            .await
+            .expect_err("Get after delete should fail");
+        assert!(matches!(get_result, object_store::Error::NotFound { .. }));
+    }
+
+    #[tokio::test]
+    async fn multipart_upload() {
+        let store = super::InMemoryStore::new();
+        let (id, mut writer) = store
+            .put_multipart(&object_store::path::Path::from("foo"))
+            .await
+            .unwrap();
+        assert_eq!(id, "foo");
+        writer.write_all(&[1, 2, 3]).await.unwrap();
+        writer.write_all(&[4, 5, 6]).await.unwrap();
+        writer.shutdown().await.unwrap();
+
+        let get_result = store
+            .get(&object_store::path::Path::from("foo"))
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap();
+        assert_eq!(get_result, Bytes::from(vec![1, 2, 3, 4, 5, 6]));
+    }
+
+    #[tokio::test]
+    async fn multipart_upload_abort() {
+        let store = super::InMemoryStore::new();
+        let (id, mut writer) = store
+            .put_multipart(&object_store::path::Path::from("foo"))
+            .await
+            .unwrap();
+        assert_eq!(id, "foo");
+        writer.write_all(&[1, 2, 3]).await.unwrap();
+        // Abort for the in-memory store just means that we dropped the writer.
+        drop(writer);
+
+        let get_result = store
+            .get(&object_store::path::Path::from("foo"))
+            .await
+            .expect_err("Get without finishing should fail");
+        assert!(matches!(get_result, object_store::Error::NotFound { .. }));
+    }
+}
