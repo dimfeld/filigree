@@ -3,7 +3,8 @@ use error_stack::Report;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::Error;
+use super::field::{Access, FilterableType, ModelField, SqlType};
+use crate::{config::Config, Error};
 
 /// Options for a model that represents a file upload
 #[derive(Deserialize, Clone, Debug)]
@@ -33,11 +34,26 @@ pub struct FileModelOptions {
     #[serde(default = "default_filename_template")]
     pub filename_template: String,
 
+    /// True if the user should be able to see the key at which the file is stored
+    #[serde(default)]
+    pub storage_key_readable: bool,
+
     #[serde(default)]
     pub meta: FileUploadRecordMetadata,
 }
 
+fn default_filename_template() -> String {
+    String::from("{id}-{filename}")
+}
+
 impl FileModelOptions {
+    pub fn validate(&self, model_name: &str, config: &Config) -> Result<(), Error> {
+        config.storage.bucket.get(&self.bucket).ok_or_else(|| {
+            Error::InvalidStorageBucket(model_name.to_string(), self.bucket.clone())
+        })?;
+        Ok(())
+    }
+
     pub fn add_deps(&self, manifest: &Manifest) -> Result<(), Report<Error>> {
         if let Some(hash) = &self.meta.hash {
             hash.add_deps(manifest)?;
@@ -53,10 +69,73 @@ impl FileModelOptions {
             "hash": self.meta.hash.as_ref().map(|h| h.template_context()),
         })
     }
-}
 
-fn default_filename_template() -> String {
-    String::from("{id}-{filename}")
+    pub fn model_fields(&self) -> Vec<ModelField> {
+        let key_access = if self.storage_key_readable {
+            Access::Read
+        } else {
+            Access::None
+        };
+
+        let mut fields = vec![
+            ModelField {
+                name: "file_storage_key".to_string(),
+                typ: SqlType::Text,
+                nullable: true,
+                user_access: key_access,
+                owner_access: key_access,
+                ..Default::default()
+            },
+            // The id of the bucket where the file is stored.
+            // Generally this will be all the same, but can be useful when migrating from one
+            // bucket to another.
+            ModelField {
+                name: "file_storage_bucket".to_string(),
+                typ: SqlType::Text,
+                nullable: false,
+                user_access: Access::None,
+                owner_access: Access::None,
+                ..Default::default()
+            },
+        ];
+
+        if self.meta.filename {
+            fields.push(ModelField {
+                name: "file_original_name".to_string(),
+                typ: SqlType::Text,
+                nullable: true,
+                user_access: Access::Read,
+                owner_access: Access::Read,
+                filterable: FilterableType::Exact,
+                ..Default::default()
+            });
+        }
+
+        if self.meta.size {
+            fields.push(ModelField {
+                name: "file_size".to_string(),
+                typ: SqlType::Int,
+                nullable: true,
+                user_access: Access::Read,
+                owner_access: Access::Read,
+                ..Default::default()
+            });
+        }
+
+        if self.meta.hash.is_some() {
+            fields.push(ModelField {
+                name: "file_hash".to_string(),
+                typ: SqlType::Bytes,
+                nullable: true,
+                user_access: Access::Read,
+                owner_access: Access::Read,
+                filterable: FilterableType::Exact,
+                ..Default::default()
+            });
+        }
+
+        fields
+    }
 }
 
 /// Metadata that we might want to record about the uploaded file. Setting these fields will

@@ -1,7 +1,11 @@
-use crate::{Error, ModelMap};
+use crate::{config::Config, Error, ModelMap};
 
-pub fn validate_model_configuration(models: &ModelMap) -> Result<(), Error> {
+pub fn validate_model_configuration(config: &Config, models: &ModelMap) -> Result<(), Error> {
     for (_, model) in &models.0 {
+        if let Some(file) = &model.file_upload {
+            file.validate(&model.name, config)?;
+        }
+
         for has in &model.has {
             let child = models.get(&has.model, &model.name, "has")?;
 

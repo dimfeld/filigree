@@ -87,6 +87,8 @@ pub enum Error {
         "Model {0} uses {1} as a through model to {2}, but {1}'s join setting does not reference {3}"
     )]
     BadJoin(String, String, String, String),
+    #[error("Model {0}'s file_upload configuration referenced nonexistent bucket {1}")]
+    InvalidStorageBucket(String, String),
 }
 
 pub struct ModelMap(pub std::collections::HashMap<String, Model>);
@@ -179,7 +181,7 @@ pub fn main() -> Result<(), Report<Error>> {
     let models = build_models(&config, config_models);
     let model_map = ModelMap::new(&models);
 
-    model::validate::validate_model_configuration(&model_map)?;
+    model::validate::validate_model_configuration(&config, &model_map)?;
 
     add_deps::add_fixed_deps(&crate_manifest)?;
     for model in &models {

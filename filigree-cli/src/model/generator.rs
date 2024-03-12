@@ -187,6 +187,11 @@ impl<'a> ModelGenerator<'a> {
             .standard_fields()?
             .map(|field| Cow::Owned(field))
             .chain(self.fields.iter().map(|field| Cow::Borrowed(field)))
+            .chain(
+                self.file_upload_fields()
+                    .into_iter()
+                    .map(|field| Cow::Owned(field)),
+            )
             .chain(self.belongs_to_field()?.map(|field| Cow::Owned(field)));
 
         Ok(fields)
@@ -605,6 +610,13 @@ impl<'a> ModelGenerator<'a> {
         Ok(id_fields.into_iter().chain(other_fields).flatten())
     }
 
+    fn file_upload_fields(&self) -> Vec<ModelField> {
+        match &self.file_upload {
+            Some(file) => file.model_fields(),
+            None => vec![],
+        }
+    }
+
     fn belongs_to_field(&self) -> Result<impl Iterator<Item = ModelField>, Error> {
         let belongs_to = self
             .belongs_to
@@ -689,7 +701,7 @@ impl<'a> ModelGenerator<'a> {
 
     /// Fields generated in some SQL queries, such as when populating child models, but which are
     /// not present in the base table.
-    /// This fields are not included in `all_fields`.
+    /// These fields are not included in `all_fields`.
     pub fn virtual_fields(
         &self,
         read_operation: ReadOperation,
