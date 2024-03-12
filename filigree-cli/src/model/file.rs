@@ -3,7 +3,10 @@ use error_stack::Report;
 use serde::Deserialize;
 use serde_json::json;
 
-use super::field::{Access, FilterableType, ModelField, SqlType};
+use super::{
+    field::{Access, FilterableType, ModelField, SqlType},
+    Endpoints, Model, Pagination, PerEndpoint,
+};
 use crate::{config::Config, Error};
 
 /// Options for a model that represents a file upload
@@ -12,6 +15,10 @@ pub struct FileModelOptions {
     /// The storage bucket where the files should be stored. This must be one of the keys
     /// of [storage.bucket] in the primary configuration file.
     pub bucket: String,
+
+    /// If true, the hosting model can reference many files.
+    #[serde(default)]
+    pub many: bool,
 
     /// How to determine the keey at which an uploaded file will be stored.
     ///
@@ -70,7 +77,37 @@ impl FileModelOptions {
         })
     }
 
-    pub fn model_fields(&self) -> Vec<ModelField> {
+    pub fn generate_model(&self, parent: &Model) -> Model {
+        Model {
+            name: format!("{}File", parent.name),
+            // file upload submodel does not have an embedded file upload submodel
+            file_upload: None,
+            id_prefix: Some(format!("{}fil", parent.id_prefix())),
+            fields: self.file_model_fields(),
+            belongs_to: Some(super::BelongsTo::Simple(parent.name.clone())),
+            // We have custom endpoints for this model so don't generate the normal ones.
+            endpoints: Endpoints::Only(PerEndpoint {
+                get: true,
+                // The rest of these are custom.
+                list: false,
+                create: false,
+                update: false,
+                delete: false,
+            }),
+            plural: None,
+            default_sort_field: None,
+            pagination: Pagination::default(),
+            extra_create_table_sql: String::new(),
+            extra_sql: String::new(),
+            global: false,
+            auth_scope: None,
+            indexes: vec![],
+            joins: None,
+            has: vec![],
+        }
+    }
+
+    fn file_model_fields(&self) -> Vec<ModelField> {
         let key_access = if self.storage_key_readable {
             Access::Read
         } else {

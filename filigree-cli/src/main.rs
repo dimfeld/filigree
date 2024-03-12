@@ -153,7 +153,15 @@ fn build_models(config: &Config, mut config_models: Vec<Model>) -> Vec<Model> {
         model.merge_from(same_model);
     }
 
+    // Add autogenrated submodels for file uploads
+    for model in config_models.iter() {
+        if let Some(file) = &model.file_upload {
+            models.push(file.generate_model(&model));
+        }
+    }
+
     models.extend(config_models.into_iter());
+
     models
 }
 
