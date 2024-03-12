@@ -5,7 +5,7 @@ use serde_json::json;
 
 use super::{
     field::{Access, FilterableType, ModelField, SqlType},
-    Endpoints, Model, Pagination, PerEndpoint,
+    Endpoints, HasModel, Model, Pagination, PerEndpoint, ReferenceFetchType,
 };
 use crate::{config::Config, Error};
 
@@ -47,6 +47,11 @@ pub struct FileModelOptions {
 
     #[serde(default)]
     pub meta: FileUploadRecordMetadata,
+
+    /// If omitted or false, the file will be deleted from storage when the model is deleted.
+    /// If true, the file will be retained in object storage even after the model is deleted.
+    #[serde(default)]
+    pub retain_file_on_delete: bool,
 }
 
 fn default_filename_template() -> String {
@@ -74,12 +79,36 @@ impl FileModelOptions {
             "bucket": self.bucket,
             "filename_template": self.filename_template,
             "hash": self.meta.hash.as_ref().map(|h| h.template_context()),
+            "record_size": self.meta.size,
+            "record_filename": self.meta.filename,
+            "retain_file_on_delete": self.retain_file_on_delete,
         })
+    }
+
+    pub fn model_name(&self, parent: &Model) -> String {
+        format!("{}File", parent.name)
+    }
+
+    pub fn has_for_parent(&self, parent: &Model) -> HasModel {
+        HasModel {
+            model: self.model_name(parent),
+            many: self.many,
+            through: None,
+            populate_on_get: ReferenceFetchType::Data,
+            populate_on_list: ReferenceFetchType::None,
+            update_with_parent: false,
+            field_name: Some(if self.many {
+                "files".to_string()
+            } else {
+                "file".to_string()
+            }),
+        }
     }
 
     pub fn generate_model(&self, parent: &Model) -> Model {
         Model {
-            name: format!("{}File", parent.name),
+            name: self.model_name(parent),
+            file_for: Some((parent.name.clone(), self.clone())),
             // file upload submodel does not have an embedded file upload submodel
             file_upload: None,
             id_prefix: Some(format!("{}fil", parent.id_prefix())),
@@ -88,11 +117,11 @@ impl FileModelOptions {
             // We have custom endpoints for this model so don't generate the normal ones.
             endpoints: Endpoints::Only(PerEndpoint {
                 get: true,
+                delete: true,
                 // The rest of these are custom.
                 list: false,
                 create: false,
                 update: false,
-                delete: false,
             }),
             plural: None,
             default_sort_field: None,

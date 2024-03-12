@@ -38,6 +38,7 @@ pub struct ModelGenerator<'a> {
     pub model_map: &'a ModelMap,
     pub(super) renderer: &'a Renderer<'a>,
     pub config: &'a Config,
+    children: Vec<HasModel>,
     context: Option<tera::Context>,
 }
 
@@ -48,11 +49,19 @@ impl<'a> ModelGenerator<'a> {
         model_map: &'a ModelMap,
         model: Model,
     ) -> Result<Self, Error> {
+        let file_has = model.file_upload.as_ref().map(|f| f.has_for_parent(&model));
+        let children = model
+            .has
+            .iter()
+            .map(|c| c.clone())
+            .chain(file_has)
+            .collect();
         Ok(Self {
             config,
             model_map,
             model,
             renderer,
+            children,
             context: None,
         })
     }
@@ -135,7 +144,7 @@ impl<'a> ModelGenerator<'a> {
         let mut populate_context = self.template_context().clone();
         populate_context.insert("populate_children", &true);
 
-        let populate_queries = if self.model.has.is_empty() {
+        let populate_queries = if self.children.is_empty() {
             vec![]
         } else {
             vec![
@@ -276,10 +285,7 @@ impl<'a> ModelGenerator<'a> {
 
         let base_dir = PathBuf::from("src/models").join(self.module_name());
 
-        let children = self
-            .model
-            .has
-            .iter()
+        let children = self.children.iter()
             .map(|has| {
                 let child_model = self.model_map.get(&has.model, &self.model.name, "has")?;
                 let child_generator = generators.get(&has.model, &self.model.name, "has")?;
@@ -318,7 +324,6 @@ impl<'a> ModelGenerator<'a> {
 
                 let result = json!({
                     "relationship": has,
-                    "is_file_upload": child_model.file_upload.is_some(),
                     "get_field_type": get_field_type,
                     "get_sql_field_name": get_sql_field_name,
                     "full_get_sql_field_name": format!("{get_sql_field_name}{exc}: {get_field_type}"),
@@ -452,7 +457,9 @@ impl<'a> ModelGenerator<'a> {
             "has_any_endpoints": endpoints.any_enabled(),
             "endpoints": endpoints.per_endpoint(),
             "auth_scope": self.auth_scope.unwrap_or(self.config.default_auth_scope),
-            "file_upload": self.file_upload.as_ref().map(|f| f.template_context()),
+            "file_for": self.file_for.as_ref().map(|f| f.0.as_str()),
+            "file_upload": self.file_for.as_ref().map(|f| f.1.template_context()),
+            "child_file_upload": self.file_upload.as_ref().map(|f| f.template_context()),
         });
 
         let mut context = tera::Context::from_value(json_value).unwrap();
@@ -620,7 +627,13 @@ impl<'a> ModelGenerator<'a> {
                     .iter()
                     .find(|has| has.model == self.model.name)
                     .map(|has| !has.many)
-                    .unwrap_or(false);
+                    .unwrap_or(false)
+                    || (self
+                        .model
+                        .file_for
+                        .as_ref()
+                        .map(|(parent_model, f)| parent_model == &model.name && f.many)
+                        .unwrap_or(false));
 
                 Ok::<_, Error>(ModelField {
                     name: model.foreign_key_id_field_name(),
@@ -714,19 +727,7 @@ impl<'a> ModelGenerator<'a> {
             previous_name: None,
         };
 
-        let file_has = self.file_upload.as_ref().map(|f| HasModel {
-            model: format!("{}File", self.model.name),
-            many: f.many,
-            through: None,
-            populate_on_get: ReferenceFetchType::Data,
-            populate_on_list: ReferenceFetchType::None,
-            update_with_parent: false,
-            field_name: Some(if f.many {
-                "files".to_string()
-            } else {
-                "file".to_string()
-            }),
-        });
+        let file_has = self.file_upload.as_ref().map(|f| f.has_for_parent(self));
 
         let has_fields = self
             .has
@@ -887,7 +888,7 @@ impl<'a> ModelGenerator<'a> {
         };
 
         let has_fields = self
-            .has
+            .children
             .iter()
             .map(|has| {
                 let has_model = self.model_map.get(&has.model, &self.model.name, "has")?;

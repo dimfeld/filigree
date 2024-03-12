@@ -66,6 +66,7 @@ impl Model {
                 joins: None,
                 belongs_to: None,
                 has: vec![],
+                file_for: None,
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
@@ -108,6 +109,7 @@ impl Model {
                 joins: None,
                 belongs_to: None,
                 has: vec![],
+                file_for: None,
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
@@ -161,6 +163,7 @@ impl Model {
                 joins: None,
                 belongs_to: None,
                 has: vec![],
+                file_for: None,
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,

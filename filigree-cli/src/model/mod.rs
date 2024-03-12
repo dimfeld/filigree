@@ -85,6 +85,10 @@ pub struct Model {
     /// as sub-entities, updating in the same operation as the update to the parent.
     #[serde(default)]
     pub has: Vec<HasModel>,
+
+    /// If set, this model is a file submodel and `file_for` is its parent.
+    #[serde(skip, default)]
+    pub(crate) file_for: Option<(String, FileModelOptions)>,
 }
 
 impl Model {
