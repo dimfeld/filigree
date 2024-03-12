@@ -315,6 +315,7 @@ impl<'a> ModelGenerator<'a> {
                     child_model.name.to_case(Case::Snake)
                 };
 
+                // Used in tests
                 let possible_child_field_names = vec![
                     Self::child_model_field_name(&child_model, ReferenceFetchType::Id, false),
                     Self::child_model_field_name(&child_model, ReferenceFetchType::Id, true),
@@ -339,6 +340,7 @@ impl<'a> ModelGenerator<'a> {
                     "table": child_model.table(),
                     "url_path": url_path,
                     "parent_field": self.model.foreign_key_id_field_name(),
+                    "is_file_upload": child_model.file_for.is_some(),
                 });
 
                 Ok::<_, Error>(result)

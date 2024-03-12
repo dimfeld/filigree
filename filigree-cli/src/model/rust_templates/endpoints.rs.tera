@@ -194,7 +194,7 @@ async fn upsert_child_{{c.module}}(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
-    let result = crate::models::{{c.module}}::queries::update_with_parent(
+    let result = crate::models::{{c.module}}::queries::upsert_with_parent(
         &state.db,
         auth.organization_id,
         object_perm == ObjectPermission::Owner,

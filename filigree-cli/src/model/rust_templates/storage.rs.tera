@@ -1,0 +1,143 @@
+{% if file_upload %}
+//! Object storage functionality for {{model_name}}
+
+use filigree::uploads;
+use sqlx::PgConection;
+
+use crate::{
+    error::Error,
+    server::ServerState
+};
+
+/// Apply the storage key template
+pub fn generate_object_key(auth: &Authed, id: {{id_type}}, filename: &str) -> String {
+    {{file_upload.filename_template_function_body}}
+}
+
+pub fn get_storage(state: &ServerState) -> &Storage {
+    &state.storage.{{file_upload.bucket}}
+}
+
+pub async fn upload_stream<E: Into<Error>>(state: &ServerState, tx: &mut PgConnection, parent_id: {{belongs_to_field.rust_type}}, id: Option<{{id_type}}>, filename: Option<String>, key: &str, limit: Option<usize>, body: impl Stream<Item=Result<Bytes, E>>) -> Result<(), Report<Error>> {
+    let storage = get_storage(state);
+
+    {% if file_upload.record_size -%}
+    let mut file_size = uploads::UploadSize::new(limit);
+    {%- endif %}
+    {% if file_upload.hash -%}
+    let mut hasher = uploads::UploadHasher::<{{file_upload.hash.hasher}}>::new();
+    {%- endif %}
+
+    hasher.update(&body);
+    let hash = hasher.finalize();
+    storage.save_and_inspect_request_body(key, body, |chunk| async {
+        {% if file_upload.record_size -%}
+        file_size.inspect(chunk).await?;
+        {%- endif %}
+        {% if file_upload.hash -%}
+        hasher.update(chunk).await?;
+        {%- endif %}
+        Ok::<(), UploadInspectorError>(())
+    }).await?;
+
+    {% if file_upload.record_size -%}
+    let file_size = file_size.finish();
+    {%- endif %}
+    {% if file_upload.hash -%}
+    let hash = hasher.finish();
+    {%- endif %}
+
+    let db_payload = {{struct_base}}UpdatePayload {
+        id,
+        {{belongs_to_field.name}}: parent_id,
+        file_storage_key: Some(key.to_string()),
+        file_storage_bucket: "{{file_upload.bucket}}".to_string(),
+        {% if file_upload.filename -%}
+        file_original_name: filename,
+        {%- endif %}
+        {% if file_upload.hash -%}
+        file_hash: Some(hash),
+        {%- endif %}
+        {% if file_upload.record_size -%}
+        file_size: Some(file_size),
+        {%- endif %}
+        ..Default::default()
+    };
+
+    super::queries::upsert_with_parent(
+        tx,
+        auth.organization_id,
+        true,
+        parent_id,
+        &db_payload
+    )?.await?;
+
+    Ok(())
+}
+
+pub async fn upload(state: &ServerState, tx: &mut PgConnection,
+    parent_id: {{belongs_to_field.rust_type}},
+    id: Option<{{id_type}}>,
+    filename: Option<String>,
+    key: &str,
+    limit: Option<usize>,
+    body: Bytes
+) -> Result<(), Report<Error>> {
+
+    let file_size = body.len();
+    if let Some(limit) = limit {
+        if file_size > limit {
+            return Err(Report::from(UploadInspectorError::FileSizeTooLarge));
+        }
+    }
+    
+    {% if file_upload.hash %}
+    let mut hasher = uploads::UploadHasher::<{{file_upload.hash.hasher}}>::new();
+    hasher.update(&body);
+    let hash = hasher.finalize();
+    {% endif %}
+
+    let storage = get_storage(state);
+    storage.put(key, body).await?;
+
+    let db_payload = {{struct_base}}UpdatePayload {
+        id,
+        {{belongs_to_field.name}}: parent_id,
+        file_storage_key: Some(key.to_string()),
+        file_storage_bucket: "{{file_upload.bucket}}".to_string(),
+        {% if file_upload.filename -%}
+        file_original_name: filename,
+        {%- endif %}
+        {% if file_upload.hash -%}
+        file_hash: Some(hash),
+        {%- endif %}
+        {% if file_upload.record_size -%}
+        file_size: Some(file_size),
+        {%- endif %}
+        ..Default::default()
+    };
+
+    super::queries::upsert_with_parent(tx, 
+        auth.organization_id,
+        true,
+        parent_id,
+        &db_payload
+    ).await?;
+
+    Ok(())
+}
+
+/// Delete an object given the storage key
+pub async fn delete_by_key(state: &ServerState, key: &str) -> Result<(), Report<Error>> {
+    let storage = get_storage(state);
+
+    storage.delete(key).await?;
+    Ok(())
+}
+
+pub async fn delete_by_id(state: &ServerState, id: {{id_type}}) -> Result<(), Report<Error>> {
+    // Look up the object in the database and then delete it
+    let storage_key = todo!();
+    delete_by_key(state, &storage_key).await
+}
+{% endif %}

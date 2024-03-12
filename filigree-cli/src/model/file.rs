@@ -27,7 +27,14 @@ pub struct FileModelOptions {
     /// - `{user}` will be replaced with the ID of the user that uploaded the object.
     /// - `{id}` will be replaced with the ID of the object.
     /// - `{filename}` will be replaced with the original filename of the uploaded file, if known.
-    /// You can also use `strftime` percent parameters to insert time-based values.
+    /// - '{year}' will be replaced with the current year
+    /// - '{month}' will be replaced with the current month, 01-12
+    /// - '{day}' will be replaced with the current day, 01-31
+    /// - '{hour}' will be replaced with the current hour, 00-23
+    /// - '{minute}' will be replaced with the current minute, 00-59
+    /// - '{second}' will be replaced with the current second, 00-59
+    ///
+    /// All date and time paramters use UTC.
     ///
     /// The default template is "{id}-{filename}". This helps to guarantee
     /// unique file names, while still aiding manual inspection.
@@ -75,14 +82,71 @@ impl FileModelOptions {
     }
 
     pub fn template_context(&self) -> serde_json::Value {
+        let template_func = self.filename_template_function();
+
         serde_json::json!({
             "bucket": self.bucket,
-            "filename_template": self.filename_template,
+            "filename_template_function_body": template_func,
             "hash": self.meta.hash.as_ref().map(|h| h.template_context()),
             "record_size": self.meta.size,
             "record_filename": self.meta.filename,
             "retain_file_on_delete": self.retain_file_on_delete,
         })
+    }
+
+    fn filename_template_function(&self) -> String {
+        let mut uses_date = false;
+        let mut format_parameters = String::new();
+
+        let parameters = [
+            ("year", 0, "now.year()", true),
+            ("month", 2, "now.month()", true),
+            ("day", 2, "now.day()", true),
+            ("hour", 2, "now.hour()", true),
+            ("minute", 2, "now.minute()", true),
+            ("second", 2, "now.second()", true),
+            ("org", 0, "auth.organization_id", false),
+            ("user", 0, "auth.user_id", false),
+            ("id", 0, "id", false),
+            ("filename", 0, "filename", false),
+        ];
+
+        let mut template = self.filename_template.clone();
+        for (name, padding, value, is_date) in parameters {
+            let search_param = format!("{{{}}}", name);
+            if !template.contains(&search_param) {
+                continue;
+            }
+
+            if is_date {
+                uses_date = true;
+            }
+
+            if padding > 0 {
+                template = template.replace(&search_param, &format!("{{{name}:0{padding}}}"));
+            }
+
+            format_parameters.push_str(&name);
+            format_parameters.push('=');
+            format_parameters.push_str(value);
+            format_parameters.push_str(",\n");
+        }
+
+        let now = if uses_date {
+            "let now = chrono::Utc::now();"
+        } else {
+            ""
+        };
+
+        format!(
+            r###"
+        {now}
+        format!(
+            r##"{template}"##,
+            {format_parameters}
+        )
+        "###
+        )
     }
 
     pub fn model_name(&self, parent: &Model) -> String {

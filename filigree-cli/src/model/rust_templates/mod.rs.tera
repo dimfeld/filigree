@@ -2,6 +2,9 @@
 pub mod endpoints;
 {% endif %}
 pub mod queries;
+{% if file_upload %}
+pub mod storage;
+{% endif %}
 #[cfg(test)]
 pub mod testing;
 pub mod types;
