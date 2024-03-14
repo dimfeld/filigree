@@ -35,6 +35,8 @@ pub enum Error {
     NotFound(&'static str),
     #[error("Invalid filter")]
     Filter,
+    #[error("Failed to upload file")]
+    Upload,
     /// A wrapper around a Report<Error> to let it be returned from an Axum handler, since we can't
     /// implement IntoResponse on Report
     #[error("{0}")]
@@ -59,15 +61,28 @@ impl From<Report<Error>> for Error {
 }
 
 impl Error {
+    /// Helper function for find_downstack_error
+    fn error_kind_and_code(e: impl HttpError) -> (&'static str, StatusCode) {
+        (e.error_kind(), e.status_code())
+    }
+
     /// If this Error contains a Report<Error>, find an inner HttpError whose error data we may want to use.
-    fn find_downstack_error(&self) -> Option<&AuthError> {
+    fn find_downstack_error(&self) -> Option<(&'static str, StatusCode)> {
         let Error::WrapReport(report) = self else {
             return None;
         };
 
-        // Currently this only applies to AuthError. Other errors don't need to pass through their
-        // codes to the user.
-        report.downcast_ref::<AuthError>()
+        // Can't downcast to a trait object, so we just check the error types we know are relevant
+        report.frames().find_map(|frame| {
+            frame
+                .downcast_ref::<AuthError>()
+                .map(Self::error_kind_and_code)
+                .or_else(|| {
+                    frame
+                        .downcast_ref::<UploadInspectorError>()
+                        .map(Self::error_kind_and_code)
+                })
+        })
     }
 }
 
@@ -75,22 +90,23 @@ impl HttpError for Error {
     type Detail = String;
 
     fn error_kind(&self) -> &'static str {
-        if let Some(e) = self.find_downstack_error() {
-            return e.error_kind();
+        if let Some((error_kind, _)) = self.find_downstack_error() {
+            return error_kind;
         }
 
         match self {
             Error::WrapReport(e) => e.current_context().error_kind(),
+            Error::Upload => FilErrorKind::UploadFailed.as_str(),
             Error::DbInit => FilErrorKind::DatabaseInit.as_str(),
             Error::Db => FilErrorKind::Database.as_str(),
-            Error::TaskQueue => "task_queue",
+            Error::TaskQueue => ErrorKind::TaskQueue.as_str(),
             Error::ServerStart => FilErrorKind::ServerStart.as_str(),
             Error::NotFound(_) => FilErrorKind::NotFound.as_str(),
             Error::Shutdown => FilErrorKind::Shutdown.as_str(),
-            Error::ScheduledTask => "scheduled_task",
-            Error::Filter => "invalid_filter",
+            Error::ScheduledTask => ErrorKind::ScheduledTask.as_str(),
+            Error::Filter => ErrorKind::Filter.as_str(),
             Error::AuthError(e) => e.error_kind(),
-            Error::AuthSubsystem => "auth",
+            Error::AuthSubsystem => ErrorKind::AuthSubsystem.as_str(),
             Error::Login => FilErrorKind::Unauthenticated.as_str(),
             Error::MissingPermission(_) => FilErrorKind::Unauthenticated.as_str(),
             Error::InvalidHostHeader => FilErrorKind::InvalidHostHeader.as_str(),
@@ -113,13 +129,14 @@ impl HttpError for Error {
     }
 
     fn status_code(&self) -> StatusCode {
-        if let Some(e) = self.find_downstack_error() {
-            return e.status_code();
+        if let Some((_, status_code)) = self.find_downstack_error() {
+            return status_code;
         }
 
         match self {
             Error::WrapReport(e) => e.current_context().status_code(),
             Error::AuthError(e) => e.status_code(),
+            Error::Upload => StatusCode::INTERNAL_SERVER_ERROR,
             Error::DbInit => StatusCode::INTERNAL_SERVER_ERROR,
             Error::Db => StatusCode::INTERNAL_SERVER_ERROR,
             Error::TaskQueue => StatusCode::INTERNAL_SERVER_ERROR,

@@ -353,7 +353,7 @@ async fn create_payload_children(
                     child.{{c.parent_field}} = parent_id;
                 }
 
-                crate::models::{{c.module}}::queries::update_with_parent(&mut *db, organization_id, true, parent_id, &children).await?
+                crate::models::{{c.module}}::queries::update_all_with_parent(&mut *db, organization_id, true, parent_id, &children).await?
             } else {
                 vec![]
             }
@@ -436,7 +436,7 @@ async fn update_payload_children(
         children.{{c.parent_field}} = parent_id;
         {% endif %}
 
-        crate::models::{{c.module}}::queries::update_with_parent(
+        crate::models::{{c.module}}::queries::update_all_with_parent(
             &mut *db,
             organization_id,
             is_owner,
@@ -489,7 +489,8 @@ pub async fn lookup_object_permissions(
 
 {% if belongs_to_field %}
 {% if belongs_to_field.unique %}
-/// Update or insert the child of the given parent.
+/// Update or insert the child of the given parent. Since there can only be a single child per
+/// parent, this ignores the `id` field of the payload, and only looks at the parent ID.
 {% else %}
 /// Update or insert a child of the given parent.
 {% endif %}
@@ -502,11 +503,12 @@ pub async fn upsert_with_parent(
     payload: &{{ struct_base }}UpdatePayload)
     -> Result<Option<{{struct_base}}>, error_stack::Report<Error>> {
 
+    let id = payload.id.clone().unwrap_or_else({{id_type}}::new);
     let result = query_file_as!({{struct_base}}, "{{dir}}/upsert_single_child.sql",
         {% if owner_and_user_different_access %}
         is_owner,
         {% endif %}
-        payload.id.as_uuid(),
+        id.as_uuid(),
         {% if not global -%}
         organization_id.as_uuid(),
         {%- endif %}
@@ -525,7 +527,7 @@ pub async fn upsert_with_parent(
 }
 
 {% if not belongs_to_field.unique %}
-/// Update a single child of the given parent.
+/// Update a single child of the given parent. This does nothing if the child doesn't exist.
 #[instrument(skip(db))]
 pub async fn update_one_with_parent(
     db: impl PgExecutor<'_>,
@@ -563,7 +565,7 @@ pub async fn update_one_with_parent(
 /// Insert new values that are not yet in the database and
 /// delete existing values that are not in the payload.
 #[instrument(skip(db))]
-pub async fn update_with_parent(
+pub async fn update_all_with_parent(
     db: &mut PgConnection,
     organization_id: OrganizationId,
     is_owner: bool,

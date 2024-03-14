@@ -40,13 +40,6 @@ pub async fn upload_stream<E: Into<Error>>(state: &ServerState, tx: &mut PgConne
         Ok::<(), UploadInspectorError>(())
     }).await?;
 
-    {% if file_upload.record_size -%}
-    let file_size = file_size.finish();
-    {%- endif %}
-    {% if file_upload.hash -%}
-    let hash = hasher.finish();
-    {%- endif %}
-
     let db_payload = {{struct_base}}UpdatePayload {
         id,
         {{belongs_to_field.name}}: parent_id,
@@ -56,10 +49,10 @@ pub async fn upload_stream<E: Into<Error>>(state: &ServerState, tx: &mut PgConne
         file_original_name: filename,
         {%- endif %}
         {% if file_upload.hash -%}
-        file_hash: Some(hash),
+        file_hash: Some(hasher.finish()),
         {%- endif %}
         {% if file_upload.record_size -%}
-        file_size: Some(file_size),
+        file_size: Some(file_size.finish()),
         {%- endif %}
         ..Default::default()
     };
@@ -90,7 +83,7 @@ pub async fn upload(state: &ServerState, tx: &mut PgConnection,
             return Err(Report::from(UploadInspectorError::FileSizeTooLarge));
         }
     }
-    
+
     {% if file_upload.hash %}
     let mut hasher = uploads::UploadHasher::<{{file_upload.hash.hasher}}>::new();
     hasher.update(&body);
@@ -117,7 +110,7 @@ pub async fn upload(state: &ServerState, tx: &mut PgConnection,
         ..Default::default()
     };
 
-    super::queries::upsert_with_parent(tx, 
+    super::queries::upsert_with_parent(tx,
         auth.organization_id,
         true,
         parent_id,

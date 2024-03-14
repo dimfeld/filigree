@@ -122,6 +122,8 @@ pub enum ErrorKind {
     SignupDisabled,
     /// The user is not logged in
     Unauthenticated,
+    /// An upload failed in some way not covered by a more specific error message
+    UploadFailed,
     /// An uploaded file was larger than the configured limit
     UploadTooLarge,
     /// Internal error while creating a user
@@ -162,6 +164,7 @@ impl ErrorKind {
             Self::Shutdown => "shutdown",
             Self::SignupDisabled => "signup_disabled",
             Self::Unauthenticated => "unauthenticated",
+            Self::UploadFailed => "upload_failed",
             Self::UploadTooLarge => "upload_too_large",
             Self::UserCreationError => "user_creation_error",
             Self::UserNotFound => "user_not_found",
