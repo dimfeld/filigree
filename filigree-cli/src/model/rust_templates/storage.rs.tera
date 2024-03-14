@@ -5,6 +5,7 @@ use filigree::uploads;
 use sqlx::PgConection;
 
 use crate::{
+    auth::Authed,
     error::Error,
     server::ServerState
 };
@@ -18,7 +19,17 @@ pub fn get_storage(state: &ServerState) -> &Storage {
     &state.storage.{{file_upload.bucket}}
 }
 
-pub async fn upload_stream<E: Into<Error>>(state: &ServerState, tx: &mut PgConnection, parent_id: {{belongs_to_field.rust_type}}, id: Option<{{id_type}}>, filename: Option<String>, key: &str, limit: Option<usize>, body: impl Stream<Item=Result<Bytes, E>>) -> Result<(), Report<Error>> {
+pub async fn upload_stream<E: Into<Error>>(
+    state: &ServerState,
+    auth: &Authed,
+    tx: &mut PgConnection,
+    parent_id: {{belongs_to_field.rust_type}},
+    id: Option<{{id_type}}>,
+    filename: Option<String>,
+    key: Option<String>,
+    limit: Option<usize>,
+    body: impl Stream<Item=Result<Bytes, E>>
+) -> Result<(), Report<Error>> {
     let storage = get_storage(state);
 
     {% if file_upload.record_size -%}
@@ -28,8 +39,31 @@ pub async fn upload_stream<E: Into<Error>>(state: &ServerState, tx: &mut PgConne
     let mut hasher = uploads::UploadHasher::<{{file_upload.hash.hasher}}>::new();
     {%- endif %}
 
-    hasher.update(&body);
-    let hash = hasher.finalize();
+    let db_payload = {{struct_base}}UpdatePayload {
+        id,
+        {{belongs_to_field.name}}: parent_id,
+        file_storage_key: Some(file_storage_key),
+        file_storage_bucket: "{{file_upload.bucket}}".to_string(),
+        {% if file_upload.filename -%}
+        file_original_name: filename,
+        {%- endif %}
+        ..Default::default()
+    };
+
+    // Do the upsert first to get the actual ID, since in the single-child case the ID won't change
+    // if the object already exists.
+    let id = super::queries::upsert_with_parent(
+        tx,
+        auth.organization_id,
+        true,
+        parent_id,
+        &db_payload
+    )
+        .await?
+        .id;
+
+    let file_storage_key = key.unwrap_or_else(|| generate_object_key(auth, id, filename.as_deref().unwrap_or_default()));
+
     storage.save_and_inspect_request_body(key, body, |chunk| async {
         {% if file_upload.record_size -%}
         file_size.inspect(chunk).await?;
@@ -40,16 +74,12 @@ pub async fn upload_stream<E: Into<Error>>(state: &ServerState, tx: &mut PgConne
         Ok::<(), UploadInspectorError>(())
     }).await?;
 
-    let db_payload = {{struct_base}}UpdatePayload {
-        id,
-        {{belongs_to_field.name}}: parent_id,
-        file_storage_key: Some(key.to_string()),
-        file_storage_bucket: "{{file_upload.bucket}}".to_string(),
-        {% if file_upload.filename -%}
-        file_original_name: filename,
-        {%- endif %}
+    {% if file_upload.record_size or file_upload.hash -%}
+    // Record the info that we got from the stream itself.
+    let recording_payload = {{struct_base}}UpdatePayload {
+        id: Some(id),
         {% if file_upload.hash -%}
-        file_hash: Some(hasher.finish()),
+        file_hash: Some(hasher.finish().as_bytes().to_vec()),
         {%- endif %}
         {% if file_upload.record_size -%}
         file_size: Some(file_size.finish()),
@@ -57,22 +87,20 @@ pub async fn upload_stream<E: Into<Error>>(state: &ServerState, tx: &mut PgConne
         ..Default::default()
     };
 
-    super::queries::upsert_with_parent(
-        tx,
-        auth.organization_id,
-        true,
-        parent_id,
-        &db_payload
-    )?.await?;
+    super::queries::update(&mut *tx, auth, id, recording_payload).await?;
+    {%- endif %}
 
     Ok(())
 }
 
-pub async fn upload(state: &ServerState, tx: &mut PgConnection,
+pub async fn upload(
+    state: &ServerState,
+    authed: &Authed,
+    tx: &mut PgConnection,
     parent_id: {{belongs_to_field.rust_type}},
     id: Option<{{id_type}}>,
     filename: Option<String>,
-    key: &str,
+    key: Option<String>,
     limit: Option<usize>,
     body: Bytes
 ) -> Result<(), Report<Error>> {
@@ -85,18 +113,18 @@ pub async fn upload(state: &ServerState, tx: &mut PgConnection,
     }
 
     {% if file_upload.hash %}
-    let mut hasher = uploads::UploadHasher::<{{file_upload.hash.hasher}}>::new();
-    hasher.update(&body);
-    let hash = hasher.finalize();
+    let hash = tokio::task::spawn_blocking(|| {
+        let mut hasher = uploads::UploadHasher::<{{file_upload.hash.hasher}}>::new();
+        hasher.update(&body);
+        hasher.finish().as_bytes().to_vec()
+    }).await?;
     {% endif %}
 
-    let storage = get_storage(state);
-    storage.put(key, body).await?;
-
+    let file_storage_key = key.unwrap_or_else(|| generate_object_key(auth, id, filename.as_deref().unwrap_or_default()));
     let db_payload = {{struct_base}}UpdatePayload {
         id,
         {{belongs_to_field.name}}: parent_id,
-        file_storage_key: Some(key.to_string()),
+        file_storage_key: Some(file_storage_key.clone()),
         file_storage_bucket: "{{file_upload.bucket}}".to_string(),
         {% if file_upload.filename -%}
         file_original_name: filename,
@@ -110,27 +138,49 @@ pub async fn upload(state: &ServerState, tx: &mut PgConnection,
         ..Default::default()
     };
 
-    super::queries::upsert_with_parent(tx,
+    let id = super::queries::upsert_with_parent(
+        tx,
         auth.organization_id,
         true,
         parent_id,
         &db_payload
-    ).await?;
+    )
+        .await?
+        .id;
+
+    let storage = get_storage(state);
+    storage.put(&file_storage_key, body).await?;
 
     Ok(())
 }
 
 /// Delete an object given the storage key
-pub async fn delete_by_key(state: &ServerState, key: &str) -> Result<(), Report<Error>> {
+pub async fn delete_by_key(state: &ServerState,  key: &str) -> Result<(), Report<Error>> {
     let storage = get_storage(state);
-
     storage.delete(key).await?;
     Ok(())
 }
 
-pub async fn delete_by_id(state: &ServerState, id: {{id_type}}) -> Result<(), Report<Error>> {
+pub async fn delete_by_id(
+    state: &ServerState,
+    auth: &Authed,
+    tx: &mut PgConnection,
+    id: {{id_type}}
+) -> Result<(), Report<Error>> {
     // Look up the object in the database and then delete it
-    let storage_key = todo!();
-    delete_by_key(state, &storage_key).await
+
+    let storage_key = super::queries::get(
+        &mut *tx,
+        auth,
+        id
+    )
+        .await?
+        .file_storage_key;
+
+    delete_by_key(state, &storage_key).await?;
+
+    super::queries::delete(&mut *tx, auth, id).await?;
+
+    Ok(())
 }
 {% endif %}

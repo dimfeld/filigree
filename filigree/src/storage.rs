@@ -3,6 +3,7 @@ use axum_extra::extract::multipart::MultipartError;
 use bytes::Bytes;
 use futures::{Future, Stream, TryFutureExt, TryStreamExt};
 use object_store::{path::Path, GetResult, MultipartId, ObjectStore as _, PutResult};
+use serde::Deserialize;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tracing::instrument;
 use url::Url;
@@ -16,6 +17,12 @@ pub mod local;
 pub mod s3;
 
 pub use config::*;
+
+/// A filename in a query string
+#[derive(Debug, Deserialize)]
+pub struct QueryFilename {
+    filename: Option<String>,
+}
 
 /// An error that may occur during a storage operation
 #[derive(Debug, thiserror::Error)]

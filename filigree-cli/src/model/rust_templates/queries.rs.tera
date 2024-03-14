@@ -361,7 +361,8 @@ async fn create_payload_children(
             tracing::event!(Level::DEBUG, ?children, "Creating child {{c.module}}");
             children.id = Some({{c.object_id}}::new());
             children.{{c.parent_field}} = parent_id;
-            crate::models::{{c.module}}::queries::upsert_with_parent(&mut *db, organization_id, true, parent_id, &children).await?
+            let result = crate::models::{{c.module}}::queries::upsert_with_parent(&mut *db, organization_id, true, parent_id, &children).await?;
+            Some(result)
         {% endif %}
         } else {
             {% if c.relationship.many %}
@@ -501,14 +502,14 @@ pub async fn upsert_with_parent(
     is_owner: bool,
     parent_id: {{belongs_to_field.rust_type}},
     payload: &{{ struct_base }}UpdatePayload)
-    -> Result<Option<{{struct_base}}>, error_stack::Report<Error>> {
+    -> Result<{{struct_base}}, error_stack::Report<Error>> {
 
     let id = payload.id.clone().unwrap_or_else({{id_type}}::new);
     let result = query_file_as!({{struct_base}}, "{{dir}}/upsert_single_child.sql",
         {% if owner_and_user_different_access %}
         is_owner,
         {% endif %}
-        id.as_uuid(),
+        payload.id.as_uuid(),
         {% if not global -%}
         organization_id.as_uuid(),
         {%- endif %}
@@ -523,7 +524,7 @@ pub async fn upsert_with_parent(
         .fetch_one(db)
         .await
         .change_context(Error::Db)?;
-    Ok(Some(result))
+    Ok(result)
 }
 
 {% if not belongs_to_field.unique %}

@@ -1,4 +1,4 @@
-{% import "model/sql_macros.tera" as macros %}
+{% import "sql_macros.tera" as macros %}
 DELETE FROM {{table}}
 WHERE
   id = $1

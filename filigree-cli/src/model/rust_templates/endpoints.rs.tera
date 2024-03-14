@@ -121,19 +121,38 @@ async fn create_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
     Path(parent_id): Path<{{id_type}}>,
+    {% if c.is_file_upload -%}
+    body: axum::body::Body,
+    Query(qs): Query<filigree::storage::QueryFilename>,
+    {%- else -%}
     FormOrJson(mut payload): FormOrJson<{{c.struct_base}}CreatePayload>,
+    {%- endif %}
     ) -> Result<impl IntoResponse, Error> {
 
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
+    {% if c.is_file_upload %}
+    crate::models::{{c.module}}::storage::upload_stream(
+        &state,
+        &auth,
+        &mut *tx,
+        parent_id,
+        None,
+        qs.filename.clone(),
+        None,
+        body.into_data_stream()
+    ).await?;
+    {% else %}
     payload.{{c.parent_field}} = parent_id;
 
-    let mut tx = state.db.begin().await.change_context(Error::Db)?;
     let result = crate::models::{{c.module}}::queries::create(
         &mut *tx,
         &auth,
         payload
     ).await?;
-    tx.commit().await.change_context(Error::Db)?;
+    {% endif %}
 
+    tx.commit().await.change_context(Error::Db)?;
 
     Ok(Json(result))
 }
@@ -142,9 +161,16 @@ async fn update_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
     Path((parent_id, child_id)): Path<({{id_type}}, {{c.object_id}})>,
+    {% if c.is_file_upload -%}
+    body: axum::body::Body,
+    Query(qs): Query<filigree::storage::QueryFilename>,
+    {%- else -%}
     FormOrJson(mut payload): FormOrJson<{{c.struct_base}}UpdatePayload>,
+    {%- endif %}
     ) -> Result<impl IntoResponse, Error> {
 
+    // TODO FILE for file child models this should be a direct upload and delete the old one if
+    // retain is off
     payload.id = Some(child_id);
     payload.{{c.parent_field}} = parent_id;
 
@@ -165,6 +191,7 @@ async fn delete_child_{{c.module}}(
     Path((parent_id, child_id)): Path<({{id_type}}, {{c.object_id}})>,
     ) -> Result<impl IntoResponse, Error> {
 
+    // TODO FILE for file child models this should delete the file if retain if off
     crate::models::{{c.module}}::queries::delete_with_parent(
         &state.db,
         &auth,
@@ -194,6 +221,7 @@ async fn upsert_child_{{c.module}}(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
+    // TODO FILE for file child models this should be a direct upload
     let result = crate::models::{{c.module}}::queries::upsert_with_parent(
         &state.db,
         auth.organization_id,
@@ -217,6 +245,7 @@ async fn delete_child_{{c.module}}(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
+    // TODO FILE for file child models this should delete the file if retain if off
     crate::models::{{c.module}}::queries::delete_all_children_of_parent(
         &state.db,
         auth.organization_id,

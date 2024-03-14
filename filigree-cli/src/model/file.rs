@@ -1,4 +1,7 @@
+use std::borrow::Cow;
+
 use cargo_toml::Manifest;
+use convert_case::{Case, Casing};
 use error_stack::Report;
 use serde::Deserialize;
 use serde_json::json;
@@ -12,6 +15,10 @@ use crate::{config::Config, Error};
 /// Options for a model that represents a file upload
 #[derive(Deserialize, Clone, Debug)]
 pub struct FileModelOptions {
+    /// The name of this file model. If omitted, {model.name}File will be used and
+    /// the child field will be named "file" or "files" depending on [many].
+    pub name: Option<String>,
+
     /// The storage bucket where the files should be stored. This must be one of the keys
     /// of [storage.bucket] in the primary configuration file.
     pub bucket: String,
@@ -150,7 +157,24 @@ impl FileModelOptions {
     }
 
     pub fn model_name(&self, parent: &Model) -> String {
-        format!("{}File", parent.name)
+        if let Some(name) = &self.name {
+            format!("{}{}", parent.name, name)
+        } else {
+            format!("{}File", parent.name)
+        }
+    }
+
+    fn child_field_name(&self) -> String {
+        let field_name = self
+            .name
+            .as_ref()
+            .map(|name| Cow::Owned(name.to_case(Case::Snake)))
+            .unwrap_or(Cow::Borrowed("file"));
+        if self.many {
+            format!("{field_name}s")
+        } else {
+            field_name.to_string()
+        }
     }
 
     pub fn has_for_parent(&self, parent: &Model) -> HasModel {
@@ -161,11 +185,7 @@ impl FileModelOptions {
             populate_on_get: ReferenceFetchType::Data,
             populate_on_list: ReferenceFetchType::None,
             update_with_parent: false,
-            field_name: Some(if self.many {
-                "files".to_string()
-            } else {
-                "file".to_string()
-            }),
+            field_name: Some(self.child_field_name()),
         }
     }
 
@@ -178,15 +198,9 @@ impl FileModelOptions {
             id_prefix: Some(format!("{}fil", parent.id_prefix())),
             fields: self.file_model_fields(),
             belongs_to: Some(super::BelongsTo::Simple(parent.name.clone())),
-            // We have custom endpoints for this model so don't generate the normal ones.
-            endpoints: Endpoints::Only(PerEndpoint {
-                get: true,
-                delete: true,
-                // The rest of these are custom.
-                list: false,
-                create: false,
-                update: false,
-            }),
+            // The object is only accessible via the parent model, so don't generate endpoints
+            // here.
+            endpoints: Endpoints::All(false),
             plural: None,
             default_sort_field: None,
             pagination: Pagination::default(),
@@ -322,7 +336,7 @@ impl HashType {
             HashType::Sha3_224 | HashType::Sha3_256 | HashType::Sha3_384 | HashType::Sha3_512 => {
                 ("sha3", "0.10.8", &[])
             }
-            HashType::Blake3 => ("blake3", "1.5.0", &["traits-preview"]),
+            HashType::Blake3 => ("blake3", "1.5.1", &["traits-preview"]),
         }
     }
 
