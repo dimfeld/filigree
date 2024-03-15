@@ -277,7 +277,7 @@ async fn upsert_child_{{c.module}}(
         auth.organization_id,
         object_perm == ObjectPermission::Owner,
         parent_id,
-        &Some(payload)).await?;
+        &payload).await?;
     {% endif %}
     Ok(Json(result))
 }

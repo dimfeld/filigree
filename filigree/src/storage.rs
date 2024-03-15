@@ -21,7 +21,8 @@ pub use config::*;
 /// A filename in a query string
 #[derive(Debug, Deserialize)]
 pub struct QueryFilename {
-    filename: Option<String>,
+    /// The filename
+    pub filename: Option<String>,
 }
 
 /// An error that may occur during a storage operation

@@ -509,7 +509,7 @@ pub async fn upsert_with_parent(
         {% if owner_and_user_different_access %}
         is_owner,
         {% endif %}
-        payload.id.as_uuid(),
+        id.as_uuid(),
         {% if not global -%}
         organization_id.as_uuid(),
         {%- endif %}
@@ -653,7 +653,7 @@ pub async fn delete_with_parent(
         .execute(db)
         .await
         .change_context(Error::Db)?;
-    Ok(result.affected_rows() > 0)
+    Ok(result.rows_affected() > 0)
 }
 {% endif %}
 
