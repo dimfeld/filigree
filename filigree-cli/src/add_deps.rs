@@ -16,6 +16,7 @@ const DEPS: &[DepVersion<'static>] = &[
         "0.8.0",
         &["postgres", "runtime-tokio-rustls"],
     ),
+    ("bytes", "1.5.0", &[]),
     ("chrono", "0.4.33", &[]),
     ("clap", "4.4.11", &["env", "derive"]),
     ("dotenvy", "0.15.7", &[]),

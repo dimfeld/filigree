@@ -11,6 +11,7 @@ use crate::models::{
     comment::{Comment, CommentCreatePayload, CommentId, CommentUpdatePayload},
     organization::OrganizationId,
     poll::{Poll, PollCreatePayload, PollId, PollUpdatePayload},
+    post_image::{PostImage, PostImageCreatePayload, PostImageId, PostImageUpdatePayload},
     reaction::{Reaction, ReactionCreatePayload, ReactionId, ReactionUpdatePayload},
 };
 
@@ -141,6 +142,7 @@ pub struct PostPopulatedGet {
     pub comment_ids: Vec<CommentId>,
     pub reactions: Vec<Reaction>,
     pub poll: Option<Poll>,
+    pub images: Vec<PostImage>,
     pub _permission: ObjectPermission,
 }
 
@@ -183,6 +185,10 @@ impl PostPopulatedGet {
     pub fn default_poll() -> Option<Poll> {
         None
     }
+
+    pub fn default_images() -> Vec<PostImage> {
+        <Vec<PostImage> as Default>::default().into()
+    }
 }
 
 sqlx_json_decode!(PostPopulatedGet);
@@ -199,6 +205,7 @@ impl Default for PostPopulatedGet {
             comment_ids: Self::default_comment_ids(),
             reactions: Self::default_reactions(),
             poll: Self::default_poll(),
+            images: Self::default_images(),
             _permission: ObjectPermission::Owner,
         }
     }
@@ -209,7 +216,7 @@ impl Serialize for PostPopulatedGet {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("PostPopulatedGet", 10)?;
+        let mut state = serializer.serialize_struct("PostPopulatedGet", 11)?;
         state.serialize_field("id", &self.id)?;
         state.serialize_field("organization_id", &self.organization_id)?;
         state.serialize_field("updated_at", &self.updated_at)?;
@@ -219,6 +226,7 @@ impl Serialize for PostPopulatedGet {
         state.serialize_field("comment_ids", &self.comment_ids)?;
         state.serialize_field("reactions", &self.reactions)?;
         state.serialize_field("poll", &self.poll)?;
+        state.serialize_field("images", &self.images)?;
         state.serialize_field("_permission", &self._permission)?;
         state.end()
     }

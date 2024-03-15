@@ -1,14 +1,23 @@
 {% if file_upload %}
 //! Object storage functionality for {{model_name}}
+#![allow(unused_imports, dead_code)]
 
-use filigree::uploads;
-use sqlx::PgConection;
+use bytes::Bytes;
+use error_stack::ResultExt;
+use filigree::{
+    storage::{Storage, StorageError},
+    uploads::{self, UploadInspectorError},
+};
+use futures::stream::Stream;
+use sqlx::PgConnection;
 
 use crate::{
     auth::Authed,
     error::Error,
     server::ServerState
 };
+use super::{ {{struct_base}}, {{struct_base}}UpdatePayload, {{id_type}} };
+{{imports}}
 
 /// Apply the storage key template
 pub fn generate_object_key(auth: &Authed, id: {{id_type}}, filename: &str) -> String {
@@ -19,7 +28,7 @@ pub fn get_storage(state: &ServerState) -> &Storage {
     &state.storage.{{file_upload.bucket}}
 }
 
-pub async fn upload_stream<E: Into<Error>>(
+pub async fn upload_stream<E: Into<StorageError>>(
     state: &ServerState,
     auth: &Authed,
     tx: &mut PgConnection,
@@ -28,9 +37,27 @@ pub async fn upload_stream<E: Into<Error>>(
     filename: Option<String>,
     key: Option<String>,
     limit: Option<usize>,
-    body: impl Stream<Item=Result<Bytes, E>>
-) -> Result<(), Report<Error>> {
+    body: impl Stream<Item=Result<Bytes, E>> + Unpin
+) -> Result<{{struct_base}}, error_stack::Report<Error>> {
     let storage = get_storage(state);
+
+    {% if file_upload.many %}
+    let id = id.unwrap_or_else({{id_type}}::new);
+    {% else %}
+    // Get the actual ID first, since in the single-child case the ID won't change
+    // if the object already exists.
+    let existing_id = sqlx::query_scalar!(
+        r##"SELECT id: "id: {{id_type}}" FROM {{table}} WHERE {{belongs_to_field}} = $1"##,
+        parent_id
+    )
+        .fetch_optional(&mut *tx)
+        .await
+        .change_context(Error::Db)?;
+
+    let id = existing_id.or(id).unwrap_or_else({{id_type}}::new);
+    {% endif %}
+
+    let file_storage_key = key.unwrap_or_else(|| generate_object_key(auth, id, filename.as_deref().unwrap_or_default()));
 
     {% if file_upload.record_size -%}
     let mut file_size = uploads::UploadSize::new(limit);
@@ -39,44 +66,26 @@ pub async fn upload_stream<E: Into<Error>>(
     let mut hasher = uploads::UploadHasher::<{{file_upload.hash.hasher}}>::new();
     {%- endif %}
 
-    let db_payload = {{struct_base}}UpdatePayload {
-        id,
-        {{belongs_to_field.name}}: parent_id,
-        file_storage_key: Some(file_storage_key),
-        file_storage_bucket: "{{file_upload.bucket}}".to_string(),
-        {% if file_upload.filename -%}
-        file_original_name: filename,
-        {%- endif %}
-        ..Default::default()
-    };
-
-    // Do the upsert first to get the actual ID, since in the single-child case the ID won't change
-    // if the object already exists.
-    let mut result = super::queries::upsert_with_parent(
-        tx,
-        auth.organization_id,
-        true,
-        parent_id,
-        &db_payload
-    )
-        .await?;
-
-    let file_storage_key = key.unwrap_or_else(|| generate_object_key(auth, result.id, filename.as_deref().unwrap_or_default()));
-
-    storage.save_and_inspect_request_body(key, body, |chunk| async {
+    storage.save_and_inspect_request_body(&file_storage_key, body, |chunk| async {
         {% if file_upload.record_size -%}
         file_size.inspect(chunk).await?;
         {%- endif %}
         {% if file_upload.hash -%}
-        hasher.update(chunk).await?;
+        hasher.inspect(chunk).await?;
         {%- endif %}
         Ok::<(), UploadInspectorError>(())
-    }).await?;
+    })
+    .await
+    .change_context(Error::Upload)?;
 
-    {% if file_upload.record_size or file_upload.hash -%}
-    // Record the info that we got from the stream itself.
-    let recording_payload = {{struct_base}}UpdatePayload {
-        id: Some(result.id),
+    let db_payload = {{struct_base}}UpdatePayload {
+        id,
+        {{belongs_to_field.name}}: parent_id,
+        file_storage_key,
+        file_storage_bucket: "{{file_upload.bucket}}".to_string(),
+        {% if file_upload.filename -%}
+        file_original_name: filename,
+        {%- endif %}
         {% if file_upload.hash -%}
         file_hash: Some(hasher.finish().as_bytes().to_vec()),
         {%- endif %}
@@ -86,17 +95,16 @@ pub async fn upload_stream<E: Into<Error>>(
         ..Default::default()
     };
 
-    {% if file_upload.hash -%}
-    result.file_hash = recording_payload.file_hash.clone();
-    {%- endif %}
-    {% if file_upload.record_size -%}
-    result.file_size = recording_payload.file_size;
-    {%- endif %}
+    let result = super::queries::upsert_with_parent(
+        tx,
+        auth.organization_id,
+        true,
+        parent_id,
+        &db_payload
+    )
+        .await?;
 
-    super::queries::update(&mut *tx, auth, result.id, recording_payload).await?;
-    {%- endif %}
-
-    Ok(())
+    Ok(result)
 }
 
 pub async fn upload(
@@ -109,19 +117,19 @@ pub async fn upload(
     key: Option<String>,
     limit: Option<usize>,
     body: Bytes
-) -> Result<(), Report<Error>> {
+) -> Result<{{struct_base}}, error_stack::Report<Error>> {
 
     let file_size = body.len();
     if let Some(limit) = limit {
         if file_size > limit {
-            return Err(Report::from(UploadInspectorError::FileSizeTooLarge));
+            return Err(error_stack::Report::new(Error::from(UploadInspectorError::FileSizeTooLarge)));
         }
     }
 
     {% if file_upload.hash %}
     let hash = tokio::task::spawn_blocking(|| {
         let mut hasher = uploads::UploadHasher::<{{file_upload.hash.hasher}}>::new();
-        hasher.update(&body);
+        hasher.inspect(&body);
         hasher.finish().as_bytes().to_vec()
     }).await?;
     {% endif %}
@@ -144,24 +152,24 @@ pub async fn upload(
         ..Default::default()
     };
 
-    let id = super::queries::upsert_with_parent(
+    let result = super::queries::upsert_with_parent(
         tx,
         auth.organization_id,
         true,
         parent_id,
         &db_payload
-    )
-        .await?
-        .id;
+    ).await?;
 
     let storage = get_storage(state);
-    storage.put(&file_storage_key, body).await?;
+    storage.put(&file_storage_key, body)
+        .await
+        .change_context(Error::Upload)?;
 
     Ok(())
 }
 
 /// Delete an object given the storage key
-pub async fn delete_by_key(state: &ServerState,  key: &str) -> Result<(), Report<Error>> {
+pub async fn delete_by_key(state: &ServerState,  key: &str) -> Result<(), error_stack::Report<Error>> {
     let storage = get_storage(state);
     storage.delete(key).await?;
     Ok(())
@@ -174,7 +182,7 @@ pub async fn delete_by_id(
     tx: &mut PgConnection,
     parent_id: {{belongs_to_field.rust_type}},
     id: {{id_type}}
-) -> Result<(), Report<Error>> {
+) -> Result<(), error_stack::Report<Error>> {
 
     let storage_key = get_storage_key_by_id(state, auth, &mut *tx, id).await?;
     let deleted = super::queries::delete_with_parent(&mut *tx, auth, parent_id, id).await?;
@@ -191,7 +199,7 @@ pub async fn get_storage_key_by_id(
     auth: &Authed,
     tx: &mut PgConnection,
     id: {{id_type}}
-) -> Result<String, Report<Error>> {
+) -> Result<String, error_stack::Report<Error>> {
     let storage_key = super::queries::get(
         &mut *tx,
         auth,

@@ -1208,6 +1208,7 @@ dependencies = [
  "axum-jsonschema",
  "axum-sqlx-tx",
  "blake3",
+ "bytes",
  "chrono",
  "clap",
  "digest",

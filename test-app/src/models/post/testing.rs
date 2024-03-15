@@ -2,6 +2,7 @@ use super::{PostCreatePayload, PostId, PostUpdatePayload};
 use crate::models::{
     comment::{Comment, CommentCreatePayload, CommentId, CommentUpdatePayload},
     poll::{Poll, PollCreatePayload, PollId, PollUpdatePayload},
+    post_image::{PostImage, PostImageCreatePayload, PostImageId, PostImageUpdatePayload},
     reaction::{Reaction, ReactionCreatePayload, ReactionId, ReactionUpdatePayload},
 };
 

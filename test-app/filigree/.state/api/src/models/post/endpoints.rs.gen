@@ -20,6 +20,7 @@ use crate::{
     models::{
         comment::{Comment, CommentCreatePayload, CommentId, CommentUpdatePayload},
         poll::{Poll, PollCreatePayload, PollId, PollUpdatePayload},
+        post_image::{PostImage, PostImageCreatePayload, PostImageId, PostImageUpdatePayload},
         reaction::{Reaction, ReactionCreatePayload, ReactionId, ReactionUpdatePayload},
     },
     server::ServerState,
@@ -275,6 +276,59 @@ async fn delete_child_poll(
     Ok(StatusCode::OK)
 }
 
+async fn list_child_post_image(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path(parent_id): Path<PostId>,
+    Query(mut qs): Query<crate::models::post_image::queries::ListQueryFilters>,
+) -> Result<impl IntoResponse, Error> {
+    qs.post_id = vec![parent_id];
+
+    let object = crate::models::post_image::queries::list(&state.db, &auth, &qs).await?;
+
+    Ok(Json(object))
+}
+
+async fn create_child_post_image(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path(parent_id): Path<PostId>,
+    body: axum::body::Body,
+    Query(qs): Query<filigree::storage::QueryFilename>,
+) -> Result<impl IntoResponse, Error> {
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
+    let result = crate::models::post_image::storage::upload_stream(
+        &state,
+        &auth,
+        &mut *tx,
+        parent_id,
+        None,
+        qs.filename.clone(),
+        None,
+        None,
+        body.into_data_stream(),
+    )
+    .await?;
+
+    tx.commit().await.change_context(Error::Db)?;
+
+    Ok(Json(result))
+}
+
+async fn delete_child_post_image(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path((parent_id, child_id)): Path<(PostId, PostImageId)>,
+) -> Result<impl IntoResponse, Error> {
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+    crate::models::post_image::storage::delete_by_id(&state, &auth, &mut *tx, parent_id, child_id)
+        .await?;
+    tx.commit().await.change_context(Error::Db)?;
+
+    Ok(StatusCode::OK)
+}
+
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
         .route(
@@ -370,6 +424,21 @@ pub fn create_routes() -> axum::Router<ServerState> {
         .route(
             "/posts/:id/poll",
             routing::delete(delete_child_poll)
+                .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
+        )
+        .route(
+            "/posts/:id/post_images",
+            routing::get(list_child_post_image)
+                .route_layer(has_any_permission(vec![READ_PERMISSION, "org_admin"])),
+        )
+        .route(
+            "/posts/:id/post_images",
+            routing::post(create_child_post_image)
+                .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
+        )
+        .route(
+            "/posts/:id/post_images/:child_id",
+            routing::delete(delete_child_post_image)
                 .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
         )
 }
@@ -559,6 +628,8 @@ mod test {
         // TODO test list endpoint of child comment objects
 
         // TODO test list endpoint of child reaction objects
+
+        // TODO test list endpoint of child post_image objects
     }
 
     #[sqlx::test]
@@ -688,6 +759,8 @@ mod test {
 
         assert_eq!(result["poll"], serde_json::json!(null), "field poll");
 
+        assert_eq!(result["images"], serde_json::json!([]), "field images");
+
         // Check that we don't return any fields which are supposed to be omitted.
 
         let result = user
@@ -752,6 +825,8 @@ mod test {
         // TODO test get of child reaction object
 
         // TODO test get of child poll object
+
+        // TODO test get of child post_image object
     }
 
     #[sqlx::test]
@@ -869,6 +944,8 @@ mod test {
         // TODO test update endpoint of child reaction object
 
         // TODO test update endpoint of child poll object
+
+        // TODO test update endpoint of child post_image object
     }
 
     #[sqlx::test]
@@ -963,6 +1040,8 @@ mod test {
         // TODO test create endpoint of child reaction object
 
         // TODO test create endpoint of child poll object
+
+        // TODO test create endpoint of child post_image object
     }
 
     #[sqlx::test]
@@ -1021,5 +1100,7 @@ mod test {
         // TODO test delete endpoint of child reaction object
 
         // TODO test delete endpoint of child poll object
+
+        // TODO test delete endpoint of child post_image object
     }
 }

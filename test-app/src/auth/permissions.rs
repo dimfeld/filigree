@@ -72,6 +72,21 @@ pub const PERMISSIONS: &[PermissionInfo] = &[
         key: "Post::owner",
     },
     PermissionInfo {
+        name: "Read PostImages",
+        description: "List and read PostImage objects",
+        key: "PostImage::read",
+    },
+    PermissionInfo {
+        name: "Write PostImages",
+        description: "Write PostImage objects",
+        key: "PostImage::write",
+    },
+    PermissionInfo {
+        name: "Administer PostImages",
+        description: "Create and delete PostImage objects",
+        key: "PostImage::owner",
+    },
+    PermissionInfo {
         name: "Read Reactions",
         description: "List and read Reaction objects",
         key: "Reaction::read",

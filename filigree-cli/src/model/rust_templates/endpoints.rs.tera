@@ -132,7 +132,7 @@ async fn create_child_{{c.module}}(
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
 
     {% if c.file_upload %}
-    crate::models::{{c.module}}::storage::upload_stream(
+    let result = crate::models::{{c.module}}::storage::upload_stream(
         &state,
         &auth,
         &mut *tx,
@@ -140,6 +140,7 @@ async fn create_child_{{c.module}}(
         None,
         qs.filename.clone(),
         None,
+        {% if c.file_upload.upload_size_limit %}Some({{c.file_upload.upload_size_limit}}){% else %}None{% endif %},
         body.into_data_stream()
     ).await?;
     {% else %}
@@ -186,14 +187,15 @@ async fn delete_child_{{c.module}}(
     ) -> Result<impl IntoResponse, Error> {
 
     {% if c.file_upload and not c.file_upload_retain_file_on_delete %}
-    let tx = state.db.begin()
+    let mut tx = state.db.begin()
         .await
         .change_context(Error::Db)?;
     crate::models::{{c.module}}::storage::delete_by_id(
         &state,
         &auth,
+        &mut *tx,
+        parent_id,
         child_id,
-        &mut *tx
     ).await?;
     tx.commit()
         .await
@@ -235,7 +237,7 @@ async fn upsert_child_{{c.module}}(
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
     {% if c.file_upload %}
-    let tx = state.db.begin().await?;
+    let mut tx = state.db.begin().await?;
     {% if not c.file_upload_retain_file_on_update %}
     let old_storage_key = sqlx::query_scalar!(
         "SELECT file_storage_key FROM {{c.table}} WHERE {{c.parent_field}} = $1",
@@ -253,6 +255,7 @@ async fn upsert_child_{{c.module}}(
         None,
         qs.filename.clone(),
         None,
+        {% if c.file_upload.upload_size_limit %}Some({{c.file_upload.upload_size_limit}}){% else %}None{% endif %},
         body.into_data_stream()
     ).await?;
 
@@ -352,14 +355,18 @@ pub fn create_routes() -> axum::Router<ServerState> {
 
     {% if endpoints.update %}
         {% if c.relationship.many %}
-        .route("/{{url_path}}/:id/{{c.url_path}}/:child_id",
-            routing::put(update_child_{{c.module}})
+            {% if not c.file_upload %}
+                .route("/{{url_path}}/:id/{{c.url_path}}/:child_id",
+                        routing::put(update_child_{{c.module}})
+                    .route_layer(has_any_permission(vec![WRITE_PERMISSION, OWNER_PERMISSION, "org_admin"]))
+                )
+            {% endif %}
         {% else %}
         .route("/{{url_path}}/:id/{{c.url_path}}",
             routing::put(upsert_child_{{c.module}})
-        {% endif %}
                 .route_layer(has_any_permission(vec![WRITE_PERMISSION, OWNER_PERMISSION, "org_admin"]))
             )
+        {% endif %}
     {% endif %}
 
     {% if endpoints.delete %}

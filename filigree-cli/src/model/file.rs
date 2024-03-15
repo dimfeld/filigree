@@ -74,6 +74,9 @@ pub struct FileModelOptions {
     #[serde(default)]
     pub meta: FileUploadRecordMetadata,
 
+    /// Limit the maximum size of uploaded files
+    pub upload_size_limit: Option<usize>,
+
     /// If omitted or false, the file will be deleted from storage when the model is deleted.
     /// If true, the file will be retained in object storage even after the model is deleted.
     #[serde(default)]
@@ -106,8 +109,10 @@ impl FileModelOptions {
         serde_json::json!({
             "bucket": self.bucket,
             "filename_template_function_body": template_func,
+            "many": self.many,
             "hash": self.meta.hash.as_ref().map(|h| h.template_context()),
             "record_size": self.meta.size,
+            "upload_size_limit": self.upload_size_limit,
             "record_filename": self.meta.filename,
             "retain_file_on_delete": self.retain_file_on_delete,
         })
@@ -269,7 +274,7 @@ impl FileModelOptions {
         if self.meta.size {
             fields.push(ModelField {
                 name: "file_size".to_string(),
-                typ: SqlType::Int,
+                typ: SqlType::BigInt,
                 nullable: true,
                 user_access: Access::Read,
                 owner_access: Access::Read,

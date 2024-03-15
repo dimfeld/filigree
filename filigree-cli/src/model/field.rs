@@ -304,7 +304,7 @@ impl SqlType {
     pub fn to_rust_type(&self) -> &'static str {
         match self {
             SqlType::Text => "String",
-            SqlType::Int => "i64",
+            SqlType::Int => "i32",
             SqlType::BigInt => "i64",
             SqlType::Float => "f64",
             SqlType::Boolean => "bool",

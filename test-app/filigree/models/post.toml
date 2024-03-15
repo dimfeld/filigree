@@ -35,6 +35,7 @@ populate_on_get = "data"
 
 [[files]]
 name = "image"
+id_prefix = "pstimg"
 bucket = "image_uploads"
 many = true
 meta.filename = true

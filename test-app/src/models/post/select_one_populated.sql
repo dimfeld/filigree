@@ -34,6 +34,18 @@ SELECT
       post_id = $1
       AND organization_id = $2
     LIMIT 1) AS "poll: Poll",
+(
+  SELECT
+    COALESCE(ARRAY_AGG(JSONB_BUILD_OBJECT('id', id, 'organization_id', organization_id,
+      'updated_at', updated_at, 'created_at', created_at, 'file_storage_key', file_storage_key,
+      'file_storage_bucket', file_storage_bucket, 'file_original_name', file_original_name, 'file_size',
+      file_size, 'file_hash', file_hash, 'post_id', post_id, '_permission',
+      _permission)), ARRAY[]::jsonb[])
+  FROM
+    post_images
+  WHERE
+    post_id = $1
+    AND organization_id = $2) AS "images!: Vec<PostImage>",
 _permission AS "_permission!: filigree::auth::ObjectPermission"
 FROM
   posts tb

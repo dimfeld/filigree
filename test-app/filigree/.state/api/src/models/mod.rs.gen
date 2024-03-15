@@ -2,6 +2,7 @@ pub mod comment;
 pub mod organization;
 pub mod poll;
 pub mod post;
+pub mod post_image;
 pub mod reaction;
 pub mod report;
 pub mod report_section;
