@@ -121,7 +121,7 @@ async fn create_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
     Path(parent_id): Path<{{id_type}}>,
-    {% if c.is_file_upload -%}
+    {% if c.file_upload -%}
     body: axum::body::Body,
     Query(qs): Query<filigree::storage::QueryFilename>,
     {%- else -%}
@@ -131,7 +131,7 @@ async fn create_child_{{c.module}}(
 
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
 
-    {% if c.is_file_upload %}
+    {% if c.file_upload %}
     crate::models::{{c.module}}::storage::upload_stream(
         &state,
         &auth,
@@ -157,20 +157,13 @@ async fn create_child_{{c.module}}(
     Ok(Json(result))
 }
 
+{% if not c.file_upload %}
 async fn update_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
     Path((parent_id, child_id)): Path<({{id_type}}, {{c.object_id}})>,
-    {% if c.is_file_upload -%}
-    body: axum::body::Body,
-    Query(qs): Query<filigree::storage::QueryFilename>,
-    {%- else -%}
     FormOrJson(mut payload): FormOrJson<{{c.struct_base}}UpdatePayload>,
-    {%- endif %}
     ) -> Result<impl IntoResponse, Error> {
-
-    // TODO FILE for file child models this should be a direct upload and delete the old one if
-    // retain is off
     payload.id = Some(child_id);
     payload.{{c.parent_field}} = parent_id;
 
@@ -184,6 +177,7 @@ async fn update_child_{{c.module}}(
 
     Ok(Json(result))
 }
+{% endif %}
 
 async fn delete_child_{{c.module}}(
     State(state): State<ServerState>,
@@ -191,13 +185,27 @@ async fn delete_child_{{c.module}}(
     Path((parent_id, child_id)): Path<({{id_type}}, {{c.object_id}})>,
     ) -> Result<impl IntoResponse, Error> {
 
-    // TODO FILE for file child models this should delete the file if retain if off
+    {% if c.file_upload and not c.file_upload_retain_file_on_delete %}
+    let tx = state.db.begin()
+        .await
+        .change_context(Error::Db)?;
+    crate::models::{{c.module}}::storage::delete_by_id(
+        &state,
+        &auth,
+        child_id,
+        &mut *tx
+    ).await?;
+    tx.commit()
+        .await;
+        .change_context(Error::Db)?;
+    {% else %}
     crate::models::{{c.module}}::queries::delete_with_parent(
         &state.db,
         &auth,
         parent_id,
         child_id,
     ).await?;
+    {% endif %}
 
     Ok(StatusCode::OK)
 }
@@ -208,7 +216,12 @@ async fn upsert_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
     Path(parent_id): Path<{{id_type}}>,
+    {% if c.file_upload -%}
+    body: axum::body::Body,
+    Query(qs): Query<filigree::storage::QueryFilename>,
+    {%- else -%}
     FormOrJson(mut payload): FormOrJson<{{c.struct_base}}UpdatePayload>,
+    {%- endif %}
     ) -> Result<impl IntoResponse, Error> {
     payload.{{c.parent_field}} = parent_id;
 
@@ -221,13 +234,51 @@ async fn upsert_child_{{c.module}}(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
-    // TODO FILE for file child models this should be a direct upload
+    {% if c.file_upload %}
+    let tx = state.db.begin().await?;
+    {% if not c.file_upload_retain_file_on_update %}
+    let old_storage_key = sqlx::query_scalar!(
+        "SELECT file_storage_key FROM {{c.table}} WHERE {{c.parent_field}} = $1",
+        parent_id
+    )
+        .fetch_optional(&mut *tx)
+        .await?;
+    {% endif %}
+
+    crate::models::{{c.module}}::storage::upload_stream(
+        &state,
+        &auth,
+        &mut state.db,
+        parent_id,
+        None,
+        qs.filename.clone(),
+        None,
+        body.into_data_stream()
+    ).await?;
+
+    tx.commit()
+        .await
+        .change_context(Error::Db)?;
+
+    {% if not c.file_upload_retain_file_on_update %}
+    if let Some(old_storage_key) = old_storage_key {
+        crate::models::{{c.module}}::storage::delete_by_key(
+            &state,
+            &old_storage_key
+        )
+            .await?;
+    }
+    {% endif %}
+
+
+    {% else %}
     let result = crate::models::{{c.module}}::queries::upsert_with_parent(
         &state.db,
         auth.organization_id,
         object_perm == ObjectPermission::Owner,
         parent_id,
         &Some(payload)).await?;
+    {% endif %}
     Ok(Json(result))
 }
 

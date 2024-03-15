@@ -340,7 +340,7 @@ impl<'a> ModelGenerator<'a> {
                     "table": child_model.table(),
                     "url_path": url_path,
                     "parent_field": self.model.foreign_key_id_field_name(),
-                    "is_file_upload": child_model.file_for.is_some(),
+                    "file_upload": child_model.file_for.as_ref().map(|f| f.1.template_context()),
                 });
 
                 Ok::<_, Error>(result)

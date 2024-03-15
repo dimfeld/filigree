@@ -52,17 +52,16 @@ pub async fn upload_stream<E: Into<Error>>(
 
     // Do the upsert first to get the actual ID, since in the single-child case the ID won't change
     // if the object already exists.
-    let id = super::queries::upsert_with_parent(
+    let mut result = super::queries::upsert_with_parent(
         tx,
         auth.organization_id,
         true,
         parent_id,
         &db_payload
     )
-        .await?
-        .id;
+        .await?;
 
-    let file_storage_key = key.unwrap_or_else(|| generate_object_key(auth, id, filename.as_deref().unwrap_or_default()));
+    let file_storage_key = key.unwrap_or_else(|| generate_object_key(auth, result.id, filename.as_deref().unwrap_or_default()));
 
     storage.save_and_inspect_request_body(key, body, |chunk| async {
         {% if file_upload.record_size -%}
@@ -77,7 +76,7 @@ pub async fn upload_stream<E: Into<Error>>(
     {% if file_upload.record_size or file_upload.hash -%}
     // Record the info that we got from the stream itself.
     let recording_payload = {{struct_base}}UpdatePayload {
-        id: Some(id),
+        id: Some(result.id),
         {% if file_upload.hash -%}
         file_hash: Some(hasher.finish().as_bytes().to_vec()),
         {%- endif %}
@@ -87,7 +86,14 @@ pub async fn upload_stream<E: Into<Error>>(
         ..Default::default()
     };
 
-    super::queries::update(&mut *tx, auth, id, recording_payload).await?;
+    {% if file_upload.hash -%}
+    result.file_hash = recording_payload.file_hash.clone();
+    {%- endif %}
+    {% if file_upload.record_size -%}
+    result.file_size = recording_payload.file_size;
+    {%- endif %}
+
+    super::queries::update(&mut *tx, auth, result.id, recording_payload).await?;
     {%- endif %}
 
     Ok(())
@@ -161,14 +167,31 @@ pub async fn delete_by_key(state: &ServerState,  key: &str) -> Result<(), Report
     Ok(())
 }
 
+/// Delete a file from the database and from object storage.
 pub async fn delete_by_id(
     state: &ServerState,
     auth: &Authed,
     tx: &mut PgConnection,
+    parent_id: {{belongs_to_field.rust_type}},
     id: {{id_type}}
 ) -> Result<(), Report<Error>> {
-    // Look up the object in the database and then delete it
 
+    let storage_key = get_storage_key_by_id(state, auth, &mut *tx, id).await?;
+    let deleted = super::queries::delete_with_parent(&mut *tx, auth, parent_id, id).await?;
+
+    if deleted {
+        delete_by_key(state, &storage_key).await?;
+    }
+
+    Ok(())
+}
+
+pub async fn get_storage_key_by_id(
+    state: &ServerStatus,
+    auth: &Authed,
+    tx: &mut PgConnection,
+    id: {{id_type}}
+) -> Result<String, Report<Error>> {
     let storage_key = super::queries::get(
         &mut *tx,
         auth,
@@ -176,11 +199,6 @@ pub async fn delete_by_id(
     )
         .await?
         .file_storage_key;
-
-    delete_by_key(state, &storage_key).await?;
-
-    super::queries::delete(&mut *tx, auth, id).await?;
-
-    Ok(())
+    Ok(storage_key)
 }
 {% endif %}
