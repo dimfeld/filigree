@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use cargo_toml::Manifest;
 use convert_case::{Case, Casing};
 use error_stack::Report;
@@ -15,17 +13,27 @@ use crate::{config::Config, Error};
 /// Options for a model that represents a file upload
 #[derive(Deserialize, Clone, Debug)]
 pub struct FileModelOptions {
-    /// The name of this file model. If omitted, {model.name}File will be used and
-    /// the child field will be named "file" or "files" depending on [many].
-    pub name: Option<String>,
+    /// The name of this file model. This affects both the model name, which is an concatenation
+    /// of the parent model name and this name, and also the rust module and URL segments for the model.
+    pub name: String,
 
     /// The storage bucket where the files should be stored. This must be one of the keys
     /// of [storage.bucket] in the primary configuration file.
     pub bucket: String,
 
+    /// The prefix to use for this file's object IDs
+    pub id_prefix: Option<String>,
+
     /// If true, the hosting model can reference many files.
     #[serde(default)]
     pub many: bool,
+
+    /// How to fetch the referenced instances of the model in the "list" endpoint
+    #[serde(default)]
+    pub populate_on_list: ReferenceFetchType,
+    /// How to fetch the referenced instances of the model in the "get" endpoint
+    #[serde(default)]
+    pub populate_on_get: ReferenceFetchType,
 
     /// How to determine the keey at which an uploaded file will be stored.
     ///
@@ -59,6 +67,10 @@ pub struct FileModelOptions {
     #[serde(default)]
     pub storage_key_readable: bool,
 
+    // /// True if the user should be able to see the public URL of this file. Only applies when the
+    // /// backing storage `bucket` has a public URL set.
+    // #[serde(default)]
+    // pub public_url_readable: bool,
     #[serde(default)]
     pub meta: FileUploadRecordMetadata,
 
@@ -157,23 +169,19 @@ impl FileModelOptions {
     }
 
     pub fn model_name(&self, parent: &Model) -> String {
-        if let Some(name) = &self.name {
-            format!("{}{}", parent.name, name)
-        } else {
-            format!("{}File", parent.name)
-        }
+        format!(
+            "{}{}",
+            parent.name.to_case(Case::Pascal),
+            self.name.to_case(Case::Pascal)
+        )
     }
 
     fn child_field_name(&self) -> String {
-        let field_name = self
-            .name
-            .as_ref()
-            .map(|name| Cow::Owned(name.to_case(Case::Snake)))
-            .unwrap_or(Cow::Borrowed("file"));
+        let field_name = self.name.to_case(Case::Snake);
         if self.many {
             format!("{field_name}s")
         } else {
-            field_name.to_string()
+            field_name
         }
     }
 
@@ -182,8 +190,8 @@ impl FileModelOptions {
             model: self.model_name(parent),
             many: self.many,
             through: None,
-            populate_on_get: ReferenceFetchType::Data,
-            populate_on_list: ReferenceFetchType::None,
+            populate_on_get: self.populate_on_get,
+            populate_on_list: self.populate_on_list,
             update_with_parent: false,
             field_name: Some(self.child_field_name()),
         }
@@ -193,9 +201,12 @@ impl FileModelOptions {
         Model {
             name: self.model_name(parent),
             file_for: Some((parent.name.clone(), self.clone())),
-            // file upload submodel does not have an embedded file upload submodel
+            // file upload submodel does not have embedded file upload submodels
             files: Vec::new(),
-            id_prefix: Some(format!("{}fil", parent.id_prefix())),
+            id_prefix: self.id_prefix.clone().or_else(|| {
+                let self_prefix: String = self.name.to_lowercase().chars().take(3).collect();
+                Some(format!("{}{}", parent.id_prefix(), self_prefix))
+            }),
             fields: self.file_model_fields(),
             belongs_to: Some(super::BelongsTo::Simple(parent.name.clone())),
             // The object is only accessible via the parent model, so don't generate endpoints

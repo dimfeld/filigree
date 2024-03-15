@@ -203,7 +203,6 @@ pub struct Pagination {
     #[serde(default = "default_max_per_page")]
     pub max_per_page: u32,
     /// Maximum number of pages possible to return.
-    /// Usually you won't want to set this
     pub max_page: Option<u32>,
 }
 

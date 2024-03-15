@@ -196,7 +196,7 @@ async fn delete_child_{{c.module}}(
         &mut *tx
     ).await?;
     tx.commit()
-        .await;
+        .await
         .change_context(Error::Db)?;
     {% else %}
     crate::models::{{c.module}}::queries::delete_with_parent(

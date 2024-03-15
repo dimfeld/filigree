@@ -87,7 +87,7 @@ pub enum Error {
         "Model {0} uses {1} as a through model to {2}, but {1}'s join setting does not reference {3}"
     )]
     BadJoin(String, String, String, String),
-    #[error("Model {0}'s file_upload configuration referenced nonexistent bucket {1}")]
+    #[error("Model {0}'s files configuration referenced nonexistent bucket {1}")]
     InvalidStorageBucket(String, String),
 }
 

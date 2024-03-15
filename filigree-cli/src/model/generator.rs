@@ -750,7 +750,7 @@ impl<'a> ModelGenerator<'a> {
                 });
                 let rust_type = Self::child_model_field_type(&model, populate_type, has.many, "");
 
-                if name.is_empty() {
+                if rust_type.is_empty() {
                     return Ok(None);
                 }
 
