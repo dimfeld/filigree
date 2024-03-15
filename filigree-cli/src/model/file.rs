@@ -236,7 +236,7 @@ impl FileModelOptions {
             ModelField {
                 name: "file_storage_key".to_string(),
                 typ: SqlType::Text,
-                nullable: true,
+                nullable: false,
                 user_access: key_access,
                 owner_access: key_access,
                 ..Default::default()
