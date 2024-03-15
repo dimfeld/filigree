@@ -330,7 +330,7 @@ async fn create_payload_children(
                 child.report_id = parent_id;
             }
 
-            crate::models::report_section::queries::update_with_parent(
+            crate::models::report_section::queries::update_all_with_parent(
                 &mut *db,
                 organization_id,
                 true,
@@ -394,7 +394,7 @@ async fn update_payload_children(
             child.report_id = parent_id;
         }
 
-        crate::models::report_section::queries::update_with_parent(
+        crate::models::report_section::queries::update_all_with_parent(
             &mut *db,
             organization_id,
             is_owner,

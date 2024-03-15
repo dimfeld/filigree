@@ -1,5 +1,4 @@
 pub mod endpoints;
-
 pub mod queries;
 #[cfg(test)]
 pub mod testing;

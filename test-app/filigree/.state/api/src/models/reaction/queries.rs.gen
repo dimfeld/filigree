@@ -336,6 +336,32 @@ pub async fn lookup_object_permissions(
     Ok(perm)
 }
 
+/// Update or insert a child of the given parent.
+
+#[instrument(skip(db))]
+pub async fn upsert_with_parent(
+    db: impl PgExecutor<'_>,
+    organization_id: OrganizationId,
+    is_owner: bool,
+    parent_id: PostId,
+    payload: &ReactionUpdatePayload,
+) -> Result<Reaction, error_stack::Report<Error>> {
+    let id = payload.id.clone().unwrap_or_else(ReactionId::new);
+    let result = query_file_as!(
+        Reaction,
+        "src/models/reaction/upsert_single_child.sql",
+        id.as_uuid(),
+        organization_id.as_uuid(),
+        &payload.typ,
+        &payload.post_id as _,
+    )
+    .fetch_one(db)
+    .await
+    .change_context(Error::Db)?;
+    Ok(result)
+}
+
+/// Update a single child of the given parent. This does nothing if the child doesn't exist.
 #[instrument(skip(db))]
 pub async fn update_one_with_parent(
     db: impl PgExecutor<'_>,
@@ -364,8 +390,10 @@ pub async fn update_one_with_parent(
 }
 
 /// Update the children of the given parent.
+/// Insert new values that are not yet in the database and
+/// delete existing values that are not in the payload.
 #[instrument(skip(db))]
-pub async fn update_with_parent(
+pub async fn update_all_with_parent(
     db: &mut PgConnection,
     organization_id: OrganizationId,
     is_owner: bool,
@@ -429,8 +457,8 @@ pub async fn delete_with_parent(
     auth: &AuthInfo,
     parent_id: PostId,
     child_id: ReactionId,
-) -> Result<(), error_stack::Report<Error>> {
-    query_file!(
+) -> Result<bool, error_stack::Report<Error>> {
+    let result = query_file!(
         "src/models/reaction/delete_with_parent.sql",
         auth.organization_id.as_uuid(),
         parent_id.as_uuid(),
@@ -439,7 +467,7 @@ pub async fn delete_with_parent(
     .execute(db)
     .await
     .change_context(Error::Db)?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
 /// Delete all children of the given parent. This function does not do permissions checks.

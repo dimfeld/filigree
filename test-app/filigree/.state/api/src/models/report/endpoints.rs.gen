@@ -111,10 +111,12 @@ async fn create_child_report_section(
     Path(parent_id): Path<ReportId>,
     FormOrJson(mut payload): FormOrJson<ReportSectionCreatePayload>,
 ) -> Result<impl IntoResponse, Error> {
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
     payload.report_id = parent_id;
 
-    let mut tx = state.db.begin().await.change_context(Error::Db)?;
     let result = crate::models::report_section::queries::create(&mut *tx, &auth, payload).await?;
+
     tx.commit().await.change_context(Error::Db)?;
 
     Ok(Json(result))

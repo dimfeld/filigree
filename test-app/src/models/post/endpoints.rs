@@ -113,10 +113,12 @@ async fn create_child_comment(
     Path(parent_id): Path<PostId>,
     FormOrJson(mut payload): FormOrJson<CommentCreatePayload>,
 ) -> Result<impl IntoResponse, Error> {
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
     payload.post_id = parent_id;
 
-    let mut tx = state.db.begin().await.change_context(Error::Db)?;
     let result = crate::models::comment::queries::create(&mut *tx, &auth, payload).await?;
+
     tx.commit().await.change_context(Error::Db)?;
 
     Ok(Json(result))
@@ -170,10 +172,12 @@ async fn create_child_reaction(
     Path(parent_id): Path<PostId>,
     FormOrJson(mut payload): FormOrJson<ReactionCreatePayload>,
 ) -> Result<impl IntoResponse, Error> {
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
     payload.post_id = parent_id;
 
-    let mut tx = state.db.begin().await.change_context(Error::Db)?;
     let result = crate::models::reaction::queries::create(&mut *tx, &auth, payload).await?;
+
     tx.commit().await.change_context(Error::Db)?;
 
     Ok(Json(result))
@@ -237,14 +241,15 @@ async fn upsert_child_poll(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
-    let result = crate::models::poll::queries::update_with_parent(
+    let result = crate::models::poll::queries::upsert_with_parent(
         &state.db,
         auth.organization_id,
         object_perm == ObjectPermission::Owner,
         parent_id,
-        &Some(payload),
+        &payload,
     )
     .await?;
+
     Ok(Json(result))
 }
 
@@ -259,6 +264,7 @@ async fn delete_child_poll(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
+    // TODO FILE for file child models this should delete the file if retain if off
     crate::models::poll::queries::delete_all_children_of_parent(
         &state.db,
         auth.organization_id,

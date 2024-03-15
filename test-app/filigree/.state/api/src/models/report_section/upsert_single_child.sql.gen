@@ -13,7 +13,7 @@ VALUES (
   $5,
   $6)
 ON CONFLICT (
-  report_id)
+  id)
   DO UPDATE SET
     name = EXCLUDED.name,
     viz = EXCLUDED.viz,
@@ -22,6 +22,7 @@ ON CONFLICT (
     updated_at = now()
   WHERE
     report_sections.organization_id = $2
+    AND report_sections.report_id = EXCLUDED.report_id
   RETURNING
     id AS "id: ReportSectionId",
     organization_id AS "organization_id: crate::models::organization::OrganizationId",
