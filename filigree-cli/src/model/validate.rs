@@ -2,7 +2,7 @@ use crate::{config::Config, Error, ModelMap};
 
 pub fn validate_model_configuration(config: &Config, models: &ModelMap) -> Result<(), Error> {
     for (_, model) in &models.0 {
-        if let Some(file) = &model.file_upload {
+        for file in &model.files {
             file.validate(&model.name, config)?;
         }
 

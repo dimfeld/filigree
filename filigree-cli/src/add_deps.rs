@@ -1,4 +1,4 @@
-use cargo_toml::Manifest;
+use cargo_toml::{DependencyDetail, Manifest};
 use error_stack::{Report, ResultExt};
 use semver::{Version, VersionReq};
 
@@ -46,7 +46,7 @@ const DEPS: &[DepVersion<'static>] = &[
     ("uuid", "1.6.1", &[]),
 ];
 
-pub fn add_fixed_deps(manifest: &Manifest) -> Result<(), Report<Error>> {
+pub fn add_fixed_deps(manifest: &mut Manifest) -> Result<(), Report<Error>> {
     for dep in DEPS {
         add_dep(manifest, dep)?;
     }
@@ -55,7 +55,7 @@ pub fn add_fixed_deps(manifest: &Manifest) -> Result<(), Report<Error>> {
 }
 
 pub fn add_dep(
-    manifest: &Manifest,
+    manifest: &mut Manifest,
     (name, version, features): &DepVersion,
 ) -> Result<(), Report<Error>> {
     let existing = manifest.dependencies.get(*name);
@@ -83,6 +83,15 @@ pub fn add_dep(
 
     if !desired.matches(&existing_version) {
         run_cargo_add(name, version, features)?;
+        manifest.dependencies.insert(
+            name.to_string(),
+            cargo_toml::Dependency::Detailed(DependencyDetail {
+                version: Some(version.to_string()),
+                features: features.iter().map(|s| s.to_string()).collect(),
+                ..Default::default()
+            }),
+        );
+
         return Ok(());
     }
 
@@ -92,6 +101,14 @@ pub fn add_dep(
         .all(|feature| existing_features.iter().any(|f| f == feature))
     {
         run_cargo_add(name, version, features)?;
+        manifest.dependencies.insert(
+            name.to_string(),
+            cargo_toml::Dependency::Detailed(DependencyDetail {
+                version: Some(version.to_string()),
+                features: features.iter().map(|s| s.to_string()).collect(),
+                ..Default::default()
+            }),
+        );
         return Ok(());
     }
 

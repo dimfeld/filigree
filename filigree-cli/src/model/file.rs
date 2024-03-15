@@ -8,7 +8,7 @@ use serde_json::json;
 
 use super::{
     field::{Access, FilterableType, ModelField, SqlType},
-    Endpoints, HasModel, Model, Pagination, PerEndpoint, ReferenceFetchType,
+    Endpoints, HasModel, Model, Pagination, ReferenceFetchType,
 };
 use crate::{config::Config, Error};
 
@@ -80,7 +80,7 @@ impl FileModelOptions {
         Ok(())
     }
 
-    pub fn add_deps(&self, manifest: &Manifest) -> Result<(), Report<Error>> {
+    pub fn add_deps(&self, manifest: &mut Manifest) -> Result<(), Report<Error>> {
         if let Some(hash) = &self.meta.hash {
             hash.add_deps(manifest)?;
         }
@@ -194,7 +194,7 @@ impl FileModelOptions {
             name: self.model_name(parent),
             file_for: Some((parent.name.clone(), self.clone())),
             // file upload submodel does not have an embedded file upload submodel
-            file_upload: None,
+            files: Vec::new(),
             id_prefix: Some(format!("{}fil", parent.id_prefix())),
             fields: self.file_model_fields(),
             belongs_to: Some(super::BelongsTo::Simple(parent.name.clone())),
@@ -320,7 +320,7 @@ impl HashType {
         })
     }
 
-    fn add_deps(&self, manifest: &Manifest) -> Result<(), Report<Error>> {
+    fn add_deps(&self, manifest: &mut Manifest) -> Result<(), Report<Error>> {
         let crate_dep = self.crate_name();
         crate::add_deps::add_dep(manifest, &crate_dep)?;
         crate::add_deps::add_dep(manifest, &("digest", "0.10.7", &[]))?;

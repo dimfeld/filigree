@@ -49,7 +49,7 @@ impl<'a> ModelGenerator<'a> {
         model_map: &'a ModelMap,
         model: Model,
     ) -> Result<Self, Error> {
-        let file_has = model.file_upload.as_ref().map(|f| f.has_for_parent(&model));
+        let file_has = model.files.iter().map(|f| f.has_for_parent(&model));
         let children = model
             .has
             .iter()
@@ -461,7 +461,6 @@ impl<'a> ModelGenerator<'a> {
             "auth_scope": self.auth_scope.unwrap_or(self.config.default_auth_scope),
             "file_for": self.file_for.as_ref().map(|f| f.0.as_str()),
             "file_upload": self.file_for.as_ref().map(|f| f.1.template_context()),
-            "child_file_upload": self.file_upload.as_ref().map(|f| f.template_context()),
         });
 
         let mut context = tera::Context::from_value(json_value).unwrap();
@@ -729,7 +728,11 @@ impl<'a> ModelGenerator<'a> {
             previous_name: None,
         };
 
-        let file_has = self.file_upload.as_ref().map(|f| f.has_for_parent(self));
+        let file_has = self
+            .files
+            .iter()
+            .map(|f| f.has_for_parent(self))
+            .collect::<Vec<_>>();
 
         let has_fields = self
             .has
