@@ -11,6 +11,11 @@ WITH permissions AS (
 UPDATE
   post_images
 SET
+  file_storage_key = $5,
+  file_storage_bucket = $6,
+  file_original_name = $7,
+  file_size = $8,
+  file_hash = $9,
   updated_at = now()
 FROM
   permissions

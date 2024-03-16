@@ -1,11 +1,11 @@
 //! Object storage functionality for PostImage
-#![allow(unused_imports, dead_code)]
+#![allow(unused_imports, unused_variables, dead_code)]
 
 use bytes::Bytes;
 use error_stack::ResultExt;
 use filigree::{
     storage::{Storage, StorageError},
-    uploads::{self, UploadInspectorError},
+    uploads::{self, UploadInspector, UploadInspectorError},
 };
 use futures::stream::Stream;
 use sqlx::PgConnection;
@@ -22,7 +22,7 @@ pub fn get_storage(state: &ServerState) -> &Storage {
     &state.storage.image_uploads
 }
 
-pub async fn upload_stream<E: Into<StorageError>>(
+pub async fn upload_stream<E>(
     state: &ServerState,
     auth: &Authed,
     tx: &mut PgConnection,
@@ -32,7 +32,11 @@ pub async fn upload_stream<E: Into<StorageError>>(
     key: Option<String>,
     limit: Option<usize>,
     body: impl Stream<Item = Result<Bytes, E>> + Unpin,
-) -> Result<PostImage, error_stack::Report<Error>> {
+) -> Result<PostImage, error_stack::Report<Error>>
+where
+    StorageError: From<E>,
+    UploadInspectorError: From<E>,
+{
     let storage = get_storage(state);
 
     let id = id.unwrap_or_else(PostImageId::new);
@@ -44,22 +48,22 @@ pub async fn upload_stream<E: Into<StorageError>>(
     let mut hasher = uploads::UploadHasher::<blake3::Hasher>::new();
 
     storage
-        .save_and_inspect_request_body(&file_storage_key, body, |chunk| async {
-            file_size.inspect(chunk).await?;
-            hasher.inspect(chunk).await?;
+        .save_and_inspect_request_body(&file_storage_key, body, |chunk| {
+            file_size.inspect(chunk)?;
+            hasher.inspect(chunk)?;
             Ok::<(), UploadInspectorError>(())
         })
         .await
         .change_context(Error::Upload)?;
 
     let db_payload = PostImageUpdatePayload {
-        id,
+        id: Some(id),
         post_id: parent_id,
         file_storage_key,
         file_storage_bucket: "image_uploads".to_string(),
-
-        file_hash: Some(hasher.finish().as_bytes().to_vec()),
-        file_size: Some(file_size.finish()),
+        file_original_name: filename,
+        file_hash: Some(hasher.finish().to_vec()),
+        file_size: Some(file_size.finish() as i64),
         ..Default::default()
     };
 
@@ -72,7 +76,7 @@ pub async fn upload_stream<E: Into<StorageError>>(
 
 pub async fn upload(
     state: &ServerState,
-    authed: &Authed,
+    auth: &Authed,
     tx: &mut PgConnection,
     parent_id: PostId,
     id: Option<PostImageId>,
@@ -84,29 +88,35 @@ pub async fn upload(
     let file_size = body.len();
     if let Some(limit) = limit {
         if file_size > limit {
-            return Err(error_stack::Report::new(Error::from(
+            return Err(error_stack::Report::new(
                 UploadInspectorError::FileSizeTooLarge,
-            )));
+            ))
+            .change_context(Error::Upload);
         }
     }
 
-    let hash = tokio::task::spawn_blocking(|| {
+    let b = body.clone();
+    let hash = tokio::task::spawn_blocking(move || {
         let mut hasher = uploads::UploadHasher::<blake3::Hasher>::new();
-        hasher.inspect(&body);
-        hasher.finish().as_bytes().to_vec()
+        hasher.inspect(&b).ok();
+        hasher.finish().to_vec()
     })
-    .await?;
+    .await
+    .change_context(Error::Upload)?;
+
+    let id = id.unwrap_or_else(PostImageId::new);
 
     let file_storage_key = key
         .unwrap_or_else(|| generate_object_key(auth, id, filename.as_deref().unwrap_or_default()));
-    let db_payload = PostImageUpdatePayload {
-        id,
-        post_id: parent_id,
-        file_storage_key: Some(file_storage_key.clone()),
-        file_storage_bucket: "image_uploads".to_string(),
 
+    let db_payload = PostImageUpdatePayload {
+        id: Some(id),
+        post_id: parent_id,
+        file_storage_key: file_storage_key.clone(),
+        file_storage_bucket: "image_uploads".to_string(),
+        file_original_name: filename,
         file_hash: Some(hash),
-        file_size: Some(file_size),
+        file_size: Some(file_size as i64),
         ..Default::default()
     };
 
@@ -120,7 +130,7 @@ pub async fn upload(
         .await
         .change_context(Error::Upload)?;
 
-    Ok(())
+    Ok(result)
 }
 
 /// Delete an object given the storage key
@@ -129,7 +139,7 @@ pub async fn delete_by_key(
     key: &str,
 ) -> Result<(), error_stack::Report<Error>> {
     let storage = get_storage(state);
-    storage.delete(key).await?;
+    storage.delete(key).await.change_context(Error::Storage)?;
     Ok(())
 }
 
@@ -152,7 +162,7 @@ pub async fn delete_by_id(
 }
 
 pub async fn get_storage_key_by_id(
-    state: &ServerStatus,
+    state: &ServerState,
     auth: &Authed,
     tx: &mut PgConnection,
     id: PostImageId,

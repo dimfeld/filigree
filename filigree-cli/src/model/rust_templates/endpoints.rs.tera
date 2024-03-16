@@ -122,8 +122,8 @@ async fn create_child_{{c.module}}(
     auth: Authed,
     Path(parent_id): Path<{{id_type}}>,
     {% if c.file_upload -%}
-    body: axum::body::Body,
     Query(qs): Query<filigree::storage::QueryFilename>,
+    body: axum::body::Body,
     {%- else -%}
     FormOrJson(mut payload): FormOrJson<{{c.struct_base}}CreatePayload>,
     {%- endif %}

@@ -112,6 +112,8 @@ pub enum ErrorKind {
     PasswordConfirmMismatch,
     /// Internal error with the password hashing mechanism
     PasswordHasherError,
+    /// Error reading the request body
+    RequestRead,
     /// Failed to start the server
     ServerStart,
     /// Internal error with the session backend
@@ -120,6 +122,8 @@ pub enum ErrorKind {
     Shutdown,
     /// Creation of new user accounts is disabled
     SignupDisabled,
+    /// Error writing storage
+    StorageWrite,
     /// The user is not logged in
     Unauthenticated,
     /// An upload failed in some way not covered by a more specific error message
@@ -159,10 +163,12 @@ impl ErrorKind {
             Self::OrderBy => "order_by",
             Self::PasswordConfirmMismatch => "password_mismatch",
             Self::PasswordHasherError => "password_hash_internal",
+            Self::RequestRead => "request_read",
             Self::ServerStart => "server",
             Self::SessionBackend => "session_backend",
             Self::Shutdown => "shutdown",
             Self::SignupDisabled => "signup_disabled",
+            Self::StorageWrite => "storage_write",
             Self::Unauthenticated => "unauthenticated",
             Self::UploadFailed => "upload_failed",
             Self::UploadTooLarge => "upload_too_large",

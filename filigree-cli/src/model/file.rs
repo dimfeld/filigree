@@ -232,9 +232,9 @@ impl FileModelOptions {
 
     fn file_model_fields(&self) -> Vec<ModelField> {
         let key_access = if self.storage_key_readable {
-            Access::Read
+            Access::ReadWrite
         } else {
-            Access::None
+            Access::Write
         };
 
         let mut fields = vec![
@@ -253,8 +253,8 @@ impl FileModelOptions {
                 name: "file_storage_bucket".to_string(),
                 typ: SqlType::Text,
                 nullable: false,
-                user_access: Access::None,
-                owner_access: Access::None,
+                user_access: Access::Write,
+                owner_access: Access::Write,
                 ..Default::default()
             },
         ];
@@ -264,8 +264,8 @@ impl FileModelOptions {
                 name: "file_original_name".to_string(),
                 typ: SqlType::Text,
                 nullable: true,
-                user_access: Access::Read,
-                owner_access: Access::Read,
+                user_access: Access::Write,
+                owner_access: Access::Write,
                 filterable: FilterableType::Exact,
                 ..Default::default()
             });
@@ -276,8 +276,8 @@ impl FileModelOptions {
                 name: "file_size".to_string(),
                 typ: SqlType::BigInt,
                 nullable: true,
-                user_access: Access::Read,
-                owner_access: Access::Read,
+                user_access: Access::ReadWrite,
+                owner_access: Access::ReadWrite,
                 ..Default::default()
             });
         }
@@ -287,8 +287,8 @@ impl FileModelOptions {
                 name: "file_hash".to_string(),
                 typ: SqlType::Bytes,
                 nullable: true,
-                user_access: Access::Read,
-                owner_access: Access::Read,
+                user_access: Access::ReadWrite,
+                owner_access: Access::ReadWrite,
                 filterable: FilterableType::Exact,
                 ..Default::default()
             });

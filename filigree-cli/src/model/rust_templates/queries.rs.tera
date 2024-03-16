@@ -633,6 +633,7 @@ pub async fn update_all_with_parent(
         Ok(results)
     }
 }
+{% endif %}
 
 /// Delete a child object, making sure that its parent ID matches.
 #[instrument(skip(db))]
@@ -655,7 +656,6 @@ pub async fn delete_with_parent(
         .change_context(Error::Db)?;
     Ok(result.rows_affected() > 0)
 }
-{% endif %}
 
 /// Delete all children of the given parent. This function does not do permissions checks.
 #[instrument(skip(db))]

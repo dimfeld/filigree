@@ -38,6 +38,8 @@ pub enum Error {
     Filter,
     #[error("Failed to upload file")]
     Upload,
+    #[error("Error communicating with object storage")]
+    Storage,
     /// A wrapper around a Report<Error> to let it be returned from an Axum handler, since we can't
     /// implement IntoResponse on Report
     #[error("{0}")]
@@ -135,6 +137,7 @@ impl HttpError for Error {
             Error::Login => FilErrorKind::Unauthenticated.as_str(),
             Error::MissingPermission(_) => FilErrorKind::Unauthenticated.as_str(),
             Error::InvalidHostHeader => FilErrorKind::InvalidHostHeader.as_str(),
+            Error::Storage => FilErrorKind::StorageWrite.as_str(),
         }
     }
 
@@ -174,6 +177,7 @@ impl HttpError for Error {
             Error::MissingPermission(_) => StatusCode::FORBIDDEN,
             Error::Login => StatusCode::UNAUTHORIZED,
             Error::InvalidHostHeader => StatusCode::BAD_REQUEST,
+            Error::Storage => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 

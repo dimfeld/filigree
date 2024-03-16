@@ -10,6 +10,12 @@ use crate::{
     storage::StorageError,
 };
 
+/// An object that can inspect chunks of a stream as it is uploaded
+pub trait UploadInspector<E> {
+    /// Inspect a chunk of the stream
+    fn inspect(&mut self, bytes: &Bytes) -> Result<(), E>;
+}
+
 /// An error that may occur while examining an upload
 #[derive(Debug, thiserror::Error)]
 pub enum UploadInspectorError {
@@ -19,6 +25,9 @@ pub enum UploadInspectorError {
     /// An I/O error occurred while uploading the file
     #[error(transparent)]
     IO(#[from] StorageError),
+    /// An I/O error occurred while reading the request body
+    #[error(transparent)]
+    Read(#[from] axum::Error),
 }
 
 impl HttpError for UploadInspectorError {
@@ -28,6 +37,7 @@ impl HttpError for UploadInspectorError {
         match self {
             UploadInspectorError::FileSizeTooLarge => http::StatusCode::PAYLOAD_TOO_LARGE,
             UploadInspectorError::IO(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
+            UploadInspectorError::Read(_) => http::StatusCode::BAD_REQUEST,
         }
     }
 
@@ -35,6 +45,7 @@ impl HttpError for UploadInspectorError {
         match self {
             UploadInspectorError::FileSizeTooLarge => ErrorKind::UploadTooLarge,
             UploadInspectorError::IO(_) => ErrorKind::IO,
+            UploadInspectorError::Read(_) => ErrorKind::RequestRead,
         }
         .as_str()
     }
@@ -57,8 +68,14 @@ impl UploadSize {
         Self { size: 0, limit }
     }
 
-    /// Add the size of a chunk.
-    pub async fn inspect(&mut self, bytes: &Bytes) -> Result<(), UploadInspectorError> {
+    /// Return the calculated size
+    pub fn finish(self) -> usize {
+        self.size
+    }
+}
+
+impl UploadInspector<UploadInspectorError> for UploadSize {
+    fn inspect(&mut self, bytes: &Bytes) -> Result<(), UploadInspectorError> {
         self.size += bytes.len();
 
         let too_large = self.limit.map(|l| self.size > l).unwrap_or(false);
@@ -67,11 +84,6 @@ impl UploadSize {
         }
 
         Ok(())
-    }
-
-    /// Return the calculated size
-    pub fn finish(self) -> usize {
-        self.size
     }
 }
 
@@ -86,14 +98,16 @@ impl<D: Digest> UploadHasher<D> {
         Self { hasher: D::new() }
     }
 
-    /// Hash a chunk that is passing through
-    pub async fn inspect(&mut self, bytes: &Bytes) -> Result<(), UploadInspectorError> {
-        self.hasher.update(bytes);
-        Ok(())
-    }
-
     /// Return the final hash of all the chunks.
     pub fn finish(self) -> digest::Output<D> {
         self.hasher.finalize()
+    }
+}
+
+impl<D: Digest> UploadInspector<UploadInspectorError> for UploadHasher<D> {
+    /// Hash a chunk that is passing through
+    fn inspect(&mut self, bytes: &Bytes) -> Result<(), UploadInspectorError> {
+        self.hasher.update(bytes);
+        Ok(())
     }
 }

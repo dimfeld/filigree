@@ -380,8 +380,7 @@ pub async fn update_one_with_parent(
     payload.report_id = parent_id;
 
     let actor_ids = auth.actor_ids();
-    let result = query_file_as!(
-        ReportSection,
+    let result = query_file!(
         "src/models/report_section/update_one_with_parent.sql",
         id.as_uuid(),
         parent_id.as_uuid(),
@@ -451,7 +450,7 @@ pub async fn update_all_with_parent(
             "src/models/report_section/delete_removed_children.sql",
             organization_id.as_uuid(),
             parent_id.as_uuid(),
-            ids.as_slice()
+            &ids
         )
         .execute(db)
         .await

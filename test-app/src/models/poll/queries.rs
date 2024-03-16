@@ -365,6 +365,26 @@ pub async fn upsert_with_parent(
     Ok(result)
 }
 
+/// Delete a child object, making sure that its parent ID matches.
+#[instrument(skip(db))]
+pub async fn delete_with_parent(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    parent_id: PostId,
+    child_id: PollId,
+) -> Result<bool, error_stack::Report<Error>> {
+    let result = query_file!(
+        "src/models/poll/delete_with_parent.sql",
+        auth.organization_id.as_uuid(),
+        parent_id.as_uuid(),
+        child_id.as_uuid()
+    )
+    .execute(db)
+    .await
+    .change_context(Error::Db)?;
+    Ok(result.rows_affected() > 0)
+}
+
 /// Delete all children of the given parent. This function does not do permissions checks.
 #[instrument(skip(db))]
 pub async fn delete_all_children_of_parent(

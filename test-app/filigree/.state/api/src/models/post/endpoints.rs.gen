@@ -293,8 +293,8 @@ async fn create_child_post_image(
     State(state): State<ServerState>,
     auth: Authed,
     Path(parent_id): Path<PostId>,
-    body: axum::body::Body,
     Query(qs): Query<filigree::storage::QueryFilename>,
+    body: axum::body::Body,
 ) -> Result<impl IntoResponse, Error> {
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
 

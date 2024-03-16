@@ -101,12 +101,11 @@ impl Serialize for PostImage {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("PostImage", 9)?;
+        let mut state = serializer.serialize_struct("PostImage", 8)?;
         state.serialize_field("id", &self.id)?;
         state.serialize_field("organization_id", &self.organization_id)?;
         state.serialize_field("updated_at", &self.updated_at)?;
         state.serialize_field("created_at", &self.created_at)?;
-        state.serialize_field("file_original_name", &self.file_original_name)?;
         state.serialize_field("file_size", &self.file_size)?;
         state.serialize_field("file_hash", &self.file_hash)?;
         state.serialize_field("post_id", &self.post_id)?;
@@ -119,6 +118,11 @@ impl Serialize for PostImage {
 #[cfg_attr(test, derive(Serialize))]
 pub struct PostImageCreatePayloadAndUpdatePayload {
     pub id: Option<PostImageId>,
+    pub file_storage_key: String,
+    pub file_storage_bucket: String,
+    pub file_original_name: Option<String>,
+    pub file_size: Option<i64>,
+    pub file_hash: Option<Vec<u8>>,
     pub post_id: PostId,
 }
 
@@ -134,6 +138,26 @@ impl PostImageCreatePayloadAndUpdatePayload {
         None
     }
 
+    pub fn default_file_storage_key() -> String {
+        <String as Default>::default().into()
+    }
+
+    pub fn default_file_storage_bucket() -> String {
+        <String as Default>::default().into()
+    }
+
+    pub fn default_file_original_name() -> Option<String> {
+        None
+    }
+
+    pub fn default_file_size() -> Option<i64> {
+        None
+    }
+
+    pub fn default_file_hash() -> Option<Vec<u8>> {
+        None
+    }
+
     pub fn default_post_id() -> PostId {
         <PostId as Default>::default().into()
     }
@@ -143,6 +167,11 @@ impl Default for PostImageCreatePayloadAndUpdatePayload {
     fn default() -> Self {
         Self {
             id: Self::default_id(),
+            file_storage_key: Self::default_file_storage_key(),
+            file_storage_bucket: Self::default_file_storage_bucket(),
+            file_original_name: Self::default_file_original_name(),
+            file_size: Self::default_file_size(),
+            file_hash: Self::default_file_hash(),
             post_id: Self::default_post_id(),
         }
     }

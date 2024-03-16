@@ -1,7 +1,7 @@
 use axum::body::Body;
 use axum_extra::extract::multipart::MultipartError;
 use bytes::Bytes;
-use futures::{Future, Stream, TryFutureExt, TryStreamExt};
+use futures::{Stream, TryStreamExt};
 use object_store::{path::Path, GetResult, MultipartId, ObjectStore as _, PutResult};
 use serde::Deserialize;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
@@ -178,7 +178,7 @@ impl Storage {
     }
 
     /// Stream a request body into object storage
-    pub async fn save_request_body<STREAMERROR, F, Fut>(
+    pub async fn save_request_body<STREAMERROR, F>(
         &self,
         location: &str,
         body: impl Stream<Item = Result<Bytes, STREAMERROR>> + Unpin,
@@ -186,16 +186,12 @@ impl Storage {
     where
         StorageError: From<STREAMERROR>,
     {
-        self.save_and_inspect_request_body(
-            location,
-            body,
-            |_| async move { Ok::<_, StorageError>(()) },
-        )
-        .await
+        self.save_and_inspect_request_body(location, body, |_| Ok::<_, StorageError>(()))
+            .await
     }
 
     /// Stream a request body into object storage
-    pub async fn save_and_inspect_request_body<E, STREAMERROR, F, Fut>(
+    pub async fn save_and_inspect_request_body<E, STREAMERROR, F>(
         &self,
         location: &str,
         body: impl Stream<Item = Result<Bytes, STREAMERROR>> + Unpin,
@@ -203,8 +199,7 @@ impl Storage {
     ) -> Result<usize, E>
     where
         E: From<StorageError> + From<STREAMERROR>,
-        F: FnMut(&Bytes) -> Fut,
-        Fut: Future<Output = Result<(), E>>,
+        F: FnMut(&Bytes) -> Result<(), E>,
     {
         let (upload_id, mut writer) = self
             .put_multipart(location)
@@ -218,7 +213,7 @@ impl Storage {
         result
     }
 
-    async fn upload_body<E, STREAMERROR, F, Fut>(
+    async fn upload_body<E, STREAMERROR, F>(
         &self,
         upload: &mut Box<dyn AsyncWrite + Unpin + Send>,
         mut stream: impl Stream<Item = Result<Bytes, STREAMERROR>> + Unpin,
@@ -226,18 +221,16 @@ impl Storage {
     ) -> Result<usize, E>
     where
         E: From<StorageError> + From<STREAMERROR>,
-        F: FnMut(&Bytes) -> Fut,
-        Fut: Future<Output = Result<(), E>>,
+        F: FnMut(&Bytes) -> Result<(), E>,
     {
         let mut total_size = 0;
         while let Some(chunk) = stream.try_next().await.map_err(E::from)? {
             total_size += chunk.len();
-            tokio::try_join!(
-                inspect(&chunk),
-                upload
-                    .write_all(&chunk)
-                    .map_err(|e| E::from(StorageError::from(e)))
-            )?;
+            inspect(&chunk)?;
+            upload
+                .write_all(&chunk)
+                .await
+                .map_err(|e| E::from(StorageError::from(e)))?;
         }
 
         upload.shutdown().await.map_err(StorageError::from)?;

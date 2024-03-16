@@ -250,7 +250,7 @@ where
 
     let q = q.replace("__insertion_point_filters", &filters.build_where_clause());
 
-    let mut query = sqlx::query_as::<sqlx::Postgres, T>(q.as_str());
+    let mut query = sqlx::query_as::<_, T>(q.as_str());
 
     let actor_ids = auth.actor_ids();
     event!(Level::DEBUG, organization_id=?auth.organization_id, actor_ids=?actor_ids);

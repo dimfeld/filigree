@@ -49,7 +49,7 @@ pub struct BootstrappedData {
 }
 
 pub struct TestAppOptions {
-    pub obfuscate_errors: Option<bool>,
+    obfuscate_errors: Option<bool>,
 }
 
 impl Default for TestAppOptions {
