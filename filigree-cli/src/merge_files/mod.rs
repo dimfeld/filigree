@@ -8,13 +8,15 @@ use crate::RenderedFile;
 pub struct MergeTracker {
     pub base_generated_path: PathBuf,
     output_path: PathBuf,
+    overwrite: bool,
 }
 
 impl MergeTracker {
-    pub fn new(base_generated_path: PathBuf, output_path: PathBuf) -> Self {
+    pub fn new(base_generated_path: PathBuf, output_path: PathBuf, overwrite: bool) -> Self {
         Self {
             base_generated_path,
             output_path,
+            overwrite,
         }
     }
 
@@ -36,7 +38,11 @@ impl MergeTracker {
         let previous_generation_result = std::fs::read_to_string(&base_generated_path);
         let gen_exists = previous_generation_result.is_ok();
         let previous_generation = previous_generation_result.ok();
-        let users_file = std::fs::read_to_string(&output_path).ok();
+        let users_file = if self.overwrite {
+            None
+        } else {
+            std::fs::read_to_string(&output_path).ok()
+        };
 
         let merged = generate_merged_output(
             previous_generation.as_deref(),

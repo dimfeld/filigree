@@ -51,6 +51,11 @@ pub struct Cli {
     /// Override the path to the configuration directory. By default this looks for ./filigree
     #[clap(short, long, value_name = "FILE")]
     config: Option<PathBuf>,
+
+    /// When generating files, ignore any changes you have made and just write the template output,
+    /// instead of merging them together.
+    #[clap(long)]
+    overwrite: bool,
 }
 
 #[derive(Error, Debug)]
@@ -181,8 +186,10 @@ pub fn main() -> Result<(), Report<Error>> {
         web_dir,
         ..
     } = config;
-    let api_merge_tracker = MergeTracker::new(state_dir.join("api"), api_dir.clone());
-    let web_merge_tracker = MergeTracker::new(state_dir.join("web"), web_dir.clone());
+    let api_merge_tracker =
+        MergeTracker::new(state_dir.join("api"), api_dir.clone(), args.overwrite);
+    let web_merge_tracker =
+        MergeTracker::new(state_dir.join("web"), web_dir.clone(), args.overwrite);
 
     let renderer = templates::Renderer::new(&config);
 
