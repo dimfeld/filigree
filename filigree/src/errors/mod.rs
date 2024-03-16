@@ -42,14 +42,37 @@ impl HttpError for OrderByError {
 /// This would usually be used in a context like this:
 ///
 /// ```
-/// report.frames().find_map(|frame| {
-///     find_error!(
+/// # use filigree::{
+/// #    downref_report_frame,
+/// #    errors::{HttpError, OrderByError},
+/// #    uploads::UploadInspectorError,
+/// # };
+/// # #[derive(Debug)]
+/// # struct Error {}
+/// # impl std::error::Error for Error {}
+/// # impl std::fmt::Display for Error {
+/// #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+/// #         write!(f, "Error")
+/// #     }
+/// # }
+/// fn error_code<E: HttpError>(err: &E) -> http::StatusCode {
+///     err.status_code()
+/// }
+///
+/// let report = error_stack::Report::new(OrderByError::InvalidField)
+///     .change_context(Error{});
+///
+/// let status_code = report.frames().find_map(|frame| {
+///     downref_report_frame!(
 ///         frame,
-///         Self::error_kind_and_code,
-///         AuthError,
-///         UploadInspectorError
+///         error_code,
+///         OrderByError,
+///         filigree::uploads::UploadInspectorError
 ///     )
-/// })
+/// });
+///
+/// // Should return the status code for OrderByError::InvalidField
+/// assert_eq!(status_code, Some(http::StatusCode::BAD_REQUEST));
 /// ```
 #[macro_export]
 macro_rules! downref_report_frame {
