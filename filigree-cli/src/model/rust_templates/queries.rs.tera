@@ -663,9 +663,9 @@ pub async fn delete_all_children_of_parent(
     db: impl PgExecutor<'_>,
     organization_id: OrganizationId,
     parent_id: {{belongs_to_field.rust_type}})
-    -> Result<(), error_stack::Report<Error>> {
+    -> Result<bool, error_stack::Report<Error>> {
 
-    query_file!("{{dir}}/delete_all_children.sql",
+    let result = query_file!("{{dir}}/delete_all_children.sql",
         {%if not global %}
         organization_id.as_uuid(),
         {% endif %}
@@ -674,7 +674,7 @@ pub async fn delete_all_children_of_parent(
         .execute(db)
         .await
         .change_context(Error::Db)?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
 {% endif %}

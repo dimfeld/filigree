@@ -486,8 +486,8 @@ pub async fn delete_all_children_of_parent(
     db: impl PgExecutor<'_>,
     organization_id: OrganizationId,
     parent_id: ReportId,
-) -> Result<(), error_stack::Report<Error>> {
-    query_file!(
+) -> Result<bool, error_stack::Report<Error>> {
+    let result = query_file!(
         "src/models/report_section/delete_all_children.sql",
         organization_id.as_uuid(),
         parent_id.as_uuid()
@@ -495,5 +495,5 @@ pub async fn delete_all_children_of_parent(
     .execute(db)
     .await
     .change_context(Error::Db)?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }

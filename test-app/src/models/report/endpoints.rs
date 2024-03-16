@@ -89,6 +89,7 @@ async fn delete(
     }
 
     tx.commit().await.change_context(Error::Db)?;
+
     Ok(StatusCode::OK)
 }
 

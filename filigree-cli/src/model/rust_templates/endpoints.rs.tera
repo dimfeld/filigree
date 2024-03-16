@@ -78,6 +78,14 @@ async fn delete(
 
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
 
+    {% for c in children 
+        | filter(attribute="file_upload")
+        | filter(attribute="file_upload.retain_file_on_delete", value=false) -%}
+    let {{ c.module }}_files = crate::models::{{c.module}}::storage::get_storage_keys_by_parent_id(
+        &state, &auth, &mut *tx, id
+    ).await?;
+    {%- endfor %}
+
     let deleted = queries::delete(&mut *tx, &auth, id).await?;
 
     if !deleted {
@@ -85,6 +93,15 @@ async fn delete(
     }
 
     tx.commit().await.change_context(Error::Db)?;
+
+    {% for c in children 
+        | filter(attribute="file_upload")
+        | filter(attribute="file_upload.retain_file_on_delete", value=false) -%}
+    for file in {{ c.module }}_files {
+        crate::models::{{c.module}}::storage::delete_by_key(&state, &file).await?;
+    }
+    {%- endfor %}
+
     Ok(StatusCode::OK)
 }
 
@@ -186,7 +203,7 @@ async fn delete_child_{{c.module}}(
     Path((parent_id, child_id)): Path<({{id_type}}, {{c.object_id}})>,
     ) -> Result<impl IntoResponse, Error> {
 
-    {% if c.file_upload and not c.file_upload_retain_file_on_delete %}
+    {% if c.file_upload and not c.file_upload.retain_file_on_delete %}
     let mut tx = state.db.begin()
         .await
         .change_context(Error::Db)?;
@@ -238,7 +255,7 @@ async fn upsert_child_{{c.module}}(
 
     {% if c.file_upload %}
     let mut tx = state.db.begin().await?;
-    {% if not c.file_upload_retain_file_on_update %}
+    {% if not c.file_upload.retain_file_on_update %}
     let old_storage_key = sqlx::query_scalar!(
         "SELECT file_storage_key FROM {{c.table}} WHERE {{c.parent_field}} = $1",
         parent_id
@@ -263,7 +280,7 @@ async fn upsert_child_{{c.module}}(
         .await
         .change_context(Error::Db)?;
 
-    {% if not c.file_upload_retain_file_on_update %}
+    {% if not c.file_upload.retain_file_on_update %}
     if let Some(old_storage_key) = old_storage_key {
         crate::models::{{c.module}}::storage::delete_by_key(
             &state,
@@ -299,11 +316,28 @@ async fn delete_child_{{c.module}}(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
-    // TODO FILE for file child models this should delete the file if retain if off
+    {% if c.file_upload and not c.file_upload.retain_file_on_delete %}
+    let mut tx = state.db.begin()
+        .await
+        .change_context(Error::Db)?;
+
+    crate::models::{{c.module}}::storage::delete_by_parent_id(
+        &state,
+        &auth,
+        &mut *tx,
+        parent_id,
+        child_id,
+    ).await?;
+
+    tx.commit()
+        .await
+        .change_context(Error::Db)?;
+    {% else %}
     crate::models::{{c.module}}::queries::delete_all_children_of_parent(
         &state.db,
         auth.organization_id,
         parent_id).await?;
+    {% endif %}
 
     Ok(StatusCode::OK)
 }

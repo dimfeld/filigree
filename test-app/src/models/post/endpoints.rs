@@ -85,6 +85,11 @@ async fn delete(
 ) -> Result<impl IntoResponse, Error> {
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
 
+    let post_image_files = crate::models::post_image::storage::get_storage_keys_by_parent_id(
+        &state, &auth, &mut *tx, id,
+    )
+    .await?;
+
     let deleted = queries::delete(&mut *tx, &auth, id).await?;
 
     if !deleted {
@@ -92,6 +97,11 @@ async fn delete(
     }
 
     tx.commit().await.change_context(Error::Db)?;
+
+    for file in post_image_files {
+        crate::models::post_image::storage::delete_by_key(&state, &file).await?;
+    }
+
     Ok(StatusCode::OK)
 }
 
@@ -265,7 +275,6 @@ async fn delete_child_poll(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
-    // TODO FILE for file child models this should delete the file if retain if off
     crate::models::poll::queries::delete_all_children_of_parent(
         &state.db,
         auth.organization_id,

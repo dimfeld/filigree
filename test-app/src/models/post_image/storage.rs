@@ -161,6 +161,44 @@ pub async fn delete_by_id(
     Ok(())
 }
 
+/// Delete files from the database and from object storage that belong to this parent object.
+pub async fn delete_by_parent_id(
+    state: &ServerState,
+    auth: &Authed,
+    tx: &mut PgConnection,
+    parent_id: PostId,
+) -> Result<(), error_stack::Report<Error>> {
+    let storage_keys = get_storage_keys_by_parent_id(state, auth, &mut *tx, parent_id).await?;
+    let deleted =
+        super::queries::delete_all_children_of_parent(&mut *tx, auth.organization_id, parent_id)
+            .await?;
+
+    if deleted {
+        for key in storage_keys {
+            delete_by_key(state, &key).await?;
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn get_storage_keys_by_parent_id(
+    state: &ServerState,
+    auth: &Authed,
+    tx: &mut PgConnection,
+    parent_id: PostId,
+) -> Result<Vec<String>, error_stack::Report<Error>> {
+    let storage_keys = sqlx::query_scalar!(
+        "SELECT file_storage_key FROM post_images WHERE post_id = $1",
+        parent_id.as_uuid()
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .change_context(Error::Db)?;
+
+    Ok(storage_keys)
+}
+
 pub async fn get_storage_key_by_id(
     state: &ServerState,
     auth: &Authed,
