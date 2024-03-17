@@ -27,6 +27,17 @@ type QueryAs<'q, T> = sqlx::query::QueryAs<
     <sqlx::Postgres as sqlx::database::HasArguments<'q>>::Arguments,
 >;
 
+fn check_missing_parent_error<T>(
+    result: Result<T, sqlx::Error>,
+) -> Result<T, error_stack::Report<Error>> {
+    match result {
+        Err(sqlx::Error::Database(e)) if e.constraint() == Some("reactions_post_id_fkey") => {
+            Err(e).change_context(Error::NotFound("Parent Post"))
+        }
+        _ => result.change_context(Error::Db),
+    }
+}
+
 /// Get a Reaction from the database
 #[instrument(skip(db))]
 pub async fn get(
@@ -264,8 +275,9 @@ pub async fn create_raw(
         &payload.post_id as _,
     )
     .fetch_one(&mut *db)
-    .await
-    .change_context(Error::Db)?;
+    .await;
+
+    let result = check_missing_parent_error(result)?;
 
     Ok(result)
 }
@@ -356,9 +368,8 @@ pub async fn upsert_with_parent(
         &payload.post_id as _,
     )
     .fetch_one(db)
-    .await
-    .change_context(Error::Db)?;
-    Ok(result)
+    .await;
+    check_missing_parent_error(result)
 }
 
 /// Update a single child of the given parent. This does nothing if the child doesn't exist.
@@ -429,7 +440,8 @@ pub async fn update_all_with_parent(
                 .bind(&p.post_id)
         }
 
-        let results = query.fetch_all(&mut *db).await.change_context(Error::Db)?;
+        let results = query.fetch_all(&mut *db).await;
+        let results = check_missing_parent_error(results)?;
 
         // Delete any of the children that were not sent in.
         let ids = results
@@ -462,7 +474,7 @@ pub async fn delete_with_parent(
         "src/models/reaction/delete_with_parent.sql",
         auth.organization_id.as_uuid(),
         parent_id.as_uuid(),
-        child_id.as_uuid()
+        child_id.as_uuid(),
     )
     .execute(db)
     .await

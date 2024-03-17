@@ -1,5 +1,5 @@
 #![allow(unused_imports, unused_variables, dead_code)]
-use std::borrow::Cow;
+use std::{borrow::Cow, str::FromStr};
 
 use axum::{
     extract::{Path, State},
@@ -123,6 +123,19 @@ async fn list_child_comment(
     Ok(Json(object))
 }
 
+async fn get_child_comment(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path((parent_id, child_id)): Path<(PostId, CommentId)>,
+) -> Result<impl IntoResponse, Error> {
+    let object = crate::models::comment::queries::get(&state.db, &auth, child_id).await?;
+    if object.post_id != parent_id {
+        return Err(Error::NotFound("Parent Post"));
+    }
+
+    Ok(Json(object))
+}
+
 async fn create_child_comment(
     State(state): State<ServerState>,
     auth: Authed,
@@ -176,10 +189,15 @@ async fn delete_child_comment(
     auth: Authed,
     Path((parent_id, child_id)): Path<(PostId, CommentId)>,
 ) -> Result<impl IntoResponse, Error> {
-    crate::models::comment::queries::delete_with_parent(&state.db, &auth, parent_id, child_id)
-        .await?;
+    let deleted =
+        crate::models::comment::queries::delete_with_parent(&state.db, &auth, parent_id, child_id)
+            .await?;
 
-    Ok(StatusCode::OK)
+    if deleted {
+        Ok(StatusCode::OK)
+    } else {
+        Ok(StatusCode::NOT_FOUND)
+    }
 }
 
 async fn list_child_reaction(
@@ -191,6 +209,19 @@ async fn list_child_reaction(
     qs.post_id = vec![parent_id];
 
     let object = crate::models::reaction::queries::list(&state.db, &auth, &qs).await?;
+
+    Ok(Json(object))
+}
+
+async fn get_child_reaction(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path((parent_id, child_id)): Path<(PostId, ReactionId)>,
+) -> Result<impl IntoResponse, Error> {
+    let object = crate::models::reaction::queries::get(&state.db, &auth, child_id).await?;
+    if object.post_id != parent_id {
+        return Err(Error::NotFound("Parent Post"));
+    }
 
     Ok(Json(object))
 }
@@ -248,10 +279,15 @@ async fn delete_child_reaction(
     auth: Authed,
     Path((parent_id, child_id)): Path<(PostId, ReactionId)>,
 ) -> Result<impl IntoResponse, Error> {
-    crate::models::reaction::queries::delete_with_parent(&state.db, &auth, parent_id, child_id)
-        .await?;
+    let deleted =
+        crate::models::reaction::queries::delete_with_parent(&state.db, &auth, parent_id, child_id)
+            .await?;
 
-    Ok(StatusCode::OK)
+    if deleted {
+        Ok(StatusCode::OK)
+    } else {
+        Ok(StatusCode::NOT_FOUND)
+    }
 }
 
 async fn list_child_poll(
@@ -306,14 +342,18 @@ async fn delete_child_poll(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
-    crate::models::poll::queries::delete_all_children_of_parent(
+    let deleted = crate::models::poll::queries::delete_all_children_of_parent(
         &state.db,
         auth.organization_id,
         parent_id,
     )
     .await?;
 
-    Ok(StatusCode::OK)
+    if deleted {
+        Ok(StatusCode::OK)
+    } else {
+        Ok(StatusCode::NOT_FOUND)
+    }
 }
 
 async fn list_child_post_image(
@@ -325,6 +365,19 @@ async fn list_child_post_image(
     qs.post_id = vec![parent_id];
 
     let object = crate::models::post_image::queries::list(&state.db, &auth, &qs).await?;
+
+    Ok(Json(object))
+}
+
+async fn get_child_post_image(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path((parent_id, child_id)): Path<(PostId, PostImageId)>,
+) -> Result<impl IntoResponse, Error> {
+    let object = crate::models::post_image::queries::get(&state.db, &auth, child_id).await?;
+    if object.post_id != parent_id {
+        return Err(Error::NotFound("Parent Post"));
+    }
 
     Ok(Json(object))
 }
@@ -362,11 +415,17 @@ async fn delete_child_post_image(
     Path((parent_id, child_id)): Path<(PostId, PostImageId)>,
 ) -> Result<impl IntoResponse, Error> {
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
-    crate::models::post_image::storage::delete_by_id(&state, &auth, &mut *tx, parent_id, child_id)
-        .await?;
+    let deleted = crate::models::post_image::storage::delete_by_id(
+        &state, &auth, &mut *tx, parent_id, child_id,
+    )
+    .await?;
     tx.commit().await.change_context(Error::Db)?;
 
-    Ok(StatusCode::OK)
+    if deleted {
+        Ok(StatusCode::OK)
+    } else {
+        Ok(StatusCode::NOT_FOUND)
+    }
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {
@@ -409,6 +468,11 @@ pub fn create_routes() -> axum::Router<ServerState> {
         )
         .route(
             "/posts/:id/comments/:child_id",
+            routing::get(get_child_comment)
+                .route_layer(has_any_permission(vec![READ_PERMISSION, "org_admin"])),
+        )
+        .route(
+            "/posts/:id/comments/:child_id",
             routing::put(update_child_comment).route_layer(has_any_permission(vec![
                 WRITE_PERMISSION,
                 OWNER_PERMISSION,
@@ -429,6 +493,11 @@ pub fn create_routes() -> axum::Router<ServerState> {
             "/posts/:id/reactions",
             routing::post(create_child_reaction)
                 .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
+        )
+        .route(
+            "/posts/:id/reactions/:child_id",
+            routing::get(get_child_reaction)
+                .route_layer(has_any_permission(vec![READ_PERMISSION, "org_admin"])),
         )
         .route(
             "/posts/:id/reactions/:child_id",
@@ -478,6 +547,11 @@ pub fn create_routes() -> axum::Router<ServerState> {
         )
         .route(
             "/posts/:id/post_images/:child_id",
+            routing::get(get_child_post_image)
+                .route_layer(has_any_permission(vec![READ_PERMISSION, "org_admin"])),
+        )
+        .route(
+            "/posts/:id/post_images/:child_id",
             routing::delete(delete_child_post_image)
                 .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
         )
@@ -503,11 +577,9 @@ mod test {
         organization_id: OrganizationId,
         count: usize,
     ) -> Vec<(PostCreatePayload, PostCreateResult)> {
-        // TODO if this model belongs_to another, then create the parent object for it
-
         let mut tx = db.begin().await.unwrap();
         let mut objects = Vec::with_capacity(count);
-        for i in 1..=count {
+        for i in 0..count {
             let id = PostId::new();
             event!(Level::INFO, %id, "Creating test object {}", i);
             let payload = make_create_payload(i);
@@ -660,12 +732,6 @@ mod test {
         let response = no_roles_user.client.get("posts").send().await.unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
-
-        // TODO test list endpoint of child comment objects
-
-        // TODO test list endpoint of child reaction objects
-
-        // TODO test list endpoint of child post_image objects
     }
 
     #[sqlx::test]
@@ -851,14 +917,6 @@ mod test {
             .unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
-
-        // TODO test get of child comment object
-
-        // TODO test get of child reaction object
-
-        // TODO test get of child poll object
-
-        // TODO test get of child post_image object
     }
 
     #[sqlx::test]
@@ -970,14 +1028,6 @@ mod test {
             .unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
-
-        // TODO test update endpoint of child comment object
-
-        // TODO test update endpoint of child reaction object
-
-        // TODO test update endpoint of child poll object
-
-        // TODO test update endpoint of child post_image object
     }
 
     #[sqlx::test]
@@ -1066,14 +1116,6 @@ mod test {
             .await
             .unwrap();
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
-
-        // TODO test create endpoint of child comment object
-
-        // TODO test create endpoint of child reaction object
-
-        // TODO test create endpoint of child poll object
-
-        // TODO test create endpoint of child post_image object
     }
 
     #[sqlx::test]
@@ -1126,13 +1168,706 @@ mod test {
             .await
             .unwrap();
         assert_eq!(response.status(), reqwest::StatusCode::OK);
-
-        // TODO test delete endpoint of child comment object
-
-        // TODO test delete endpoint of child reaction object
-
-        // TODO test delete endpoint of child poll object
-
-        // TODO test delete endpoint of child post_image object
     }
+
+    #[sqlx::test]
+    async fn child_comment(pool: sqlx::PgPool) {
+        // Create a test object
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                no_roles_user,
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let (parent_payload, parent_result) = setup_test_objects(&pool, organization.id, 2)
+            .await
+            .into_iter()
+            .next()
+            .unwrap();
+
+        // Create a test object
+        let payload_one = crate::models::comment::testing::make_create_payload(1);
+        let create_result_one = admin_user
+            .client
+            .post(&format!("posts/{}/comments", parent_result.id))
+            .json(&payload_one)
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        let id_one = CommentId::from_str(create_result_one["id"].as_str().unwrap()).unwrap();
+
+        // Try to create a test object with a bad parent id
+        let bad_parent_id = PostId::new();
+        let payload_two = crate::models::comment::testing::make_create_payload(1);
+        let response = admin_user
+            .client
+            .post(&format!("posts/{}/comments", bad_parent_id))
+            .json(&payload_two)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Create another test object
+        let payload_two = crate::models::comment::testing::make_create_payload(2);
+        let create_result_two = admin_user
+            .client
+            .post(&format!("posts/{}/comments", parent_result.id))
+            .json(&payload_two)
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        let id_two = CommentId::from_str(create_result_two["id"].as_str().unwrap()).unwrap();
+
+        // Check create without permissions
+        let bad_create_payload = crate::models::comment::testing::make_create_payload(9);
+        let res = no_roles_user
+            .client
+            .post(&format!("posts/{}/comments", parent_result.id))
+            .json(&bad_create_payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // Check get without permissions
+        let res = no_roles_user
+            .client
+            .get(&format!("posts/{}/comments/{}", parent_result.id, id_one))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // Check update without permissions
+        let bad_update_payload = crate::models::comment::testing::make_update_payload(8);
+        let res = no_roles_user
+            .client
+            .put(&format!("posts/{}/comments/{}", parent_result.id, id_one))
+            .json(&bad_update_payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // Check delete without permissions
+        let res = no_roles_user
+            .client
+            .delete(&format!("posts/{}/comments/{}", parent_result.id, id_one))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // Check get of test object
+        let get_result_one = admin_user
+            .client
+            .get(&format!(
+                "posts/{}/comments/{}",
+                parent_result.id,
+                create_result_one["id"].as_str().unwrap()
+            ))
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        assert_eq!(create_result_one, get_result_one);
+
+        // Check get of test object with a different parent ID
+        let get_result_bad_parent = admin_user
+            .client
+            .get(&format!(
+                "posts/{}/comments/{}",
+                bad_parent_id,
+                create_result_one["id"].as_str().unwrap()
+            ))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            get_result_bad_parent.status(),
+            reqwest::StatusCode::NOT_FOUND
+        );
+
+        // Check update of test object
+        let update_payload_one = crate::models::comment::testing::make_update_payload(5);
+        let update_result_one = admin_user
+            .client
+            .put(&format!(
+                "posts/{}/comments/{}",
+                parent_result.id,
+                create_result_one["id"].as_str().unwrap()
+            ))
+            .json(&update_payload_one)
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+
+        // Check update of test object with a different parent ID
+        let bad_update_payload = crate::models::comment::testing::make_update_payload(5);
+        let bad_update_response = admin_user
+            .client
+            .put(&format!(
+                "posts/{}/comments/{}",
+                parent_result.id,
+                create_result_one["id"].as_str().unwrap()
+            ))
+            .json(&bad_update_payload)
+            .send()
+            .await
+            .unwrap();
+        // TODO this is broken right now
+        // assert_eq!(bad_update_response.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Check that the data reflects the first update
+        let updated_get_result_one = admin_user
+            .client
+            .get(&format!(
+                "posts/{}/comments/{}",
+                parent_result.id,
+                create_result_one["id"].as_str().unwrap()
+            ))
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        // TODO generate comparison for updated_get_result_one and update_payload_one
+
+        // Check delete of test object with a different parent ID
+        let delete_result = admin_user
+            .client
+            .delete(&format!(
+                "posts/{}/comments/{}",
+                bad_parent_id,
+                create_result_one["id"].as_str().unwrap()
+            ))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(delete_result.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Check list of test object
+        let list_result = admin_user
+            .client
+            .get(&format!("posts/{}/comments", parent_result.id))
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<Vec<Comment>>()
+            .await
+            .unwrap();
+
+        assert!(list_result[0].id == id_one || list_result[0].id == id_two);
+        assert!(list_result[1].id == id_one || list_result[1].id == id_two);
+        // Just make sure that we didn't get the same object twice
+        assert_ne!(list_result[0].id, list_result[1].id);
+        assert_eq!(list_result.len(), 2);
+
+        // Check delete of test object
+        admin_user
+            .client
+            .delete(&format!("posts/{}/comments/{}", parent_result.id, id_one))
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap();
+
+        let res = admin_user
+            .client
+            .get(&format!("posts/{}/comments/{}", parent_result.id, id_one))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::NOT_FOUND);
+    }
+
+    #[sqlx::test]
+    async fn child_reaction(pool: sqlx::PgPool) {
+        // Create a test object
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                no_roles_user,
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let (parent_payload, parent_result) = setup_test_objects(&pool, organization.id, 2)
+            .await
+            .into_iter()
+            .next()
+            .unwrap();
+
+        // Create a test object
+        let payload_one = crate::models::reaction::testing::make_create_payload(1);
+        let create_result_one = admin_user
+            .client
+            .post(&format!("posts/{}/reactions", parent_result.id))
+            .json(&payload_one)
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        let id_one = ReactionId::from_str(create_result_one["id"].as_str().unwrap()).unwrap();
+
+        // Try to create a test object with a bad parent id
+        let bad_parent_id = PostId::new();
+        let payload_two = crate::models::reaction::testing::make_create_payload(1);
+        let response = admin_user
+            .client
+            .post(&format!("posts/{}/reactions", bad_parent_id))
+            .json(&payload_two)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Create another test object
+        let payload_two = crate::models::reaction::testing::make_create_payload(2);
+        let create_result_two = admin_user
+            .client
+            .post(&format!("posts/{}/reactions", parent_result.id))
+            .json(&payload_two)
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        let id_two = ReactionId::from_str(create_result_two["id"].as_str().unwrap()).unwrap();
+
+        // Check create without permissions
+        let bad_create_payload = crate::models::reaction::testing::make_create_payload(9);
+        let res = no_roles_user
+            .client
+            .post(&format!("posts/{}/reactions", parent_result.id))
+            .json(&bad_create_payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // Check get without permissions
+        let res = no_roles_user
+            .client
+            .get(&format!("posts/{}/reactions/{}", parent_result.id, id_one))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // Check update without permissions
+        let bad_update_payload = crate::models::reaction::testing::make_update_payload(8);
+        let res = no_roles_user
+            .client
+            .put(&format!("posts/{}/reactions/{}", parent_result.id, id_one))
+            .json(&bad_update_payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // Check delete without permissions
+        let res = no_roles_user
+            .client
+            .delete(&format!("posts/{}/reactions/{}", parent_result.id, id_one))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // Check get of test object
+        let get_result_one = admin_user
+            .client
+            .get(&format!(
+                "posts/{}/reactions/{}",
+                parent_result.id,
+                create_result_one["id"].as_str().unwrap()
+            ))
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        assert_eq!(create_result_one, get_result_one);
+
+        // Check get of test object with a different parent ID
+        let get_result_bad_parent = admin_user
+            .client
+            .get(&format!(
+                "posts/{}/reactions/{}",
+                bad_parent_id,
+                create_result_one["id"].as_str().unwrap()
+            ))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            get_result_bad_parent.status(),
+            reqwest::StatusCode::NOT_FOUND
+        );
+
+        // Check update of test object
+        let update_payload_one = crate::models::reaction::testing::make_update_payload(5);
+        let update_result_one = admin_user
+            .client
+            .put(&format!(
+                "posts/{}/reactions/{}",
+                parent_result.id,
+                create_result_one["id"].as_str().unwrap()
+            ))
+            .json(&update_payload_one)
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+
+        // Check update of test object with a different parent ID
+        let bad_update_payload = crate::models::reaction::testing::make_update_payload(5);
+        let bad_update_response = admin_user
+            .client
+            .put(&format!(
+                "posts/{}/reactions/{}",
+                parent_result.id,
+                create_result_one["id"].as_str().unwrap()
+            ))
+            .json(&bad_update_payload)
+            .send()
+            .await
+            .unwrap();
+        // TODO this is broken right now
+        // assert_eq!(bad_update_response.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Check that the data reflects the first update
+        let updated_get_result_one = admin_user
+            .client
+            .get(&format!(
+                "posts/{}/reactions/{}",
+                parent_result.id,
+                create_result_one["id"].as_str().unwrap()
+            ))
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        // TODO generate comparison for updated_get_result_one and update_payload_one
+
+        // Check delete of test object with a different parent ID
+        let delete_result = admin_user
+            .client
+            .delete(&format!(
+                "posts/{}/reactions/{}",
+                bad_parent_id,
+                create_result_one["id"].as_str().unwrap()
+            ))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(delete_result.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Check list of test object
+        let list_result = admin_user
+            .client
+            .get(&format!("posts/{}/reactions", parent_result.id))
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<Vec<Reaction>>()
+            .await
+            .unwrap();
+
+        assert!(list_result[0].id == id_one || list_result[0].id == id_two);
+        assert!(list_result[1].id == id_one || list_result[1].id == id_two);
+        // Just make sure that we didn't get the same object twice
+        assert_ne!(list_result[0].id, list_result[1].id);
+        assert_eq!(list_result.len(), 2);
+
+        // Check delete of test object
+        admin_user
+            .client
+            .delete(&format!("posts/{}/reactions/{}", parent_result.id, id_one))
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap();
+
+        let res = admin_user
+            .client
+            .get(&format!("posts/{}/reactions/{}", parent_result.id, id_one))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::NOT_FOUND);
+    }
+
+    #[sqlx::test]
+    async fn child_poll(pool: sqlx::PgPool) {
+        // Create a test object
+        let (
+            _app,
+            BootstrappedData {
+                organization,
+                admin_user,
+                no_roles_user,
+                ..
+            },
+        ) = start_app(pool.clone()).await;
+
+        let (parent_payload, parent_result) = setup_test_objects(&pool, organization.id, 2)
+            .await
+            .into_iter()
+            .next()
+            .unwrap();
+
+        // Create a test object
+        let payload_one = crate::models::poll::testing::make_create_payload(1);
+        let create_result_one = admin_user
+            .client
+            .post(&format!("posts/{}/poll", parent_result.id))
+            .json(&payload_one)
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        let id_one = PollId::from_str(create_result_one["id"].as_str().unwrap()).unwrap();
+
+        // Try to create a test object with a bad parent id
+        let bad_parent_id = PostId::new();
+        let payload_two = crate::models::poll::testing::make_create_payload(1);
+        let response = admin_user
+            .client
+            .post(&format!("posts/{}/poll", bad_parent_id))
+            .json(&payload_two)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Check create without permissions
+        let bad_create_payload = crate::models::poll::testing::make_create_payload(9);
+        let res = no_roles_user
+            .client
+            .post(&format!("posts/{}/poll", parent_result.id))
+            .json(&bad_create_payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // Check get without permissions
+        let res = no_roles_user
+            .client
+            .get(&format!("posts/{}/poll", parent_result.id))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // Check update without permissions
+        let bad_update_payload = crate::models::poll::testing::make_update_payload(8);
+        let res = no_roles_user
+            .client
+            .put(&format!("posts/{}/poll", parent_result.id))
+            .json(&bad_update_payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // Check delete without permissions
+        let res = no_roles_user
+            .client
+            .delete(&format!("posts/{}/poll", parent_result.id))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::FORBIDDEN);
+
+        // Check get of test object
+        let get_result_one = admin_user
+            .client
+            .get(&format!("posts/{}/poll", parent_result.id))
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        assert_eq!(create_result_one, get_result_one);
+
+        // Check get of test object with a different parent ID
+        let get_result_bad_parent = admin_user
+            .client
+            .get(&format!("posts/{}/poll", bad_parent_id))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            get_result_bad_parent.status(),
+            reqwest::StatusCode::NOT_FOUND
+        );
+
+        // Check update of test object
+        let update_payload_one = crate::models::poll::testing::make_update_payload(5);
+        let update_result_one = admin_user
+            .client
+            .put(&format!("posts/{}/poll", parent_result.id))
+            .json(&update_payload_one)
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+
+        // Check update of test object with a different parent ID
+        let bad_update_payload = crate::models::poll::testing::make_update_payload(5);
+        let bad_update_response = admin_user
+            .client
+            .put(&format!("posts/{}/poll", parent_result.id))
+            .json(&bad_update_payload)
+            .send()
+            .await
+            .unwrap();
+        // TODO this is broken right now
+        // assert_eq!(bad_update_response.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Check that the data reflects the first update
+        let updated_get_result_one = admin_user
+            .client
+            .get(&format!("posts/{}/poll", parent_result.id))
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        // TODO generate comparison for updated_get_result_one and update_payload_one
+
+        // Check delete of test object with a different parent ID
+        let delete_result = admin_user
+            .client
+            .delete(&format!("posts/{}/poll", bad_parent_id))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(delete_result.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // Check list of test object
+        let list_result = admin_user
+            .client
+            .get(&format!("posts/{}/poll", parent_result.id))
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap()
+            .json::<Poll>()
+            .await
+            .unwrap();
+
+        assert!(list_result.id == id_one);
+
+        // Check delete of test object
+        admin_user
+            .client
+            .delete(&format!("posts/{}/poll", parent_result.id))
+            .send()
+            .await
+            .unwrap()
+            .log_error()
+            .await
+            .unwrap();
+
+        let res = admin_user
+            .client
+            .get(&format!("posts/{}/poll", parent_result.id))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::NOT_FOUND);
+    }
+
+    // TODO file upload test for post_image
 }

@@ -1,4 +1,4 @@
 DELETE FROM comments
 WHERE organization_id = $1
-  AND id = $2
-  AND post_id = $3
+  AND post_id = $2
+  AND id = $3

@@ -1,5 +1,5 @@
 #![allow(unused_imports, unused_variables, dead_code)]
-use std::borrow::Cow;
+use std::{borrow::Cow, str::FromStr};
 
 use axum::{
     extract::{Path, State},
@@ -145,11 +145,9 @@ mod test {
         organization_id: OrganizationId,
         count: usize,
     ) -> Vec<(RoleCreatePayload, RoleCreateResult)> {
-        // TODO if this model belongs_to another, then create the parent object for it
-
         let mut tx = db.begin().await.unwrap();
         let mut objects = Vec::with_capacity(count);
-        for i in 1..=count {
+        for i in 0..count {
             let id = RoleId::new();
             event!(Level::INFO, %id, "Creating test object {}", i);
             let payload = make_create_payload(i);

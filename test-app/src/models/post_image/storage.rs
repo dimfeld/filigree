@@ -150,7 +150,7 @@ pub async fn delete_by_id(
     tx: &mut PgConnection,
     parent_id: PostId,
     id: PostImageId,
-) -> Result<(), error_stack::Report<Error>> {
+) -> Result<bool, error_stack::Report<Error>> {
     let storage_key = get_storage_key_by_id(state, auth, &mut *tx, id).await?;
     let deleted = super::queries::delete_with_parent(&mut *tx, auth, parent_id, id).await?;
 
@@ -158,7 +158,7 @@ pub async fn delete_by_id(
         delete_by_key(state, &storage_key).await?;
     }
 
-    Ok(())
+    Ok(deleted)
 }
 
 /// Delete files from the database and from object storage that belong to this parent object.
@@ -167,7 +167,7 @@ pub async fn delete_by_parent_id(
     auth: &Authed,
     tx: &mut PgConnection,
     parent_id: PostId,
-) -> Result<(), error_stack::Report<Error>> {
+) -> Result<bool, error_stack::Report<Error>> {
     let storage_keys = get_storage_keys_by_parent_id(state, auth, &mut *tx, parent_id).await?;
     let deleted =
         super::queries::delete_all_children_of_parent(&mut *tx, auth.organization_id, parent_id)
@@ -179,7 +179,7 @@ pub async fn delete_by_parent_id(
         }
     }
 
-    Ok(())
+    Ok(deleted)
 }
 
 pub async fn get_storage_keys_by_parent_id(

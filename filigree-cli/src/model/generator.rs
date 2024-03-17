@@ -375,6 +375,7 @@ impl<'a> ModelGenerator<'a> {
             imports.insert(model.qualified_object_id_type());
         }
 
+        let parent_model_name = self.belongs_to.as_ref().map(|b| b.model());
         let belongs_to_field = self
             .belongs_to_field()?
             .next()
@@ -459,6 +460,7 @@ impl<'a> ModelGenerator<'a> {
             "has_any_endpoints": endpoints.any_enabled(),
             "endpoints": endpoints.per_endpoint(),
             "auth_scope": self.auth_scope.unwrap_or(self.config.default_auth_scope),
+            "parent_model_name": parent_model_name,
             "file_for": self.file_for.as_ref().map(|f| f.0.as_str()),
             "file_upload": self.file_for.as_ref().map(|f| f.1.template_context()),
         });

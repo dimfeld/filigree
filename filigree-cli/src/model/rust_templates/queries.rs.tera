@@ -23,6 +23,19 @@ use crate::Error;
 
 type QueryAs<'q, T> = sqlx::query::QueryAs<'q, sqlx::Postgres, T, <sqlx::Postgres as sqlx::database::HasArguments<'q>>::Arguments>;
 
+{% if belongs_to_field %}
+fn check_missing_parent_error<T>(result: Result<T, sqlx::Error>) -> Result<T, error_stack::Report<Error>> {
+    match result {
+        Err(sqlx::Error::Database(e))
+            if e.constraint() == Some("{{table}}_{{belongs_to_field.sql_name}}_fkey") =>
+        {
+            Err(e).change_context(Error::NotFound("Parent {{parent_model_name}}"))
+        }
+        _ => result.change_context(Error::Db)
+    }
+}
+{% endif %}
+
 /// Get a {{model_name}} from the database
 #[instrument(skip(db))]
 pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}, error_stack::Report<Error>> {
@@ -303,8 +316,15 @@ pub async fn create_raw(
         {% endfor %}
         )
         .fetch_one(&mut *db)
+    {% if belongs_to_field %}
+        .await;
+
+    let result = check_missing_parent_error(result)?;
+
+    {% else %}
         .await
         .change_context(Error::Db)?;
+    {% endif %}
 
     {% if create_payload_fields %}
     let child_result = create_payload_children(&mut *db, id, organization_id, payload).await?;
@@ -522,9 +542,8 @@ pub async fn upsert_with_parent(
         {% endfor %}
         )
         .fetch_one(db)
-        .await
-        .change_context(Error::Db)?;
-    Ok(result)
+        .await;
+    check_missing_parent_error(result)
 }
 
 {% if not belongs_to_field.unique %}
@@ -614,8 +633,8 @@ pub async fn update_all_with_parent(
 
         let results = query
             .fetch_all(&mut *db)
-            .await
-            .change_context(Error::Db)?;
+            .await;
+        let results = check_missing_parent_error(results)?;
 
         // Delete any of the children that were not sent in.
         let ids = results.iter().map(|o| o.id.as_uuid().clone()).collect::<Vec<_>>();
@@ -649,7 +668,7 @@ pub async fn delete_with_parent(
         auth.organization_id.as_uuid(),
         {% endif %}
         parent_id.as_uuid(),
-        child_id.as_uuid()
+        child_id.as_uuid(),
         )
         .execute(db)
         .await
