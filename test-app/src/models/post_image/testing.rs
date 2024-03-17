@@ -1,3 +1,4 @@
+#![allow(unused_imports, unused_variables, dead_code)]
 use super::{PostImageCreatePayload, PostImageId, PostImageUpdatePayload};
 use crate::models::post::PostId;
 

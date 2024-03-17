@@ -1,4 +1,4 @@
-#![allow(unused_imports, dead_code)]
+#![allow(unused_imports, unused_variables, dead_code)]
 use std::borrow::Cow;
 
 use axum::{

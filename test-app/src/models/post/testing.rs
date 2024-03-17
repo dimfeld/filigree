@@ -1,3 +1,4 @@
+#![allow(unused_imports, unused_variables, dead_code)]
 use super::{PostCreatePayload, PostId, PostUpdatePayload};
 use crate::models::{
     comment::{Comment, CommentCreatePayload, CommentId, CommentUpdatePayload},

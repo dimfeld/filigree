@@ -1,3 +1,4 @@
+#![allow(unused_imports, unused_variables, dead_code)]
 use super::{ReportCreatePayload, ReportId, ReportUpdatePayload};
 use crate::models::report_section::{
     ReportSection, ReportSectionCreatePayload, ReportSectionId, ReportSectionUpdatePayload,
