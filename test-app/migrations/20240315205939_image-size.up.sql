@@ -1,0 +1,2 @@
+ALTER TABLE post_images
+  ALTER COLUMN file_size SET DATA TYPE BIGINT;

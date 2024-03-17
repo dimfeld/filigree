@@ -1,16 +1,18 @@
 {% if has_any_endpoints -%}
-#![allow(unused_imports, dead_code)]
+#![allow(unused_imports, unused_variables, dead_code)]
 use axum::{extract::{State, Path}, http::StatusCode, response::IntoResponse, routing};
 use axum_jsonschema::Json;
 use axum_extra::extract::Query;
 use error_stack::ResultExt;
-use filigree::{auth::ObjectPermission, extract::FormOrJson};
+use filigree::{auth::{AuthError, ObjectPermission}, extract::FormOrJson};
 use tracing::{event, Level};
 
 use crate::{Error, auth::{Authed, has_any_permission}, server::ServerState};
 {{imports}}
 
 use super::{queries, types::*, {{id_type}}, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION, WRITE_PERMISSION };
+
+use std::borrow::Cow;
 
 async fn get(
     State(state): State<ServerState>,
@@ -78,6 +80,14 @@ async fn delete(
 
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
 
+    {% for c in children 
+        | filter(attribute="file_upload")
+        | filter(attribute="file_upload.retain_file_on_delete", value=false) -%}
+    let {{ c.module }}_files = crate::models::{{c.module}}::storage::get_storage_keys_by_parent_id(
+        &state, &auth, &mut *tx, id
+    ).await?;
+    {%- endfor %}
+
     let deleted = queries::delete(&mut *tx, &auth, id).await?;
 
     if !deleted {
@@ -85,6 +95,15 @@ async fn delete(
     }
 
     tx.commit().await.change_context(Error::Db)?;
+
+    {% for c in children 
+        | filter(attribute="file_upload")
+        | filter(attribute="file_upload.retain_file_on_delete", value=false) -%}
+    for file in {{ c.module }}_files {
+        crate::models::{{c.module}}::storage::delete_by_key(&state, &file).await?;
+    }
+    {%- endfor %}
+
     Ok(StatusCode::OK)
 }
 
@@ -121,43 +140,81 @@ async fn create_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
     Path(parent_id): Path<{{id_type}}>,
+    {% if c.file_upload -%}
+    Query(qs): Query<filigree::storage::QueryFilename>,
+    body: axum::body::Body,
+    {%- else -%}
     FormOrJson(mut payload): FormOrJson<{{c.struct_base}}CreatePayload>,
+    {%- endif %}
     ) -> Result<impl IntoResponse, Error> {
 
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
+    {% if c.file_upload %}
+    let result = crate::models::{{c.module}}::storage::upload_stream(
+        &state,
+        &auth,
+        &mut *tx,
+        parent_id,
+        None,
+        qs.filename.clone(),
+        None,
+        {% if c.file_upload.upload_size_limit %}Some({{c.file_upload.upload_size_limit}}){% else %}None{% endif %},
+        body.into_data_stream()
+    ).await?;
+    {% else %}
     payload.{{c.parent_field}} = parent_id;
 
-    let mut tx = state.db.begin().await.change_context(Error::Db)?;
     let result = crate::models::{{c.module}}::queries::create(
         &mut *tx,
         &auth,
         payload
     ).await?;
-    tx.commit().await.change_context(Error::Db)?;
+    {% endif %}
 
+    tx.commit().await.change_context(Error::Db)?;
 
     Ok(Json(result))
 }
 
+{% if not c.file_upload %}
 async fn update_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
     Path((parent_id, child_id)): Path<({{id_type}}, {{c.object_id}})>,
     FormOrJson(mut payload): FormOrJson<{{c.struct_base}}UpdatePayload>,
     ) -> Result<impl IntoResponse, Error> {
-
     payload.id = Some(child_id);
     payload.{{c.parent_field}} = parent_id;
+
+    let object_perm = queries::lookup_object_permissions(
+        &state.db,
+        &auth,
+        parent_id,
+    ).await?
+    .unwrap_or(ObjectPermission::Read);
+
+    let is_owner = match object_perm {
+        ObjectPermission::Owner => true,
+        ObjectPermission::Write => false,
+        ObjectPermission::Read => {
+            return Err(Error::AuthError(AuthError::MissingPermission(
+                Cow::Borrowed(super::WRITE_PERMISSION),
+            )));
+        }
+    };
 
     let result = crate::models::{{c.module}}::queries::update_one_with_parent(
         &state.db,
         &auth,
-        true, // TODO get the right value here
+        is_owner,
         parent_id,
         child_id,
         payload).await?;
 
     Ok(Json(result))
 }
+{% endif %}
 
 async fn delete_child_{{c.module}}(
     State(state): State<ServerState>,
@@ -165,12 +222,28 @@ async fn delete_child_{{c.module}}(
     Path((parent_id, child_id)): Path<({{id_type}}, {{c.object_id}})>,
     ) -> Result<impl IntoResponse, Error> {
 
+    {% if c.file_upload and not c.file_upload.retain_file_on_delete %}
+    let mut tx = state.db.begin()
+        .await
+        .change_context(Error::Db)?;
+    crate::models::{{c.module}}::storage::delete_by_id(
+        &state,
+        &auth,
+        &mut *tx,
+        parent_id,
+        child_id,
+    ).await?;
+    tx.commit()
+        .await
+        .change_context(Error::Db)?;
+    {% else %}
     crate::models::{{c.module}}::queries::delete_with_parent(
         &state.db,
         &auth,
         parent_id,
         child_id,
     ).await?;
+    {% endif %}
 
     Ok(StatusCode::OK)
 }
@@ -181,7 +254,12 @@ async fn upsert_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
     Path(parent_id): Path<{{id_type}}>,
+    {% if c.file_upload -%}
+    body: axum::body::Body,
+    Query(qs): Query<filigree::storage::QueryFilename>,
+    {%- else -%}
     FormOrJson(mut payload): FormOrJson<{{c.struct_base}}UpdatePayload>,
+    {%- endif %}
     ) -> Result<impl IntoResponse, Error> {
     payload.{{c.parent_field}} = parent_id;
 
@@ -194,12 +272,52 @@ async fn upsert_child_{{c.module}}(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
-    let result = crate::models::{{c.module}}::queries::update_with_parent(
+    {% if c.file_upload %}
+    let mut tx = state.db.begin().await?;
+    {% if not c.file_upload.retain_file_on_update %}
+    let old_storage_key = sqlx::query_scalar!(
+        "SELECT file_storage_key FROM {{c.table}} WHERE {{c.parent_field}} = $1",
+        parent_id
+    )
+        .fetch_optional(&mut *tx)
+        .await?;
+    {% endif %}
+
+    crate::models::{{c.module}}::storage::upload_stream(
+        &state,
+        &auth,
+        &mut state.db,
+        parent_id,
+        None,
+        qs.filename.clone(),
+        None,
+        {% if c.file_upload.upload_size_limit %}Some({{c.file_upload.upload_size_limit}}){% else %}None{% endif %},
+        body.into_data_stream()
+    ).await?;
+
+    tx.commit()
+        .await
+        .change_context(Error::Db)?;
+
+    {% if not c.file_upload.retain_file_on_update %}
+    if let Some(old_storage_key) = old_storage_key {
+        crate::models::{{c.module}}::storage::delete_by_key(
+            &state,
+            &old_storage_key
+        )
+            .await?;
+    }
+    {% endif %}
+
+
+    {% else %}
+    let result = crate::models::{{c.module}}::queries::upsert_with_parent(
         &state.db,
         auth.organization_id,
         object_perm == ObjectPermission::Owner,
         parent_id,
-        &Some(payload)).await?;
+        &payload).await?;
+    {% endif %}
     Ok(Json(result))
 }
 
@@ -217,10 +335,28 @@ async fn delete_child_{{c.module}}(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
+    {% if c.file_upload and not c.file_upload.retain_file_on_delete %}
+    let mut tx = state.db.begin()
+        .await
+        .change_context(Error::Db)?;
+
+    crate::models::{{c.module}}::storage::delete_by_parent_id(
+        &state,
+        &auth,
+        &mut *tx,
+        parent_id,
+        child_id,
+    ).await?;
+
+    tx.commit()
+        .await
+        .change_context(Error::Db)?;
+    {% else %}
     crate::models::{{c.module}}::queries::delete_all_children_of_parent(
         &state.db,
         auth.organization_id,
         parent_id).await?;
+    {% endif %}
 
     Ok(StatusCode::OK)
 }
@@ -272,14 +408,18 @@ pub fn create_routes() -> axum::Router<ServerState> {
 
     {% if endpoints.update %}
         {% if c.relationship.many %}
-        .route("/{{url_path}}/:id/{{c.url_path}}/:child_id",
-            routing::put(update_child_{{c.module}})
+            {% if not c.file_upload %}
+                .route("/{{url_path}}/:id/{{c.url_path}}/:child_id",
+                        routing::put(update_child_{{c.module}})
+                    .route_layer(has_any_permission(vec![WRITE_PERMISSION, OWNER_PERMISSION, "org_admin"]))
+                )
+            {% endif %}
         {% else %}
         .route("/{{url_path}}/:id/{{c.url_path}}",
             routing::put(upsert_child_{{c.module}})
-        {% endif %}
                 .route_layer(has_any_permission(vec![WRITE_PERMISSION, OWNER_PERMISSION, "org_admin"]))
             )
+        {% endif %}
     {% endif %}
 
     {% if endpoints.delete %}
@@ -415,7 +555,6 @@ mod test {
             {%- endfor %}
             assert_eq!(result["_permission"], "owner");
 
-            // Check that we don't return any fields which are supposed to be omitted.
             {% for field in fields | filter (attribute="owner_read", value=false) -%}
             assert_eq!(
                 result.get("{{field.rust_name}}"),
@@ -508,7 +647,6 @@ mod test {
             {% endif %}
             {% endfor %}
 
-            // Check that we don't return any fields which are supposed to be omitted.
             {% for field in fields | filter (attribute="user_read", value=false) -%}
             assert_eq!(
                 result.get("{{field.rust_name}}"),
@@ -669,7 +807,6 @@ mod test {
         {% endif %}
         {% endfor %}
 
-        // Check that we don't return any fields which are supposed to be omitted.
         {% for field in fields | filter (attribute="owner_read", value=false) -%}
         assert_eq!(
             result.get("{{field.rust_name}}"),
@@ -701,7 +838,6 @@ mod test {
         {%- endfor %}
         assert_eq!(result["_permission"], "write");
 
-        // Check that we don't return any fields which are supposed to be omitted.
         {% for field in fields | filter (attribute="user_read", value=false) -%}
         assert_eq!(
             result.get("{{field.rust_name}}"),

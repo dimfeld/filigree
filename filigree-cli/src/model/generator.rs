@@ -38,6 +38,7 @@ pub struct ModelGenerator<'a> {
     pub model_map: &'a ModelMap,
     pub(super) renderer: &'a Renderer<'a>,
     pub config: &'a Config,
+    children: Vec<HasModel>,
     context: Option<tera::Context>,
 }
 
@@ -48,11 +49,19 @@ impl<'a> ModelGenerator<'a> {
         model_map: &'a ModelMap,
         model: Model,
     ) -> Result<Self, Error> {
+        let file_has = model.files.iter().map(|f| f.has_for_parent(&model));
+        let children = model
+            .has
+            .iter()
+            .map(|c| c.clone())
+            .chain(file_has)
+            .collect();
         Ok(Self {
             config,
             model_map,
             model,
             renderer,
+            children,
             context: None,
         })
     }
@@ -135,7 +144,7 @@ impl<'a> ModelGenerator<'a> {
         let mut populate_context = self.template_context().clone();
         populate_context.insert("populate_children", &true);
 
-        let populate_queries = if self.model.has.is_empty() {
+        let populate_queries = if self.children.is_empty() {
             vec![]
         } else {
             vec![
@@ -276,10 +285,7 @@ impl<'a> ModelGenerator<'a> {
 
         let base_dir = PathBuf::from("src/models").join(self.module_name());
 
-        let children = self
-            .model
-            .has
-            .iter()
+        let children = self.children.iter()
             .map(|has| {
                 let child_model = self.model_map.get(&has.model, &self.model.name, "has")?;
                 let child_generator = generators.get(&has.model, &self.model.name, "has")?;
@@ -309,6 +315,7 @@ impl<'a> ModelGenerator<'a> {
                     child_model.name.to_case(Case::Snake)
                 };
 
+                // Used in tests
                 let possible_child_field_names = vec![
                     Self::child_model_field_name(&child_model, ReferenceFetchType::Id, false),
                     Self::child_model_field_name(&child_model, ReferenceFetchType::Id, true),
@@ -333,6 +340,7 @@ impl<'a> ModelGenerator<'a> {
                     "table": child_model.table(),
                     "url_path": url_path,
                     "parent_field": self.model.foreign_key_id_field_name(),
+                    "file_upload": child_model.file_for.as_ref().map(|f| f.1.template_context()),
                 });
 
                 Ok::<_, Error>(result)
@@ -451,6 +459,8 @@ impl<'a> ModelGenerator<'a> {
             "has_any_endpoints": endpoints.any_enabled(),
             "endpoints": endpoints.per_endpoint(),
             "auth_scope": self.auth_scope.unwrap_or(self.config.default_auth_scope),
+            "file_for": self.file_for.as_ref().map(|f| f.0.as_str()),
+            "file_upload": self.file_for.as_ref().map(|f| f.1.template_context()),
         });
 
         let mut context = tera::Context::from_value(json_value).unwrap();
@@ -486,14 +496,13 @@ impl<'a> ModelGenerator<'a> {
         let org_field = if self.global {
             None
         } else {
-            let org_id_nullable = self.name == "User";
-            let org_id_foreign_key = self.name != "User";
+            let locked_to_single_org = self.name != "User";
 
             Some(ModelField {
                 name: "organization_id".to_string(),
                 typ: SqlType::Uuid,
                 rust_type: Some("crate::models::organization::OrganizationId".to_string()),
-                nullable: org_id_nullable,
+                nullable: !locked_to_single_org,
                 unique: false,
                 indexed: true,
                 sortable: SortableType::None,
@@ -506,7 +515,7 @@ impl<'a> ModelGenerator<'a> {
                 never_read: false,
                 fixed: true,
                 previous_name: None,
-                references: org_id_foreign_key.then(|| {
+                references: locked_to_single_org.then(|| {
                     ModelFieldReference::new(
                         "organizations",
                         "id",
@@ -619,7 +628,13 @@ impl<'a> ModelGenerator<'a> {
                     .iter()
                     .find(|has| has.model == self.model.name)
                     .map(|has| !has.many)
-                    .unwrap_or(false);
+                    .unwrap_or(false)
+                    || (self
+                        .model
+                        .file_for
+                        .as_ref()
+                        .map(|(parent_model, f)| parent_model == &model.name && f.many)
+                        .unwrap_or(false));
 
                 Ok::<_, Error>(ModelField {
                     name: model.foreign_key_id_field_name(),
@@ -688,7 +703,7 @@ impl<'a> ModelGenerator<'a> {
 
     /// Fields generated in some SQL queries, such as when populating child models, but which are
     /// not present in the base table.
-    /// This fields are not included in `all_fields`.
+    /// These fields are not included in `all_fields`.
     pub fn virtual_fields(
         &self,
         read_operation: ReadOperation,
@@ -713,9 +728,16 @@ impl<'a> ModelGenerator<'a> {
             previous_name: None,
         };
 
+        let file_has = self
+            .files
+            .iter()
+            .map(|f| f.has_for_parent(self))
+            .collect::<Vec<_>>();
+
         let has_fields = self
             .has
             .iter()
+            .chain(file_has.iter())
             .map(|has| {
                 let populate_type = match read_operation {
                     ReadOperation::Get => has.populate_on_get,
@@ -728,7 +750,7 @@ impl<'a> ModelGenerator<'a> {
                 });
                 let rust_type = Self::child_model_field_type(&model, populate_type, has.many, "");
 
-                if name.is_empty() {
+                if rust_type.is_empty() {
                     return Ok(None);
                 }
 
@@ -871,7 +893,7 @@ impl<'a> ModelGenerator<'a> {
         };
 
         let has_fields = self
-            .has
+            .children
             .iter()
             .map(|has| {
                 let has_model = self.model_map.get(&has.model, &self.model.name, "has")?;

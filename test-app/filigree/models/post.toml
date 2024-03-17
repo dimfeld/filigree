@@ -32,3 +32,13 @@ populate_on_get = "data"
 # [[has]]
 # model = "Tag"
 # through = "PostTag"
+
+[[files]]
+name = "image"
+id_prefix = "pstimg"
+bucket = "image_uploads"
+many = true
+meta.filename = true
+meta.size = true
+meta.hash = "Blake3"
+populate_on_get = "data"

@@ -62,9 +62,11 @@ impl Model {
                 extra_create_table_sql: String::new(),
                 extra_sql: String::new(),
                 pagination: Default::default(),
+                files: Vec::new(),
                 joins: None,
                 belongs_to: None,
                 has: vec![],
+                file_for: None,
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
@@ -103,9 +105,11 @@ impl Model {
                 extra_create_table_sql: String::new(),
                 extra_sql: String::new(),
                 pagination: Default::default(),
+                files: Vec::new(),
                 joins: None,
                 belongs_to: None,
                 has: vec![],
+                file_for: None,
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
@@ -155,9 +159,11 @@ impl Model {
                 extra_create_table_sql: String::new(),
                 extra_sql: String::new(),
                 pagination: Default::default(),
+                files: Vec::new(),
                 joins: None,
                 belongs_to: None,
                 has: vec![],
+                file_for: None,
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,

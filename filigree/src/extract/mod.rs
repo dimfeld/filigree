@@ -34,6 +34,8 @@ pub enum Rejection {
     Multipart(MultipartRejection),
     /// Failed to deserialize a field in a Multipart payload
     MultipartField(MultipartError),
+    /// Too many files in a multipart upload
+    TooManyFiles,
     /// Failed to deserialize a JSON payload
     Serde(serde_path_to_error::Error<serde_json::Error>),
     /// The client passed a content-type header which we don't support
@@ -81,6 +83,15 @@ impl IntoResponse for Rejection {
                 Json(ErrorResponseData::new(
                     "request_terminated_early",
                     "Request terminated early",
+                    (),
+                )),
+            )
+                .into_response(),
+            Rejection::TooManyFiles => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponseData::new(
+                    "too_many_files",
+                    "Too many files in upload",
                     (),
                 )),
             )

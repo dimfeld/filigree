@@ -34,3 +34,56 @@ impl HttpError for OrderByError {
         ()
     }
 }
+
+/// Attempt to downcast_ref a [error_stack::Frame] into multiple error types,
+/// and map the first matching type through a function. The map function should be generic on some
+/// trait that the errors all implement, usually HttpError.
+///
+/// This would usually be used in a context like this:
+///
+/// ```
+/// # use filigree::{
+/// #    downref_report_frame,
+/// #    errors::{HttpError, OrderByError},
+/// #    uploads::UploadInspectorError,
+/// # };
+/// # #[derive(Debug)]
+/// # struct Error {}
+/// # impl std::error::Error for Error {}
+/// # impl std::fmt::Display for Error {
+/// #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+/// #         write!(f, "Error")
+/// #     }
+/// # }
+/// fn error_code<E: HttpError>(err: &E) -> http::StatusCode {
+///     err.status_code()
+/// }
+///
+/// let report = error_stack::Report::new(OrderByError::InvalidField)
+///     .change_context(Error{});
+///
+/// let status_code = report.frames().find_map(|frame| {
+///     downref_report_frame!(
+///         frame,
+///         error_code,
+///         OrderByError,
+///         filigree::uploads::UploadInspectorError
+///     )
+/// });
+///
+/// // Should return the status code for OrderByError::InvalidField
+/// assert_eq!(status_code, Some(http::StatusCode::BAD_REQUEST));
+/// ```
+#[macro_export]
+macro_rules! downref_report_frame {
+    ($frame:ident, $func:expr, $error_type:ty) => {
+        $frame.downcast_ref::<$error_type>().map($func)
+    };
+
+    ($frame:ident, $func:expr, $error_type:ty, $($more_error_type:ty),+) => {
+        $crate::downref_report_frame!($frame, $func, $error_type)
+            $(
+                .or_else(|| $crate::downref_report_frame!($frame, $func, $more_error_type))
+            )+
+    };
+}

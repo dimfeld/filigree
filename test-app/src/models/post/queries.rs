@@ -20,6 +20,7 @@ use crate::{
         comment::{Comment, CommentCreatePayload, CommentId, CommentUpdatePayload},
         organization::OrganizationId,
         poll::{Poll, PollCreatePayload, PollId, PollUpdatePayload},
+        post_image::{PostImage, PostImageCreatePayload, PostImageId, PostImageUpdatePayload},
         reaction::{Reaction, ReactionCreatePayload, ReactionId, ReactionUpdatePayload},
     },
     Error,

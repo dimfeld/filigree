@@ -1,4 +1,6 @@
-#![allow(unused_imports, dead_code)]
+#![allow(unused_imports, unused_variables, dead_code)]
+use std::borrow::Cow;
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -8,7 +10,10 @@ use axum::{
 use axum_extra::extract::Query;
 use axum_jsonschema::Json;
 use error_stack::ResultExt;
-use filigree::{auth::ObjectPermission, extract::FormOrJson};
+use filigree::{
+    auth::{AuthError, ObjectPermission},
+    extract::FormOrJson,
+};
 use tracing::{event, Level};
 
 use super::{
@@ -86,6 +91,7 @@ async fn delete(
     }
 
     tx.commit().await.change_context(Error::Db)?;
+
     Ok(StatusCode::OK)
 }
 
@@ -249,7 +255,6 @@ mod test {
 
             assert_eq!(result["_permission"], "owner");
 
-            // Check that we don't return any fields which are supposed to be omitted.
             assert_eq!(
                 result.get("password_hash"),
                 None,
@@ -326,7 +331,6 @@ mod test {
             );
             assert_eq!(result["_permission"], "write");
 
-            // Check that we don't return any fields which are supposed to be omitted.
             assert_eq!(
                 result.get("password_hash"),
                 None,
@@ -461,7 +465,6 @@ mod test {
 
         assert_eq!(result["_permission"], "owner");
 
-        // Check that we don't return any fields which are supposed to be omitted.
         assert_eq!(
             result.get("password_hash"),
             None,
@@ -519,7 +522,6 @@ mod test {
         );
         assert_eq!(result["_permission"], "write");
 
-        // Check that we don't return any fields which are supposed to be omitted.
         assert_eq!(
             result.get("password_hash"),
             None,

@@ -9,10 +9,10 @@ VALUES (
   $3,
   $4)
 ON CONFLICT (
-  post_id)
+  id)
   DO UPDATE SET type = EXCLUDED.type, post_id = EXCLUDED.post_id, updated_at = now()
   WHERE
-    reactions.organization_id = $2
+    reactions.organization_id = $2 AND reactions.post_id = EXCLUDED.post_id
   RETURNING
     id AS "id: ReactionId",
     organization_id AS "organization_id: crate::models::organization::OrganizationId",

@@ -353,7 +353,7 @@ async fn create_payload_children(
                     child.{{c.parent_field}} = parent_id;
                 }
 
-                crate::models::{{c.module}}::queries::update_with_parent(&mut *db, organization_id, true, parent_id, &children).await?
+                crate::models::{{c.module}}::queries::update_all_with_parent(&mut *db, organization_id, true, parent_id, &children).await?
             } else {
                 vec![]
             }
@@ -361,7 +361,8 @@ async fn create_payload_children(
             tracing::event!(Level::DEBUG, ?children, "Creating child {{c.module}}");
             children.id = Some({{c.object_id}}::new());
             children.{{c.parent_field}} = parent_id;
-            crate::models::{{c.module}}::queries::update_with_parent(&mut *db, organization_id, true, parent_id, &[children]).await?
+            let result = crate::models::{{c.module}}::queries::upsert_with_parent(&mut *db, organization_id, true, parent_id, &children).await?;
+            Some(result)
         {% endif %}
         } else {
             {% if c.relationship.many %}
@@ -436,7 +437,7 @@ async fn update_payload_children(
         children.{{c.parent_field}} = parent_id;
         {% endif %}
 
-        crate::models::{{c.module}}::queries::update_with_parent(
+        crate::models::{{c.module}}::queries::update_all_with_parent(
             &mut *db,
             organization_id,
             is_owner,
@@ -489,43 +490,45 @@ pub async fn lookup_object_permissions(
 
 {% if belongs_to_field %}
 {% if belongs_to_field.unique %}
-/// Update the child of the given parent.
+/// Update or insert the child of the given parent. Since there can only be a single child per
+/// parent, this ignores the `id` field of the payload, and only looks at the parent ID.
+{% else %}
+/// Update or insert a child of the given parent.
+{% endif %}
 #[instrument(skip(db))]
-pub async fn update_with_parent(
+pub async fn upsert_with_parent(
     db: impl PgExecutor<'_>,
     organization_id: OrganizationId,
     is_owner: bool,
     parent_id: {{belongs_to_field.rust_type}},
-    payload: &Option<{{ struct_base }}UpdatePayload>)
-    -> Result<Option<{{struct_base}}>, error_stack::Report<Error>> {
+    payload: &{{ struct_base }}UpdatePayload)
+    -> Result<{{struct_base}}, error_stack::Report<Error>> {
 
-    if let Some(payload) = payload.as_ref() {
-        let result = query_file_as!({{struct_base}}, "{{dir}}/upsert_single_child.sql",
-            {% if owner_and_user_different_access %}
-            is_owner,
-            {% endif %}
-            {{id_type}}::new() as _,
-            {% if not global -%}
-            organization_id.as_uuid(),
-            {%- endif %}
-            {% for field in fields | filter(attribute="owner_write", value=true) %}
-                {%- if field.nullable -%}
-                    payload.{{field.rust_name}}.as_ref(){% if field.is_custom_rust_type %} as _{% endif %},
-                {%- else -%}
-                    &payload.{{field.rust_name}}{% if field.is_custom_rust_type %} as _{% endif %},
-                {%- endif -%}
-            {% endfor %}
-            )
-            .fetch_one(db)
-            .await
-            .change_context(Error::Db)?;
-        Ok(Some(result))
-    } else {
-        delete_all_children_of_parent(db, organization_id, parent_id).await?;
-        Ok(None)
-    }
+    let id = payload.id.clone().unwrap_or_else({{id_type}}::new);
+    let result = query_file_as!({{struct_base}}, "{{dir}}/upsert_single_child.sql",
+        {% if owner_and_user_different_access %}
+        is_owner,
+        {% endif %}
+        id.as_uuid(),
+        {% if not global -%}
+        organization_id.as_uuid(),
+        {%- endif %}
+        {% for field in fields | filter(attribute="owner_write", value=true) %}
+            {%- if field.nullable -%}
+                payload.{{field.rust_name}}.as_ref(){% if field.is_custom_rust_type %} as _{% endif %},
+            {%- else -%}
+                &payload.{{field.rust_name}}{% if field.is_custom_rust_type %} as _{% endif %},
+            {%- endif -%}
+        {% endfor %}
+        )
+        .fetch_one(db)
+        .await
+        .change_context(Error::Db)?;
+    Ok(result)
 }
-{% else %}
+
+{% if not belongs_to_field.unique %}
+/// Update a single child of the given parent. This does nothing if the child doesn't exist.
 #[instrument(skip(db))]
 pub async fn update_one_with_parent(
     db: impl PgExecutor<'_>,
@@ -560,8 +563,10 @@ pub async fn update_one_with_parent(
 }
 
 /// Update the children of the given parent.
+/// Insert new values that are not yet in the database and
+/// delete existing values that are not in the payload.
 #[instrument(skip(db))]
-pub async fn update_with_parent(
+pub async fn update_all_with_parent(
     db: &mut PgConnection,
     organization_id: OrganizationId,
     is_owner: bool,
@@ -628,6 +633,7 @@ pub async fn update_with_parent(
         Ok(results)
     }
 }
+{% endif %}
 
 /// Delete a child object, making sure that its parent ID matches.
 #[instrument(skip(db))]
@@ -636,9 +642,9 @@ pub async fn delete_with_parent(
     auth: &AuthInfo,
     parent_id: {{belongs_to_field.rust_type}},
     child_id: {{id_type}})
-    -> Result<(), error_stack::Report<Error>> {
+    -> Result<bool, error_stack::Report<Error>> {
 
-    query_file!("{{dir}}/delete_with_parent.sql",
+    let result = query_file!("{{dir}}/delete_with_parent.sql",
         {%if not global %}
         auth.organization_id.as_uuid(),
         {% endif %}
@@ -648,9 +654,8 @@ pub async fn delete_with_parent(
         .execute(db)
         .await
         .change_context(Error::Db)?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
-{% endif %}
 
 /// Delete all children of the given parent. This function does not do permissions checks.
 #[instrument(skip(db))]
@@ -658,9 +663,9 @@ pub async fn delete_all_children_of_parent(
     db: impl PgExecutor<'_>,
     organization_id: OrganizationId,
     parent_id: {{belongs_to_field.rust_type}})
-    -> Result<(), error_stack::Report<Error>> {
+    -> Result<bool, error_stack::Report<Error>> {
 
-    query_file!("{{dir}}/delete_all_children.sql",
+    let result = query_file!("{{dir}}/delete_all_children.sql",
         {%if not global %}
         organization_id.as_uuid(),
         {% endif %}
@@ -669,7 +674,7 @@ pub async fn delete_all_children_of_parent(
         .execute(db)
         .await
         .change_context(Error::Db)?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
 {% endif %}

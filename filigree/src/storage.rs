@@ -1,7 +1,9 @@
-use axum::body::{Body, BodyDataStream};
+use axum::body::Body;
+use axum_extra::extract::multipart::MultipartError;
 use bytes::Bytes;
-use futures::{Future, TryFutureExt, TryStreamExt};
+use futures::{Stream, TryStreamExt};
 use object_store::{path::Path, GetResult, MultipartId, ObjectStore as _, PutResult};
+use serde::Deserialize;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tracing::instrument;
 use url::Url;
@@ -16,6 +18,13 @@ pub mod s3;
 
 pub use config::*;
 
+/// A filename in a query string
+#[derive(Debug, Deserialize)]
+pub struct QueryFilename {
+    /// The filename
+    pub filename: Option<String>,
+}
+
 /// An error that may occur during a storage operation
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
@@ -25,6 +34,9 @@ pub enum StorageError {
     /// I/O error while reading the request body
     #[error("Request body error: {0}")]
     Body(#[from] axum::Error),
+    /// I/O error while reading the multipart field containing the upload
+    #[error("Request field error: {0}")]
+    MultipartField(#[from] MultipartError),
     /// Object was not found
     #[error("Object not found")]
     NotFound(#[source] object_store::Error),
@@ -166,30 +178,28 @@ impl Storage {
     }
 
     /// Stream a request body into object storage
-    pub async fn save_request_body<E, F, Fut>(
+    pub async fn save_request_body<STREAMERROR, F>(
         &self,
         location: &str,
-        body: BodyDataStream,
-    ) -> Result<usize, StorageError> {
-        self.save_and_inspect_request_body(
-            location,
-            body,
-            |_| async move { Ok::<_, StorageError>(()) },
-        )
-        .await
+        body: impl Stream<Item = Result<Bytes, STREAMERROR>> + Unpin,
+    ) -> Result<usize, StorageError>
+    where
+        StorageError: From<STREAMERROR>,
+    {
+        self.save_and_inspect_request_body(location, body, |_| Ok::<_, StorageError>(()))
+            .await
     }
 
     /// Stream a request body into object storage
-    pub async fn save_and_inspect_request_body<E, F, Fut>(
+    pub async fn save_and_inspect_request_body<E, STREAMERROR, F>(
         &self,
         location: &str,
-        body: BodyDataStream,
+        body: impl Stream<Item = Result<Bytes, STREAMERROR>> + Unpin,
         inspect: F,
     ) -> Result<usize, E>
     where
-        E: From<StorageError>,
-        F: FnMut(&Bytes) -> Fut,
-        Fut: Future<Output = Result<(), E>>,
+        E: From<StorageError> + From<STREAMERROR>,
+        F: FnMut(&Bytes) -> Result<(), E>,
     {
         let (upload_id, mut writer) = self
             .put_multipart(location)
@@ -203,26 +213,24 @@ impl Storage {
         result
     }
 
-    async fn upload_body<E, F, Fut>(
+    async fn upload_body<E, STREAMERROR, F>(
         &self,
         upload: &mut Box<dyn AsyncWrite + Unpin + Send>,
-        mut stream: BodyDataStream,
+        mut stream: impl Stream<Item = Result<Bytes, STREAMERROR>> + Unpin,
         mut inspect: F,
     ) -> Result<usize, E>
     where
-        E: From<StorageError>,
-        F: FnMut(&Bytes) -> Fut,
-        Fut: Future<Output = Result<(), E>>,
+        E: From<StorageError> + From<STREAMERROR>,
+        F: FnMut(&Bytes) -> Result<(), E>,
     {
         let mut total_size = 0;
-        while let Some(chunk) = stream.try_next().await.map_err(StorageError::from)? {
+        while let Some(chunk) = stream.try_next().await.map_err(E::from)? {
             total_size += chunk.len();
-            tokio::try_join!(
-                inspect(&chunk),
-                upload
-                    .write_all(&chunk)
-                    .map_err(|e| E::from(StorageError::from(e)))
-            )?;
+            inspect(&chunk)?;
+            upload
+                .write_all(&chunk)
+                .await
+                .map_err(|e| E::from(StorageError::from(e)))?;
         }
 
         upload.shutdown().await.map_err(StorageError::from)?;

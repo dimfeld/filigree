@@ -31,7 +31,13 @@ VALUES
 {% endfor %}
 )
 
-ON CONFLICT({{belongs_to_field.sql_name}}) DO UPDATE
+ON CONFLICT(
+  {%- if belongs_to_field.unique -%}
+  {{belongs_to_field.sql_name}}
+  {%- else -%}
+  id
+  {%- endif -%}
+) DO UPDATE
 SET
   {% for field in fields | filter(attribute='owner_write', value=true) %}
     {% if field.user_write %}
@@ -44,6 +50,10 @@ SET
 WHERE
 {% if not global %}
   {{table}}.organization_id = ${{p}}
+{% endif %}
+{% if not belongs_to_field.unique %}
+  {% if not global %}AND{% endif %} 
+  {{table}}.{{belongs_to_field.sql_name}} = EXCLUDED.{{belongs_to_field.sql_name}}
 {% endif %}
 
 RETURNING

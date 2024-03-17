@@ -338,33 +338,51 @@ pub async fn lookup_object_permissions(
     Ok(perm)
 }
 
-/// Update the child of the given parent.
+/// Update or insert the child of the given parent. Since there can only be a single child per
+/// parent, this ignores the `id` field of the payload, and only looks at the parent ID.
+
 #[instrument(skip(db))]
-pub async fn update_with_parent(
+pub async fn upsert_with_parent(
     db: impl PgExecutor<'_>,
     organization_id: OrganizationId,
     is_owner: bool,
     parent_id: PostId,
-    payload: &Option<PollUpdatePayload>,
-) -> Result<Option<Poll>, error_stack::Report<Error>> {
-    if let Some(payload) = payload.as_ref() {
-        let result = query_file_as!(
-            Poll,
-            "src/models/poll/upsert_single_child.sql",
-            PollId::new() as _,
-            organization_id.as_uuid(),
-            &payload.question,
-            &payload.answers,
-            &payload.post_id as _,
-        )
-        .fetch_one(db)
-        .await
-        .change_context(Error::Db)?;
-        Ok(Some(result))
-    } else {
-        delete_all_children_of_parent(db, organization_id, parent_id).await?;
-        Ok(None)
-    }
+    payload: &PollUpdatePayload,
+) -> Result<Poll, error_stack::Report<Error>> {
+    let id = payload.id.clone().unwrap_or_else(PollId::new);
+    let result = query_file_as!(
+        Poll,
+        "src/models/poll/upsert_single_child.sql",
+        id.as_uuid(),
+        organization_id.as_uuid(),
+        &payload.question,
+        &payload.answers,
+        &payload.post_id as _,
+    )
+    .fetch_one(db)
+    .await
+    .change_context(Error::Db)?;
+    Ok(result)
+}
+
+/// Delete a child object, making sure that its parent ID matches.
+#[instrument(skip(db))]
+pub async fn delete_with_parent(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    parent_id: PostId,
+    child_id: PollId,
+) -> Result<bool, error_stack::Report<Error>> {
+    let result = query_file!(
+        "src/models/poll/delete_with_parent.sql",
+        auth.organization_id.as_uuid(),
+        parent_id.as_uuid(),
+        child_id.as_uuid()
+    )
+    .execute(db)
+    .await
+    .change_context(Error::Db)?;
+    Ok(result.rows_affected() > 0)
 }
 
 /// Delete all children of the given parent. This function does not do permissions checks.
@@ -373,8 +391,8 @@ pub async fn delete_all_children_of_parent(
     db: impl PgExecutor<'_>,
     organization_id: OrganizationId,
     parent_id: PostId,
-) -> Result<(), error_stack::Report<Error>> {
-    query_file!(
+) -> Result<bool, error_stack::Report<Error>> {
+    let result = query_file!(
         "src/models/poll/delete_all_children.sql",
         organization_id.as_uuid(),
         parent_id.as_uuid()
@@ -382,5 +400,5 @@ pub async fn delete_all_children_of_parent(
     .execute(db)
     .await
     .change_context(Error::Db)?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }

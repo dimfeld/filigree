@@ -37,6 +37,7 @@ pub mod testing;
 /// Tracing configuration
 #[cfg(feature = "tracing")]
 pub mod tracing_config;
+pub mod uploads;
 /// Manage users, roles, and related data
 pub mod users;
 

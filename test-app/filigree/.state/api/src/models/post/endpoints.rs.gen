@@ -1,4 +1,6 @@
-#![allow(unused_imports, dead_code)]
+#![allow(unused_imports, unused_variables, dead_code)]
+use std::borrow::Cow;
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -8,7 +10,10 @@ use axum::{
 use axum_extra::extract::Query;
 use axum_jsonschema::Json;
 use error_stack::ResultExt;
-use filigree::{auth::ObjectPermission, extract::FormOrJson};
+use filigree::{
+    auth::{AuthError, ObjectPermission},
+    extract::FormOrJson,
+};
 use tracing::{event, Level};
 
 use super::{
@@ -20,6 +25,7 @@ use crate::{
     models::{
         comment::{Comment, CommentCreatePayload, CommentId, CommentUpdatePayload},
         poll::{Poll, PollCreatePayload, PollId, PollUpdatePayload},
+        post_image::{PostImage, PostImageCreatePayload, PostImageId, PostImageUpdatePayload},
         reaction::{Reaction, ReactionCreatePayload, ReactionId, ReactionUpdatePayload},
     },
     server::ServerState,
@@ -84,6 +90,11 @@ async fn delete(
 ) -> Result<impl IntoResponse, Error> {
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
 
+    let post_image_files = crate::models::post_image::storage::get_storage_keys_by_parent_id(
+        &state, &auth, &mut *tx, id,
+    )
+    .await?;
+
     let deleted = queries::delete(&mut *tx, &auth, id).await?;
 
     if !deleted {
@@ -91,6 +102,11 @@ async fn delete(
     }
 
     tx.commit().await.change_context(Error::Db)?;
+
+    for file in post_image_files {
+        crate::models::post_image::storage::delete_by_key(&state, &file).await?;
+    }
+
     Ok(StatusCode::OK)
 }
 
@@ -113,10 +129,12 @@ async fn create_child_comment(
     Path(parent_id): Path<PostId>,
     FormOrJson(mut payload): FormOrJson<CommentCreatePayload>,
 ) -> Result<impl IntoResponse, Error> {
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
     payload.post_id = parent_id;
 
-    let mut tx = state.db.begin().await.change_context(Error::Db)?;
     let result = crate::models::comment::queries::create(&mut *tx, &auth, payload).await?;
+
     tx.commit().await.change_context(Error::Db)?;
 
     Ok(Json(result))
@@ -131,9 +149,22 @@ async fn update_child_comment(
     payload.id = Some(child_id);
     payload.post_id = parent_id;
 
+    let object_perm = queries::lookup_object_permissions(&state.db, &auth, parent_id)
+        .await?
+        .unwrap_or(ObjectPermission::Read);
+
+    let is_owner = match object_perm {
+        ObjectPermission::Owner => true,
+        ObjectPermission::Write => false,
+        ObjectPermission::Read => {
+            return Err(Error::AuthError(AuthError::MissingPermission(
+                Cow::Borrowed(super::WRITE_PERMISSION),
+            )));
+        }
+    };
+
     let result = crate::models::comment::queries::update_one_with_parent(
-        &state.db, &auth, true, // TODO get the right value here
-        parent_id, child_id, payload,
+        &state.db, &auth, is_owner, parent_id, child_id, payload,
     )
     .await?;
 
@@ -170,10 +201,12 @@ async fn create_child_reaction(
     Path(parent_id): Path<PostId>,
     FormOrJson(mut payload): FormOrJson<ReactionCreatePayload>,
 ) -> Result<impl IntoResponse, Error> {
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
     payload.post_id = parent_id;
 
-    let mut tx = state.db.begin().await.change_context(Error::Db)?;
     let result = crate::models::reaction::queries::create(&mut *tx, &auth, payload).await?;
+
     tx.commit().await.change_context(Error::Db)?;
 
     Ok(Json(result))
@@ -188,9 +221,22 @@ async fn update_child_reaction(
     payload.id = Some(child_id);
     payload.post_id = parent_id;
 
+    let object_perm = queries::lookup_object_permissions(&state.db, &auth, parent_id)
+        .await?
+        .unwrap_or(ObjectPermission::Read);
+
+    let is_owner = match object_perm {
+        ObjectPermission::Owner => true,
+        ObjectPermission::Write => false,
+        ObjectPermission::Read => {
+            return Err(Error::AuthError(AuthError::MissingPermission(
+                Cow::Borrowed(super::WRITE_PERMISSION),
+            )));
+        }
+    };
+
     let result = crate::models::reaction::queries::update_one_with_parent(
-        &state.db, &auth, true, // TODO get the right value here
-        parent_id, child_id, payload,
+        &state.db, &auth, is_owner, parent_id, child_id, payload,
     )
     .await?;
 
@@ -237,14 +283,15 @@ async fn upsert_child_poll(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
-    let result = crate::models::poll::queries::update_with_parent(
+    let result = crate::models::poll::queries::upsert_with_parent(
         &state.db,
         auth.organization_id,
         object_perm == ObjectPermission::Owner,
         parent_id,
-        &Some(payload),
+        &payload,
     )
     .await?;
+
     Ok(Json(result))
 }
 
@@ -265,6 +312,59 @@ async fn delete_child_poll(
         parent_id,
     )
     .await?;
+
+    Ok(StatusCode::OK)
+}
+
+async fn list_child_post_image(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path(parent_id): Path<PostId>,
+    Query(mut qs): Query<crate::models::post_image::queries::ListQueryFilters>,
+) -> Result<impl IntoResponse, Error> {
+    qs.post_id = vec![parent_id];
+
+    let object = crate::models::post_image::queries::list(&state.db, &auth, &qs).await?;
+
+    Ok(Json(object))
+}
+
+async fn create_child_post_image(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path(parent_id): Path<PostId>,
+    Query(qs): Query<filigree::storage::QueryFilename>,
+    body: axum::body::Body,
+) -> Result<impl IntoResponse, Error> {
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
+    let result = crate::models::post_image::storage::upload_stream(
+        &state,
+        &auth,
+        &mut *tx,
+        parent_id,
+        None,
+        qs.filename.clone(),
+        None,
+        None,
+        body.into_data_stream(),
+    )
+    .await?;
+
+    tx.commit().await.change_context(Error::Db)?;
+
+    Ok(Json(result))
+}
+
+async fn delete_child_post_image(
+    State(state): State<ServerState>,
+    auth: Authed,
+    Path((parent_id, child_id)): Path<(PostId, PostImageId)>,
+) -> Result<impl IntoResponse, Error> {
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+    crate::models::post_image::storage::delete_by_id(&state, &auth, &mut *tx, parent_id, child_id)
+        .await?;
+    tx.commit().await.change_context(Error::Db)?;
 
     Ok(StatusCode::OK)
 }
@@ -364,6 +464,21 @@ pub fn create_routes() -> axum::Router<ServerState> {
         .route(
             "/posts/:id/poll",
             routing::delete(delete_child_poll)
+                .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
+        )
+        .route(
+            "/posts/:id/post_images",
+            routing::get(list_child_post_image)
+                .route_layer(has_any_permission(vec![READ_PERMISSION, "org_admin"])),
+        )
+        .route(
+            "/posts/:id/post_images",
+            routing::post(create_child_post_image)
+                .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
+        )
+        .route(
+            "/posts/:id/post_images/:child_id",
+            routing::delete(delete_child_post_image)
                 .route_layer(has_any_permission(vec![CREATE_PERMISSION, "org_admin"])),
         )
 }
@@ -481,8 +596,6 @@ mod test {
             assert_eq!(payload.body, added.body, "create result field body");
 
             assert_eq!(result["_permission"], "owner");
-
-            // Check that we don't return any fields which are supposed to be omitted.
         }
 
         let results = user
@@ -542,8 +655,6 @@ mod test {
             let ids = serde_json::json!(null);
 
             assert_eq!(result["poll_id"], ids, "field poll_id");
-
-            // Check that we don't return any fields which are supposed to be omitted.
         }
 
         let response = no_roles_user.client.get("posts").send().await.unwrap();
@@ -553,6 +664,8 @@ mod test {
         // TODO test list endpoint of child comment objects
 
         // TODO test list endpoint of child reaction objects
+
+        // TODO test list endpoint of child post_image objects
     }
 
     #[sqlx::test]
@@ -682,7 +795,7 @@ mod test {
 
         assert_eq!(result["poll"], serde_json::json!(null), "field poll");
 
-        // Check that we don't return any fields which are supposed to be omitted.
+        assert_eq!(result["images"], serde_json::json!([]), "field images");
 
         let result = user
             .client
@@ -730,8 +843,6 @@ mod test {
         );
         assert_eq!(result["_permission"], "write");
 
-        // Check that we don't return any fields which are supposed to be omitted.
-
         let response = no_roles_user
             .client
             .get(&format!("posts/{}", added_objects[1].1.id))
@@ -746,6 +857,8 @@ mod test {
         // TODO test get of child reaction object
 
         // TODO test get of child poll object
+
+        // TODO test get of child post_image object
     }
 
     #[sqlx::test]
@@ -863,6 +976,8 @@ mod test {
         // TODO test update endpoint of child reaction object
 
         // TODO test update endpoint of child poll object
+
+        // TODO test update endpoint of child post_image object
     }
 
     #[sqlx::test]
@@ -957,6 +1072,8 @@ mod test {
         // TODO test create endpoint of child reaction object
 
         // TODO test create endpoint of child poll object
+
+        // TODO test create endpoint of child post_image object
     }
 
     #[sqlx::test]
@@ -1015,5 +1132,7 @@ mod test {
         // TODO test delete endpoint of child reaction object
 
         // TODO test delete endpoint of child poll object
+
+        // TODO test delete endpoint of child post_image object
     }
 }

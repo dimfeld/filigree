@@ -6,6 +6,7 @@ use error_stack::Report;
 use filigree::{
     auth::AuthError,
     errors::{ErrorKind as FilErrorKind, ForceObfuscate, HttpError},
+    uploads::UploadInspectorError,
 };
 use thiserror::Error;
 
@@ -35,6 +36,10 @@ pub enum Error {
     NotFound(&'static str),
     #[error("Invalid filter")]
     Filter,
+    #[error("Failed to upload file")]
+    Upload,
+    #[error("Error communicating with object storage")]
+    Storage,
     /// A wrapper around a Report<Error> to let it be returned from an Axum handler, since we can't
     /// implement IntoResponse on Report
     #[error("{0}")]
@@ -60,14 +65,51 @@ impl From<Report<Error>> for Error {
 
 impl Error {
     /// If this Error contains a Report<Error>, find an inner HttpError whose error data we may want to use.
-    fn find_downstack_error(&self) -> Option<&AuthError> {
+    fn find_downstack_error_code(&self) -> Option<StatusCode> {
         let Error::WrapReport(report) = self else {
             return None;
         };
 
-        // Currently this only applies to AuthError. Other errors don't need to pass through their
-        // codes to the user.
-        report.downcast_ref::<AuthError>()
+        report.frames().find_map(|frame| {
+            filigree::downref_report_frame!(
+                frame,
+                |e| e.status_code(),
+                AuthError,
+                UploadInspectorError
+            )
+        })
+    }
+
+    /// If this Error contains a Report<Error>, find an inner HttpError whose error data we may want to use.
+    fn find_downstack_error_kind(&self) -> Option<&'static str> {
+        let Error::WrapReport(report) = self else {
+            return None;
+        };
+
+        report.frames().find_map(|frame| {
+            filigree::downref_report_frame!(
+                frame,
+                |e| e.error_kind(),
+                AuthError,
+                UploadInspectorError
+            )
+        })
+    }
+
+    /// If this Error contains a Report<Error>, find an inner HttpError whose error data we may want to use.
+    fn find_downstack_error_obfuscate(&self) -> Option<Option<ForceObfuscate>> {
+        let Error::WrapReport(report) = self else {
+            return None;
+        };
+
+        report.frames().find_map(|frame| {
+            filigree::downref_report_frame!(
+                frame,
+                |e| e.obfuscate(),
+                AuthError,
+                UploadInspectorError
+            )
+        })
     }
 }
 
@@ -75,31 +117,33 @@ impl HttpError for Error {
     type Detail = String;
 
     fn error_kind(&self) -> &'static str {
-        if let Some(e) = self.find_downstack_error() {
-            return e.error_kind();
+        if let Some(error_kind) = self.find_downstack_error_kind() {
+            return error_kind;
         }
 
         match self {
             Error::WrapReport(e) => e.current_context().error_kind(),
+            Error::Upload => FilErrorKind::UploadFailed.as_str(),
             Error::DbInit => FilErrorKind::DatabaseInit.as_str(),
             Error::Db => FilErrorKind::Database.as_str(),
-            Error::TaskQueue => "task_queue",
+            Error::TaskQueue => ErrorKind::TaskQueue.as_str(),
             Error::ServerStart => FilErrorKind::ServerStart.as_str(),
             Error::NotFound(_) => FilErrorKind::NotFound.as_str(),
             Error::Shutdown => FilErrorKind::Shutdown.as_str(),
-            Error::ScheduledTask => "scheduled_task",
-            Error::Filter => "invalid_filter",
+            Error::ScheduledTask => ErrorKind::ScheduledTask.as_str(),
+            Error::Filter => ErrorKind::Filter.as_str(),
             Error::AuthError(e) => e.error_kind(),
-            Error::AuthSubsystem => "auth",
+            Error::AuthSubsystem => ErrorKind::AuthSubsystem.as_str(),
             Error::Login => FilErrorKind::Unauthenticated.as_str(),
             Error::MissingPermission(_) => FilErrorKind::Unauthenticated.as_str(),
             Error::InvalidHostHeader => FilErrorKind::InvalidHostHeader.as_str(),
+            Error::Storage => FilErrorKind::StorageWrite.as_str(),
         }
     }
 
     fn obfuscate(&self) -> Option<ForceObfuscate> {
-        if let Some(e) = self.find_downstack_error() {
-            return e.obfuscate();
+        if let Some(obfuscate) = self.find_downstack_error_obfuscate() {
+            return obfuscate;
         }
 
         match self {
@@ -113,13 +157,14 @@ impl HttpError for Error {
     }
 
     fn status_code(&self) -> StatusCode {
-        if let Some(e) = self.find_downstack_error() {
-            return e.status_code();
+        if let Some(status_code) = self.find_downstack_error_code() {
+            return status_code;
         }
 
         match self {
             Error::WrapReport(e) => e.current_context().status_code(),
             Error::AuthError(e) => e.status_code(),
+            Error::Upload => StatusCode::INTERNAL_SERVER_ERROR,
             Error::DbInit => StatusCode::INTERNAL_SERVER_ERROR,
             Error::Db => StatusCode::INTERNAL_SERVER_ERROR,
             Error::TaskQueue => StatusCode::INTERNAL_SERVER_ERROR,
@@ -132,6 +177,7 @@ impl HttpError for Error {
             Error::MissingPermission(_) => StatusCode::FORBIDDEN,
             Error::Login => StatusCode::UNAUTHORIZED,
             Error::InvalidHostHeader => StatusCode::BAD_REQUEST,
+            Error::Storage => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 

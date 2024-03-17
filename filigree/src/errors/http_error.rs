@@ -90,6 +90,8 @@ pub enum ErrorKind {
     InvalidHostHeader,
     /// The token provided in a reset request was invalid or expired
     InvalidToken,
+    /// I/O error
+    IO,
     /// The requested operation requires a permission that the client does not have
     MissingPermission,
     /// The requested object was not found
@@ -110,6 +112,8 @@ pub enum ErrorKind {
     PasswordConfirmMismatch,
     /// Internal error with the password hashing mechanism
     PasswordHasherError,
+    /// Error reading the request body
+    RequestRead,
     /// Failed to start the server
     ServerStart,
     /// Internal error with the session backend
@@ -118,8 +122,14 @@ pub enum ErrorKind {
     Shutdown,
     /// Creation of new user accounts is disabled
     SignupDisabled,
+    /// Error writing storage
+    StorageWrite,
     /// The user is not logged in
     Unauthenticated,
+    /// An upload failed in some way not covered by a more specific error message
+    UploadFailed,
+    /// An uploaded file was larger than the configured limit
+    UploadTooLarge,
     /// Internal error while creating a user
     UserCreationError,
     /// The requested user does not exist
@@ -142,6 +152,7 @@ impl ErrorKind {
             Self::InvalidApiKey => "invalid_api_key",
             Self::InvalidHostHeader => "invalid_host_header",
             Self::InvalidToken => "invalid_token",
+            Self::IO => "io_error",
             Self::MissingPermission => "missing_permission",
             Self::NotFound => "not_found",
             Self::NotVerified => "not_verified",
@@ -152,11 +163,15 @@ impl ErrorKind {
             Self::OrderBy => "order_by",
             Self::PasswordConfirmMismatch => "password_mismatch",
             Self::PasswordHasherError => "password_hash_internal",
+            Self::RequestRead => "request_read",
             Self::ServerStart => "server",
             Self::SessionBackend => "session_backend",
             Self::Shutdown => "shutdown",
             Self::SignupDisabled => "signup_disabled",
+            Self::StorageWrite => "storage_write",
             Self::Unauthenticated => "unauthenticated",
+            Self::UploadFailed => "upload_failed",
+            Self::UploadTooLarge => "upload_too_large",
             Self::UserCreationError => "user_creation_error",
             Self::UserNotFound => "user_not_found",
         }

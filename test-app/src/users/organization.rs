@@ -22,6 +22,8 @@ const USER_DEFAULT_PERMISSIONS: &[&str] = &[
     "Poll::write",
     "Post::read",
     "Post::write",
+    "PostImage::read",
+    "PostImage::write",
     "Reaction::read",
     "Reaction::write",
     "Report::read",

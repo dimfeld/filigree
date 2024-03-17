@@ -117,6 +117,9 @@ where
     multipart: axum_extra::extract::Multipart,
     data: serde_json::Value,
     _marker: PhantomData<T>,
+    /// If false (the default), then the processor will return an error if it encounters
+    /// a file upload in a call to `finish`. If true, the file will be silently skipped.
+    pub may_skip_files: bool,
 }
 
 impl<T> MultipartProcessor<T>
@@ -146,7 +149,9 @@ where
         while let Some(field) = self.multipart.next_field().await? {
             match handle_multipart_field(field).await? {
                 MultipartField::File(_) => {
-                    // Ignoring any other files the user didn't handle with [next_file].
+                    if !self.may_skip_files {
+                        return Err(Rejection::TooManyFiles);
+                    }
                 }
                 MultipartField::Data(key, value) => {
                     coerce_and_push_array(&mut self.data, key, json!(value));
@@ -170,6 +175,7 @@ where
             multipart,
             data: json!({}),
             _marker: PhantomData,
+            may_skip_files: false,
         }
     }
 }
@@ -281,6 +287,110 @@ mod test {
                     data: FileData(Vec::from("<b>Some html</b>".as_bytes()))
                 }),
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn multipart_processor() {
+        let req = get_req();
+
+        #[derive(Deserialize, JsonSchema, Debug, PartialEq, Eq)]
+        struct Data {
+            name: String,
+            agreed: bool,
+        }
+
+        let multipart = axum_extra::extract::Multipart::from_request(req, &())
+            .await
+            .unwrap();
+        let mut processor = super::MultipartProcessor::<Data>::from(multipart);
+
+        let mut index = 0;
+        while let Some(file) = processor.next_file().await.unwrap() {
+            match index {
+                0 => {
+                    assert_eq!(file.file_name(), Some("a.txt"));
+                    assert_eq!(file.content_type(), Some("text/plain"));
+                    assert_eq!(file.name(), Some("file1"));
+                    assert_eq!(file.text().await.unwrap(), "Some text");
+                }
+                1 => {
+                    assert_eq!(file.file_name(), Some("a.html"));
+                    assert_eq!(file.content_type(), Some("text/html"));
+                    assert_eq!(file.name(), Some("file2"));
+                    assert_eq!(file.text().await.unwrap(), "<b>Some html</b>");
+                }
+                _ => panic!("Saw too many files"),
+            };
+
+            index += 1;
+        }
+
+        let output = processor.finish().await.unwrap();
+        assert_eq!(
+            output,
+            Data {
+                name: "test".to_string(),
+                agreed: true
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn multipart_processor_too_many_uploads() {
+        let req = get_req();
+
+        #[derive(Deserialize, JsonSchema, Debug, PartialEq, Eq)]
+        struct Data {
+            name: String,
+            agreed: bool,
+        }
+
+        let multipart = axum_extra::extract::Multipart::from_request(req, &())
+            .await
+            .unwrap();
+        let mut processor = super::MultipartProcessor::<Data>::from(multipart);
+
+        let file = processor.next_file().await.unwrap().unwrap();
+        assert_eq!(file.file_name(), Some("a.txt"));
+        assert_eq!(file.content_type(), Some("text/plain"));
+        assert_eq!(file.name(), Some("file1"));
+        assert_eq!(file.text().await.unwrap(), "Some text");
+
+        let err = processor.finish().await.expect_err("Finishing");
+        assert!(matches!(err, Rejection::TooManyFiles));
+    }
+
+    /// Make sure it works to skip a file
+    #[tokio::test]
+    async fn multipart_processor_may_skip_files() {
+        let req = get_req();
+
+        #[derive(Deserialize, JsonSchema, Debug, PartialEq, Eq)]
+        struct Data {
+            name: String,
+            agreed: bool,
+        }
+
+        let multipart = axum_extra::extract::Multipart::from_request(req, &())
+            .await
+            .unwrap();
+        let mut processor = super::MultipartProcessor::<Data>::from(multipart);
+        processor.may_skip_files = true;
+
+        let file = processor.next_file().await.unwrap().unwrap();
+        assert_eq!(file.file_name(), Some("a.txt"));
+        assert_eq!(file.content_type(), Some("text/plain"));
+        assert_eq!(file.name(), Some("file1"));
+        assert_eq!(file.text().await.unwrap(), "Some text");
+
+        let output = processor.finish().await.unwrap();
+        assert_eq!(
+            output,
+            Data {
+                name: "test".to_string(),
+                agreed: true
+            }
         );
     }
 }

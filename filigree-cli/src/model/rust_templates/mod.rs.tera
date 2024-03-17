@@ -1,7 +1,10 @@
-{% if has_any_endpoints %}
+{% if has_any_endpoints -%}
 pub mod endpoints;
-{% endif %}
+{%- endif -%}
 pub mod queries;
+{% if file_upload -%}
+pub mod storage;
+{%- endif -%}
 #[cfg(test)]
 pub mod testing;
 pub mod types;

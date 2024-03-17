@@ -1,4 +1,6 @@
-#![allow(unused_imports, dead_code)]
+#![allow(unused_imports, unused_variables, dead_code)]
+use std::borrow::Cow;
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -8,7 +10,10 @@ use axum::{
 use axum_extra::extract::Query;
 use axum_jsonschema::Json;
 use error_stack::ResultExt;
-use filigree::{auth::ObjectPermission, extract::FormOrJson};
+use filigree::{
+    auth::{AuthError, ObjectPermission},
+    extract::FormOrJson,
+};
 use tracing::{event, Level};
 
 use super::{
@@ -89,6 +94,7 @@ async fn delete(
     }
 
     tx.commit().await.change_context(Error::Db)?;
+
     Ok(StatusCode::OK)
 }
 
@@ -111,10 +117,12 @@ async fn create_child_report_section(
     Path(parent_id): Path<ReportId>,
     FormOrJson(mut payload): FormOrJson<ReportSectionCreatePayload>,
 ) -> Result<impl IntoResponse, Error> {
+    let mut tx = state.db.begin().await.change_context(Error::Db)?;
+
     payload.report_id = parent_id;
 
-    let mut tx = state.db.begin().await.change_context(Error::Db)?;
     let result = crate::models::report_section::queries::create(&mut *tx, &auth, payload).await?;
+
     tx.commit().await.change_context(Error::Db)?;
 
     Ok(Json(result))
@@ -129,9 +137,22 @@ async fn update_child_report_section(
     payload.id = Some(child_id);
     payload.report_id = parent_id;
 
+    let object_perm = queries::lookup_object_permissions(&state.db, &auth, parent_id)
+        .await?
+        .unwrap_or(ObjectPermission::Read);
+
+    let is_owner = match object_perm {
+        ObjectPermission::Owner => true,
+        ObjectPermission::Write => false,
+        ObjectPermission::Read => {
+            return Err(Error::AuthError(AuthError::MissingPermission(
+                Cow::Borrowed(super::WRITE_PERMISSION),
+            )));
+        }
+    };
+
     let result = crate::models::report_section::queries::update_one_with_parent(
-        &state.db, &auth, true, // TODO get the right value here
-        parent_id, child_id, payload,
+        &state.db, &auth, is_owner, parent_id, child_id, payload,
     )
     .await?;
 
@@ -324,8 +345,6 @@ mod test {
             assert_eq!(payload.ui, added.ui, "create result field ui");
 
             assert_eq!(result["_permission"], "owner");
-
-            // Check that we don't return any fields which are supposed to be omitted.
         }
 
         let results = user
@@ -394,8 +413,6 @@ mod test {
                 result["report_section_ids"], ids,
                 "field report_section_ids"
             );
-
-            // Check that we don't return any fields which are supposed to be omitted.
         }
 
         let response = no_roles_user.client.get("reports").send().await.unwrap();
@@ -533,8 +550,6 @@ mod test {
             "field report_sections"
         );
 
-        // Check that we don't return any fields which are supposed to be omitted.
-
         let result = user
             .client
             .get(&format!("reports/{}", added_objects[1].1.id))
@@ -585,8 +600,6 @@ mod test {
             "get result field ui"
         );
         assert_eq!(result["_permission"], "write");
-
-        // Check that we don't return any fields which are supposed to be omitted.
 
         let response = no_roles_user
             .client
