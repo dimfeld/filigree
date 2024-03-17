@@ -1,4 +1,6 @@
 #![allow(unused_imports, dead_code)]
+use std::borrow::Cow;
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -8,7 +10,10 @@ use axum::{
 use axum_extra::extract::Query;
 use axum_jsonschema::Json;
 use error_stack::ResultExt;
-use filigree::{auth::ObjectPermission, extract::FormOrJson};
+use filigree::{
+    auth::{AuthError, ObjectPermission},
+    extract::FormOrJson,
+};
 use tracing::{event, Level};
 
 use super::{
@@ -144,9 +149,22 @@ async fn update_child_comment(
     payload.id = Some(child_id);
     payload.post_id = parent_id;
 
+    let object_perm = queries::lookup_object_permissions(&state.db, &auth, parent_id)
+        .await?
+        .unwrap_or(ObjectPermission::Read);
+
+    let is_owner = match object_perm {
+        ObjectPermission::Owner => true,
+        ObjectPermission::Write => false,
+        ObjectPermission::Read => {
+            return Err(Error::AuthError(AuthError::MissingPermission(
+                Cow::Borrowed(super::WRITE_PERMISSION),
+            )));
+        }
+    };
+
     let result = crate::models::comment::queries::update_one_with_parent(
-        &state.db, &auth, true, // TODO get the right value here
-        parent_id, child_id, payload,
+        &state.db, &auth, is_owner, parent_id, child_id, payload,
     )
     .await?;
 
@@ -203,9 +221,22 @@ async fn update_child_reaction(
     payload.id = Some(child_id);
     payload.post_id = parent_id;
 
+    let object_perm = queries::lookup_object_permissions(&state.db, &auth, parent_id)
+        .await?
+        .unwrap_or(ObjectPermission::Read);
+
+    let is_owner = match object_perm {
+        ObjectPermission::Owner => true,
+        ObjectPermission::Write => false,
+        ObjectPermission::Read => {
+            return Err(Error::AuthError(AuthError::MissingPermission(
+                Cow::Borrowed(super::WRITE_PERMISSION),
+            )));
+        }
+    };
+
     let result = crate::models::reaction::queries::update_one_with_parent(
-        &state.db, &auth, true, // TODO get the right value here
-        parent_id, child_id, payload,
+        &state.db, &auth, is_owner, parent_id, child_id, payload,
     )
     .await?;
 
@@ -565,8 +596,6 @@ mod test {
             assert_eq!(payload.body, added.body, "create result field body");
 
             assert_eq!(result["_permission"], "owner");
-
-            // Check that we don't return any fields which are supposed to be omitted.
         }
 
         let results = user
@@ -626,8 +655,6 @@ mod test {
             let ids = serde_json::json!(null);
 
             assert_eq!(result["poll_id"], ids, "field poll_id");
-
-            // Check that we don't return any fields which are supposed to be omitted.
         }
 
         let response = no_roles_user.client.get("posts").send().await.unwrap();
@@ -770,8 +797,6 @@ mod test {
 
         assert_eq!(result["images"], serde_json::json!([]), "field images");
 
-        // Check that we don't return any fields which are supposed to be omitted.
-
         let result = user
             .client
             .get(&format!("posts/{}", added_objects[1].1.id))
@@ -817,8 +842,6 @@ mod test {
             "get result field body"
         );
         assert_eq!(result["_permission"], "write");
-
-        // Check that we don't return any fields which are supposed to be omitted.
 
         let response = no_roles_user
             .client

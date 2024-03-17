@@ -4,13 +4,15 @@ use axum::{extract::{State, Path}, http::StatusCode, response::IntoResponse, rou
 use axum_jsonschema::Json;
 use axum_extra::extract::Query;
 use error_stack::ResultExt;
-use filigree::{auth::ObjectPermission, extract::FormOrJson};
+use filigree::{auth::{AuthError, ObjectPermission}, extract::FormOrJson};
 use tracing::{event, Level};
 
 use crate::{Error, auth::{Authed, has_any_permission}, server::ServerState};
 {{imports}}
 
 use super::{queries, types::*, {{id_type}}, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION, WRITE_PERMISSION };
+
+use std::borrow::Cow;
 
 async fn get(
     State(state): State<ServerState>,
@@ -185,10 +187,27 @@ async fn update_child_{{c.module}}(
     payload.id = Some(child_id);
     payload.{{c.parent_field}} = parent_id;
 
+    let object_perm = queries::lookup_object_permissions(
+        &state.db,
+        &auth,
+        parent_id,
+    ).await?
+    .unwrap_or(ObjectPermission::Read);
+
+    let is_owner = match object_perm {
+        ObjectPermission::Owner => true,
+        ObjectPermission::Write => false,
+        ObjectPermission::Read => {
+            return Err(Error::AuthError(AuthError::MissingPermission(
+                Cow::Borrowed(super::WRITE_PERMISSION),
+            )));
+        }
+    };
+
     let result = crate::models::{{c.module}}::queries::update_one_with_parent(
         &state.db,
         &auth,
-        true, // TODO get the right value here
+        is_owner,
         parent_id,
         child_id,
         payload).await?;
@@ -536,7 +555,6 @@ mod test {
             {%- endfor %}
             assert_eq!(result["_permission"], "owner");
 
-            // Check that we don't return any fields which are supposed to be omitted.
             {% for field in fields | filter (attribute="owner_read", value=false) -%}
             assert_eq!(
                 result.get("{{field.rust_name}}"),
@@ -629,7 +647,6 @@ mod test {
             {% endif %}
             {% endfor %}
 
-            // Check that we don't return any fields which are supposed to be omitted.
             {% for field in fields | filter (attribute="user_read", value=false) -%}
             assert_eq!(
                 result.get("{{field.rust_name}}"),
@@ -790,7 +807,6 @@ mod test {
         {% endif %}
         {% endfor %}
 
-        // Check that we don't return any fields which are supposed to be omitted.
         {% for field in fields | filter (attribute="owner_read", value=false) -%}
         assert_eq!(
             result.get("{{field.rust_name}}"),
@@ -822,7 +838,6 @@ mod test {
         {%- endfor %}
         assert_eq!(result["_permission"], "write");
 
-        // Check that we don't return any fields which are supposed to be omitted.
         {% for field in fields | filter (attribute="user_read", value=false) -%}
         assert_eq!(
             result.get("{{field.rust_name}}"),
