@@ -21,6 +21,9 @@ pub struct ModelField {
     /// The Rust type for this field. If omitted, the type will be inferred from the SQL
     /// type. This type should be fully qualified, e.g. `crate::MyType`.
     pub rust_type: Option<String>,
+    /// The Typescript type for this field. If omitted, the type will be inferred from the SQL
+    /// type.
+    pub ts_type: Option<String>,
 
     #[serde(default)]
     pub nullable: bool,
@@ -107,6 +110,22 @@ impl ModelField {
             format!("Option<{}>", self.base_rust_type()).into()
         } else {
             self.base_rust_type().into()
+        }
+    }
+
+    /// The Typescript type of this field.
+    pub fn base_ts_type(&self) -> &str {
+        self.ts_type
+            .as_deref()
+            .unwrap_or_else(|| self.typ.to_ts_type())
+    }
+
+    /// The Typescript type of this field accounting for nullability
+    pub fn ts_type(&self) -> Cow<str> {
+        if self.nullable {
+            format!("Option<{}>", self.base_ts_type()).into()
+        } else {
+            self.base_ts_type().into()
         }
     }
 
@@ -313,6 +332,22 @@ impl SqlType {
             SqlType::Date => "chrono::NaiveDate",
             SqlType::Uuid => "uuid::Uuid",
             SqlType::Bytes => "Vec<u8>",
+        }
+    }
+
+    /// Convert the type to Typescript syntax
+    pub fn to_ts_type(&self) -> &'static str {
+        match self {
+            SqlType::Text => "string",
+            SqlType::Int => "number",
+            SqlType::BigInt => "number",
+            SqlType::Float => "number",
+            SqlType::Boolean => "boolean",
+            SqlType::Json => "any",
+            SqlType::Timestamp => "Date",
+            SqlType::Date => "Date",
+            SqlType::Uuid => "string",
+            SqlType::Bytes => "Uint8Array",
         }
     }
 
