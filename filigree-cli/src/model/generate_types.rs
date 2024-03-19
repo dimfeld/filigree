@@ -16,7 +16,7 @@ struct GeneratedStruct {
     fields: Vec<ModelField>,
     add_permissions_field: bool,
     rust_contents: String,
-    ts_contents: String,
+    zod_contents: String,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -137,6 +137,7 @@ impl<'a> ModelGenerator<'a> {
 
         struct GroupedStruct {
             fields: Vec<ModelField>,
+            ts_contents: String,
             has_permissions_field: bool,
             flags: ImplFlags,
             suffixes: Vec<&'static str>,
@@ -155,6 +156,7 @@ impl<'a> ModelGenerator<'a> {
                     fields: fields.fields,
                     has_permissions_field: fields.add_permissions_field,
                     flags,
+                    ts_contents: fields.zod_contents,
                     suffixes: Vec::new(),
                 });
             entry.flags = entry.flags.or(&flags);
@@ -175,6 +177,7 @@ impl<'a> ModelGenerator<'a> {
                     rust_fields_content,
                     GroupedStruct {
                         fields,
+                        ts_contents: zod_contents,
                         has_permissions_field,
                         flags,
                         suffixes,
@@ -208,6 +211,7 @@ impl<'a> ModelGenerator<'a> {
                     json!({
                         "name": name,
                         "rust_fields_content": rust_fields_content,
+                        "zod_fields_content": zod_contents,
                         "fields": field_info,
                         "aliases": aliases,
                         "impl_json_decode": flags.json_decode,
@@ -271,36 +275,32 @@ impl<'a> ModelGenerator<'a> {
             })
             .join("\n");
 
-        let ts_contents = fields
+        let zod_contents = fields
             .iter()
             .map(|f| {
                 let ts_type = if f.rust_type().starts_with("Option<Option<") {
-                    Cow::Owned(format!("{} | null", f.ts_type()))
+                    Cow::Owned(format!("{}.nullish()", f.base_zod_type()))
                 } else {
-                    f.ts_type()
+                    f.zod_type()
                 };
 
-                format!(
-                    "  {ts_field_name}{nullable}: {ts_type},",
-                    ts_field_name = f.name,
-                    nullable = if f.nullable { "?" } else { "" },
-                )
+                format!("  {ts_field_name}: {ts_type},", ts_field_name = f.name)
             })
             .join("\n");
 
-        let (ts_contents, rust_contents) = if add_permissions_field {
+        let (zod_contents, rust_contents) = if add_permissions_field {
             (
-                format!("{ts_contents}\n_permission: ObjectPermission,"),
+                format!("{zod_contents}\n_permission: ObjectPermission,"),
                 format!("{rust_contents}\npub _permission: ObjectPermission,"),
             )
         } else {
-            (ts_contents, rust_contents)
+            (zod_contents, rust_contents)
         };
 
         GeneratedStruct {
             fields,
             add_permissions_field,
-            ts_contents,
+            zod_contents,
             rust_contents,
         }
     }

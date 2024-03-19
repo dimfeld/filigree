@@ -1,0 +1,21 @@
+import { z } from 'zod';
+
+export const ObjectPermission = z.enum([
+  "owner",
+  "write",
+  "read"
+]);
+
+{% for model in models %}
+{% for struct in model.structs %}
+export const {{struct.name}}Schema = z.object({
+  {{struct.zod_fields_content}}
+});
+
+export type {{struct.name}} = z.infer<typeof {{struct.name}}Schema>;
+{% for alias in struct.aliases -%}
+export type {{alias}} = {{struct.name}};
+{% endfor %}
+
+{%- endfor %}
+{%- endfor %}

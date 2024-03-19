@@ -9,6 +9,8 @@ use crate::Error;
 pub struct Formatters {
     /// The formatter to use for Rust code. Defaults to rustfmt.
     pub rust: Option<Vec<String>>,
+    /// The formatter to use for Javascript and Typescript code. Defaults to pretter
+    pub js: Option<Vec<String>>,
     /// The formatter to use for SQL files.
     pub sql: Option<Vec<String>>,
 }
@@ -19,6 +21,8 @@ impl Formatters {
             self.sql.clone()
         } else if filename.ends_with(".rs") {
             self.rust.clone().or(Some(vec!["rustfmt".to_string()]))
+        } else if filename.ends_with(".ts") || filename.ends_with(".js") {
+            self.js.clone().or(Some(vec!["prettier".to_string()]))
         } else {
             None
         };

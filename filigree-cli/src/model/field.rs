@@ -23,7 +23,7 @@ pub struct ModelField {
     pub rust_type: Option<String>,
     /// The Typescript type for this field. If omitted, the type will be inferred from the SQL
     /// type.
-    pub ts_type: Option<String>,
+    pub zod_type: Option<String>,
 
     #[serde(default)]
     pub nullable: bool,
@@ -114,18 +114,18 @@ impl ModelField {
     }
 
     /// The Typescript type of this field.
-    pub fn base_ts_type(&self) -> &str {
-        self.ts_type
+    pub fn base_zod_type(&self) -> &str {
+        self.zod_type
             .as_deref()
-            .unwrap_or_else(|| self.typ.to_ts_type())
+            .unwrap_or_else(|| self.typ.to_zod_type())
     }
 
     /// The Typescript type of this field accounting for nullability
-    pub fn ts_type(&self) -> Cow<str> {
+    pub fn zod_type(&self) -> Cow<str> {
         if self.nullable {
-            format!("Option<{}>", self.base_ts_type()).into()
+            format!("{}.optional()", self.base_zod_type()).into()
         } else {
-            self.base_ts_type().into()
+            self.base_zod_type().into()
         }
     }
 
@@ -336,18 +336,18 @@ impl SqlType {
     }
 
     /// Convert the type to Typescript syntax
-    pub fn to_ts_type(&self) -> &'static str {
+    pub fn to_zod_type(&self) -> &'static str {
         match self {
-            SqlType::Text => "string",
-            SqlType::Int => "number",
-            SqlType::BigInt => "number",
-            SqlType::Float => "number",
-            SqlType::Boolean => "boolean",
-            SqlType::Json => "any",
-            SqlType::Timestamp => "Date",
-            SqlType::Date => "Date",
-            SqlType::Uuid => "string",
-            SqlType::Bytes => "Uint8Array",
+            SqlType::Text => "z.string()",
+            SqlType::Int => "z.number().int()",
+            SqlType::BigInt => "z.number().int()",
+            SqlType::Float => "z.number()",
+            SqlType::Boolean => "z.boolean()",
+            SqlType::Json => "z.any()",
+            SqlType::Timestamp => "z.string().datetime()",
+            SqlType::Date => "z.string()",
+            SqlType::Uuid => "z.string().uuid()",
+            SqlType::Bytes => "z.string()",
         }
     }
 
