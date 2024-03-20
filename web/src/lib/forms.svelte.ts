@@ -1,7 +1,7 @@
 import type { ModelDefinition } from './model.js';
+import { z } from 'zod';
 import { type HttpMethod, client } from './client.js';
 import { isErrorResponse, type ErrorField, type ErrorResponse } from './requests.js';
-import type { ErrorObject } from 'ajv';
 import { applyAction, deserialize, enhance } from '$app/forms';
 import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 import { invalidateAll } from '$app/navigation';
@@ -42,7 +42,7 @@ function isValidationError<T extends object>(
 
 export type SubmitState = 'idle' | 'loading' | 'slow';
 
-export interface FormOptions<T extends object> {
+export interface FormOptions<T extends z.AnyZodObject> {
   model?: ModelDefinition<T>;
   /** If the form data is nested or flat. If omitted, it will be inferred from the model. */
   nested?: boolean;
@@ -69,18 +69,19 @@ export interface FormOptions<T extends object> {
   onError?: (result: ActionResult) => void | ActionResult;
 }
 
-function processAjvError(errors: ErrorObject[]): FormErrors {
+function processZodError(errors: z.ZodIssue[]): FormErrors {
   let output: Record<string, string[]> = {};
 
   for (let error of errors) {
     let message = error.message ?? 'Invalid';
 
-    let existing = output[error.instancePath];
+    let path = error.path.join('/');
+    let existing = output[path];
     if (existing) {
       existing.push(message);
     } else {
       // TODO standardize messages with server version. Maybe just use WASM?
-      output[error.instancePath] = [message];
+      output[path] = [message];
     }
   }
 
@@ -90,7 +91,7 @@ function processAjvError(errors: ErrorObject[]): FormErrors {
   };
 }
 
-class State<T extends object> {
+class State<T extends z.AnyZodObject> {
   message: string | undefined = $state();
   errors: Readonly<FormErrors | null | undefined> = $state(null);
   fieldErrors = $derived(
@@ -128,17 +129,17 @@ class State<T extends object> {
   }
 }
 
-interface InternalOptions<T extends object> {
+interface InternalOptions<T extends z.AnyZodObject> {
   state: State<T>;
   options: FormOptions<T>;
   slowLoadThreshold: number;
 }
 
-export function manageForm<T extends object>(options: FormOptions<T>) {
+export function manageForm<T extends z.AnyZodObject>(options: FormOptions<T>) {
   return new State(options);
 }
 
-function validate<T extends object>(
+function validate<T extends z.AnyZodObject>(
   model: ModelDefinition<T> | undefined,
   options: InternalOptions<T>
 ) {
@@ -148,9 +149,9 @@ function validate<T extends object>(
 
   let errors: FormErrors | undefined;
 
-  let validated = model.validator(options.state.formData);
-  if (!validated) {
-    errors = processAjvError(model.validator.errors ?? []);
+  let validated = model.model.safeParse(options.state.formData);
+  if (!validated.success) {
+    errors = processZodError(validated.error.issues);
   }
 
   let extraErrors = options.options.validate?.(options.state.formData);
@@ -189,7 +190,7 @@ function validate<T extends object>(
   return true;
 }
 
-function trackSlowLoading<T extends object>(options: InternalOptions<T>) {
+function trackSlowLoading<T extends z.AnyZodObject>(options: InternalOptions<T>) {
   return setTimeout(() => {
     if (options.state.loadingState === 'loading') {
       options.state.loadingState = 'slow';
@@ -197,7 +198,7 @@ function trackSlowLoading<T extends object>(options: InternalOptions<T>) {
   }, options.slowLoadThreshold);
 }
 
-function resolveSuccessHookReturnValue<T extends object>(
+function resolveSuccessHookReturnValue<T extends z.AnyZodObject>(
   options: InternalOptions<T>,
   retVal: { resetForm?: boolean; invalidateAll?: boolean } | void
 ) {
@@ -249,7 +250,7 @@ function errorStateFromErrorResponse<T extends object>(
   }
 }
 
-function maybeHandleFailureResult<T extends object>(
+function maybeHandleFailureResult<T extends z.AnyZodObject>(
   options: InternalOptions<T>,
   result: ActionResult
 ) {
@@ -264,7 +265,7 @@ function maybeHandleFailureResult<T extends object>(
   state.errors = errorStateFromErrorResponse(data);
 }
 
-function plainEnhance<T extends object>(options: InternalOptions<T>) {
+function plainEnhance<T extends z.AnyZodObject>(options: InternalOptions<T>) {
   const {
     state,
     options: { model, onSubmit, onSuccess, onError },
@@ -336,7 +337,7 @@ function plainEnhance<T extends object>(options: InternalOptions<T>) {
 }
 
 // For nested data, we need to send as JSON.
-function nestedEnhance<T extends object>(options: InternalOptions<T>) {
+function nestedEnhance<T extends z.AnyZodObject>(options: InternalOptions<T>) {
   const {
     state,
     options: { model, onSubmit, onSuccess, onError },
