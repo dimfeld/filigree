@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::path::PathBuf;
 
 use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
@@ -7,14 +7,15 @@ use rayon::prelude::*;
 
 use crate::{
     config::Config,
-    templates::{Renderer, RootApiTemplates},
+    model::generator::ModelGenerator,
+    templates::{Renderer, RootApiTemplates, RootWebTemplates},
     Error, RenderedFile, RenderedFileLocation,
 };
 
 pub fn render_files(
     crate_name: &str,
     config: &Config,
-    models: &HashMap<String, tera::Context>,
+    models: &[ModelGenerator],
     renderer: &Renderer,
 ) -> Result<Vec<RenderedFile>, Report<Error>> {
     let mut context = tera::Context::new();
@@ -46,21 +47,37 @@ pub fn render_files(
     context.insert("users", &config.users);
     context.insert("db", &config.database);
 
-    let user_model = models.get("User").expect("User model not found");
-    let role_model = models.get("Role").expect("Role model not found");
+    let user_model = models
+        .iter()
+        .find(|m| m.name == "User")
+        .expect("User model not found");
+    let role_model = models
+        .iter()
+        .find(|m| m.name == "Role")
+        .expect("Role model not found");
     let org_model = models
-        .get("Organization")
+        .iter()
+        .find(|m| m.name == "Organization")
         .expect("Organization model not found");
 
     let all_models = models
         .iter()
-        .sorted_by(|(m1, _), (m2, _)| m1.cmp(m2))
-        .map(|(_, value)| value.clone().into_json())
+        .map(|gen| gen.template_context().clone().into_json())
         .collect::<Vec<_>>();
+
     context.insert("models", &all_models);
-    context.insert("user_model", &user_model.clone().into_json());
-    context.insert("role_model", &role_model.clone().into_json());
-    context.insert("org_model", &org_model.clone().into_json());
+    context.insert(
+        "user_model",
+        &user_model.template_context().clone().into_json(),
+    );
+    context.insert(
+        "role_model",
+        &role_model.template_context().clone().into_json(),
+    );
+    context.insert(
+        "org_model",
+        &org_model.template_context().clone().into_json(),
+    );
 
     let storage_context = config
         .storage
@@ -72,7 +89,7 @@ pub fn render_files(
 
     let files = RootApiTemplates::iter()
         .map(|f| (RenderedFileLocation::Api, f))
-        // .chain(RootWebTemplates::iter().map(|f| (RenderedFileLocation::Web, f)))
+        .chain(RootWebTemplates::iter().map(|f| (RenderedFileLocation::Web, f)))
         .collect::<Vec<_>>();
     let mut output = files
         .into_par_iter()

@@ -9,6 +9,7 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
         name: name.to_string(),
         typ,
         rust_type: None,
+        zod_type: None,
         nullable: false,
         unique: false,
         filterable: super::field::FilterableType::None,

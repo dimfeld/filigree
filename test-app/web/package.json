@@ -14,6 +14,10 @@
     "test:integration": "playwright test",
     "test:unit": "vitest"
   },
+  "dependencies": {
+    "filigree-web": "../../web",
+    "zod": "^3.22.4"
+  },
   "devDependencies": {
     "@playwright/test": "^1.28.1",
     "@sveltejs/adapter-node": "^3.0.1",

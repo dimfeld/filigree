@@ -69,12 +69,10 @@ impl<'a> Renderer<'a> {
     }
 }
 
-/*
 #[derive(RustEmbed)]
 #[prefix = "root/"]
 #[folder = "$CARGO_MANIFEST_DIR/src/root/web_templates"]
 pub struct RootWebTemplates;
-*/
 
 #[derive(RustEmbed)]
 #[prefix = "root/"]
@@ -116,7 +114,7 @@ fn create_tera() -> Tera {
     let template_files = get_files::<RootApiTemplates>()
         .chain(get_files::<ModelRustTemplates>())
         .chain(get_files::<ModelSqlTemplates>())
-        // .chain(get_files::<RootWebTemplates>())
+        .chain(get_files::<RootWebTemplates>())
         // .chain(get_files::<ModelWebTemplates>())
         .collect::<Vec<_>>();
     let res = tera.add_raw_templates(template_files);

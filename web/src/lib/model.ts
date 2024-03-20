@@ -1,8 +1,15 @@
-import AjvModule from 'ajv';
+import { z } from 'zod';
 
-const ajv = new AjvModule.default({ allErrors: true });
-
-export type FieldType = 'text' | 'integer' | 'float' | 'boolean' | 'date-time' | 'date' | 'object';
+export type FieldType =
+  | 'text'
+  | 'integer'
+  | 'float'
+  | 'boolean'
+  | 'date-time'
+  | 'date'
+  | 'uuid'
+  | 'object'
+  | 'blob';
 
 export interface ModelField {
   name: string;
@@ -11,13 +18,14 @@ export interface ModelField {
   required: boolean;
 }
 
-export interface ModelDefinition<MODEL> {
+export interface ModelDefinition<SCHEMA extends z.AnyZodObject> {
   name: string;
   plural: string;
   /** The base URL in the API for interacting with the model */
   url: string;
   fields: ModelField[];
-  /** Constraints to add to HTML fields for a particular  */
+  schema: SCHEMA;
+  /** Constraints to add to HTML fields for a particular field  */
   htmlConstraints?: {
     [name: string]: {
       min?: number;
@@ -25,5 +33,4 @@ export interface ModelDefinition<MODEL> {
       required?: boolean;
     };
   };
-  validator: AjvModule.ValidateFunction<MODEL>;
 }

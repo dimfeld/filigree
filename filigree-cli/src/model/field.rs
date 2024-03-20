@@ -21,6 +21,9 @@ pub struct ModelField {
     /// The Rust type for this field. If omitted, the type will be inferred from the SQL
     /// type. This type should be fully qualified, e.g. `crate::MyType`.
     pub rust_type: Option<String>,
+    /// The Typescript type for this field. If omitted, the type will be inferred from the SQL
+    /// type.
+    pub zod_type: Option<String>,
 
     #[serde(default)]
     pub nullable: bool,
@@ -110,6 +113,22 @@ impl ModelField {
         }
     }
 
+    /// The Typescript type of this field.
+    pub fn base_zod_type(&self) -> &str {
+        self.zod_type
+            .as_deref()
+            .unwrap_or_else(|| self.typ.to_zod_type())
+    }
+
+    /// The Typescript type of this field accounting for nullability
+    pub fn zod_type(&self) -> Cow<str> {
+        if self.nullable {
+            format!("{}.optional()", self.base_zod_type()).into()
+        } else {
+            self.base_zod_type().into()
+        }
+    }
+
     pub fn sql_field_name(&self) -> String {
         self.name.to_case(Case::Snake)
     }
@@ -163,6 +182,7 @@ impl ModelField {
             "base_rust_type": self.base_rust_type(),
             "rust_type": self.rust_type(),
             "is_custom_rust_type": self.rust_type.is_some(),
+            "client_type": self.typ.to_client_type(),
             "default_sql": self.default_sql,
             "default_rust": self.default_rust,
             "nullable": self.nullable,
@@ -301,6 +321,7 @@ pub enum SqlType {
 }
 
 impl SqlType {
+    /// Convert the type to its Rust equivalent
     pub fn to_rust_type(&self) -> &'static str {
         match self {
             SqlType::Text => "String",
@@ -316,6 +337,39 @@ impl SqlType {
         }
     }
 
+    /// Convert the type to its ModelField Typescript value
+    pub fn to_client_type(&self) -> &'static str {
+        match self {
+            SqlType::Text => "text",
+            SqlType::Int => "integer",
+            SqlType::BigInt => "integer",
+            SqlType::Float => "float",
+            SqlType::Boolean => "boolean",
+            SqlType::Json => "object",
+            SqlType::Timestamp => "date-time",
+            SqlType::Date => "date",
+            SqlType::Uuid => "uuid",
+            SqlType::Bytes => "blob",
+        }
+    }
+
+    /// Convert the type to its Zod equivalent
+    pub fn to_zod_type(&self) -> &'static str {
+        match self {
+            SqlType::Text => "z.string()",
+            SqlType::Int => "z.number().int()",
+            SqlType::BigInt => "z.number().int()",
+            SqlType::Float => "z.number()",
+            SqlType::Boolean => "z.boolean()",
+            SqlType::Json => "z.any()",
+            SqlType::Timestamp => "z.string().datetime()",
+            SqlType::Date => "z.string()",
+            SqlType::Uuid => "z.string().uuid()",
+            SqlType::Bytes => "z.string()",
+        }
+    }
+
+    /// Convert the type to its SQL equivalent
     pub fn to_sql_type(&self, dialect: SqlDialect) -> &'static str {
         match (self, dialect) {
             (SqlType::Text, _) => "TEXT",

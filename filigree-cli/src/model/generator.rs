@@ -476,6 +476,7 @@ impl<'a> ModelGenerator<'a> {
             name: "id".to_string(),
             typ: SqlType::Uuid,
             rust_type: Some(self.object_id_type()),
+            zod_type: None,
             nullable: false,
             unique: false,
             indexed: false,
@@ -504,6 +505,7 @@ impl<'a> ModelGenerator<'a> {
                 name: "organization_id".to_string(),
                 typ: SqlType::Uuid,
                 rust_type: Some("crate::models::organization::OrganizationId".to_string()),
+                zod_type: None,
                 nullable: !locked_to_single_org,
                 unique: false,
                 indexed: true,
@@ -540,6 +542,7 @@ impl<'a> ModelGenerator<'a> {
                     name: model.foreign_key_id_field_name(),
                     typ: SqlType::Uuid,
                     rust_type: Some(model.object_id_type()),
+                    zod_type: None,
                     nullable: false,
                     unique: false,
                     indexed: true,
@@ -575,6 +578,7 @@ impl<'a> ModelGenerator<'a> {
                 name: "updated_at".to_string(),
                 typ: SqlType::Timestamp,
                 rust_type: None,
+                zod_type: None,
                 nullable: false,
                 unique: false,
                 indexed: false,
@@ -594,6 +598,7 @@ impl<'a> ModelGenerator<'a> {
                 name: "created_at".to_string(),
                 typ: SqlType::Timestamp,
                 rust_type: None,
+                zod_type: None,
                 nullable: false,
                 unique: false,
                 indexed: false,
@@ -642,6 +647,7 @@ impl<'a> ModelGenerator<'a> {
                     name: model.foreign_key_id_field_name(),
                     typ: SqlType::Uuid,
                     rust_type: Some(model.object_id_type()),
+                    zod_type: None,
                     nullable: belongs_to.optional(),
                     unique: single_child,
                     indexed: belongs_to.indexed(),
@@ -677,14 +683,14 @@ impl<'a> ModelGenerator<'a> {
     ) -> String {
         match (fetch_type, many) {
             (ReferenceFetchType::None, _) => String::new(),
-            (ReferenceFetchType::Id, true) => {
-                format!("{}_ids", model.name.to_case(Case::Snake))
-            }
             (ReferenceFetchType::Id, false) => {
                 format!("{}_id", model.name.to_case(Case::Snake))
             }
-            (ReferenceFetchType::Data, true) => model.plural().to_case(Case::Snake),
+            (ReferenceFetchType::Id, true) => {
+                format!("{}_ids", model.name.to_case(Case::Snake))
+            }
             (ReferenceFetchType::Data, false) => model.name.to_case(Case::Snake),
+            (ReferenceFetchType::Data, true) => model.plural().to_case(Case::Snake),
         }
     }
 
@@ -696,10 +702,27 @@ impl<'a> ModelGenerator<'a> {
     ) -> String {
         match (fetch_type, many) {
             (ReferenceFetchType::None, _) => String::new(),
-            (ReferenceFetchType::Id, true) => format!("Vec<{}>", model.object_id_type()),
             (ReferenceFetchType::Id, false) => model.object_id_type(),
-            (ReferenceFetchType::Data, true) => format!("Vec<{}{suffix}>", model.struct_name()),
+            (ReferenceFetchType::Id, true) => format!("Vec<{}>", model.object_id_type()),
             (ReferenceFetchType::Data, false) => format!("{}{suffix}", model.struct_name()),
+            (ReferenceFetchType::Data, true) => format!("Vec<{}{suffix}>", model.struct_name()),
+        }
+    }
+
+    pub fn child_model_zod_field_type(
+        model: &Model,
+        fetch_type: ReferenceFetchType,
+        many: bool,
+        suffix: &str,
+    ) -> String {
+        match (fetch_type, many) {
+            (ReferenceFetchType::None, _) => String::new(),
+            (ReferenceFetchType::Id, false) => "z.string().uuid()".to_string(),
+            (ReferenceFetchType::Id, true) => "z.string().uuid().array()".to_string(),
+            (ReferenceFetchType::Data, false) => format!("{}{suffix}Schema", model.struct_name()),
+            (ReferenceFetchType::Data, true) => {
+                format!("{}{suffix}Schema.array()", model.struct_name())
+            }
         }
     }
 
@@ -714,6 +737,7 @@ impl<'a> ModelGenerator<'a> {
             name: String::new(),
             typ: SqlType::Uuid,
             rust_type: None,
+            zod_type: None,
             nullable: false,
             unique: false,
             extra_sql_modifiers: String::new(),
@@ -751,6 +775,7 @@ impl<'a> ModelGenerator<'a> {
                     Self::child_model_field_name(&model, populate_type, has.many)
                 });
                 let rust_type = Self::child_model_field_type(&model, populate_type, has.many, "");
+                let ts_type = Self::child_model_zod_field_type(&model, populate_type, has.many, "");
 
                 if rust_type.is_empty() {
                     return Ok(None);
@@ -759,6 +784,7 @@ impl<'a> ModelGenerator<'a> {
                 let field = ModelField {
                     name,
                     rust_type: Some(rust_type),
+                    zod_type: Some(ts_type),
                     nullable: !has.many,
                     ..base_field.clone()
                 };
@@ -790,6 +816,7 @@ impl<'a> ModelGenerator<'a> {
             name: String::new(),
             typ: SqlType::Uuid,
             rust_type: None,
+            zod_type: None,
             nullable: false,
             unique: false,
             extra_sql_modifiers: String::new(),
@@ -878,6 +905,7 @@ impl<'a> ModelGenerator<'a> {
             name: String::new(),
             typ: SqlType::Uuid,
             rust_type: None,
+            zod_type: None,
             nullable: false,
             unique: false,
             extra_sql_modifiers: String::new(),

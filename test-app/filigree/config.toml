@@ -9,6 +9,7 @@ hosts = ["localhost"]
 
 [formatter]
 rust = ["rustfmt", "+nightly"]
+js = ["biome", "format", "--stdin-file-path=stdin.ts" ]
 sql = ["pg_format"]
 
 [database]

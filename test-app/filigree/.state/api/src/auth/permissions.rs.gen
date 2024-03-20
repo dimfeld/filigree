@@ -57,21 +57,6 @@ pub const PERMISSIONS: &[PermissionInfo] = &[
         key: "Poll::owner",
     },
     PermissionInfo {
-        name: "Read Posts",
-        description: "List and read Post objects",
-        key: "Post::read",
-    },
-    PermissionInfo {
-        name: "Write Posts",
-        description: "Write Post objects",
-        key: "Post::write",
-    },
-    PermissionInfo {
-        name: "Administer Posts",
-        description: "Create and delete Post objects",
-        key: "Post::owner",
-    },
-    PermissionInfo {
         name: "Read PostImages",
         description: "List and read PostImage objects",
         key: "PostImage::read",
@@ -102,19 +87,19 @@ pub const PERMISSIONS: &[PermissionInfo] = &[
         key: "Reaction::owner",
     },
     PermissionInfo {
-        name: "Read Reports",
-        description: "List and read Report objects",
-        key: "Report::read",
+        name: "Read Posts",
+        description: "List and read Post objects",
+        key: "Post::read",
     },
     PermissionInfo {
-        name: "Write Reports",
-        description: "Write Report objects",
-        key: "Report::write",
+        name: "Write Posts",
+        description: "Write Post objects",
+        key: "Post::write",
     },
     PermissionInfo {
-        name: "Administer Reports",
-        description: "Create and delete Report objects",
-        key: "Report::owner",
+        name: "Administer Posts",
+        description: "Create and delete Post objects",
+        key: "Post::owner",
     },
     PermissionInfo {
         name: "Read ReportSections",
@@ -130,6 +115,21 @@ pub const PERMISSIONS: &[PermissionInfo] = &[
         name: "Administer ReportSections",
         description: "Create and delete ReportSection objects",
         key: "ReportSection::owner",
+    },
+    PermissionInfo {
+        name: "Read Reports",
+        description: "List and read Report objects",
+        key: "Report::read",
+    },
+    PermissionInfo {
+        name: "Write Reports",
+        description: "Write Report objects",
+        key: "Report::write",
+    },
+    PermissionInfo {
+        name: "Administer Reports",
+        description: "Create and delete Report objects",
+        key: "Report::owner",
     },
     PermissionInfo {
         name: "Read Roles",

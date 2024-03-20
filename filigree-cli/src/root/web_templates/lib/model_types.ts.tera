@@ -1,0 +1,47 @@
+import type { ModelDefinition } from 'filigree-web';
+import { z } from 'zod';
+
+export const ObjectPermission = z.enum([
+  "owner",
+  "write",
+  "read"
+]);
+
+{% for model in models %}
+{% for struct in model.structs %}
+export const {{struct.name}}Schema = z.object({
+  {{struct.zod_fields_content}}
+});
+
+export type {{struct.name}} = z.infer<typeof {{struct.name}}Schema>;
+{% for alias in struct.aliases -%}
+export type {{alias}} = {{struct.name}};
+{% endfor %}
+
+{%- endfor %}
+
+export const {{model.name}}Model : ModelDefinition<typeof {{model.struct_base}}Schema> = {
+  name: "{{model.name}}",
+  plural: "{{model.plural}}",
+  url: "{{model.url_path}}",
+  schema: {{model.struct_base}}Schema,
+  fields: [
+    {% for field in model.fields -%}
+    {
+      name: "{{field.name}}",
+      type: "{{field.client_type}}",
+      description: "",
+      required: {{not field.nullable}},
+    },
+    {%- endfor %}
+  ],
+  htmlConstraints: {
+    {% for field in model.fields -%}
+    "{{field.name}}": {
+      required: {{not field.nullable}}
+    },
+    {%- endfor %}
+  }
+};
+
+{%- endfor %}

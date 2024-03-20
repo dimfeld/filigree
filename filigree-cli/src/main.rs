@@ -1,5 +1,4 @@
 use std::{
-    cmp::Ordering,
     collections::{HashMap, HashSet},
     error::Error as _,
     path::PathBuf,
@@ -207,6 +206,7 @@ pub fn main() -> Result<(), Report<Error>> {
         .into_iter()
         .map(|model| ModelGenerator::new(&config, &renderer, &model_map, model))
         .collect::<Result<Vec<_>, Error>>()?;
+    generators.sort_by(|a, b| a.model.order_by_dependency(&b.model));
 
     let generator_map = GeneratorMap::new(&generators);
 
@@ -241,7 +241,7 @@ pub fn main() -> Result<(), Report<Error>> {
             root_files = Some(root::render_files(
                 &crate_name,
                 &config,
-                &generator_contexts,
+                &generators,
                 &renderer,
             ))
         });
@@ -266,37 +266,11 @@ pub fn main() -> Result<(), Report<Error>> {
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    fn model_migration_sort(m1: &Model, m2: &Model) -> bool {
-        if m1
-            .joins
-            .as_ref()
-            .map(|(j1, j2)| j1 == &m2.name || j2 == &m2.name)
-            .unwrap_or(false)
-        {
-            return true;
-        }
-
-        if let Some(b) = &m1.belongs_to {
-            if b.model() == m2.name {
-                return true;
-            }
-        }
-
-        false
-    }
-
     // When a child model belongs to a parent model, ensure that the child comes later.
     model_migrations.sort_by(|m1, m2| {
         let m1 = &m1.model.unwrap();
         let m2 = &m2.model.unwrap();
-
-        if model_migration_sort(m1, m2) {
-            Ordering::Greater
-        } else if model_migration_sort(m2, m1) {
-            Ordering::Less
-        } else {
-            Ordering::Equal
-        }
+        m1.order_by_dependency(m2)
     });
 
     let (first_fixed_migrations, last_fixed_migrations) = ModelGenerator::fixed_migrations();
@@ -407,10 +381,10 @@ pub fn main() -> Result<(), Report<Error>> {
     let mut model_mod_context = tera::Context::new();
     model_mod_context.insert(
         "models",
-        &generator_contexts
+        &generators
             .iter()
-            .sorted_by(|(m1, _), (m2, _)| m1.cmp(m2))
-            .map(|(_, v)| v.clone().into_json())
+            .sorted_by(|m1, m2| m1.model.name.cmp(&m2.model.name))
+            .map(|v| v.template_context().clone().into_json())
             .collect::<Vec<_>>(),
     );
 
