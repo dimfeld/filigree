@@ -20,7 +20,7 @@ export type {{alias}} = {{struct.name}};
 
 {%- endfor %}
 
-export const {{model.name}}Model : ModelDefinition<{{model.struct_base}}> = {
+export const {{model.name}}Model : ModelDefinition<typeof {{model.struct_base}}Schema> = {
   name: "{{model.name}}",
   plural: "{{model.plural}}",
   url: "{{model.url_path}}",
@@ -29,7 +29,7 @@ export const {{model.name}}Model : ModelDefinition<{{model.struct_base}}> = {
     {% for field in model.fields -%}
     {
       name: "{{field.name}}",
-      type: "{{field.sql_type}}",
+      type: "{{field.client_type}}",
       description: "",
       required: {{not field.nullable}},
     },

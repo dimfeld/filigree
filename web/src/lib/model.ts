@@ -1,6 +1,15 @@
 import { z } from 'zod';
 
-export type FieldType = 'text' | 'integer' | 'float' | 'boolean' | 'date-time' | 'date' | 'object';
+export type FieldType =
+  | 'text'
+  | 'integer'
+  | 'float'
+  | 'boolean'
+  | 'date-time'
+  | 'date'
+  | 'uuid'
+  | 'object'
+  | 'blob';
 
 export interface ModelField {
   name: string;

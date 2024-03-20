@@ -182,6 +182,7 @@ impl ModelField {
             "base_rust_type": self.base_rust_type(),
             "rust_type": self.rust_type(),
             "is_custom_rust_type": self.rust_type.is_some(),
+            "client_type": self.typ.to_client_type(),
             "default_sql": self.default_sql,
             "default_rust": self.default_rust,
             "nullable": self.nullable,
@@ -320,6 +321,7 @@ pub enum SqlType {
 }
 
 impl SqlType {
+    /// Convert the type to its Rust equivalent
     pub fn to_rust_type(&self) -> &'static str {
         match self {
             SqlType::Text => "String",
@@ -335,7 +337,23 @@ impl SqlType {
         }
     }
 
-    /// Convert the type to Typescript syntax
+    /// Convert the type to its ModelField Typescript value
+    pub fn to_client_type(&self) -> &'static str {
+        match self {
+            SqlType::Text => "text",
+            SqlType::Int => "integer",
+            SqlType::BigInt => "integer",
+            SqlType::Float => "float",
+            SqlType::Boolean => "boolean",
+            SqlType::Json => "object",
+            SqlType::Timestamp => "date-time",
+            SqlType::Date => "date",
+            SqlType::Uuid => "uuid",
+            SqlType::Bytes => "blob",
+        }
+    }
+
+    /// Convert the type to its Zod equivalent
     pub fn to_zod_type(&self) -> &'static str {
         match self {
             SqlType::Text => "z.string()",
@@ -351,6 +369,7 @@ impl SqlType {
         }
     }
 
+    /// Convert the type to its SQL equivalent
     pub fn to_sql_type(&self, dialect: SqlDialect) -> &'static str {
         match (self, dialect) {
             (SqlType::Text, _) => "TEXT",
