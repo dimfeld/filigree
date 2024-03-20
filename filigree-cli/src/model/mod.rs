@@ -192,6 +192,38 @@ impl Model {
         // Don't merge `global`, `plural`, or `name` since these must not change
         // for things to work properly.
     }
+
+    fn depends_on(&self, other: &Model) -> bool {
+        if self
+            .joins
+            .as_ref()
+            .map(|(j1, j2)| j1 == &other.name || j2 == &other.name)
+            .unwrap_or(false)
+        {
+            return true;
+        }
+
+        if let Some(b) = &self.belongs_to {
+            if b.model() == other.name {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Comparison function to sort models so that child models come first,
+    /// in order to write templates in the right order when parent models reference
+    /// types defined by the children.
+    pub fn order_by_dependency(&self, other: &Model) -> std::cmp::Ordering {
+        if self.depends_on(other) {
+            std::cmp::Ordering::Less
+        } else if other.depends_on(self) {
+            std::cmp::Ordering::Greater
+        } else {
+            self.name.cmp(&other.name)
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
