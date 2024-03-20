@@ -149,7 +149,7 @@ function validate<T extends z.AnyZodObject>(
 
   let errors: FormErrors | undefined;
 
-  let validated = model.model.safeParse(options.state.formData);
+  let validated = model.schema.safeParse(options.state.formData);
   if (!validated.success) {
     errors = processZodError(validated.error.issues);
   }

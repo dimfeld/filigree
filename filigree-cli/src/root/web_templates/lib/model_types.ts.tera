@@ -24,7 +24,7 @@ export const {{model.name}}Model : ModelDefinition<typeof {{model.struct_base}}S
   name: "{{model.name}}",
   plural: "{{model.plural}}",
   url: "{{model.url_path}}",
-  model: {{model.struct_base}}Schema,
+  schema: {{model.struct_base}}Schema,
   fields: [
     {% for field in model.fields -%}
     {

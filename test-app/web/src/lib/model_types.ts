@@ -34,7 +34,7 @@ export const CommentModel: ModelDefinition<typeof CommentSchema> = {
 	name: "Comment",
 	plural: "Comments",
 	url: "comments",
-	model: CommentSchema,
+	schema: CommentSchema,
 	fields: [
 		{
 			name: "id",
@@ -130,7 +130,7 @@ export const OrganizationModel: ModelDefinition<typeof OrganizationSchema> = {
 	name: "Organization",
 	plural: "Organizations",
 	url: "organizations",
-	model: OrganizationSchema,
+	schema: OrganizationSchema,
 	fields: [
 		{
 			name: "id",
@@ -233,7 +233,7 @@ export const PollModel: ModelDefinition<typeof PollSchema> = {
 	name: "Poll",
 	plural: "Polls",
 	url: "polls",
-	model: PollSchema,
+	schema: PollSchema,
 	fields: [
 		{
 			name: "id",
@@ -342,7 +342,7 @@ export const PostImageModel: ModelDefinition<typeof PostImageSchema> = {
 	name: "PostImage",
 	plural: "PostImages",
 	url: "post_images",
-	model: PostImageSchema,
+	schema: PostImageSchema,
 	fields: [
 		{
 			name: "id",
@@ -470,7 +470,7 @@ export const ReactionModel: ModelDefinition<typeof ReactionSchema> = {
 	name: "Reaction",
 	plural: "Reactions",
 	url: "reactions",
-	model: ReactionSchema,
+	schema: ReactionSchema,
 	fields: [
 		{
 			name: "id",
@@ -590,7 +590,7 @@ export const PostModel: ModelDefinition<typeof PostSchema> = {
 	name: "Post",
 	plural: "Posts",
 	url: "posts",
-	model: PostSchema,
+	schema: PostSchema,
 	fields: [
 		{
 			name: "id",
@@ -688,7 +688,7 @@ export const ReportSectionModel: ModelDefinition<typeof ReportSectionSchema> = {
 	name: "ReportSection",
 	plural: "ReportSections",
 	url: "report_sections",
-	model: ReportSectionSchema,
+	schema: ReportSectionSchema,
 	fields: [
 		{
 			name: "id",
@@ -836,7 +836,7 @@ export const ReportModel: ModelDefinition<typeof ReportSchema> = {
 	name: "Report",
 	plural: "Reports",
 	url: "reports",
-	model: ReportSchema,
+	schema: ReportSchema,
 	fields: [
 		{
 			name: "id",
@@ -937,7 +937,7 @@ export const RoleModel: ModelDefinition<typeof RoleSchema> = {
 	name: "Role",
 	plural: "Roles",
 	url: "roles",
-	model: RoleSchema,
+	schema: RoleSchema,
 	fields: [
 		{
 			name: "id",
@@ -1031,7 +1031,7 @@ export const UserModel: ModelDefinition<typeof UserSchema> = {
 	name: "User",
 	plural: "Users",
 	url: "users",
-	model: UserSchema,
+	schema: UserSchema,
 	fields: [
 		{
 			name: "id",
