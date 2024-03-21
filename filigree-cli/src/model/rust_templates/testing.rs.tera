@@ -4,7 +4,7 @@ use super::{
     {{struct_base}}CreatePayload,
     {{struct_base}}UpdatePayload,
 };
-{{imports}}
+{{rust_imports}}
 
 {% macro payload_field_value(field) %}
     {%- if field.base_type == "text" -%}

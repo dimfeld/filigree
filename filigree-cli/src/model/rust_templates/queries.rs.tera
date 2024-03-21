@@ -19,7 +19,7 @@ use super::types::*;
 
 use crate::auth::AuthInfo;
 use crate::Error;
-{{imports}}
+{{rust_imports}}
 
 type QueryAs<'q, T> = sqlx::query::QueryAs<'q, sqlx::Postgres, T, <sqlx::Postgres as sqlx::database::HasArguments<'q>>::Arguments>;
 

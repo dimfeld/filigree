@@ -17,7 +17,7 @@ use crate::{
     config::Config,
     migrations::SingleMigration,
     model::{field::SortableType, ReferenceFetchType},
-    templates::{ModelRustTemplates, ModelSqlTemplates, Renderer},
+    templates::{ModelRustTemplates, ModelSqlTemplates, ModelWebTemplates, Renderer},
     Error, GeneratorMap, ModelMap, RenderedFile, RenderedFileLocation,
 };
 
@@ -131,8 +131,34 @@ impl<'a> ModelGenerator<'a> {
     }
 
     pub fn render_model_directory(&self) -> Result<Vec<RenderedFile>, Report<Error>> {
-        let base_path = PathBuf::from("src/models").join(self.model.module_name());
+        fn strip_path(name: &str) -> &str {
+            name.strip_prefix("model/")
+                .unwrap()
+                .strip_suffix(".tera")
+                .unwrap()
+        }
 
+        let web_base_path = PathBuf::from("src/lib/models");
+        let web_files = ModelWebTemplates::iter().map(|f| {
+            let outfile = if f == "model/model.ts.tera" {
+                // The main file. Right now we render this straight into lib
+                web_base_path.join(format!("{}.ts", self.model.module_name()))
+            } else {
+                // Other files go in a subdirectory
+                web_base_path
+                    .join(self.model.module_name())
+                    .join(strip_path(f.as_ref()))
+            };
+
+            (
+                f,
+                outfile,
+                RenderedFileLocation::Web,
+                self.template_context(),
+            )
+        });
+
+        let rust_base_path = PathBuf::from("src/models").join(self.model.module_name());
         let skip_files = [
             "model/main_mod.rs.tera",
             "model/sql_macros.tera",
@@ -156,33 +182,33 @@ impl<'a> ModelGenerator<'a> {
         .map(|(infile, outfile)| {
             (
                 Cow::Borrowed(infile),
-                outfile.to_string(),
+                rust_base_path.join(outfile),
+                RenderedFileLocation::Api,
                 &populate_context,
             )
         });
 
-        let files = ModelSqlTemplates::iter()
+        let api_files = ModelSqlTemplates::iter()
             .chain(ModelRustTemplates::iter())
             .filter(|f| !skip_files.contains(&f.as_ref()))
             .map(|f| {
-                let outfile = f
-                    .strip_prefix("model/")
-                    .unwrap()
-                    .strip_suffix(".tera")
-                    .unwrap()
-                    .to_string();
-                (f, outfile, self.template_context())
+                let outfile = rust_base_path.join(strip_path(f.as_ref()));
+                (
+                    f,
+                    outfile,
+                    RenderedFileLocation::Api,
+                    self.template_context(),
+                )
             })
-            .chain(populate_queries)
-            .collect::<Vec<_>>();
+            .chain(populate_queries);
+
+        let files = web_files.chain(api_files).collect::<Vec<_>>();
 
         let output = files
             .into_par_iter()
-            .map(|(infile, outfile, ctx)| {
-                let path = base_path.join(outfile);
-
+            .map(|(infile, outfile, render_location, ctx)| {
                 self.renderer
-                    .render_with_full_path(path, &infile, RenderedFileLocation::Api, ctx)
+                    .render_with_full_path(outfile, &infile, render_location, ctx)
                     .attach_printable_lazy(|| format!("Model {}", self.model.name))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -228,7 +254,8 @@ impl<'a> ModelGenerator<'a> {
         &self,
         generators: &GeneratorMap,
     ) -> Result<tera::Context, Error> {
-        let mut imports = HashSet::new();
+        let mut rust_imports = HashSet::new();
+        let mut ts_imports = HashSet::new();
         let sql_dialect = Config::default_sql_dialect();
         let full_default_sort_field = self.default_sort_field.as_deref().unwrap_or("-updated_at");
         let default_sort_field = if full_default_sort_field.starts_with('-') {
@@ -290,10 +317,13 @@ impl<'a> ModelGenerator<'a> {
                 let child_model = self.model_map.get(&has.model, &self.model.name, "has")?;
                 let child_generator = generators.get(&has.model, &self.model.name, "has")?;
 
-                imports.insert(child_model.qualified_struct_name());
-                imports.insert(format!("{}CreatePayload", child_model.qualified_struct_name()));
-                imports.insert(format!("{}UpdatePayload", child_model.qualified_struct_name()));
-                imports.insert(child_model.qualified_object_id_type());
+                ts_imports.insert((child_model.module_name(), format!("{}Schema", child_model.struct_name())));
+                ts_imports.insert((child_model.module_name(), format!("{}CreatePayloadSchema", child_model.struct_name())));
+                ts_imports.insert((child_model.module_name(), format!("{}UpdatePayloadSchema", child_model.struct_name())));
+                rust_imports.insert(child_model.qualified_struct_name());
+                rust_imports.insert(format!("{}CreatePayload", child_model.qualified_struct_name()));
+                rust_imports.insert(format!("{}UpdatePayload", child_model.qualified_struct_name()));
+                rust_imports.insert(child_model.qualified_object_id_type());
 
                 let get_sql_field_name = has.field_name.clone().unwrap_or_else(|| {
                     Self::child_model_field_name(&child_model, has.populate_on_get, has.many)
@@ -353,8 +383,12 @@ impl<'a> ModelGenerator<'a> {
                 let gen = generators.get(&ref_model.name, &self.model.name, "references")?;
                 let full_name = field.qualified_sql_field_name();
 
-                imports.insert(gen.model.qualified_struct_name());
-                imports.insert(gen.model.qualified_object_id_type());
+                ts_imports.insert((
+                    gen.model.module_name(),
+                    format!("{}Schema", gen.model.struct_name()),
+                ));
+                rust_imports.insert(gen.model.qualified_struct_name());
+                rust_imports.insert(gen.model.qualified_object_id_type());
 
                 Ok(json!({
                     "name": field.name,
@@ -372,7 +406,8 @@ impl<'a> ModelGenerator<'a> {
             let model = self
                 .model_map
                 .get(b.model(), &self.model.name, "belongs_to")?;
-            imports.insert(model.qualified_object_id_type());
+
+            rust_imports.insert(model.qualified_object_id_type());
         }
 
         let parent_model_name = self.belongs_to.as_ref().map(|b| b.model());
@@ -393,10 +428,21 @@ impl<'a> ModelGenerator<'a> {
             }
         }
 
-        let imports = imports
+        let rust_imports = rust_imports
             .into_iter()
             .map(|i| format!("use {i};"))
             .sorted()
+            .join("\n");
+
+        let ts_imports = ts_imports
+            .into_iter()
+            .into_group_map()
+            .into_iter()
+            .sorted_by(|(m1, _), (m2, _)| m1.cmp(m2))
+            .map(|(module, imports)| {
+                let imports = imports.join(", ");
+                format!("import {{ {imports} }} from './{module}.js';")
+            })
             .join("\n");
 
         let create_payload_fields = self
@@ -439,7 +485,8 @@ impl<'a> ModelGenerator<'a> {
             "fields": fields,
             "create_payload_fields": create_payload_fields,
             "update_payload_fields": update_payload_fields,
-            "imports": imports,
+            "rust_imports": rust_imports,
+            "ts_imports": ts_imports,
             "belongs_to_field": belongs_to_field,
             "can_populate_get": can_populate_get,
             "can_populate_list": can_populate_list,

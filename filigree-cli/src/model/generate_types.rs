@@ -277,6 +277,7 @@ impl<'a> ModelGenerator<'a> {
 
         let zod_contents = fields
             .iter()
+            .filter(|f| f.owner_read())
             .map(|f| {
                 format!(
                     "  {ts_field_name}: {ts_type},",

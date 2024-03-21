@@ -87,10 +87,11 @@ pub fn render_files(
 
     let base_path = PathBuf::from("src");
 
-    let files = RootApiTemplates::iter()
-        .map(|f| (RenderedFileLocation::Api, f))
-        .chain(RootWebTemplates::iter().map(|f| (RenderedFileLocation::Web, f)))
-        .collect::<Vec<_>>();
+    let web_files = RootWebTemplates::iter().map(|f| (RenderedFileLocation::Web, f));
+    let api_files = RootApiTemplates::iter().map(|f| (RenderedFileLocation::Api, f));
+
+    let files = web_files.chain(api_files).collect::<Vec<_>>();
+
     let mut output = files
         .into_par_iter()
         .filter(|(_, file)| file != "root/build.rs.tera" && file != "root/auth/fetch_base.sql.tera")

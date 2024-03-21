@@ -1,4 +1,3 @@
-import type { ModelDefinition } from 'filigree-web';
 import { z } from 'zod';
 
 export const ObjectPermission = z.enum([
@@ -7,40 +6,5 @@ export const ObjectPermission = z.enum([
   "read"
 ]);
 
-{% for model in models %}
-{% for struct in model.structs %}
-export const {{struct.name}}Schema = z.object({
-  {{struct.zod_fields_content}}
-});
+export type ObjectPermission = z.infer<typeof ObjectPermission>;
 
-export type {{struct.name}} = z.infer<typeof {{struct.name}}Schema>;
-{% for alias in struct.aliases -%}
-export const {{alias}}Schema = {{struct.name}}Schema;
-export type {{alias}} = {{struct.name}};
-{% endfor %}
-
-{%- endfor %}
-
-export const {{model.name}}Model : ModelDefinition<typeof {{model.struct_base}}Schema> = {
-  name: "{{model.name}}",
-  plural: "{{model.plural}}",
-  url: "{{model.url_path}}",
-  schema: {{model.struct_base}}Schema,
-  fields: [
-    {% for field in model.fields -%}
-    {
-      name: "{{field.name}}",
-      type: "{{field.client_type}}",
-      label: "{{field.label}}",
-      {% if field.description -%}
-      description: "{{field.description}}",
-      {%- endif -%}
-      constraints: {
-        required: {{not field.nullable}}
-      },
-    },
-    {%- endfor %}
-  ],
-};
-
-{%- endfor %}

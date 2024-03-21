@@ -10,7 +10,7 @@ use filigree::{auth::{AuthError, ObjectPermission}, extract::FormOrJson};
 use tracing::{event, Level};
 
 use crate::{Error, auth::{Authed, has_any_permission}, server::ServerState};
-{{imports}}
+{{rust_imports}}
 
 use super::{queries, types::*, {{id_type}}, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION, WRITE_PERMISSION };
 

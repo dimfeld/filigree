@@ -3,7 +3,7 @@ use super::{{id_type}};
 {%- if id_type != "OrganizationId" %}
 use crate::models::organization::OrganizationId;
 {% endif -%}
-{{imports}}
+{{rust_imports}}
 use filigree::auth::ObjectPermission;
 use serde::{
     ser::{Serializer, SerializeStruct},

@@ -17,7 +17,7 @@ use crate::{
     server::ServerState
 };
 use super::{ {{struct_base}}, {{struct_base}}UpdatePayload, {{id_type}} };
-{{imports}}
+{{rust_imports}}
 
 /// Apply the storage key template
 pub fn generate_object_key(auth: &Authed, id: {{id_type}}, filename: &str) -> String {
