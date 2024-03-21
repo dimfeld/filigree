@@ -5,10 +5,12 @@ endpoints = true
 [[fields]]
 name = "subject"
 type = "text"
+description = "A summary of the post"
 
 [[fields]]
 name = "body"
 type = "text"
+description = "The text of the post"
 
 # A real app would not want to use populate for big arrays such as comments and reactions since we don't want
 # to fetch them all every time, but it is convenient for testing.

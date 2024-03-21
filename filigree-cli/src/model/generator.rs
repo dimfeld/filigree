@@ -474,6 +474,8 @@ impl<'a> ModelGenerator<'a> {
     fn id_field(&self) -> ModelField {
         ModelField {
             name: "id".to_string(),
+            label: None,
+            description: None,
             typ: SqlType::Uuid,
             rust_type: Some(self.object_id_type()),
             zod_type: None,
@@ -504,6 +506,8 @@ impl<'a> ModelGenerator<'a> {
             Some(ModelField {
                 name: "organization_id".to_string(),
                 typ: SqlType::Uuid,
+                label: None,
+                description: None,
                 rust_type: Some("crate::models::organization::OrganizationId".to_string()),
                 zod_type: None,
                 nullable: !locked_to_single_org,
@@ -541,6 +545,8 @@ impl<'a> ModelGenerator<'a> {
                 ModelField {
                     name: model.foreign_key_id_field_name(),
                     typ: SqlType::Uuid,
+                    label: None,
+                    description: None,
                     rust_type: Some(model.object_id_type()),
                     zod_type: None,
                     nullable: false,
@@ -577,6 +583,8 @@ impl<'a> ModelGenerator<'a> {
             Some(ModelField {
                 name: "updated_at".to_string(),
                 typ: SqlType::Timestamp,
+                label: None,
+                description: None,
                 rust_type: None,
                 zod_type: None,
                 nullable: false,
@@ -597,6 +605,8 @@ impl<'a> ModelGenerator<'a> {
             Some(ModelField {
                 name: "created_at".to_string(),
                 typ: SqlType::Timestamp,
+                label: None,
+                description: None,
                 rust_type: None,
                 zod_type: None,
                 nullable: false,
@@ -646,6 +656,8 @@ impl<'a> ModelGenerator<'a> {
                 Ok::<_, Error>(ModelField {
                     name: model.foreign_key_id_field_name(),
                     typ: SqlType::Uuid,
+                    label: None,
+                    description: None,
                     rust_type: Some(model.object_id_type()),
                     zod_type: None,
                     nullable: belongs_to.optional(),
@@ -736,6 +748,8 @@ impl<'a> ModelGenerator<'a> {
         let base_field = ModelField {
             name: String::new(),
             typ: SqlType::Uuid,
+            label: None,
+            description: None,
             rust_type: None,
             zod_type: None,
             nullable: false,
@@ -815,6 +829,8 @@ impl<'a> ModelGenerator<'a> {
         let base_field = ModelField {
             name: String::new(),
             typ: SqlType::Uuid,
+            label: None,
+            description: None,
             rust_type: None,
             zod_type: None,
             nullable: false,
@@ -872,7 +888,7 @@ impl<'a> ModelGenerator<'a> {
         has_model: &Model,
         has: &HasModel,
         for_update: bool,
-    ) -> String {
+    ) -> (String, String) {
         let suffix = if for_update {
             "UpdatePayload"
         } else {
@@ -886,14 +902,19 @@ impl<'a> ModelGenerator<'a> {
 
         let rust_type =
             Self::child_model_field_type(has_model, write_payload_type, has.many, suffix);
+        let zod_type =
+            Self::child_model_zod_field_type(has_model, write_payload_type, has.many, suffix);
 
         // For the update payload, wrap a single child field in a double option so we can distinguish
         // between null (remove the child) vs. the member being absent (don't touch the
         // child).
         if for_update && !has.many {
-            format!("Option<{}>", rust_type)
+            (
+                format!("Option<{}>", rust_type),
+                format!("{}.nullish()", zod_type),
+            )
         } else {
-            rust_type
+            (rust_type, zod_type)
         }
     }
 
@@ -904,6 +925,8 @@ impl<'a> ModelGenerator<'a> {
         let base_field = ModelField {
             name: String::new(),
             typ: SqlType::Uuid,
+            label: None,
+            description: None,
             rust_type: None,
             zod_type: None,
             nullable: false,
@@ -931,11 +954,13 @@ impl<'a> ModelGenerator<'a> {
                     return Ok(None);
                 }
 
-                let rust_type = Self::write_payload_child_field_type(has_model, has, for_update);
+                let (rust_type, zod_type) =
+                    Self::write_payload_child_field_type(has_model, has, for_update);
 
                 let model_field = ModelField {
                     name: has.rust_child_field_name(&has_model),
                     rust_type: Some(rust_type),
+                    zod_type: Some(zod_type),
                     nullable: has.many,
                     ..base_field.clone()
                 };

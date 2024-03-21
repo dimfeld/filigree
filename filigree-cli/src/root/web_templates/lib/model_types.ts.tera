@@ -15,6 +15,7 @@ export const {{struct.name}}Schema = z.object({
 
 export type {{struct.name}} = z.infer<typeof {{struct.name}}Schema>;
 {% for alias in struct.aliases -%}
+export const {{alias}}Schema = {{struct.name}}Schema;
 export type {{alias}} = {{struct.name}};
 {% endfor %}
 
@@ -30,18 +31,16 @@ export const {{model.name}}Model : ModelDefinition<typeof {{model.struct_base}}S
     {
       name: "{{field.name}}",
       type: "{{field.client_type}}",
-      description: "",
-      required: {{not field.nullable}},
+      label: "{{field.label}}",
+      {% if field.description -%}
+      description: "{{field.description}}",
+      {%- endif -%}
+      constraints: {
+        required: {{not field.nullable}}
+      },
     },
     {%- endfor %}
   ],
-  htmlConstraints: {
-    {% for field in model.fields -%}
-    "{{field.name}}": {
-      required: {{not field.nullable}}
-    },
-    {%- endfor %}
-  }
 };
 
 {%- endfor %}

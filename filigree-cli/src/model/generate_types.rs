@@ -278,13 +278,11 @@ impl<'a> ModelGenerator<'a> {
         let zod_contents = fields
             .iter()
             .map(|f| {
-                let ts_type = if f.rust_type().starts_with("Option<Option<") {
-                    Cow::Owned(format!("{}.nullish()", f.base_zod_type()))
-                } else {
-                    f.zod_type()
-                };
-
-                format!("  {ts_field_name}: {ts_type},", ts_field_name = f.name)
+                format!(
+                    "  {ts_field_name}: {ts_type},",
+                    ts_field_name = f.name,
+                    ts_type = f.zod_type()
+                )
             })
             .join("\n");
 

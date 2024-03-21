@@ -14,8 +14,11 @@ export const CommentSchema = z.object({
 });
 
 export type Comment = z.infer<typeof CommentSchema>;
+export const CommentPopulatedGetSchema = CommentSchema;
 export type CommentPopulatedGet = Comment;
+export const CommentPopulatedListSchema = CommentSchema;
 export type CommentPopulatedList = Comment;
+export const CommentCreateResultSchema = CommentSchema;
 export type CommentCreateResult = Comment;
 
 export const CommentCreatePayloadAndUpdatePayloadSchema = z.object({
@@ -27,7 +30,11 @@ export const CommentCreatePayloadAndUpdatePayloadSchema = z.object({
 export type CommentCreatePayloadAndUpdatePayload = z.infer<
 	typeof CommentCreatePayloadAndUpdatePayloadSchema
 >;
+export const CommentCreatePayloadSchema =
+	CommentCreatePayloadAndUpdatePayloadSchema;
 export type CommentCreatePayload = CommentCreatePayloadAndUpdatePayload;
+export const CommentUpdatePayloadSchema =
+	CommentCreatePayloadAndUpdatePayloadSchema;
 export type CommentUpdatePayload = CommentCreatePayloadAndUpdatePayload;
 
 export const CommentModel: ModelDefinition<typeof CommentSchema> = {
@@ -39,60 +46,52 @@ export const CommentModel: ModelDefinition<typeof CommentSchema> = {
 		{
 			name: "id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "organization_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Organization Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "updated_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Updated At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "created_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Created At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "body",
 			type: "text",
-			description: "",
-			required: true,
+			label: "Body",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "post_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Post Id",
+			constraints: {
+				required: true,
+			},
 		},
 	],
-	htmlConstraints: {
-		id: {
-			required: true,
-		},
-		organization_id: {
-			required: true,
-		},
-		updated_at: {
-			required: true,
-		},
-		created_at: {
-			required: true,
-		},
-		body: {
-			required: true,
-		},
-		post_id: {
-			required: true,
-		},
-	},
 };
 
 export const OrganizationSchema = z.object({
@@ -107,8 +106,11 @@ export const OrganizationSchema = z.object({
 });
 
 export type Organization = z.infer<typeof OrganizationSchema>;
+export const OrganizationPopulatedGetSchema = OrganizationSchema;
 export type OrganizationPopulatedGet = Organization;
+export const OrganizationPopulatedListSchema = OrganizationSchema;
 export type OrganizationPopulatedList = Organization;
+export const OrganizationCreateResultSchema = OrganizationSchema;
 export type OrganizationCreateResult = Organization;
 
 export const OrganizationCreatePayloadAndUpdatePayloadSchema = z.object({
@@ -121,8 +123,12 @@ export const OrganizationCreatePayloadAndUpdatePayloadSchema = z.object({
 export type OrganizationCreatePayloadAndUpdatePayload = z.infer<
 	typeof OrganizationCreatePayloadAndUpdatePayloadSchema
 >;
+export const OrganizationCreatePayloadSchema =
+	OrganizationCreatePayloadAndUpdatePayloadSchema;
 export type OrganizationCreatePayload =
 	OrganizationCreatePayloadAndUpdatePayload;
+export const OrganizationUpdatePayloadSchema =
+	OrganizationCreatePayloadAndUpdatePayloadSchema;
 export type OrganizationUpdatePayload =
 	OrganizationCreatePayloadAndUpdatePayload;
 
@@ -135,69 +141,60 @@ export const OrganizationModel: ModelDefinition<typeof OrganizationSchema> = {
 		{
 			name: "id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "updated_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Updated At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "created_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Created At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "name",
 			type: "text",
-			description: "",
-			required: true,
+			label: "Name",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "owner",
 			type: "uuid",
-			description: "",
-			required: false,
+			label: "Owner",
+			constraints: {
+				required: false,
+			},
 		},
 		{
 			name: "default_role",
 			type: "uuid",
-			description: "",
-			required: false,
+			label: "Default Role",
+			constraints: {
+				required: false,
+			},
 		},
 		{
 			name: "active",
 			type: "boolean",
-			description: "",
-			required: true,
+			label: "Active",
+			constraints: {
+				required: true,
+			},
 		},
 	],
-	htmlConstraints: {
-		id: {
-			required: true,
-		},
-		updated_at: {
-			required: true,
-		},
-		created_at: {
-			required: true,
-		},
-		name: {
-			required: true,
-		},
-		owner: {
-			required: false,
-		},
-		default_role: {
-			required: false,
-		},
-		active: {
-			required: true,
-		},
-	},
 };
 
 export const PollSchema = z.object({
@@ -212,8 +209,11 @@ export const PollSchema = z.object({
 });
 
 export type Poll = z.infer<typeof PollSchema>;
+export const PollPopulatedGetSchema = PollSchema;
 export type PollPopulatedGet = Poll;
+export const PollPopulatedListSchema = PollSchema;
 export type PollPopulatedList = Poll;
+export const PollCreateResultSchema = PollSchema;
 export type PollCreateResult = Poll;
 
 export const PollCreatePayloadAndUpdatePayloadSchema = z.object({
@@ -226,7 +226,9 @@ export const PollCreatePayloadAndUpdatePayloadSchema = z.object({
 export type PollCreatePayloadAndUpdatePayload = z.infer<
 	typeof PollCreatePayloadAndUpdatePayloadSchema
 >;
+export const PollCreatePayloadSchema = PollCreatePayloadAndUpdatePayloadSchema;
 export type PollCreatePayload = PollCreatePayloadAndUpdatePayload;
+export const PollUpdatePayloadSchema = PollCreatePayloadAndUpdatePayloadSchema;
 export type PollUpdatePayload = PollCreatePayloadAndUpdatePayload;
 
 export const PollModel: ModelDefinition<typeof PollSchema> = {
@@ -238,69 +240,60 @@ export const PollModel: ModelDefinition<typeof PollSchema> = {
 		{
 			name: "id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "organization_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Organization Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "updated_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Updated At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "created_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Created At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "question",
 			type: "text",
-			description: "",
-			required: true,
+			label: "Question",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "answers",
 			type: "object",
-			description: "",
-			required: true,
+			label: "Answers",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "post_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Post Id",
+			constraints: {
+				required: true,
+			},
 		},
 	],
-	htmlConstraints: {
-		id: {
-			required: true,
-		},
-		organization_id: {
-			required: true,
-		},
-		updated_at: {
-			required: true,
-		},
-		created_at: {
-			required: true,
-		},
-		question: {
-			required: true,
-		},
-		answers: {
-			required: true,
-		},
-		post_id: {
-			required: true,
-		},
-	},
 };
 
 export const PostImageSchema = z.object({
@@ -318,8 +311,11 @@ export const PostImageSchema = z.object({
 });
 
 export type PostImage = z.infer<typeof PostImageSchema>;
+export const PostImagePopulatedGetSchema = PostImageSchema;
 export type PostImagePopulatedGet = PostImage;
+export const PostImagePopulatedListSchema = PostImageSchema;
 export type PostImagePopulatedList = PostImage;
+export const PostImageCreateResultSchema = PostImageSchema;
 export type PostImageCreateResult = PostImage;
 
 export const PostImageCreatePayloadAndUpdatePayloadSchema = z.object({
@@ -335,7 +331,11 @@ export const PostImageCreatePayloadAndUpdatePayloadSchema = z.object({
 export type PostImageCreatePayloadAndUpdatePayload = z.infer<
 	typeof PostImageCreatePayloadAndUpdatePayloadSchema
 >;
+export const PostImageCreatePayloadSchema =
+	PostImageCreatePayloadAndUpdatePayloadSchema;
 export type PostImageCreatePayload = PostImageCreatePayloadAndUpdatePayload;
+export const PostImageUpdatePayloadSchema =
+	PostImageCreatePayloadAndUpdatePayloadSchema;
 export type PostImageUpdatePayload = PostImageCreatePayloadAndUpdatePayload;
 
 export const PostImageModel: ModelDefinition<typeof PostImageSchema> = {
@@ -347,96 +347,84 @@ export const PostImageModel: ModelDefinition<typeof PostImageSchema> = {
 		{
 			name: "id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "organization_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Organization Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "updated_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Updated At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "created_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Created At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "file_storage_key",
 			type: "text",
-			description: "",
-			required: true,
+			label: "File Storage Key",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "file_storage_bucket",
 			type: "text",
-			description: "",
-			required: true,
+			label: "File Storage Bucket",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "file_original_name",
 			type: "text",
-			description: "",
-			required: false,
+			label: "File Original Name",
+			constraints: {
+				required: false,
+			},
 		},
 		{
 			name: "file_size",
 			type: "integer",
-			description: "",
-			required: false,
+			label: "File Size",
+			constraints: {
+				required: false,
+			},
 		},
 		{
 			name: "file_hash",
 			type: "blob",
-			description: "",
-			required: false,
+			label: "File Hash",
+			constraints: {
+				required: false,
+			},
 		},
 		{
 			name: "post_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Post Id",
+			constraints: {
+				required: true,
+			},
 		},
 	],
-	htmlConstraints: {
-		id: {
-			required: true,
-		},
-		organization_id: {
-			required: true,
-		},
-		updated_at: {
-			required: true,
-		},
-		created_at: {
-			required: true,
-		},
-		file_storage_key: {
-			required: true,
-		},
-		file_storage_bucket: {
-			required: true,
-		},
-		file_original_name: {
-			required: false,
-		},
-		file_size: {
-			required: false,
-		},
-		file_hash: {
-			required: false,
-		},
-		post_id: {
-			required: true,
-		},
-	},
 };
 
 export const ReactionSchema = z.object({
@@ -450,8 +438,11 @@ export const ReactionSchema = z.object({
 });
 
 export type Reaction = z.infer<typeof ReactionSchema>;
+export const ReactionPopulatedGetSchema = ReactionSchema;
 export type ReactionPopulatedGet = Reaction;
+export const ReactionPopulatedListSchema = ReactionSchema;
 export type ReactionPopulatedList = Reaction;
+export const ReactionCreateResultSchema = ReactionSchema;
 export type ReactionCreateResult = Reaction;
 
 export const ReactionCreatePayloadAndUpdatePayloadSchema = z.object({
@@ -463,7 +454,11 @@ export const ReactionCreatePayloadAndUpdatePayloadSchema = z.object({
 export type ReactionCreatePayloadAndUpdatePayload = z.infer<
 	typeof ReactionCreatePayloadAndUpdatePayloadSchema
 >;
+export const ReactionCreatePayloadSchema =
+	ReactionCreatePayloadAndUpdatePayloadSchema;
 export type ReactionCreatePayload = ReactionCreatePayloadAndUpdatePayload;
+export const ReactionUpdatePayloadSchema =
+	ReactionCreatePayloadAndUpdatePayloadSchema;
 export type ReactionUpdatePayload = ReactionCreatePayloadAndUpdatePayload;
 
 export const ReactionModel: ModelDefinition<typeof ReactionSchema> = {
@@ -475,60 +470,52 @@ export const ReactionModel: ModelDefinition<typeof ReactionSchema> = {
 		{
 			name: "id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "organization_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Organization Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "updated_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Updated At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "created_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Created At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "type",
 			type: "text",
-			description: "",
-			required: true,
+			label: "Type",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "post_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Post Id",
+			constraints: {
+				required: true,
+			},
 		},
 	],
-	htmlConstraints: {
-		id: {
-			required: true,
-		},
-		organization_id: {
-			required: true,
-		},
-		updated_at: {
-			required: true,
-		},
-		created_at: {
-			required: true,
-		},
-		type: {
-			required: true,
-		},
-		post_id: {
-			required: true,
-		},
-	},
 };
 
 export const PostSchema = z.object({
@@ -542,6 +529,7 @@ export const PostSchema = z.object({
 });
 
 export type Post = z.infer<typeof PostSchema>;
+export const PostCreateResultSchema = PostSchema;
 export type PostCreateResult = Post;
 
 export const PostCreatePayloadAndUpdatePayloadSchema = z.object({
@@ -553,7 +541,9 @@ export const PostCreatePayloadAndUpdatePayloadSchema = z.object({
 export type PostCreatePayloadAndUpdatePayload = z.infer<
 	typeof PostCreatePayloadAndUpdatePayloadSchema
 >;
+export const PostCreatePayloadSchema = PostCreatePayloadAndUpdatePayloadSchema;
 export type PostCreatePayload = PostCreatePayloadAndUpdatePayload;
+export const PostUpdatePayloadSchema = PostCreatePayloadAndUpdatePayloadSchema;
 export type PostUpdatePayload = PostCreatePayloadAndUpdatePayload;
 
 export const PostPopulatedGetSchema = z.object({
@@ -595,60 +585,54 @@ export const PostModel: ModelDefinition<typeof PostSchema> = {
 		{
 			name: "id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "organization_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Organization Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "updated_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Updated At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "created_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Created At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "subject",
 			type: "text",
-			description: "",
-			required: true,
+			label: "Subject",
+			description: "A summary of the post",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "body",
 			type: "text",
-			description: "",
-			required: true,
+			label: "Body",
+			description: "The text of the post",
+			constraints: {
+				required: true,
+			},
 		},
 	],
-	htmlConstraints: {
-		id: {
-			required: true,
-		},
-		organization_id: {
-			required: true,
-		},
-		updated_at: {
-			required: true,
-		},
-		created_at: {
-			required: true,
-		},
-		subject: {
-			required: true,
-		},
-		body: {
-			required: true,
-		},
-	},
 };
 
 export const ReportSectionSchema = z.object({
@@ -664,8 +648,11 @@ export const ReportSectionSchema = z.object({
 });
 
 export type ReportSection = z.infer<typeof ReportSectionSchema>;
+export const ReportSectionPopulatedGetSchema = ReportSectionSchema;
 export type ReportSectionPopulatedGet = ReportSection;
+export const ReportSectionPopulatedListSchema = ReportSectionSchema;
 export type ReportSectionPopulatedList = ReportSection;
+export const ReportSectionCreateResultSchema = ReportSectionSchema;
 export type ReportSectionCreateResult = ReportSection;
 
 export const ReportSectionCreatePayloadAndUpdatePayloadSchema = z.object({
@@ -679,8 +666,12 @@ export const ReportSectionCreatePayloadAndUpdatePayloadSchema = z.object({
 export type ReportSectionCreatePayloadAndUpdatePayload = z.infer<
 	typeof ReportSectionCreatePayloadAndUpdatePayloadSchema
 >;
+export const ReportSectionCreatePayloadSchema =
+	ReportSectionCreatePayloadAndUpdatePayloadSchema;
 export type ReportSectionCreatePayload =
 	ReportSectionCreatePayloadAndUpdatePayload;
+export const ReportSectionUpdatePayloadSchema =
+	ReportSectionCreatePayloadAndUpdatePayloadSchema;
 export type ReportSectionUpdatePayload =
 	ReportSectionCreatePayloadAndUpdatePayload;
 
@@ -693,78 +684,68 @@ export const ReportSectionModel: ModelDefinition<typeof ReportSectionSchema> = {
 		{
 			name: "id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "organization_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Organization Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "updated_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Updated At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "created_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Created At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "name",
 			type: "text",
-			description: "",
-			required: true,
+			label: "Name",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "viz",
 			type: "text",
-			description: "",
-			required: true,
+			label: "Viz",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "options",
 			type: "object",
-			description: "",
-			required: true,
+			label: "Options",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "report_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Report Id",
+			constraints: {
+				required: true,
+			},
 		},
 	],
-	htmlConstraints: {
-		id: {
-			required: true,
-		},
-		organization_id: {
-			required: true,
-		},
-		updated_at: {
-			required: true,
-		},
-		created_at: {
-			required: true,
-		},
-		name: {
-			required: true,
-		},
-		viz: {
-			required: true,
-		},
-		options: {
-			required: true,
-		},
-		report_id: {
-			required: true,
-		},
-	},
 };
 
 export const ReportSchema = z.object({
@@ -785,7 +766,7 @@ export const ReportCreatePayloadSchema = z.object({
 	title: z.string(),
 	description: z.string().optional(),
 	ui: z.any(),
-	report_sections: z.string().uuid().optional(),
+	report_sections: ReportSectionCreatePayloadSchema.array().optional(),
 });
 
 export type ReportCreatePayload = z.infer<typeof ReportCreatePayloadSchema>;
@@ -805,7 +786,9 @@ export const ReportPopulatedGetAndCreateResultSchema = z.object({
 export type ReportPopulatedGetAndCreateResult = z.infer<
 	typeof ReportPopulatedGetAndCreateResultSchema
 >;
+export const ReportPopulatedGetSchema = ReportPopulatedGetAndCreateResultSchema;
 export type ReportPopulatedGet = ReportPopulatedGetAndCreateResult;
+export const ReportCreateResultSchema = ReportPopulatedGetAndCreateResultSchema;
 export type ReportCreateResult = ReportPopulatedGetAndCreateResult;
 
 export const ReportPopulatedListSchema = z.object({
@@ -827,7 +810,7 @@ export const ReportUpdatePayloadSchema = z.object({
 	title: z.string(),
 	description: z.string().optional(),
 	ui: z.any().optional(),
-	report_sections: z.string().uuid().optional(),
+	report_sections: ReportSectionUpdatePayloadSchema.array().optional(),
 });
 
 export type ReportUpdatePayload = z.infer<typeof ReportUpdatePayloadSchema>;
@@ -841,69 +824,60 @@ export const ReportModel: ModelDefinition<typeof ReportSchema> = {
 		{
 			name: "id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "organization_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Organization Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "updated_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Updated At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "created_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Created At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "title",
 			type: "text",
-			description: "",
-			required: true,
+			label: "Title",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "description",
 			type: "text",
-			description: "",
-			required: false,
+			label: "Description",
+			constraints: {
+				required: false,
+			},
 		},
 		{
 			name: "ui",
 			type: "object",
-			description: "",
-			required: true,
+			label: "Ui",
+			constraints: {
+				required: true,
+			},
 		},
 	],
-	htmlConstraints: {
-		id: {
-			required: true,
-		},
-		organization_id: {
-			required: true,
-		},
-		updated_at: {
-			required: true,
-		},
-		created_at: {
-			required: true,
-		},
-		title: {
-			required: true,
-		},
-		description: {
-			required: false,
-		},
-		ui: {
-			required: true,
-		},
-	},
 };
 
 export const RoleSchema = z.object({
@@ -917,8 +891,11 @@ export const RoleSchema = z.object({
 });
 
 export type Role = z.infer<typeof RoleSchema>;
+export const RolePopulatedGetSchema = RoleSchema;
 export type RolePopulatedGet = Role;
+export const RolePopulatedListSchema = RoleSchema;
 export type RolePopulatedList = Role;
+export const RoleCreateResultSchema = RoleSchema;
 export type RoleCreateResult = Role;
 
 export const RoleCreatePayloadAndUpdatePayloadSchema = z.object({
@@ -930,7 +907,9 @@ export const RoleCreatePayloadAndUpdatePayloadSchema = z.object({
 export type RoleCreatePayloadAndUpdatePayload = z.infer<
 	typeof RoleCreatePayloadAndUpdatePayloadSchema
 >;
+export const RoleCreatePayloadSchema = RoleCreatePayloadAndUpdatePayloadSchema;
 export type RoleCreatePayload = RoleCreatePayloadAndUpdatePayload;
+export const RoleUpdatePayloadSchema = RoleCreatePayloadAndUpdatePayloadSchema;
 export type RoleUpdatePayload = RoleCreatePayloadAndUpdatePayload;
 
 export const RoleModel: ModelDefinition<typeof RoleSchema> = {
@@ -942,60 +921,52 @@ export const RoleModel: ModelDefinition<typeof RoleSchema> = {
 		{
 			name: "id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "organization_id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Organization Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "updated_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Updated At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "created_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Created At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "name",
 			type: "text",
-			description: "",
-			required: true,
+			label: "Name",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "description",
 			type: "text",
-			description: "",
-			required: false,
+			label: "Description",
+			constraints: {
+				required: false,
+			},
 		},
 	],
-	htmlConstraints: {
-		id: {
-			required: true,
-		},
-		organization_id: {
-			required: true,
-		},
-		updated_at: {
-			required: true,
-		},
-		created_at: {
-			required: true,
-		},
-		name: {
-			required: true,
-		},
-		description: {
-			required: false,
-		},
-	},
 };
 
 export const UserSchema = z.object({
@@ -1010,8 +981,11 @@ export const UserSchema = z.object({
 });
 
 export type User = z.infer<typeof UserSchema>;
+export const UserPopulatedGetSchema = UserSchema;
 export type UserPopulatedGet = User;
+export const UserPopulatedListSchema = UserSchema;
 export type UserPopulatedList = User;
+export const UserCreateResultSchema = UserSchema;
 export type UserCreateResult = User;
 
 export const UserCreatePayloadAndUpdatePayloadSchema = z.object({
@@ -1024,7 +998,9 @@ export const UserCreatePayloadAndUpdatePayloadSchema = z.object({
 export type UserCreatePayloadAndUpdatePayload = z.infer<
 	typeof UserCreatePayloadAndUpdatePayloadSchema
 >;
+export const UserCreatePayloadSchema = UserCreatePayloadAndUpdatePayloadSchema;
 export type UserCreatePayload = UserCreatePayloadAndUpdatePayload;
+export const UserUpdatePayloadSchema = UserCreatePayloadAndUpdatePayloadSchema;
 export type UserUpdatePayload = UserCreatePayloadAndUpdatePayload;
 
 export const UserModel: ModelDefinition<typeof UserSchema> = {
@@ -1036,76 +1012,66 @@ export const UserModel: ModelDefinition<typeof UserSchema> = {
 		{
 			name: "id",
 			type: "uuid",
-			description: "",
-			required: true,
+			label: "Id",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "organization_id",
 			type: "uuid",
-			description: "",
-			required: false,
+			label: "Organization Id",
+			constraints: {
+				required: false,
+			},
 		},
 		{
 			name: "updated_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Updated At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "created_at",
 			type: "date-time",
-			description: "",
-			required: true,
+			label: "Created At",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "name",
 			type: "text",
-			description: "",
-			required: true,
+			label: "Name",
+			constraints: {
+				required: true,
+			},
 		},
 		{
 			name: "password_hash",
 			type: "text",
-			description: "",
-			required: false,
+			label: "Password Hash",
+			constraints: {
+				required: false,
+			},
 		},
 		{
 			name: "email",
 			type: "text",
-			description: "",
-			required: false,
+			label: "Email",
+			constraints: {
+				required: false,
+			},
 		},
 		{
 			name: "avatar_url",
 			type: "text",
-			description: "",
-			required: false,
+			label: "Avatar Url",
+			constraints: {
+				required: false,
+			},
 		},
 	],
-	htmlConstraints: {
-		id: {
-			required: true,
-		},
-		organization_id: {
-			required: false,
-		},
-		updated_at: {
-			required: true,
-		},
-		created_at: {
-			required: true,
-		},
-		name: {
-			required: true,
-		},
-		password_hash: {
-			required: false,
-		},
-		email: {
-			required: false,
-		},
-		avatar_url: {
-			required: false,
-		},
-	},
 };

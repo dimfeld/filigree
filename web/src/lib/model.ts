@@ -14,8 +14,14 @@ export type FieldType =
 export interface ModelField {
   name: string;
   type: FieldType;
-  description: string;
-  required: boolean;
+  label: string;
+  description?: string;
+  /** Constraints to add to HTML fields for a particular field  */
+  constraints?: {
+    min?: number;
+    max?: number;
+    required?: boolean;
+  };
 }
 
 export interface ModelDefinition<SCHEMA extends z.AnyZodObject> {
@@ -25,12 +31,4 @@ export interface ModelDefinition<SCHEMA extends z.AnyZodObject> {
   url: string;
   fields: ModelField[];
   schema: SCHEMA;
-  /** Constraints to add to HTML fields for a particular field  */
-  htmlConstraints?: {
-    [name: string]: {
-      min?: number;
-      max?: number;
-      required?: boolean;
-    };
-  };
 }

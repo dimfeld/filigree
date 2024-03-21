@@ -7,6 +7,8 @@ use crate::{
 fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
     ModelField {
         name: name.to_string(),
+        label: None,
+        description: None,
         typ,
         rust_type: None,
         zod_type: None,

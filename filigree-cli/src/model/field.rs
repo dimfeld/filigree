@@ -11,6 +11,13 @@ pub struct ModelField {
     /// The name of the field
     pub name: String,
 
+    /// A label to be used when displaying this field. If omitted, `name` will be used, converted
+    /// to Title Case.
+    pub label: Option<String>,
+
+    /// A description of the field
+    pub description: Option<String>,
+
     /// If this field was renamed, this is the old name of the field. This helps with
     /// creating migrations, so that the column can be renamed instead of deleted and recreated.
     pub previous_name: Option<String>,
@@ -172,6 +179,8 @@ impl ModelField {
     pub fn template_context(&self) -> serde_json::Value {
         json!({
             "name": self.name,
+            "label": self.label.clone().unwrap_or_else(|| self.name.to_case(Case::Title)),
+            "description": self.description.as_deref().unwrap_or_default(),
             "base_type": self.typ,
             "sql_name": self.sql_field_name(),
             "sql_full_name": self.qualified_sql_field_name(),
