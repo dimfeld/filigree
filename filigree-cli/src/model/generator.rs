@@ -139,24 +139,26 @@ impl<'a> ModelGenerator<'a> {
         }
 
         let web_base_path = PathBuf::from("src/lib/models");
-        let web_files = ModelWebTemplates::iter().map(|f| {
-            let outfile = if f == "model/model.ts.tera" {
-                // The main file. Right now we render this straight into lib
-                web_base_path.join(format!("{}.ts", self.model.module_name()))
-            } else {
-                // Other files go in a subdirectory
-                web_base_path
-                    .join(self.model.module_name())
-                    .join(strip_path(f.as_ref()))
-            };
+        let web_files = ModelWebTemplates::iter()
+            .filter(|f| !f.ends_with(".macros.tera"))
+            .map(|f| {
+                let outfile = if f == "model/model.ts.tera" {
+                    // The main file. Right now we render this straight into lib
+                    web_base_path.join(format!("{}.ts", self.model.module_name()))
+                } else {
+                    // Other files go in a subdirectory
+                    web_base_path
+                        .join(self.model.module_name())
+                        .join(strip_path(f.as_ref()))
+                };
 
-            (
-                f,
-                outfile,
-                RenderedFileLocation::Web,
-                self.template_context(),
-            )
-        });
+                (
+                    f,
+                    outfile,
+                    RenderedFileLocation::Web,
+                    self.template_context(),
+                )
+            });
 
         let rust_base_path = PathBuf::from("src/models").join(self.model.module_name());
         let skip_files = [
@@ -190,7 +192,7 @@ impl<'a> ModelGenerator<'a> {
 
         let api_files = ModelSqlTemplates::iter()
             .chain(ModelRustTemplates::iter())
-            .filter(|f| !skip_files.contains(&f.as_ref()))
+            .filter(|f| !skip_files.contains(&f.as_ref()) && !f.ends_with(".macros.tera"))
             .map(|f| {
                 let outfile = rust_base_path.join(strip_path(f.as_ref()));
                 (

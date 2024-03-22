@@ -131,6 +131,9 @@ export interface RequestOptions {
   followRedirects?: boolean;
 }
 
+/** A version of `RequestOptions` for functions that fill in the URL and method themselves */
+export type ConfiguredRequestOptions = Omit<RequestOptions, 'url' | 'method' | 'json'>;
+
 function makeUrl(baseUrl: string | undefined, url: string | URL, searchParams: URLSearchParams) {
   let qs = searchParams.toString();
 

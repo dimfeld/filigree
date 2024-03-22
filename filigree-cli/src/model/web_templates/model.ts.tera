@@ -1,4 +1,4 @@
-import type { ModelDefinition } from 'filigree-web';
+import { client, type ModelDefinition } from 'filigree-web';
 import { z } from 'zod';
 import { ObjectPermission } from '../model_types.js';
 {{ts_imports}}
@@ -16,11 +16,25 @@ export type {{alias}} = {{struct.name}};
 
 {%- endfor %}
 
+export const baseUrl = '{{url_path}}';
+export const urlWithId = (id: string) => `${baseUrl}/${id}`
+
+export const urls = {
+  create: baseUrl,
+  list: baseUrl,
+  get: urlWithId,
+  update: urlWithId,
+  delete: urlWithId,
+};
+
 export const {{name}}Model : ModelDefinition<typeof {{struct_base}}Schema> = {
   name: "{{name}}",
   plural: "{{plural}}",
-  url: "{{url_path}}",
+  baseUrl,
+  urls,
   schema: {{struct_base}}Schema,
+  createSchema: {{struct_base}}CreatePayloadSchema,
+  updateSchema: {{struct_base}}UpdatePayloadSchema,
   fields: [
     {% for field in fields -%}
     {
