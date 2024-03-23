@@ -197,6 +197,7 @@ impl Model {
         // for things to work properly.
     }
 
+    /// Return true if this table depends on the `other` table in some way.
     fn depends_on(&self, other: &Model) -> bool {
         if self
             .joins
@@ -211,6 +212,16 @@ impl Model {
             if b.model() == other.name {
                 return true;
             }
+        }
+
+        if other.fields.iter().any(|f| {
+            let Some(r) = &f.references else {
+                return false;
+            };
+
+            r.table == self.table()
+        }) {
+            return true;
         }
 
         false
