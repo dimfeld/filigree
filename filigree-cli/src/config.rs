@@ -1,6 +1,10 @@
+pub mod job;
 pub mod storage;
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use error_stack::{Report, ResultExt};
 use glob::glob;
@@ -64,6 +68,10 @@ pub struct Config {
     /// Storage locations and providers that the application uses
     #[serde(default)]
     pub storage: StorageConfig,
+
+    /// Configuration for background jobs
+    #[serde(default)]
+    pub job: BTreeMap<String, job::Job>,
 }
 
 impl Config {
