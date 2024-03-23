@@ -7,23 +7,23 @@ use crate::Error;
 #[derive(Args, Debug)]
 pub struct BootstrapCommand {
     /// The email for the admin user
-    #[clap(env = "{{env_prefix}}BOOTSTRAP_ADMIN_EMAIL")]
+    #[clap(long = "email", env = "{{env_prefix}}BOOTSTRAP_ADMIN_EMAIL")]
     admin_email: String,
 
     /// The name for the admin user
     /// Defaults to "Admin"
-    #[clap(env = "{{env_prefix}}BOOTSTRAP_ADMIN_NAME")]
+    #[clap(long = "name", env = "{{env_prefix}}BOOTSTRAP_ADMIN_NAME")]
     admin_name: Option<String>,
 
     /// The password for the admin user. If supplied, this should be prehashed
     /// by the `util hash` subcommand. If omitted, login through OAuth2 and passwordless methods
     /// will still work.
-    #[clap(env = "{{env_prefix}}BOOTSTRAP_ADMIN_PASSWORD")]
+    #[clap(long = "password", env = "{{env_prefix}}BOOTSTRAP_ADMIN_PASSWORD")]
     admin_password: Option<String>,
 
     /// The name for the admin user's organization.
     /// Defaults to "Administration"
-    #[clap(env = "{{env_prefix}}BOOTSTRAP_ORG_NAME")]
+    #[clap(long = "org-name", env = "{{env_prefix}}BOOTSTRAP_ORG_NAME")]
     organization_name: Option<String>,
 
     /// Force adding the admin user even if the database already contains at least one
