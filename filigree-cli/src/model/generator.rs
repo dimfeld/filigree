@@ -234,8 +234,8 @@ impl<'a> ModelGenerator<'a> {
         &self,
         for_update: bool,
     ) -> Result<impl Iterator<Item = Cow<ModelField>>, Error> {
-        // The ID field is only used for child models, but we just add it always, make it optional,
-        // and ignore it in the other cases.
+        // The ID field is only used for child models or when `specify_id_in_create` is set,
+        // but we just add it always, make it optional, and ignore it in the other cases.
         let mut id_field = self.id_field();
         id_field.nullable = true;
 
@@ -489,6 +489,7 @@ impl<'a> ModelGenerator<'a> {
             "update_payload_fields": update_payload_fields,
             "rust_imports": rust_imports,
             "ts_imports": ts_imports,
+            "allow_id_in_create": self.allow_id_in_create,
             "belongs_to_field": belongs_to_field,
             "can_populate_get": can_populate_get,
             "can_populate_list": can_populate_list,

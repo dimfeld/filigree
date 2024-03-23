@@ -59,6 +59,10 @@ pub struct Model {
     #[serde(default)]
     pub global: bool,
 
+    /// Allow specifying the ID of the object when creating it
+    #[serde(default)]
+    pub allow_id_in_create: bool,
+
     /// Set how permissions are tracked on this model. If omitted, it will use [Config#default_auth_scope]
     #[serde(default)]
     pub auth_scope: Option<ModelAuthScope>,

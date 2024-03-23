@@ -223,6 +223,7 @@ impl FileModelOptions {
             extra_create_table_sql: String::new(),
             extra_sql: String::new(),
             global: false,
+            allow_id_in_create: false,
             auth_scope: None,
             indexes: vec![],
             joins: None,

@@ -289,11 +289,16 @@ where
 /// Create a new {{struct_base}} in the database.
 pub async fn create(db: &mut PgConnection, auth: &AuthInfo, payload: {{struct_base}}CreatePayload) -> Result<{{struct_base}}CreateResult, error_stack::Report<Error>> {
     // TODO create permissions auth check
+    {% if allow_id_in_create %}
+    let id = payload.id.unwrap_or_else({{id_type}}::new);
+    {% else %}
     let id = {{id_type}}::new();
+    {% endif %}
     create_raw(&mut *db, id, auth.organization_id, payload).await
 }
 
-/// Create a new {{struct_base}} in the database, allowing the ID to be explicitly specified.
+/// Create a new {{struct_base}} in the database, allowing the ID to be explicitly specified
+/// regardless of whether it would normally be allowed.
 #[instrument(skip(db))]
 pub async fn create_raw(
     db: &mut PgConnection,

@@ -1,6 +1,7 @@
 name = "Post"
 id_prefix = "pst"
 endpoints = true
+allow_id_in_create = true
 
 [[fields]]
 name = "subject"
