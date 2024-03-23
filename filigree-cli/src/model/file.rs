@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use cargo_toml::Manifest;
 use convert_case::{Case, Casing};
 use error_stack::Report;
@@ -95,9 +97,9 @@ impl FileModelOptions {
         Ok(())
     }
 
-    pub fn add_deps(&self, manifest: &mut Manifest) -> Result<(), Report<Error>> {
+    pub fn add_deps(&self, api_dir: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
         if let Some(hash) = &self.meta.hash {
-            hash.add_deps(manifest)?;
+            hash.add_deps(api_dir, manifest)?;
         }
 
         Ok(())
@@ -337,10 +339,10 @@ impl HashType {
         })
     }
 
-    fn add_deps(&self, manifest: &mut Manifest) -> Result<(), Report<Error>> {
+    fn add_deps(&self, api_dir: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
         let crate_dep = self.crate_name();
-        crate::add_deps::add_dep(manifest, &crate_dep)?;
-        crate::add_deps::add_dep(manifest, &("digest", "0.10.7", &[]))?;
+        crate::add_deps::add_dep(api_dir, manifest, &crate_dep)?;
+        crate::add_deps::add_dep(api_dir, manifest, &("digest", "0.10.7", &[]))?;
         Ok(())
     }
 

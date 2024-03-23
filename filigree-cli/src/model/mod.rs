@@ -5,7 +5,7 @@ mod generate_types;
 pub mod generator;
 pub mod validate;
 
-use std::borrow::Cow;
+use std::{borrow::Cow, path::Path};
 
 use cargo_toml::Manifest;
 use convert_case::{Case, Casing};
@@ -147,9 +147,9 @@ impl Model {
             .unwrap_or_else(|| Cow::Owned(format!("{}s", self.name)))
     }
 
-    pub fn add_deps(&self, manifest: &mut Manifest) -> Result<(), Report<Error>> {
+    pub fn add_deps(&self, api_dir: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
         for file in &self.files {
-            file.add_deps(manifest)?;
+            file.add_deps(api_dir, manifest)?;
         }
 
         Ok(())

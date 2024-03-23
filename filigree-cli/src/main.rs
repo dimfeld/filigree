@@ -197,9 +197,9 @@ pub fn main() -> Result<(), Report<Error>> {
 
     model::validate::validate_model_configuration(&config, &model_map)?;
 
-    add_deps::add_fixed_deps(&mut crate_manifest)?;
+    add_deps::add_fixed_deps(&api_dir, &mut crate_manifest)?;
     for model in &models {
-        model.add_deps(&mut crate_manifest)?;
+        model.add_deps(&api_dir, &mut crate_manifest)?;
     }
 
     let mut generators = models

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use cargo_toml::{DependencyDetail, Manifest};
 use error_stack::{Report, ResultExt};
 use semver::{Version, VersionReq};
@@ -47,21 +49,22 @@ const DEPS: &[DepVersion<'static>] = &[
     ("uuid", "1.6.1", &[]),
 ];
 
-pub fn add_fixed_deps(manifest: &mut Manifest) -> Result<(), Report<Error>> {
+pub fn add_fixed_deps(cwd: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
     for dep in DEPS {
-        add_dep(manifest, dep)?;
+        add_dep(cwd, manifest, dep)?;
     }
 
     Ok(())
 }
 
 pub fn add_dep(
+    cwd: &Path,
     manifest: &mut Manifest,
     (name, version, features): &DepVersion,
 ) -> Result<(), Report<Error>> {
     let existing = manifest.dependencies.get(*name);
     let Some(existing) = existing else {
-        run_cargo_add(name, version, features)?;
+        run_cargo_add(cwd, name, version, features)?;
         return Ok(());
     };
 
@@ -83,7 +86,7 @@ pub fn add_dep(
     };
 
     if !desired.matches(&existing_version) {
-        run_cargo_add(name, version, features)?;
+        run_cargo_add(cwd, name, version, features)?;
         manifest.dependencies.insert(
             name.to_string(),
             cargo_toml::Dependency::Detailed(DependencyDetail {
@@ -101,7 +104,7 @@ pub fn add_dep(
         .iter()
         .all(|feature| existing_features.iter().any(|f| f == feature))
     {
-        run_cargo_add(name, version, features)?;
+        run_cargo_add(cwd, name, version, features)?;
         manifest.dependencies.insert(
             name.to_string(),
             cargo_toml::Dependency::Detailed(DependencyDetail {
@@ -116,7 +119,12 @@ pub fn add_dep(
     Ok(())
 }
 
-fn run_cargo_add(name: &str, version: &str, features: &[&str]) -> Result<(), Report<Error>> {
+fn run_cargo_add(
+    cwd: &Path,
+    name: &str,
+    version: &str,
+    features: &[&str],
+) -> Result<(), Report<Error>> {
     let operation = if features.is_empty() {
         format!("Adding depdendency {name}@{version}")
     } else {
@@ -126,6 +134,7 @@ fn run_cargo_add(name: &str, version: &str, features: &[&str]) -> Result<(), Rep
     println!("{operation}");
 
     let mut cmd = std::process::Command::new("cargo");
+    cmd.current_dir(cwd);
     cmd.arg("add");
     cmd.arg(&format!("{name}@{version}"));
 
