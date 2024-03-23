@@ -527,7 +527,7 @@ impl<'a> ModelGenerator<'a> {
             description: None,
             typ: SqlType::Uuid,
             rust_type: Some(self.object_id_type()),
-            zod_type: None,
+            zod_type: Some("z.string()".to_string()),
             nullable: false,
             unique: false,
             indexed: false,
@@ -558,7 +558,7 @@ impl<'a> ModelGenerator<'a> {
                 label: None,
                 description: None,
                 rust_type: Some("crate::models::organization::OrganizationId".to_string()),
-                zod_type: None,
+                zod_type: Some("z.string()".to_string()),
                 nullable: !locked_to_single_org,
                 unique: false,
                 indexed: true,
@@ -597,7 +597,7 @@ impl<'a> ModelGenerator<'a> {
                     label: None,
                     description: None,
                     rust_type: Some(model.object_id_type()),
-                    zod_type: None,
+                    zod_type: Some("z.string()".to_string()),
                     nullable: false,
                     unique: false,
                     indexed: true,
@@ -778,8 +778,8 @@ impl<'a> ModelGenerator<'a> {
     ) -> String {
         match (fetch_type, many) {
             (ReferenceFetchType::None, _) => String::new(),
-            (ReferenceFetchType::Id, false) => "z.string().uuid()".to_string(),
-            (ReferenceFetchType::Id, true) => "z.string().uuid().array()".to_string(),
+            (ReferenceFetchType::Id, false) => "z.string()".to_string(),
+            (ReferenceFetchType::Id, true) => "z.string().array()".to_string(),
             (ReferenceFetchType::Data, false) => format!("{}{suffix}Schema", model.struct_name()),
             (ReferenceFetchType::Data, true) => {
                 format!("{}{suffix}Schema.array()", model.struct_name())
