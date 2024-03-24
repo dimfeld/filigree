@@ -3,8 +3,8 @@ pub mod cmd;
 pub mod db;
 pub mod emails;
 pub mod error;
+pub mod jobs;
 pub mod models;
-
 pub mod server;
 pub mod storage;
 #[cfg(test)]

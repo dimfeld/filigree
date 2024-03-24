@@ -68,10 +68,15 @@ pub struct Config {
     /// Storage locations and providers that the application uses
     #[serde(default)]
     pub storage: StorageConfig,
-    // TODO
-    // /// Configuration for background jobs
-    // #[serde(default)]
-    // pub job: BTreeMap<String, job::JobConfig>,
+
+    /// Configuration for background jobs
+    #[serde(default)]
+    pub job: BTreeMap<String, job::JobConfig>,
+
+    /// Custom Worker configurations for background jobs. Currently all workers
+    /// are in the same process as the API server.
+    #[serde(default)]
+    pub worker: BTreeMap<String, job::WorkerConfig>,
 }
 
 impl Config {

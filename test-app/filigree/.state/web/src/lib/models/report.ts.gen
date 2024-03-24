@@ -2,9 +2,9 @@ import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 import {
-	ReportSectionUpdatePayloadSchema,
 	ReportSectionCreatePayloadSchema,
 	ReportSectionSchema,
+	ReportSectionUpdatePayloadSchema,
 } from "./report_section.js";
 
 export const ReportSchema = z.object({

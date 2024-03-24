@@ -1,0 +1,97 @@
+//! {{name}} background job
+#![allow(unused_imports, unused_variables, dead_code)]
+
+use effectum::{JobBuilder, JobRunner, Queue, RecurringJobSchedule, RunningJob};
+use serde::{Serialize, Deserialize};
+use serde_json::json;
+
+use crate::server::ServerState;
+
+
+/// The payload data for the {{name}} background job
+#[derive(Debug, Serialize, Deserialize)]
+pub struct {{type_name}}JobPayload {
+    // Fill in your payload data here
+}
+
+
+/// Run the {{name}} background job
+async fn run(job: RunningJob, context: ServerState) -> Result<(), crate::Error> {
+    // Fill in your job logic here
+    Ok(())
+}
+
+/// Enqueue the {{name}} job to run immediately
+pub async fn enqueue(
+    state: &ServerState,
+    payload: &{{type_name}}JobPayload
+) -> Result<uuid::Uuid, effectum::Error> {
+    create_job_builder()
+        .json_payload(payload)?
+        .add_to(&state.queue)
+        .await
+}
+
+/// Enqueue the {{name}} job to run at a specific time
+pub async fn enqueue_at(
+    state: &ServerState,
+    payload: &{{type_name}}JobPayload,
+    at: chrono::DateTime<chrono::Utc>
+) -> Result<uuid::Uuid, effectum::Error> {
+    // convert to time crate
+    let timestamp = at.timestamp();
+    let t = time::OffsetDateTime::from_unix_timestamp(timestamp)
+        .map_err(|_| effectum::Error::TimestampOutOfRange("at"))?;
+
+    create_job_builder()
+        .json_payload(payload)?
+        .run_at(t)
+        .add_to(&state.queue)
+        .await
+}
+
+/// Register this job with the queue and initialize any recurring jobs.
+pub async fn register(queue: &Queue) -> Result<JobRunner<ServerState>, effectum::Error> {
+    // TODO register the job with the system
+    let runner = JobRunner::builder("{{name}}", run)
+        .autoheartbeat({{autoheartbeat}})
+        .build();
+
+    {% for schedule in schedules %}
+    {% if schedule.enabled %}
+    // Convert to the payload type just to make sure it's valid. This would be better
+    // done by making the type directly so we get compile safety but that's difficult
+    // to do from the template. Feel free to replace it with the equivalent.
+    let payload : {{type_name}}JobPayload = serde_json::from_value(
+        json!({{schedule.payload}})
+    ).map_err(effectum::Error::PayloadError)?;
+    let {{schedule.name}}_job = create_job_builder()
+        .json_payload(&payload)?
+        .build();
+    queue.upsert_recurring_job(
+        "{{schedule.name}}".to_string(),
+        RecurringJobSchedule::Cron{ spec: "{{schedule.schedule}}".to_string() },
+        {{schedule.name}}_job,
+        false
+    ).await?;
+    {% else %}
+    // {{schedule.name}} is disabled
+    match queue.delete_recurring_job("{{schedule.name}}".to_string()).await {
+        Ok(_) => {},
+        // It's ok if the job doesn't exist. This just means it was already deleted
+        // on a previous execution.
+        Err(effectum::Error::NotFound) => {},
+        Err(e) => return Err(e),
+    };
+    {% endif %}
+    {% endfor %}
+
+    Ok(runner)
+}
+
+fn create_job_builder() -> JobBuilder {
+    JobBuilder::new("{{name}}")
+        .priority({{priority}})
+        .weight({{weight}})
+        {%if timeout %}.timeout({{timeout}}){% endif %}
+}

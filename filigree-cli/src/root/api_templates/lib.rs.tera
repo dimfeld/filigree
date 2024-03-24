@@ -4,6 +4,9 @@ pub mod db;
 pub mod emails;
 pub mod error;
 pub mod models;
+{% if job_list -%}
+pub mod jobs;
+{%- endif %}
 pub mod server;
 {% if storage -%}
 pub mod storage;

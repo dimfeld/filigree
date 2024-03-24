@@ -1,6 +1,11 @@
 _list:
   @just --list
 
+# Stage all the current files in git, then run Filigree
+build-with-backup:
+  git add .
+  @just build-test-app
+
 build-test-app:
   cd filigree-cli && cargo lbuild
   cd test-app && ../target/debug/filigree --overwrite && cargo lcheck

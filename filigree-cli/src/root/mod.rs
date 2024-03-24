@@ -33,6 +33,17 @@ pub fn render_files(
     context.insert("email", &config.email);
     context.insert("server", &config.server);
 
+    let job_list = config
+        .job
+        .iter()
+        .map(|(k, _)| k.to_case(Case::Snake))
+        .sorted()
+        .collect::<Vec<_>>();
+    context.insert("job_list", &job_list);
+
+    let job_workers = crate::config::job::workers_context(&config.worker, &config.job);
+    context.insert("job_workers", &job_workers);
+
     let server_hosts = config
         .server
         .hosts
@@ -92,9 +103,16 @@ pub fn render_files(
 
     let files = web_files.chain(api_files).collect::<Vec<_>>();
 
+    let job_template_path = "root/jobs/_one_job.rs.tera";
+    let skip_files = [
+        "root/auth/fetch_base.sql.tera",
+        "root/build.rs.tera",
+        job_template_path,
+    ];
+
     let mut output = files
         .into_par_iter()
-        .filter(|(_, file)| file != "root/build.rs.tera" && file != "root/auth/fetch_base.sql.tera")
+        .filter(|(_, file)| !skip_files.contains(&file.as_ref()))
         .map(|(location, file)| {
             let filename = file.strip_prefix("root/").unwrap();
             let filename = filename.strip_suffix(".tera").unwrap_or(filename);
@@ -103,6 +121,25 @@ pub fn render_files(
             renderer.render_with_full_path(path, &file, location, &context)
         })
         .collect::<Result<Vec<_>, _>>()?;
+
+    let job_template = config
+        .job
+        .iter()
+        .map(|(k, v)| {
+            let module_name = k.to_case(Case::Snake);
+            let context = tera::Context::from_value(v.template_context(k)).unwrap();
+
+            let output_path = base_path.join(format!("jobs/{module_name}.rs"));
+
+            renderer.render_with_full_path(
+                output_path,
+                job_template_path,
+                RenderedFileLocation::Api,
+                &context,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    output.extend(job_template);
 
     // build.rs doesn't go in src
     let build_rs = renderer.render_with_full_path(

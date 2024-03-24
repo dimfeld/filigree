@@ -1,0 +1,55 @@
+{% if job_list %}
+//! Background jobs
+
+{% for job in job_list -%}
+pub mod {{job}};
+{%- endfor %}
+
+use error_stack::Report;
+use effectum::{Queue, Worker};
+
+use std::path::Path;
+use crate::{Error, server::ServerState};
+
+pub struct QueueWorkers {
+    {% for worker in job_workers %}
+    pub {{worker.name}}: Worker,
+    {% endfor %}
+}
+
+pub async fn create_queue(queue_location: &Path) -> Result<Queue, effectum::Error> {
+    Queue::new(queue_location).await
+}
+
+pub async fn init(state: &ServerState) -> Result<QueueWorkers, effectum::Error> {
+    // create the queue
+
+    // register the jobs
+    {% for job in job_list %}
+    let {{job}}_runner = {{job}}::register(&queue).await?;
+    {% endfor %}
+
+    // create the workers
+    {% for worker in job_workers %}
+        let worker_{{worker.name}} = Worker::builder(&queue, state.clone())
+            .max_concurrency({{worker.max_concurrency}})
+            .min_concurrency({{worker.min_concurrency}})
+            .jobs([
+                {% for job in worker.jobs -%}
+                {{job}}_runner,
+                {%- endfor %}
+            ])
+            .build()
+            .await?;
+    {% endfor %}
+
+    let workers = QueueWorkers {
+        {% for worker in job_workers -%}
+        {{worker.name}}: worker_{{worker.name}},
+        {%- endfor %}
+    };
+
+    Ok((queue, workers))
+}
+
+{% endif %}
