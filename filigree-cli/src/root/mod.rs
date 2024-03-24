@@ -44,6 +44,10 @@ pub fn render_files(
     let job_workers = crate::config::job::workers_context(&config.worker, &config.job);
     context.insert("job_workers", &job_workers);
 
+    if config.use_queue() {
+        context.insert("queue", &config.queue.template_context());
+    }
+
     let server_hosts = config
         .server
         .hosts

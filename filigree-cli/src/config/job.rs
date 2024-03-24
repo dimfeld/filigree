@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use cargo_toml::Manifest;
 use convert_case::{Case, Casing};
@@ -10,12 +13,31 @@ use serde_json::json;
 use crate::Error;
 
 pub fn add_deps(api_dir: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
-    crate::add_deps::add_dep(api_dir, manifest, &("effectum", "0.5.0", &[]))?;
-    crate::add_deps::add_dep(api_dir, manifest, &("time", "0.3.34", &[]))?;
+    crate::add_deps::add_dep(api_dir, manifest, "effectum", "0.5.0", &[])?;
+    crate::add_deps::add_dep(api_dir, manifest, "time", "0.3.34", &[])?;
     Ok(())
 }
 
-/// Configuration for a background job
+/// Configuration for the queue itself
+#[derive(Debug, serde_derive_default::Default, Serialize, Deserialize)]
+pub struct QueueConfig {
+    #[serde(default = "default_queue_path")]
+    path: PathBuf,
+}
+
+impl QueueConfig {
+    pub fn template_context(&self) -> serde_json::Value {
+        json!({
+            "path": self.path
+        })
+    }
+}
+
+fn default_queue_path() -> PathBuf {
+    PathBuf::from("queue.db")
+}
+
+/// Configuratio a background job
 #[derive(Debug, serde_derive_default::Default, Serialize, Deserialize)]
 pub struct JobConfig {
     /// The default priority for this job. Defaults to 1, and jobs with higher priority will be run first

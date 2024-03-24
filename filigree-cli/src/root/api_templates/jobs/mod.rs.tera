@@ -1,15 +1,15 @@
-{% if job_list %}
+{% if queue %}
 //! Background jobs
 
 {% for job in job_list -%}
 pub mod {{job}};
 {%- endfor %}
 
-use error_stack::Report;
 use effectum::{Queue, Worker};
+use futures::FutureExt;
 
 use std::path::Path;
-use crate::{Error, server::ServerState};
+use crate::server::ServerState;
 
 pub struct QueueWorkers {
     {% for worker in job_workers %}
@@ -17,21 +17,31 @@ pub struct QueueWorkers {
     {% endfor %}
 }
 
+impl QueueWorkers {
+    pub async fn shutdown(self) {
+        tokio::join!(
+            {% for worker in job_workers -%}
+            self.{{worker.name}}.unregister(None).map(|r| r.ok()),
+            {%- endfor %}
+        );
+    }
+}
+
 pub async fn create_queue(queue_location: &Path) -> Result<Queue, effectum::Error> {
     Queue::new(queue_location).await
 }
 
-pub async fn init(state: &ServerState) -> Result<QueueWorkers, effectum::Error> {
+pub async fn init(state: &ServerState, init_recurring_jobs: bool) -> Result<QueueWorkers, effectum::Error> {
     // create the queue
 
     // register the jobs
     {% for job in job_list %}
-    let {{job}}_runner = {{job}}::register(&queue).await?;
+    let {{job}}_runner = {{job}}::register(&state.queue, init_recurring_jobs).await?;
     {% endfor %}
 
     // create the workers
     {% for worker in job_workers %}
-        let worker_{{worker.name}} = Worker::builder(&queue, state.clone())
+        let worker_{{worker.name}} = Worker::builder(&state.queue, state.clone())
             .max_concurrency({{worker.max_concurrency}})
             .min_concurrency({{worker.min_concurrency}})
             .jobs([
@@ -49,7 +59,7 @@ pub async fn init(state: &ServerState) -> Result<QueueWorkers, effectum::Error> 
         {%- endfor %}
     };
 
-    Ok((queue, workers))
+    Ok(workers)
 }
 
 {% endif %}

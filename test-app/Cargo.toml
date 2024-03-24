@@ -55,3 +55,6 @@ uuid = "1.7.0"
 
 [features]
 test_password = []
+
+[dev-dependencies]
+temp-dir = "0.1.13"

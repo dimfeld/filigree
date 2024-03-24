@@ -10,7 +10,7 @@ use error_stack::{Report, ResultExt};
 use glob::glob;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use self::storage::StorageConfig;
+use self::{job::QueueConfig, storage::StorageConfig};
 use crate::{
     format::Formatters,
     model::{field::ModelField, Model, ModelAuthScope, SqlDialect},
@@ -69,6 +69,10 @@ pub struct Config {
     #[serde(default)]
     pub storage: StorageConfig,
 
+    /// Configuration for the job queue itself
+    #[serde(default)]
+    pub queue: QueueConfig,
+
     /// Configuration for background jobs
     #[serde(default)]
     pub job: BTreeMap<String, job::JobConfig>,
@@ -94,6 +98,10 @@ impl Config {
 
     pub const fn default_sql_dialect() -> SqlDialect {
         SqlDialect::Postgresql
+    }
+
+    pub fn use_queue(&self) -> bool {
+        !self.job.is_empty() || !self.worker.is_empty()
     }
 }
 

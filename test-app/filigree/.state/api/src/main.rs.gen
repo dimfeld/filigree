@@ -108,6 +108,10 @@ struct ServeCommand {
     /// the default is to obfuscate when env != "development".
     #[clap(env = "OBFUSCATE_ERRORS")]
     obfuscate_errors: Option<bool>,
+
+    /// The location to store the queue database
+    #[clap(env = "QUEUE_PATH", default_value_t = String::from("queue.db"))]
+    queue_path: String,
     // tracing endpoint (if any)
     // honeycomb team
     // honeycomb dataset
@@ -187,6 +191,8 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
                 .same_org_invites_require_email_verification,
         },
         pg_pool,
+        queue_path: std::path::PathBuf::from(cmd.queue_path),
+        init_recurring_jobs: true,
         storage: filigree_test_app::storage::AppStorageConfig::new()
             .change_context(Error::ServerStart)?,
     })

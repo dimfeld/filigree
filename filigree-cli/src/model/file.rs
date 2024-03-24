@@ -341,8 +341,8 @@ impl HashType {
 
     fn add_deps(&self, api_dir: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
         let crate_dep = self.crate_name();
-        crate::add_deps::add_dep(api_dir, manifest, &crate_dep)?;
-        crate::add_deps::add_dep(api_dir, manifest, &("digest", "0.10.7", &[]))?;
+        crate::add_deps::add_dep(api_dir, manifest, crate_dep.0, crate_dep.1, crate_dep.2)?;
+        crate::add_deps::add_dep(api_dir, manifest, "digest", "0.10.7", &[])?;
         Ok(())
     }
 

@@ -55,6 +55,7 @@ pub struct ServerStateInner {
     pub filigree: Arc<FiligreeState>,
     /// The Postgres database connection pool
     pub db: PgPool,
+    pub queue: effectum::Queue,
     /// Object storage providers
     pub storage: storage::AppStorage,
 }
@@ -125,7 +126,9 @@ pub struct Server {
     pub app: Router<()>,
     /// The server state.
     pub state: ServerState,
+    /// The server's TCP listener
     pub listener: tokio::net::TcpListener,
+    pub queue_workers: crate::jobs::QueueWorkers,
 }
 
 impl Server {
@@ -141,11 +144,21 @@ impl Server {
         self,
         shutdown: impl Future<Output = ()> + Send + 'static,
     ) -> Result<(), Report<Error>> {
+        event!(Level::INFO, "Shutting down server");
         axum::serve(self.listener, self.app)
             .with_graceful_shutdown(shutdown)
             .await
             .change_context(Error::ServerStart)?;
-        event!(Level::INFO, "Shutting down server");
+
+        event!(Level::INFO, "Shutting down queue");
+        self.queue_workers.shutdown().await;
+        // Once the workers are shut down, there's nothing else to do but close the queue for good
+        // measure.
+        self.state
+            .queue
+            .close(std::time::Duration::from_secs(30))
+            .await
+            .ok();
 
         // Can do extra shutdown tasks here.
 
@@ -210,6 +223,12 @@ pub struct Config {
     /// OAuth can be disabled, regardless of environment variable settings, but passing `Some(Vec::new())`.
     pub oauth_providers: Option<Vec<Box<dyn OAuthProvider>>>,
 
+    /// The path to the queue file
+    pub queue_path: std::path::PathBuf,
+    /// Set up recurring jobs. This should generally be true for normal operation and false for
+    /// testing.
+    pub init_recurring_jobs: bool,
+
     pub storage: storage::AppStorageConfig,
 }
 
@@ -231,6 +250,11 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .user_agent("Filigree Test App")
         .build()
         .unwrap();
+
+    let queue = crate::jobs::create_queue(&config.queue_path)
+        .await
+        .change_context(Error::ServerStart)?;
+
     let state = ServerState(Arc::new(ServerStateInner {
         production,
         filigree: Arc::new(FiligreeState {
@@ -254,9 +278,14 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         }),
         insecure: config.insecure,
         db: config.pg_pool.clone(),
+        queue,
 
         storage: storage::AppStorage::new(config.storage).change_context(Error::ServerStart)?,
     }));
+
+    let queue_workers = crate::jobs::init(&state, config.init_recurring_jobs)
+        .await
+        .change_context(Error::ServerStart)?;
 
     let auth_queries = Arc::new(crate::auth::AuthQueries::new(
         config.pg_pool,
@@ -325,5 +354,6 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         app,
         state,
         listener,
+        queue_workers,
     })
 }

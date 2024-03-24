@@ -49,7 +49,10 @@ pub async fn enqueue_at(
 }
 
 /// Register this job with the queue and initialize any recurring jobs.
-pub async fn register(queue: &Queue) -> Result<JobRunner<ServerState>, effectum::Error> {
+pub async fn register(
+    queue: &Queue,
+    init_recurring_jobs: bool,
+) -> Result<JobRunner<ServerState>, effectum::Error> {
     // TODO register the job with the system
     let runner = JobRunner::builder("transcode_video", run)
         .autoheartbeat(false)
