@@ -442,7 +442,7 @@ impl<'a> ModelGenerator<'a> {
             .into_iter()
             .sorted_by(|(m1, _), (m2, _)| m1.cmp(m2))
             .map(|(module, imports)| {
-                let imports = imports.join(", ");
+                let imports = imports.into_iter().sorted().join(", ");
                 format!("import {{ {imports} }} from './{module}.js';")
             })
             .join("\n");
