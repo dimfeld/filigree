@@ -16,6 +16,8 @@ const ADMIN_DEFAULT_PERMISSIONS: &[&str] = &["org_admin"];
 const USER_DEFAULT_PERMISSIONS: &[&str] = &[
     "Comment::read",
     "Comment::write",
+    "User::read",
+    "User::write",
     "Organization::read",
     "Organization::write",
     "Poll::read",
@@ -32,8 +34,6 @@ const USER_DEFAULT_PERMISSIONS: &[&str] = &[
     "Report::write",
     "Role::read",
     "Role::write",
-    "User::read",
-    "User::write",
 ];
 
 pub struct CreatedOrganization {

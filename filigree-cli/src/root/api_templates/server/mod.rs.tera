@@ -55,6 +55,9 @@ pub struct ServerStateInner {
     pub filigree: Arc<FiligreeState>,
     /// The Postgres database connection pool
     pub db: PgPool,
+    {% if queue -%}
+    pub queue: effectum::Queue,
+    {%- endif %}
     {% if storage -%}
     /// Object storage providers
     pub storage: storage::AppStorage,
@@ -79,7 +82,16 @@ impl std::ops::Deref for ServerStateInner {
     }
 }
 
-#[derive(Clone)]
+impl std::fmt::Debug for ServerStateInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ServerStateInner")
+            .field("production", &self.production)
+            .field("insecure", &self.insecure)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ServerState(Arc<ServerStateInner>);
 
 impl std::ops::Deref for ServerState {
@@ -118,7 +130,11 @@ pub struct Server {
     pub app: Router<()>,
     /// The server state.
     pub state: ServerState,
+    /// The server's TCP listener
     pub listener: tokio::net::TcpListener,
+    {% if queue -%}
+    pub queue_workers: crate::jobs::QueueWorkers,
+    {%- endif %}
 }
 
 impl Server {
@@ -134,11 +150,19 @@ impl Server {
         self,
         shutdown: impl Future<Output = ()> + Send + 'static,
     ) -> Result<(), Report<Error>> {
+        event!(Level::INFO, "Shutting down server");
         axum::serve(self.listener, self.app)
             .with_graceful_shutdown(shutdown)
             .await
             .change_context(Error::ServerStart)?;
-        event!(Level::INFO, "Shutting down server");
+
+        {% if queue -%}
+        event!(Level::INFO, "Shutting down queue");
+        self.queue_workers.shutdown().await;
+        // Once the workers are shut down, there's nothing else to do but close the queue for good
+        // measure.
+        self.state.queue.close(std::time::Duration::from_secs(30)).await.ok();
+        {%- endif %}
 
         // Can do extra shutdown tasks here.
 
@@ -203,6 +227,14 @@ pub struct Config {
     /// OAuth can be disabled, regardless of environment variable settings, but passing `Some(Vec::new())`.
     pub oauth_providers: Option<Vec<Box<dyn OAuthProvider>>>,
 
+    {% if queue %}
+    /// The path to the queue file
+    pub queue_path: std::path::PathBuf,
+    /// Set up recurring jobs. This should generally be true for normal operation and false for
+    /// testing.
+    pub init_recurring_jobs: bool,
+    {% endif %}
+
     {% if storage %}
     pub storage: storage::AppStorageConfig,
     {% endif %}
@@ -226,6 +258,13 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .user_agent("{{user_agent}}")
         .build()
         .unwrap();
+
+    {% if queue %}
+    let queue = crate::jobs::create_queue(&config.queue_path)
+        .await
+        .change_context(Error::ServerStart)?;
+    {% endif %}
+
     let state = ServerState(Arc::new(ServerStateInner {
         production,
         filigree: Arc::new(FiligreeState {
@@ -249,11 +288,18 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         }),
         insecure: config.insecure,
         db: config.pg_pool.clone(),
+        {% if queue %}queue,{% endif %}
         {% if storage %}
         storage: storage::AppStorage::new(config.storage)
             .change_context(Error::ServerStart)?,
         {% endif %}
     }));
+
+    {% if queue %}
+    let queue_workers = crate::jobs::init(&state, config.init_recurring_jobs)
+        .await
+        .change_context(Error::ServerStart)?;
+    {% endif %}
 
     let auth_queries = Arc::new(crate::auth::AuthQueries::new(
         config.pg_pool,
@@ -322,5 +368,6 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         app,
         state,
         listener,
+        queue_workers,
     })
 }

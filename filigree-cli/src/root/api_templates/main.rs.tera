@@ -112,6 +112,12 @@ struct ServeCommand {
     #[clap(env="{{env_prefix}}OBFUSCATE_ERRORS")]
     obfuscate_errors: Option<bool>,
 
+    {% if queue %}
+    /// The location to store the queue database
+    #[clap(env = "{{env_prefix}}QUEUE_PATH", default_value_t = String::from("{{queue.path}}"))]
+    queue_path: String,
+    {% endif %}
+
     // tracing endpoint (if any)
     // honeycomb team
     // honeycomb dataset
@@ -201,6 +207,10 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
             same_org_invites_require_email_verification: cmd.same_org_invites_require_email_verification,
         },
         pg_pool,
+        {% if queue -%}
+        queue_path: std::path::PathBuf::from(cmd.queue_path),
+        init_recurring_jobs: true,
+        {%- endif %}
         {% if storage -%}
         storage: {{crate_name}}::storage::AppStorageConfig::new()
             .change_context(Error::ServerStart)?,

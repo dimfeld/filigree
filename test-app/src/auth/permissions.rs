@@ -27,6 +27,21 @@ pub const PERMISSIONS: &[PermissionInfo] = &[
         key: "Comment::owner",
     },
     PermissionInfo {
+        name: "Read Users",
+        description: "List and read User objects",
+        key: "User::read",
+    },
+    PermissionInfo {
+        name: "Write Users",
+        description: "Write User objects",
+        key: "User::write",
+    },
+    PermissionInfo {
+        name: "Administer Users",
+        description: "Create and delete User objects",
+        key: "User::owner",
+    },
+    PermissionInfo {
         name: "Read Organizations",
         description: "List and read Organization objects",
         key: "Organization::read",
@@ -145,21 +160,6 @@ pub const PERMISSIONS: &[PermissionInfo] = &[
         name: "Administer Roles",
         description: "Create and delete Role objects",
         key: "Role::owner",
-    },
-    PermissionInfo {
-        name: "Read Users",
-        description: "List and read User objects",
-        key: "User::read",
-    },
-    PermissionInfo {
-        name: "Write Users",
-        description: "Write User objects",
-        key: "User::write",
-    },
-    PermissionInfo {
-        name: "Administer Users",
-        description: "Create and delete User objects",
-        key: "User::owner",
     },
 ];
 

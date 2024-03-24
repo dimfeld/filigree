@@ -1,9 +1,9 @@
-import type { ModelDefinition } from "filigree-web";
+import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
 export const OrganizationSchema = z.object({
-	id: z.string().uuid(),
+	id: z.string(),
 	updated_at: z.string().datetime(),
 	created_at: z.string().datetime(),
 	name: z.string(),
@@ -21,7 +21,7 @@ export const OrganizationCreateResultSchema = OrganizationSchema;
 export type OrganizationCreateResult = Organization;
 
 export const OrganizationCreatePayloadAndUpdatePayloadSchema = z.object({
-	id: z.string().uuid().optional(),
+	id: z.string().optional(),
 	name: z.string(),
 	owner: z.string().uuid().optional(),
 	default_role: z.string().uuid().optional(),
@@ -39,11 +39,25 @@ export const OrganizationUpdatePayloadSchema =
 export type OrganizationUpdatePayload =
 	OrganizationCreatePayloadAndUpdatePayload;
 
+export const baseUrl = "organizations";
+export const urlWithId = (id: string) => `${baseUrl}/${id}`;
+
+export const urls = {
+	create: baseUrl,
+	list: baseUrl,
+	get: urlWithId,
+	update: urlWithId,
+	delete: urlWithId,
+};
+
 export const OrganizationModel: ModelDefinition<typeof OrganizationSchema> = {
 	name: "Organization",
 	plural: "Organizations",
-	url: "organizations",
+	baseUrl,
+	urls,
 	schema: OrganizationSchema,
+	createSchema: OrganizationCreatePayloadSchema,
+	updateSchema: OrganizationUpdatePayloadSchema,
 	fields: [
 		{
 			name: "id",

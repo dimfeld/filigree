@@ -40,3 +40,16 @@ base_path = "/tmp/filigree-test-storage/internal"
 preset = "cloudflare_r2"
 # define account id below, or via environment: STORAGE_PROVIDER_CDN_ACCOUNT_ID=the-account-id
 account_id = "define-in-env"
+
+[job.transcode_video]
+
+[job.send_annoying_emails]
+
+[[job.send_annoying_emails.schedule]]
+name = "daily"
+schedule = "0 9 * * *"
+
+[[job.send_annoying_emails.schedule]]
+name = "monthly"
+schedule = "0 0 1 * *"
+disabled = true

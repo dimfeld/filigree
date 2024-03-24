@@ -1,10 +1,10 @@
-import type { ModelDefinition } from "filigree-web";
+import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
 export const UserSchema = z.object({
-	id: z.string().uuid(),
-	organization_id: z.string().uuid().optional(),
+	id: z.string(),
+	organization_id: z.string().optional(),
 	updated_at: z.string().datetime(),
 	created_at: z.string().datetime(),
 	name: z.string(),
@@ -22,7 +22,7 @@ export const UserCreateResultSchema = UserSchema;
 export type UserCreateResult = User;
 
 export const UserCreatePayloadAndUpdatePayloadSchema = z.object({
-	id: z.string().uuid().optional(),
+	id: z.string().optional(),
 	name: z.string(),
 	email: z.string().optional(),
 	avatar_url: z.string().optional(),
@@ -36,11 +36,25 @@ export type UserCreatePayload = UserCreatePayloadAndUpdatePayload;
 export const UserUpdatePayloadSchema = UserCreatePayloadAndUpdatePayloadSchema;
 export type UserUpdatePayload = UserCreatePayloadAndUpdatePayload;
 
+export const baseUrl = "users";
+export const urlWithId = (id: string) => `${baseUrl}/${id}`;
+
+export const urls = {
+	create: baseUrl,
+	list: baseUrl,
+	get: urlWithId,
+	update: urlWithId,
+	delete: urlWithId,
+};
+
 export const UserModel: ModelDefinition<typeof UserSchema> = {
 	name: "User",
 	plural: "Users",
-	url: "users",
+	baseUrl,
+	urls,
 	schema: UserSchema,
+	createSchema: UserCreatePayloadSchema,
+	updateSchema: UserUpdatePayloadSchema,
 	fields: [
 		{
 			name: "id",

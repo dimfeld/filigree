@@ -7,23 +7,36 @@ use crate::Error;
 #[derive(Args, Debug)]
 pub struct BootstrapCommand {
     /// The email for the admin user
-    #[clap(env = "BOOTSTRAP_ADMIN_EMAIL")]
+    #[clap(long = "email", env = "BOOTSTRAP_ADMIN_EMAIL")]
     admin_email: String,
 
     /// The name for the admin user
     /// Defaults to "Admin"
-    #[clap(env = "BOOTSTRAP_ADMIN_NAME")]
+    #[clap(long = "name", env = "BOOTSTRAP_ADMIN_NAME")]
     admin_name: Option<String>,
 
-    /// The password for the admin user. If supplied, this should be prehashed
-    /// by the `util hash` subcommand. If omitted, login through OAuth2 and passwordless methods
+    /// A password for the admin user, prehashed with Argon2. The `util hash-password` subcommand can be used
+    /// to generate a password hash if you don't have one already. If omitted, login through OAuth2 and passwordless methods
     /// will still work.
-    #[clap(env = "BOOTSTRAP_ADMIN_PASSWORD")]
+    #[clap(
+        long = "password-hash",
+        env = "BOOTSTRAP_ADMIN_PASSWORD_HASH",
+        conflicts_with = "admin_password"
+    )]
+    admin_password_hash: Option<String>,
+
+    /// A plain-text password for the admin user. If omitted, login through OAuth2 and passwordless methods
+    /// will still work.
+    #[clap(
+        long = "password",
+        env = "BOOTSTRAP_ADMIN_PASSWORD",
+        conflicts_with = "admin_password_hash"
+    )]
     admin_password: Option<String>,
 
     /// The name for the admin user's organization.
     /// Defaults to "Administration"
-    #[clap(env = "BOOTSTRAP_ORG_NAME")]
+    #[clap(long = "org-name", env = "BOOTSTRAP_ORG_NAME")]
     organization_name: Option<String>,
 
     /// Force adding the admin user even if the database already contains at least one
@@ -34,13 +47,22 @@ pub struct BootstrapCommand {
 
 impl BootstrapCommand {
     pub async fn handle(self, pg_pool: PgPool) -> Result<(), Report<Error>> {
+        let password = match (self.admin_password_hash, self.admin_password) {
+            (Some(hash), _) => Some(filigree::auth::password::HashedPassword(hash)),
+            (None, Some(pass)) => {
+                let hash = filigree::auth::password::new_hash(pass)
+                    .await
+                    .map_err(Error::from)?;
+                Some(hash)
+            }
+            (None, None) => None,
+        };
+
         let data = crate::db::BootstrapData {
             force: self.force,
             admin_email: self.admin_email,
             admin_name: self.admin_name,
-            admin_password: self
-                .admin_password
-                .map(filigree::auth::password::HashedPassword),
+            admin_password: password,
             organization_name: self.organization_name,
         };
 

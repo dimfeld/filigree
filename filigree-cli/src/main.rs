@@ -177,7 +177,7 @@ pub fn main() -> Result<(), Report<Error>> {
 
     let FullConfig {
         crate_name,
-        config,
+        mut config,
         models: config_models,
         mut crate_manifest,
         state_dir,
@@ -185,6 +185,15 @@ pub fn main() -> Result<(), Report<Error>> {
         web_dir,
         ..
     } = config;
+
+    // Make sure there's a default worker config.
+    if !config.worker.contains_key("default") {
+        config.worker.insert(
+            "default".to_string(),
+            crate::config::job::WorkerConfig::default(),
+        );
+    }
+
     let api_merge_tracker =
         MergeTracker::new(state_dir.join("api"), api_dir.clone(), args.overwrite);
     let web_merge_tracker =
@@ -198,6 +207,9 @@ pub fn main() -> Result<(), Report<Error>> {
     model::validate::validate_model_configuration(&config, &model_map)?;
 
     add_deps::add_fixed_deps(&api_dir, &mut crate_manifest)?;
+    if config.use_queue() {
+        crate::config::job::add_deps(&api_dir, &mut crate_manifest)?;
+    }
     for model in &models {
         model.add_deps(&api_dir, &mut crate_manifest)?;
     }
