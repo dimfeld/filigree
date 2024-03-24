@@ -1,10 +1,10 @@
-import type { ModelDefinition } from "filigree-web";
+import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
 export const ReactionSchema = z.object({
-	id: z.string().uuid(),
-	organization_id: z.string().uuid(),
+	id: z.string(),
+	organization_id: z.string(),
 	updated_at: z.string().datetime(),
 	created_at: z.string().datetime(),
 	type: z.string(),
@@ -21,7 +21,7 @@ export const ReactionCreateResultSchema = ReactionSchema;
 export type ReactionCreateResult = Reaction;
 
 export const ReactionCreatePayloadAndUpdatePayloadSchema = z.object({
-	id: z.string().uuid().optional(),
+	id: z.string().optional(),
 	type: z.string(),
 	post_id: z.string().uuid(),
 });
@@ -36,11 +36,25 @@ export const ReactionUpdatePayloadSchema =
 	ReactionCreatePayloadAndUpdatePayloadSchema;
 export type ReactionUpdatePayload = ReactionCreatePayloadAndUpdatePayload;
 
+export const baseUrl = "reactions";
+export const urlWithId = (id: string) => `${baseUrl}/${id}`;
+
+export const urls = {
+	create: baseUrl,
+	list: baseUrl,
+	get: urlWithId,
+	update: urlWithId,
+	delete: urlWithId,
+};
+
 export const ReactionModel: ModelDefinition<typeof ReactionSchema> = {
 	name: "Reaction",
 	plural: "Reactions",
-	url: "reactions",
+	baseUrl,
+	urls,
 	schema: ReactionSchema,
+	createSchema: ReactionCreatePayloadSchema,
+	updateSchema: ReactionUpdatePayloadSchema,
 	fields: [
 		{
 			name: "id",

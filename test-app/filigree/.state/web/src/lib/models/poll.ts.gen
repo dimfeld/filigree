@@ -1,10 +1,10 @@
-import type { ModelDefinition } from "filigree-web";
+import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
 export const PollSchema = z.object({
-	id: z.string().uuid(),
-	organization_id: z.string().uuid(),
+	id: z.string(),
+	organization_id: z.string(),
 	updated_at: z.string().datetime(),
 	created_at: z.string().datetime(),
 	question: z.string(),
@@ -22,7 +22,7 @@ export const PollCreateResultSchema = PollSchema;
 export type PollCreateResult = Poll;
 
 export const PollCreatePayloadAndUpdatePayloadSchema = z.object({
-	id: z.string().uuid().optional(),
+	id: z.string().optional(),
 	question: z.string(),
 	answers: z.any(),
 	post_id: z.string().uuid(),
@@ -36,11 +36,25 @@ export type PollCreatePayload = PollCreatePayloadAndUpdatePayload;
 export const PollUpdatePayloadSchema = PollCreatePayloadAndUpdatePayloadSchema;
 export type PollUpdatePayload = PollCreatePayloadAndUpdatePayload;
 
+export const baseUrl = "polls";
+export const urlWithId = (id: string) => `${baseUrl}/${id}`;
+
+export const urls = {
+	create: baseUrl,
+	list: baseUrl,
+	get: urlWithId,
+	update: urlWithId,
+	delete: urlWithId,
+};
+
 export const PollModel: ModelDefinition<typeof PollSchema> = {
 	name: "Poll",
 	plural: "Polls",
-	url: "polls",
+	baseUrl,
+	urls,
 	schema: PollSchema,
+	createSchema: PollCreatePayloadSchema,
+	updateSchema: PollUpdatePayloadSchema,
 	fields: [
 		{
 			name: "id",

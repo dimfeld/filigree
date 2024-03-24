@@ -1,10 +1,10 @@
-import type { ModelDefinition } from "filigree-web";
+import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
 export const ReportSectionSchema = z.object({
-	id: z.string().uuid(),
-	organization_id: z.string().uuid(),
+	id: z.string(),
+	organization_id: z.string(),
 	updated_at: z.string().datetime(),
 	created_at: z.string().datetime(),
 	name: z.string(),
@@ -23,7 +23,7 @@ export const ReportSectionCreateResultSchema = ReportSectionSchema;
 export type ReportSectionCreateResult = ReportSection;
 
 export const ReportSectionCreatePayloadAndUpdatePayloadSchema = z.object({
-	id: z.string().uuid().optional(),
+	id: z.string().optional(),
 	name: z.string(),
 	viz: z.string(),
 	options: z.any(),
@@ -42,11 +42,25 @@ export const ReportSectionUpdatePayloadSchema =
 export type ReportSectionUpdatePayload =
 	ReportSectionCreatePayloadAndUpdatePayload;
 
+export const baseUrl = "report_sections";
+export const urlWithId = (id: string) => `${baseUrl}/${id}`;
+
+export const urls = {
+	create: baseUrl,
+	list: baseUrl,
+	get: urlWithId,
+	update: urlWithId,
+	delete: urlWithId,
+};
+
 export const ReportSectionModel: ModelDefinition<typeof ReportSectionSchema> = {
 	name: "ReportSection",
 	plural: "ReportSections",
-	url: "report_sections",
+	baseUrl,
+	urls,
 	schema: ReportSectionSchema,
+	createSchema: ReportSectionCreatePayloadSchema,
+	updateSchema: ReportSectionUpdatePayloadSchema,
 	fields: [
 		{
 			name: "id",

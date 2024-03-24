@@ -1,10 +1,10 @@
-import type { ModelDefinition } from "filigree-web";
+import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
 export const RoleSchema = z.object({
-	id: z.string().uuid(),
-	organization_id: z.string().uuid(),
+	id: z.string(),
+	organization_id: z.string(),
 	updated_at: z.string().datetime(),
 	created_at: z.string().datetime(),
 	name: z.string(),
@@ -21,7 +21,7 @@ export const RoleCreateResultSchema = RoleSchema;
 export type RoleCreateResult = Role;
 
 export const RoleCreatePayloadAndUpdatePayloadSchema = z.object({
-	id: z.string().uuid().optional(),
+	id: z.string().optional(),
 	name: z.string(),
 	description: z.string().optional(),
 });
@@ -34,11 +34,25 @@ export type RoleCreatePayload = RoleCreatePayloadAndUpdatePayload;
 export const RoleUpdatePayloadSchema = RoleCreatePayloadAndUpdatePayloadSchema;
 export type RoleUpdatePayload = RoleCreatePayloadAndUpdatePayload;
 
+export const baseUrl = "roles";
+export const urlWithId = (id: string) => `${baseUrl}/${id}`;
+
+export const urls = {
+	create: baseUrl,
+	list: baseUrl,
+	get: urlWithId,
+	update: urlWithId,
+	delete: urlWithId,
+};
+
 export const RoleModel: ModelDefinition<typeof RoleSchema> = {
 	name: "Role",
 	plural: "Roles",
-	url: "roles",
+	baseUrl,
+	urls,
 	schema: RoleSchema,
+	createSchema: RoleCreatePayloadSchema,
+	updateSchema: RoleUpdatePayloadSchema,
 	fields: [
 		{
 			name: "id",

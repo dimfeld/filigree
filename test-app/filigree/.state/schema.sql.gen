@@ -21,6 +21,20 @@ CREATE INDEX comments_organization_id ON comments (organization_id);
 CREATE INDEX comments_post_id ON comments (post_id);
 
 
+CREATE TABLE users (
+  id uuid NOT NULL PRIMARY KEY,
+  organization_id uuid,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  name text NOT NULL,
+  password_hash text,
+  email text UNIQUE,
+  avatar_url text
+);
+
+CREATE INDEX users_organization_id ON users (organization_id);
+
+
 CREATE TABLE organizations (
   id uuid NOT NULL PRIMARY KEY,
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -130,20 +144,6 @@ CREATE TABLE roles (
 );
 
 CREATE INDEX roles_organization_id ON roles (organization_id);
-
-
-CREATE TABLE users (
-  id uuid NOT NULL PRIMARY KEY,
-  organization_id uuid,
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  created_at timestamptz NOT NULL DEFAULT now(),
-  name text NOT NULL,
-  password_hash text,
-  email text UNIQUE,
-  avatar_url text
-);
-
-CREATE INDEX users_organization_id ON users (organization_id);
 
 
 CREATE TABLE user_roles (

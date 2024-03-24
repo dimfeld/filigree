@@ -1,10 +1,10 @@
-import type { ModelDefinition } from "filigree-web";
+import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
 export const PostImageSchema = z.object({
-	id: z.string().uuid(),
-	organization_id: z.string().uuid(),
+	id: z.string(),
+	organization_id: z.string(),
 	updated_at: z.string().datetime(),
 	created_at: z.string().datetime(),
 	file_size: z.number().int().optional(),
@@ -22,7 +22,7 @@ export const PostImageCreateResultSchema = PostImageSchema;
 export type PostImageCreateResult = PostImage;
 
 export const PostImageCreatePayloadAndUpdatePayloadSchema = z.object({
-	id: z.string().uuid().optional(),
+	id: z.string().optional(),
 	file_size: z.number().int().optional(),
 	file_hash: z.string().optional(),
 	post_id: z.string().uuid(),
@@ -38,11 +38,25 @@ export const PostImageUpdatePayloadSchema =
 	PostImageCreatePayloadAndUpdatePayloadSchema;
 export type PostImageUpdatePayload = PostImageCreatePayloadAndUpdatePayload;
 
+export const baseUrl = "post_images";
+export const urlWithId = (id: string) => `${baseUrl}/${id}`;
+
+export const urls = {
+	create: baseUrl,
+	list: baseUrl,
+	get: urlWithId,
+	update: urlWithId,
+	delete: urlWithId,
+};
+
 export const PostImageModel: ModelDefinition<typeof PostImageSchema> = {
 	name: "PostImage",
 	plural: "PostImages",
-	url: "post_images",
+	baseUrl,
+	urls,
 	schema: PostImageSchema,
+	createSchema: PostImageCreatePayloadSchema,
+	updateSchema: PostImageUpdatePayloadSchema,
 	fields: [
 		{
 			name: "id",

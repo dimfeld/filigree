@@ -271,11 +271,14 @@ pub async fn create(
     payload: PostCreatePayload,
 ) -> Result<PostCreateResult, error_stack::Report<Error>> {
     // TODO create permissions auth check
-    let id = PostId::new();
+
+    let id = payload.id.unwrap_or_else(PostId::new);
+
     create_raw(&mut *db, id, auth.organization_id, payload).await
 }
 
-/// Create a new Post in the database, allowing the ID to be explicitly specified.
+/// Create a new Post in the database, allowing the ID to be explicitly specified
+/// regardless of whether it would normally be allowed.
 #[instrument(skip(db))]
 pub async fn create_raw(
     db: &mut PgConnection,

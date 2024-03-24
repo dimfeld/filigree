@@ -1,15 +1,15 @@
-import type { ModelDefinition } from "filigree-web";
+import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 import {
-	CommentUpdatePayloadSchema,
-	CommentSchema,
 	CommentCreatePayloadSchema,
+	CommentSchema,
+	CommentUpdatePayloadSchema,
 } from "./comment.js";
 import {
+	PollUpdatePayloadSchema,
 	PollSchema,
 	PollCreatePayloadSchema,
-	PollUpdatePayloadSchema,
 } from "./poll.js";
 import {
 	PostImageSchema,
@@ -17,14 +17,14 @@ import {
 	PostImageUpdatePayloadSchema,
 } from "./post_image.js";
 import {
-	ReactionUpdatePayloadSchema,
 	ReactionSchema,
+	ReactionUpdatePayloadSchema,
 	ReactionCreatePayloadSchema,
 } from "./reaction.js";
 
 export const PostSchema = z.object({
-	id: z.string().uuid(),
-	organization_id: z.string().uuid(),
+	id: z.string(),
+	organization_id: z.string(),
 	updated_at: z.string().datetime(),
 	created_at: z.string().datetime(),
 	subject: z.string(),
@@ -37,7 +37,7 @@ export const PostCreateResultSchema = PostSchema;
 export type PostCreateResult = Post;
 
 export const PostCreatePayloadAndUpdatePayloadSchema = z.object({
-	id: z.string().uuid().optional(),
+	id: z.string().optional(),
 	subject: z.string(),
 	body: z.string(),
 });
@@ -51,13 +51,13 @@ export const PostUpdatePayloadSchema = PostCreatePayloadAndUpdatePayloadSchema;
 export type PostUpdatePayload = PostCreatePayloadAndUpdatePayload;
 
 export const PostPopulatedGetSchema = z.object({
-	id: z.string().uuid(),
-	organization_id: z.string().uuid(),
+	id: z.string(),
+	organization_id: z.string(),
 	updated_at: z.string().datetime(),
 	created_at: z.string().datetime(),
 	subject: z.string(),
 	body: z.string(),
-	comment_ids: z.string().uuid().array(),
+	comment_ids: z.string().array(),
 	reactions: ReactionSchema.array(),
 	poll: PollSchema.optional(),
 	images: PostImageSchema.array(),
@@ -67,24 +67,38 @@ export const PostPopulatedGetSchema = z.object({
 export type PostPopulatedGet = z.infer<typeof PostPopulatedGetSchema>;
 
 export const PostPopulatedListSchema = z.object({
-	id: z.string().uuid(),
-	organization_id: z.string().uuid(),
+	id: z.string(),
+	organization_id: z.string(),
 	updated_at: z.string().datetime(),
 	created_at: z.string().datetime(),
 	subject: z.string(),
 	body: z.string(),
-	comment_ids: z.string().uuid().array(),
-	poll_id: z.string().uuid().optional(),
+	comment_ids: z.string().array(),
+	poll_id: z.string().optional(),
 	_permission: ObjectPermission,
 });
 
 export type PostPopulatedList = z.infer<typeof PostPopulatedListSchema>;
 
+export const baseUrl = "posts";
+export const urlWithId = (id: string) => `${baseUrl}/${id}`;
+
+export const urls = {
+	create: baseUrl,
+	list: baseUrl,
+	get: urlWithId,
+	update: urlWithId,
+	delete: urlWithId,
+};
+
 export const PostModel: ModelDefinition<typeof PostSchema> = {
 	name: "Post",
 	plural: "Posts",
-	url: "posts",
+	baseUrl,
+	urls,
 	schema: PostSchema,
+	createSchema: PostCreatePayloadSchema,
+	updateSchema: PostUpdatePayloadSchema,
 	fields: [
 		{
 			name: "id",
