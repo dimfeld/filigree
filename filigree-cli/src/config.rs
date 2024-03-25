@@ -81,11 +81,16 @@ pub struct Config {
     /// are in the same process as the API server.
     #[serde(default)]
     pub worker: BTreeMap<String, job::WorkerConfig>,
+
+    #[serde(skip)]
+    pub(crate) use_queue: bool,
 }
 
 impl Config {
     fn from_path(path: &Path) -> Result<Self, Report<Error>> {
-        read_toml(path)
+        let mut config: Self = read_toml(path)?;
+        config.use_queue = !config.job.is_empty() || !config.worker.is_empty();
+        Ok(config)
     }
 
     pub fn default_api_dir() -> PathBuf {
@@ -98,10 +103,6 @@ impl Config {
 
     pub const fn default_sql_dialect() -> SqlDialect {
         SqlDialect::Postgresql
-    }
-
-    pub fn use_queue(&self) -> bool {
-        !self.job.is_empty() || !self.worker.is_empty()
     }
 }
 

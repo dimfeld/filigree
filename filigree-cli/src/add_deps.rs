@@ -71,7 +71,7 @@ pub fn add_dep(
     features: &[&str],
 ) -> Result<(), Report<Error>> {
     let existing = manifest.dependencies.get(name);
-    let added = add_dep_internal(cwd, manifest, existing, name, version, features, false)?;
+    let added = add_dep_internal(cwd, existing, name, version, features, false)?;
 
     if added {
         manifest.dependencies.insert(
@@ -95,7 +95,7 @@ pub fn add_dev_dep(
     features: &[&str],
 ) -> Result<(), Report<Error>> {
     let existing = manifest.dev_dependencies.get(name);
-    let added = add_dep_internal(cwd, manifest, existing, name, version, features, true)?;
+    let added = add_dep_internal(cwd, existing, name, version, features, true)?;
 
     if added {
         manifest.dev_dependencies.insert(
@@ -113,7 +113,6 @@ pub fn add_dev_dep(
 
 fn add_dep_internal(
     cwd: &Path,
-    manifest: &Manifest,
     existing: Option<&Dependency>,
     name: &str,
     version: &str,

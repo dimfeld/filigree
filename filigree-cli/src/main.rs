@@ -207,7 +207,7 @@ pub fn main() -> Result<(), Report<Error>> {
     model::validate::validate_model_configuration(&config, &model_map)?;
 
     add_deps::add_fixed_deps(&api_dir, &mut crate_manifest)?;
-    if config.use_queue() {
+    if config.use_queue {
         crate::config::job::add_deps(&api_dir, &mut crate_manifest)?;
     }
     for model in &models {
