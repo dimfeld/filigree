@@ -368,6 +368,6 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         app,
         state,
         listener,
-        queue_workers,
+        {% if queue %}queue_workers,{% endif %}
     })
 }
