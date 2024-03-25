@@ -228,6 +228,8 @@ impl FileModelOptions {
             allow_id_in_create: false,
             auth_scope: None,
             indexes: vec![],
+            index_created_at: true,
+            index_updated_at: true,
             joins: None,
             has: vec![],
         }

@@ -13,8 +13,15 @@ CREATE TABLE {{table}} (
 );
 
 {% for field in fields | filter(attribute="indexed", value=true) %}
-  CREATE INDEX {{table}}_{{field.sql_name}} ON {{table}} ({{field.sql_name}});
+CREATE INDEX {{table}}_{{field.sql_name}} ON {{table}} ({% if not global and field.sql_name != 'organization_id' %}organization_id, {% endif%}{{field.sql_name}});
 {% endfor %}
+
+{% if index_updated_at %}
+CREATE INDEX {{table}}_updated_at ON {{table}} (organization_id, updated_at DESC);
+{% endif %}
+{% if index_created_at %}
+CREATE INDEX {{table}}_created_at ON {{table}} (organization_id, created_at DESC);
+{% endif %}
 
 {% for i in indexes %}
 {{ i }}

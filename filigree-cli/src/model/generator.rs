@@ -500,6 +500,8 @@ impl<'a> ModelGenerator<'a> {
             "write_permission": format!("{}::write", self.name),
             "extra_sql": self.extra_sql,
             "extra_create_table_sql": extra_create_table_sql,
+            "index_created_at": self.index_created_at,
+            "index_updated_at": self.index_updated_at,
             "pagination": self.pagination,
             "full_default_sort_field": full_default_sort_field,
             "default_sort_field": default_sort_field,

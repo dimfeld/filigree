@@ -73,6 +73,13 @@ pub struct Model {
     // TODO ability to define extra permissions
     // TODO ability to define extra operations that update specific things and require specific
     // permissions. Maybe this should just be defined in the normal code instead though...
+    /// Add a descending index on the `created_at` field. Default true
+    #[serde(default = "true_t")]
+    pub index_created_at: bool,
+
+    /// Add a descending index on the `created_at` field. Default true
+    #[serde(default = "true_t")]
+    pub index_updated_at: bool,
 
     // References to other models
     /// This model joins two other models, rather than being a normal model.
