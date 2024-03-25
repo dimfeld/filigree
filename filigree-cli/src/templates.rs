@@ -13,13 +13,18 @@ use crate::{config::Config, Error, RenderedFile, RenderedFileLocation};
 
 pub struct Renderer<'a> {
     tera: Tera,
+    passthrough_files: HashMap<String, Cow<'static, str>>,
     config: &'a Config,
 }
 
 impl<'a> Renderer<'a> {
     pub fn new(config: &'a Config) -> Self {
-        let tera = create_tera();
-        Self { tera, config }
+        let (tera, passthrough_files) = create_tera();
+        Self {
+            tera,
+            passthrough_files,
+            config,
+        }
     }
 
     /// Render a template, joining the template name to `dir` to calculate the output path.
@@ -35,6 +40,7 @@ impl<'a> Renderer<'a> {
                 .strip_suffix(".tera")
                 .expect("template name did not end with .tera"),
         );
+
         self.render_with_full_path(path, template_name, location, context)
     }
 
@@ -46,12 +52,20 @@ impl<'a> Renderer<'a> {
         location: RenderedFileLocation,
         context: &tera::Context,
     ) -> Result<RenderedFile, Report<Error>> {
-        let output = self
-            .tera
-            .render(template_name, context)
-            .map_err(Error::Render)
-            .attach_printable_lazy(|| format!("Template {}", template_name))?
-            .into_bytes();
+        let output = if template_name.ends_with(".tera") {
+            self.tera
+                .render(template_name, context)
+                .map_err(Error::Render)
+                .attach_printable_lazy(|| format!("Template {}", template_name))?
+                .into_bytes()
+        } else {
+            self.passthrough_files
+                .get(template_name)
+                .ok_or(Error::Input)
+                .attach_printable_lazy(|| format!("Template {template_name} not found"))?
+                .to_string()
+                .into_bytes()
+        };
 
         let filename = template_name.strip_suffix(".tera").unwrap_or(template_name);
 
@@ -106,15 +120,18 @@ fn get_files<FILES: RustEmbed>() -> impl Iterator<Item = (String, Cow<'static, s
     })
 }
 
-fn create_tera() -> Tera {
+fn create_tera() -> (Tera, HashMap<String, Cow<'static, str>>) {
     let mut tera = Tera::default();
 
-    let template_files = get_files::<RootApiTemplates>()
+    let (template_files, passthrough_files): (Vec<_>, Vec<_>) = get_files::<RootApiTemplates>()
         .chain(get_files::<ModelRustTemplates>())
         .chain(get_files::<ModelSqlTemplates>())
         .chain(get_files::<RootWebTemplates>())
         .chain(get_files::<ModelWebTemplates>())
-        .collect::<Vec<_>>();
+        .partition(|(filename, _)| filename.ends_with(".tera"));
+
+    let passthrough_files = passthrough_files.into_iter().collect::<HashMap<_, _>>();
+
     let res = tera.add_raw_templates(template_files);
 
     if let Err(e) = res {
@@ -128,7 +145,7 @@ fn create_tera() -> Tera {
     tera.register_filter("to_sql", to_sql);
     tera.register_filter("sql_string", sql_string_filter);
 
-    tera
+    (tera, passthrough_files)
 }
 
 fn to_sql(val: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {

@@ -1,5 +1,6 @@
 import type { FormResponse } from '$lib/forms.svelte.js';
 import { env } from '$env/dynamic/private';
+import { z } from 'zod';
 import {
   applyResponseCookies,
   forwardToApi,
@@ -8,6 +9,11 @@ import {
 } from '$lib/requests.js';
 import { error, redirect, type RequestEvent } from '@sveltejs/kit';
 import { client } from '$lib/client.js';
+
+export const LoginFormSchema = z.object({
+  email: z.string().email(),
+  password: z.string().optional(),
+});
 
 export interface LoginFormResponse {
   email: string;
@@ -83,4 +89,16 @@ export async function handlePasswordlessLoginToken({ fetch, url, cookies }: Requ
 
 export function getOauthEnabledFlag(varName: string) {
   return env[varName] ? true : undefined;
+}
+
+export async function logout({ fetch, cookies }: Pick<RequestEvent, 'fetch' | 'cookies'>) {
+  await client({
+    url: '/api/auth/logout',
+    method: 'POST',
+    fetch,
+  });
+
+  cookies.delete('sid', { path: '/' });
+
+  return {};
 }

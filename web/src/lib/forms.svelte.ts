@@ -44,16 +44,17 @@ export type SubmitState = 'idle' | 'loading' | 'slow';
 
 export interface FormOptions<T extends z.AnyZodObject> {
   model?: ModelDefinition<T>;
+  schema?: T;
   /** If the form data is nested or flat. If omitted, it will be inferred from the model. */
   nested?: boolean;
   /** Initial data to load into the form fields */
-  data?: T | null;
+  data?: z.infer<T> | null;
   /** The page's form property */
-  form?: FormResponse<T> | null;
+  form?: FormResponse<z.infer<T>> | null;
   slowLoadThreshold?: number;
 
   /** Perform extra client-side validation. */
-  validate?: (data: Partial<T>) => FormErrors | undefined;
+  validate?: (data: Partial<z.infer<T>>) => FormErrors | undefined;
 
   /** Whether or not to reset the form when the form is submitted.
    *
@@ -97,7 +98,7 @@ class State<T extends z.AnyZodObject> {
   fieldErrors = $derived(
     Object.fromEntries(Object.entries(this.errors?.fields ?? {}).map(([k, v]) => [k, v.join('\n')]))
   );
-  formData: Partial<T> = $state({});
+  formData: Partial<z.infer<T>> = $state({});
   loadingState: SubmitState = $state('idle');
 
   loading = $derived(this.loadingState === 'loading' || this.loadingState === 'slow');
@@ -140,16 +141,18 @@ export function manageForm<T extends z.AnyZodObject>(options: FormOptions<T>) {
 }
 
 function validate<T extends z.AnyZodObject>(
-  model: ModelDefinition<T> | undefined,
+  model: ModelDefinition<T> | T | undefined,
   options: InternalOptions<T>
 ) {
   if (!model) {
     return true;
   }
 
+  let schema = 'schema' in model ? model.schema : model;
+
   let errors: FormErrors | undefined;
 
-  let validated = model.schema.safeParse(options.state.formData);
+  let validated = schema.safeParse(options.state.formData);
   if (!validated.success) {
     errors = processZodError(validated.error.issues);
   }
@@ -268,7 +271,7 @@ function maybeHandleFailureResult<T extends z.AnyZodObject>(
 function plainEnhance<T extends z.AnyZodObject>(options: InternalOptions<T>) {
   const {
     state,
-    options: { model, onSubmit, onSuccess, onError },
+    options: { model, schema, onSubmit, onSuccess, onError },
   } = options;
 
   return function (formEl: HTMLFormElement) {
@@ -279,7 +282,7 @@ function plainEnhance<T extends z.AnyZodObject>(options: InternalOptions<T>) {
         submitData.cancel();
       };
 
-      let validated = validate(model, options);
+      let validated = validate(model ?? schema, options);
       if (!validated) {
         submitData.cancel();
         return;
@@ -340,7 +343,7 @@ function plainEnhance<T extends z.AnyZodObject>(options: InternalOptions<T>) {
 function nestedEnhance<T extends z.AnyZodObject>(options: InternalOptions<T>) {
   const {
     state,
-    options: { model, onSubmit, onSuccess, onError },
+    options: { model, schema, onSubmit, onSuccess, onError },
   } = options;
 
   return function (originalFormEl: HTMLFormElement) {
@@ -352,7 +355,7 @@ function nestedEnhance<T extends z.AnyZodObject>(options: InternalOptions<T>) {
 
       let payload = state.formData;
 
-      let validated = validate(model, options);
+      let validated = validate(model ?? schema, options);
       if (!validated) {
         return;
       }
