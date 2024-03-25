@@ -1,5 +1,6 @@
 use clap::{Args, Subcommand};
 use error_stack::{Report, ResultExt};
+{% if shared_types %}use ts_rs::TS;{% endif %}
 
 use crate::Error;
 
@@ -12,6 +13,9 @@ pub struct UtilCommand {
 #[derive(Debug, Subcommand)]
 pub enum UtilSubcommand {
     HashPassword(HashPasswordCommand),
+    {% if shared_types -%}
+    SyncTypes,
+    {%- endif %}
 }
 
 #[derive(Args, Debug)]
@@ -28,9 +32,31 @@ impl UtilCommand {
                     .change_context(Error::AuthSubsystem)?
                     .0;
                 println!("{hash}");
-            }
+            },
+            {% if shared_types -%}
+            UtilSubcommand::SyncTypes => sync_types()?,
+            {%- endif %}
         }
 
         Ok(())
     }
 }
+
+{% if shared_types %}
+fn sync_types() -> Result<(), Report<Error>> {
+    let mut output = vec![];
+
+    {% for type in shared_types -%}
+    let value = {{type}}::export_to_string()
+        .change_context(Error::TypeExport)
+        .attach_printable("{{type}}")?;
+    output.push(value);
+    {%- endfor %}
+
+    let output = output.join("\n\n");
+    let output_path = "{{web_relative_to_api}}/src/lib/api_types.ts";
+    std::fs::write(output_path, output.as_bytes()).change_context(Error::TypeExport)?;
+
+    Ok(())
+}
+{% endif %}

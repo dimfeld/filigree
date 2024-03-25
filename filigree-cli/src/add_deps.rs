@@ -4,7 +4,7 @@ use cargo_toml::{Dependency, DependencyDetail, Manifest};
 use error_stack::{Report, ResultExt};
 use semver::{Version, VersionReq};
 
-use crate::Error;
+use crate::{config::Config, Error};
 
 pub type DepVersion<'a> = (&'a str, &'a str, &'a [&'a str]);
 
@@ -51,9 +51,34 @@ const DEPS: &[DepVersion<'static>] = &[
 
 const DEV_DEPS: &[DepVersion<'static>] = &[("temp-dir", "0.1.13", &[])];
 
-pub fn add_fixed_deps(cwd: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
+pub fn add_fixed_deps(
+    cwd: &Path,
+    config: &Config,
+    manifest: &mut Manifest,
+) -> Result<(), Report<Error>> {
     for (name, version, features) in DEPS {
         add_dep(cwd, manifest, name, version, features)?;
+    }
+
+    if !config.shared_types.is_empty() {
+        add_dep(
+            cwd,
+            manifest,
+            "ts-rs",
+            "8.1.0",
+            &[
+                "serde-compat",
+                "import-esm",
+                "chrono-impl",
+                "serde-json-impl",
+                "url-impl",
+                "uuid-impl",
+            ],
+        )?;
+    }
+
+    if config.use_queue {
+        crate::config::job::add_deps(cwd, manifest)?;
     }
 
     for (name, version, features) in DEV_DEPS {
@@ -71,7 +96,7 @@ pub fn add_dep(
     features: &[&str],
 ) -> Result<(), Report<Error>> {
     let existing = manifest.dependencies.get(name);
-    let added = add_dep_internal(cwd, existing, name, version, features, false)?;
+    let added = add_dep_internal(cwd, existing, name, version, features, "")?;
 
     if added {
         manifest.dependencies.insert(
@@ -95,7 +120,7 @@ pub fn add_dev_dep(
     features: &[&str],
 ) -> Result<(), Report<Error>> {
     let existing = manifest.dev_dependencies.get(name);
-    let added = add_dep_internal(cwd, existing, name, version, features, true)?;
+    let added = add_dep_internal(cwd, existing, name, version, features, "--dev")?;
 
     if added {
         manifest.dev_dependencies.insert(
@@ -117,10 +142,10 @@ fn add_dep_internal(
     name: &str,
     version: &str,
     features: &[&str],
-    dev: bool,
+    mode_flag: &str,
 ) -> Result<bool, Report<Error>> {
     let Some(existing) = existing else {
-        run_cargo_add(cwd, name, version, features, dev)?;
+        run_cargo_add(cwd, name, version, features, mode_flag)?;
         return Ok(true);
     };
 
@@ -142,7 +167,7 @@ fn add_dep_internal(
     };
 
     if !desired.matches(&existing_version) {
-        run_cargo_add(cwd, name, version, features, dev)?;
+        run_cargo_add(cwd, name, version, features, mode_flag)?;
         return Ok(true);
     }
 
@@ -151,7 +176,7 @@ fn add_dep_internal(
         .iter()
         .all(|feature| existing_features.iter().any(|f| f == feature))
     {
-        run_cargo_add(cwd, name, version, features, dev)?;
+        run_cargo_add(cwd, name, version, features, mode_flag)?;
         return Ok(true);
     }
 
@@ -163,7 +188,7 @@ fn run_cargo_add(
     name: &str,
     version: &str,
     features: &[&str],
-    dev: bool,
+    mode_flag: &str,
 ) -> Result<(), Report<Error>> {
     let operation = if features.is_empty() {
         format!("Adding depdendency {name}@{version}")
@@ -178,8 +203,8 @@ fn run_cargo_add(
     cmd.arg("add");
     cmd.arg(&format!("{name}@{version}"));
 
-    if dev {
-        cmd.arg("--dev");
+    if !mode_flag.is_empty() {
+        cmd.arg(mode_flag);
     }
 
     for feature in features {

@@ -37,6 +37,11 @@ pub struct Config {
 
     pub server: ServerConfig,
 
+    /// Full paths to types that exist in the Rust application and should be replicated in
+    /// Typescript. These types must derive or otherwise implement the [ts_rs::TS] trait.
+    #[serde(default)]
+    pub shared_types: Vec<String>,
+
     #[serde(default)]
     pub formatter: Formatters,
     // Maybe support SQLite some day

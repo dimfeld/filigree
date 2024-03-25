@@ -55,6 +55,10 @@ pub enum Error {
     /// An invalid Host header was passed
     #[error("Invalid host")]
     InvalidHostHeader,
+    {% if shared_types %}
+    #[error("Type Export Error")]
+    TypeExport,
+    {% endif %}
 }
 
 impl From<Report<Error>> for Error {
@@ -138,6 +142,9 @@ impl HttpError for Error {
             Error::MissingPermission(_) => FilErrorKind::Unauthenticated.as_str(),
             Error::InvalidHostHeader => FilErrorKind::InvalidHostHeader.as_str(),
             Error::Storage => FilErrorKind::StorageWrite.as_str(),
+            {% if shared_types -%}
+            Error::TypeExport => "cli",
+            {%- endif %}
         }
     }
 
@@ -178,6 +185,9 @@ impl HttpError for Error {
             Error::Login => StatusCode::UNAUTHORIZED,
             Error::InvalidHostHeader => StatusCode::BAD_REQUEST,
             Error::Storage => StatusCode::INTERNAL_SERVER_ERROR,
+            {% if shared_types -%}
+            Error::TypeExport => StatusCode::INTERNAL_SERVER_ERROR,
+            {%- endif %}
         }
     }
 

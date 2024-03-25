@@ -206,10 +206,7 @@ pub fn main() -> Result<(), Report<Error>> {
 
     model::validate::validate_model_configuration(&config, &model_map)?;
 
-    add_deps::add_fixed_deps(&api_dir, &mut crate_manifest)?;
-    if config.use_queue {
-        crate::config::job::add_deps(&api_dir, &mut crate_manifest)?;
-    }
+    add_deps::add_fixed_deps(&api_dir, &config, &mut crate_manifest)?;
     for model in &models {
         model.add_deps(&api_dir, &mut crate_manifest)?;
     }
@@ -238,6 +235,8 @@ pub fn main() -> Result<(), Report<Error>> {
         g.set_template_context(generator_contexts[&g.model.name].clone())
     }
 
+    let web_relative_to_api = pathdiff::diff_paths(&web_dir, &api_dir).unwrap();
+
     let mut model_files = None;
     let mut root_files = None;
     rayon::scope(|s| {
@@ -253,6 +252,7 @@ pub fn main() -> Result<(), Report<Error>> {
             root_files = Some(root::render_files(
                 &crate_name,
                 &config,
+                web_relative_to_api,
                 &generators,
                 &renderer,
             ))

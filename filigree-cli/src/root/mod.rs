@@ -4,6 +4,7 @@ use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
 use itertools::Itertools;
 use rayon::prelude::*;
+use serde_json::json;
 
 use crate::{
     config::Config,
@@ -15,6 +16,7 @@ use crate::{
 pub fn render_files(
     crate_name: &str,
     config: &Config,
+    web_relative_to_api: PathBuf,
     models: &[ModelGenerator],
     renderer: &Renderer,
 ) -> Result<Vec<RenderedFile>, Report<Error>> {
@@ -93,6 +95,9 @@ pub fn render_files(
         "org_model",
         &org_model.template_context().clone().into_json(),
     );
+
+    context.insert("web_relative_to_api", &web_relative_to_api);
+    context.insert("shared_types", &config.shared_types);
 
     let storage_context = config
         .storage
