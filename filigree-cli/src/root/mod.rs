@@ -4,7 +4,6 @@ use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
 use itertools::Itertools;
 use rayon::prelude::*;
-use serde_json::json;
 
 use crate::{
     config::Config,

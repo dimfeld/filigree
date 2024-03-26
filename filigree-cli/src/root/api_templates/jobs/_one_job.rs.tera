@@ -2,10 +2,17 @@
 #![allow(unused_imports, unused_variables, dead_code)]
 
 use effectum::{JobBuilder, JobRunner, Queue, RecurringJobSchedule, RunningJob};
+use error_stack::ResultExt;
 use serde::{Serialize, Deserialize};
 use serde_json::json;
 
 use crate::server::ServerState;
+
+#[derive(thiserror::Error, Debug)]
+enum {{type_name}}JobError {
+    #[error("Failed to read payload")]
+    Payload,
+}
 
 
 /// The payload data for the {{name}} background job
@@ -16,8 +23,10 @@ pub struct {{type_name}}JobPayload {
 
 
 /// Run the {{name}} background job
-async fn run(job: RunningJob, context: ServerState) -> Result<(), crate::Error> {
-    // Fill in your job logic here
+async fn run(job: RunningJob, state: ServerState) -> Result<(), error_stack::Report<{{type_name}}JobError>> {
+    let payload: {{type_name}}JobPayload = job.json_payload()
+        .change_context({{type_name}}JobError::Payload)?;
+
     Ok(())
 }
 
@@ -52,9 +61,9 @@ pub async fn enqueue_at(
 
 /// Register this job with the queue and initialize any recurring jobs.
 pub async fn register(queue: &Queue, init_recurring_jobs: bool) -> Result<JobRunner<ServerState>, effectum::Error> {
-    // TODO register the job with the system
     let runner = JobRunner::builder("{{name}}", run)
         .autoheartbeat({{autoheartbeat}})
+        .format_failures_with_debug(true)
         .build();
 
     {% if schedules %}

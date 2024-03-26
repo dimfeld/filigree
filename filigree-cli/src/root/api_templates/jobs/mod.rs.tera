@@ -12,9 +12,9 @@ use std::path::Path;
 use crate::server::ServerState;
 
 pub struct QueueWorkers {
-    {% for worker in job_workers %}
+    {% for worker in job_workers -%}
     pub {{worker.name}}: Worker,
-    {% endfor %}
+    {%- endfor %}
 }
 
 impl QueueWorkers {
@@ -35,12 +35,12 @@ pub async fn init(state: &ServerState, init_recurring_jobs: bool) -> Result<Queu
     // create the queue
 
     // register the jobs
-    {% for job in job_list %}
+    {% for job in job_list -%}
     let {{job}}_runner = {{job}}::register(&state.queue, init_recurring_jobs).await?;
-    {% endfor %}
+    {%- endfor %}
 
     // create the workers
-    {% for worker in job_workers %}
+    {%- for worker in job_workers %}
         let worker_{{worker.name}} = Worker::builder(&state.queue, state.clone())
             .max_concurrency({{worker.max_concurrency}})
             .min_concurrency({{worker.min_concurrency}})
