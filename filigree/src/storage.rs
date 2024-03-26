@@ -177,6 +177,32 @@ impl Storage {
         Ok(Body::from_stream(stream))
     }
 
+    /// Stream an object to an [AsyncWrite]
+    pub async fn stream_to(
+        &self,
+        location: &str,
+        mut file: impl AsyncWrite + Unpin,
+    ) -> Result<(), StorageError> {
+        let mut stream = self.get(location).await?.into_stream();
+        while let Some(bytes) = stream.try_next().await? {
+            file.write_all(&bytes).await?;
+        }
+        Ok(())
+    }
+
+    /// Stream an object to a path on disk.
+    pub async fn stream_to_disk(
+        &self,
+        location: &str,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<tokio::fs::File, StorageError> {
+        let file = tokio::fs::File::create(path).await?;
+        let mut writer = tokio::io::BufWriter::new(file);
+        self.stream_to(location, &mut writer).await?;
+        writer.flush().await?;
+        Ok(writer.into_inner())
+    }
+
     /// Stream a request body into object storage
     pub async fn save_request_body<STREAMERROR, F>(
         &self,
