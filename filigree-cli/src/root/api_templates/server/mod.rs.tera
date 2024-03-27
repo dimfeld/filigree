@@ -55,6 +55,8 @@ pub struct ServerStateInner {
     pub filigree: Arc<FiligreeState>,
     /// The Postgres database connection pool
     pub db: PgPool,
+    /// Secrets loaded from the environment
+    pub secrets: Secrets,
     {% if queue -%}
     pub queue: effectum::Queue,
     {%- endif %}
@@ -117,6 +119,36 @@ impl FromRef<ServerState> for PgPool {
 impl FromRef<ServerState> for SessionBackend {
     fn from_ref(inner: &ServerState) -> Self {
         inner.0.session_backend.clone()
+    }
+}
+
+pub struct Secrets {
+    {% for secret, _env_var in secrets -%}
+    pub {{secret}}: String,
+    {%- endfor %}
+}
+
+impl Secrets {
+    /// Load the secrets from the environment
+    pub fn from_env() -> Result<Secrets, Report<Error>> {
+        Ok(Self {
+            {% for secret, env_var in secrets -%}
+            {{secret}}: std::env::var("{{env_prefix}}{{env_var}}")
+                .change_context(Error::Config)
+                .attach_printable("Missing environment variable {{env_prefix}}{{env_var}}")?,
+            {%- endfor %}
+        })
+    }
+
+    #[cfg(test)]
+    /// Create a new Secrets struct with all the strings empty, for testing where we don't need any
+    /// secrets.
+    pub fn empty() -> Secrets {
+        Secrets {
+            {% for secret, _env_var in secrets -%}
+            {{secret}}: String::new(),
+            {%- endfor %}
+        }
     }
 }
 
@@ -227,6 +259,9 @@ pub struct Config {
     /// OAuth can be disabled, regardless of environment variable settings, but passing `Some(Vec::new())`.
     pub oauth_providers: Option<Vec<Box<dyn OAuthProvider>>>,
 
+    /// Secrets for the server. Most often this should be initialized using [Secrets::from_env].
+    pub secrets: Secrets,
+
     {% if queue %}
     /// The path to the queue file
     pub queue_path: std::path::PathBuf,
@@ -288,11 +323,12 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         }),
         insecure: config.insecure,
         db: config.pg_pool.clone(),
+        secrets: config.secrets,
         {% if queue %}queue,{% endif %}
-        {% if storage %}
+        {% if storage -%}
         storage: storage::AppStorage::new(config.storage)
             .change_context(Error::ServerStart)?,
-        {% endif %}
+        {%- endif %}
     }));
 
     {% if queue %}

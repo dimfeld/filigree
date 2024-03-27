@@ -37,6 +37,11 @@ pub struct Config {
 
     pub server: ServerConfig,
 
+    /// A mapping of secret name to the environment variable used. If `env_prefix` is set, it will
+    /// be prepended to the values here. The values here will become members of a `Secrets` struct
+    /// in the `ServerState`.
+    pub secrets: BTreeMap<String, String>,
+
     /// Full paths to types that exist in the Rust application and should be replicated in
     /// Typescript. These types must derive or otherwise implement the [ts_rs::TS] trait.
     #[serde(default)]
