@@ -22,13 +22,17 @@ pub struct ModelField {
     /// creating migrations, so that the column can be renamed instead of deleted and recreated.
     pub previous_name: Option<String>,
 
+    /// If true, omit this field from the `list` query.
+    #[serde(default)]
+    pub omit_in_list: bool,
+
     /// The SQL type for this field.
     #[serde(rename = "type")]
     pub typ: SqlType,
     /// The Rust type for this field. If omitted, the type will be inferred from the SQL
     /// type. This type should be fully qualified, e.g. `crate::MyType`.
     pub rust_type: Option<String>,
-    /// The Typescript type for this field. If omitted, the type will be inferred from the SQL
+    /// The Zod type for this field. If omitted, the type will be inferred from the SQL
     /// type.
     pub zod_type: Option<String>,
 
@@ -199,6 +203,7 @@ impl ModelField {
             "sortable": self.sortable,
             "unique": self.unique,
             "indexed": self.indexed,
+            "omit_in_list": self.omit_in_list,
             "foreign_key_sql": self.references.as_ref().map(|r| r.to_string()),
             "extra_sql_modifiers": self.extra_sql_modifiers,
             "user_read": self.user_read(),

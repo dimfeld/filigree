@@ -11,6 +11,7 @@
 SELECT
   {{ fields
     | filter(attribute='never_read', value=false)
+    | filter(attribute='omit_in_list', value=false)
     | map(attribute='sql_name')
     | join(sep=',') }},
 

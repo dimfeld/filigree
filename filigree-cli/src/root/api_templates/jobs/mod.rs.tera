@@ -11,6 +11,12 @@ use futures::FutureExt;
 use std::path::Path;
 use crate::server::ServerState;
 
+#[derive(thiserror::Error, Debug)]
+enum JobError {
+    #[error("Failed to read payload")]
+    Payload,
+}
+
 pub struct QueueWorkers {
     {% for worker in job_workers -%}
     pub {{worker.name}}: Worker,

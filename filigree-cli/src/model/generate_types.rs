@@ -55,7 +55,20 @@ impl<'a> ModelGenerator<'a> {
                 },
             },
             StructContents {
-                suffix: "PopulatedGet",
+                suffix: "ListResult",
+                fields: Self::struct_contents(
+                    self.all_fields()?
+                        .filter(|f| !f.never_read && !f.omit_in_list),
+                    |_| false,
+                    true,
+                ),
+                flags: ImplFlags {
+                    serialize: true,
+                    json_decode: true,
+                },
+            },
+            StructContents {
+                suffix: "PopulatedGetResult",
                 fields: Self::struct_contents(
                     self.all_fields()?.filter(|f| !f.never_read).chain(
                         self.virtual_fields(super::generator::ReadOperation::Get)?
@@ -70,12 +83,14 @@ impl<'a> ModelGenerator<'a> {
                 },
             },
             StructContents {
-                suffix: "PopulatedList",
+                suffix: "PopulatedListResult",
                 fields: Self::struct_contents(
-                    self.all_fields()?.filter(|f| !f.never_read).chain(
-                        self.virtual_fields(super::generator::ReadOperation::List)?
-                            .map(Cow::Owned),
-                    ),
+                    self.all_fields()?
+                        .filter(|f| !f.never_read && !f.omit_in_list)
+                        .chain(
+                            self.virtual_fields(super::generator::ReadOperation::List)?
+                                .map(Cow::Owned),
+                        ),
                     |_| false,
                     true,
                 ),

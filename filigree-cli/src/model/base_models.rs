@@ -18,6 +18,7 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
         sortable: super::field::SortableType::None,
         user_access: Access::Read,
         owner_access: Access::ReadWrite,
+        omit_in_list: false,
         default_sql: String::new(),
         default_rust: String::new(),
         extra_sql_modifiers: String::new(),

@@ -6,14 +6,8 @@ use error_stack::ResultExt;
 use serde::{Serialize, Deserialize};
 use serde_json::json;
 
+use super::JobError;
 use crate::server::ServerState;
-
-#[derive(thiserror::Error, Debug)]
-enum {{type_name}}JobError {
-    #[error("Failed to read payload")]
-    Payload,
-}
-
 
 /// The payload data for the {{name}} background job
 #[derive(Debug, Serialize, Deserialize)]
@@ -21,11 +15,10 @@ pub struct {{type_name}}JobPayload {
     // Fill in your payload data here
 }
 
-
 /// Run the {{name}} background job
-async fn run(job: RunningJob, state: ServerState) -> Result<(), error_stack::Report<{{type_name}}JobError>> {
+async fn run(job: RunningJob, state: ServerState) -> Result<(), error_stack::Report<JobError>> {
     let payload: {{type_name}}JobPayload = job.json_payload()
-        .change_context({{type_name}}JobError::Payload)?;
+        .change_context(JobError::Payload)?;
 
     Ok(())
 }

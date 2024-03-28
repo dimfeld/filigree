@@ -56,9 +56,9 @@ pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> R
 {% if can_populate_get %}
 /// Get a populated {{model_name}} from the database
 #[instrument(skip(db))]
-pub async fn get_populated(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}PopulatedGet, error_stack::Report<Error>> {
+pub async fn get_populated(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> Result<{{ struct_base }}PopulatedGetResult, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
-    let object = query_file_as!({{struct_base}}PopulatedGet, "{{dir}}/select_one_populated.sql",
+    let object = query_file_as!({{struct_base}}PopulatedGetResult, "{{dir}}/select_one_populated.sql",
         id.as_uuid(),
         auth.organization_id.as_uuid(),
         &actor_ids
@@ -230,7 +230,7 @@ impl ListQueryFilters {
 pub async fn list(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
-    filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}>, error_stack::Report<Error>> {
+    filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}ListResult>, error_stack::Report<Error>> {
 
     let q = include_str!("list.sql");
     list_internal(q, db, auth, filters).await
@@ -241,7 +241,7 @@ pub async fn list(
 pub async fn list_populated(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
-    filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}PopulatedList>, error_stack::Report<Error>> {
+    filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}PopulatedListResult>, error_stack::Report<Error>> {
 
     let q = include_str!("list_populated.sql");
     list_internal(q, db, auth, filters).await
@@ -314,9 +314,17 @@ pub async fn create_raw(
         {%- endif %}
         {% for field in fields | filter(attribute="owner_write", value=true) %}
             {%- if field.nullable -%}
+                {%- if field.is_custom_rust_type and field.base_type == "json" -%}
+                sqlx::types::Json(payload.{{field.rust_name}}.as_ref()) as _,
+                {%- else -%}
                 payload.{{field.rust_name}}.as_ref(){% if field.is_custom_rust_type %} as _{% endif %},
+                {%- endif -%}
             {%- else -%}
+                {%- if field.is_custom_rust_type and field.base_type == "json" -%}
+                sqlx::types::Json(&payload.{{field.rust_name}}) as _,
+                {%- else -%}
                 &payload.{{field.rust_name}}{% if field.is_custom_rust_type %} as _{% endif %},
+                {%- endif -%}
             {%- endif -%}
         {% endfor %}
         )
@@ -401,7 +409,7 @@ async fn create_payload_children(
     let result = {{struct_base}}CreatePayloadChildrenResult {
         {% for c in children | filter(attribute="write_payload_field_name") -%}
         {{c.write_payload_field_name}}: {{c.write_payload_field_name}}_result,
-        {%- endfor %} 
+        {%- endfor %}
     };
 
     Ok(result)
@@ -422,9 +430,17 @@ pub async fn update(
         &actor_ids,
         {% for field in fields | filter(attribute="owner_write", value=true) %}
             {%- if field.nullable -%}
-                payload.{{field.rust_name}}.as_ref(){% if field.is_custom_rust_type %} as _{% endif %},
+                {%- if field.is_custom_rust_type and field.base_type == "json" -%}
+                sqlx::types::Json(payload.{{field.rust_name}}.as_ref()) as _,
+                {%- else -%}
+                payload.{{field.rust_name}}.as_ref() as _,
+                {%- endif -%}
             {%- else -%}
+                {%- if field.is_custom_rust_type and field.base_type == "json" -%}
+                sqlx::types::Json(&payload.{{field.rust_name}}) as _,
+                {%- else -%}
                 &payload.{{field.rust_name}} as _,
+                {%- endif -%}
             {%- endif -%}
         {% endfor %}
         )
