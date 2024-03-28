@@ -203,6 +203,35 @@ impl Storage {
         Ok(writer.into_inner())
     }
 
+    async fn upload_file_internal(
+        reader: &mut tokio::io::BufReader<tokio::fs::File>,
+        mut writer: Box<dyn AsyncWrite + Send + Unpin>,
+    ) -> Result<(), StorageError> {
+        tokio::io::copy_buf(reader, &mut writer).await?;
+        writer.flush().await?;
+        writer.shutdown().await?;
+        Ok(())
+    }
+
+    /// Upload a file to storage. This uses a multipart upload, so for small files you may prefer
+    /// to just read them directly and doing a regular [put] operation.
+    pub async fn upload_file(
+        &self,
+        path: impl AsRef<std::path::Path>,
+        location: &str,
+    ) -> Result<(), StorageError> {
+        let file = tokio::fs::File::open(path).await?;
+        let mut reader = tokio::io::BufReader::with_capacity(32 * 1048576, file);
+
+        let (id, writer) = self.put_multipart(location).await?;
+        let result = Self::upload_file_internal(&mut reader, writer).await;
+        if result.is_err() {
+            self.abort_multipart(location, &id).await.ok();
+        }
+
+        result
+    }
+
     /// Stream a request body into object storage
     pub async fn save_request_body<STREAMERROR, F>(
         &self,
