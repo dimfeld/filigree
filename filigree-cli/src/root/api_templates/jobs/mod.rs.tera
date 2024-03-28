@@ -38,8 +38,6 @@ pub async fn create_queue(queue_location: &Path) -> Result<Queue, effectum::Erro
 }
 
 pub async fn init(state: &ServerState, init_recurring_jobs: bool) -> Result<QueueWorkers, effectum::Error> {
-    // create the queue
-
     // register the jobs
     {% for job in job_list -%}
     let {{job}}_runner = {{job}}::register(&state.queue, init_recurring_jobs).await?;
