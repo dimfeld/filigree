@@ -64,8 +64,11 @@ impl HttpError for OrderByError {
 ///
 /// let status_code = report.frames().find_map(|frame| {
 ///     downref_report_frame!(
+///         // The frame
 ///         frame,
+///         // The function to call if we find a matching error.
 ///         error_code,
+///         // The error types to try
 ///         OrderByError,
 ///         filigree::uploads::UploadInspectorError
 ///     )
