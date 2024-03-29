@@ -210,6 +210,7 @@ impl FileModelOptions {
             file_for: Some((parent.name.clone(), self.clone())),
             // file upload submodel does not have embedded file upload submodels
             files: Vec::new(),
+            shared_types: Vec::new(),
             id_prefix: self.id_prefix.clone().or_else(|| {
                 let self_prefix: String = self.name.to_lowercase().chars().take(3).collect();
                 Some(format!("{}{}", parent.id_prefix(), self_prefix))
