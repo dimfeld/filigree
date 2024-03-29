@@ -1,12 +1,12 @@
-use std::{io::Write, process::Stdio};
+use std::{io::Write, path::PathBuf, process::Stdio};
 
 use error_stack::{Report, ResultExt};
 use serde::Deserialize;
 
 use crate::Error;
 
-#[derive(Deserialize, Debug, Default)]
-pub struct Formatters {
+#[derive(Deserialize, Clone, Debug, Default)]
+pub struct FormatterConfig {
     /// The formatter to use for Rust code. Defaults to rustfmt.
     pub rust: Option<Vec<String>>,
     /// The formatter to use for Javascript and Typescript code. Defaults to pretter
@@ -15,16 +15,35 @@ pub struct Formatters {
     pub sql: Option<Vec<String>>,
 }
 
+#[derive(Clone)]
+pub struct Formatters {
+    pub config: FormatterConfig,
+    pub api_base_dir: PathBuf,
+    pub web_base_dir: PathBuf,
+}
+
 impl Formatters {
     pub fn run_formatter(&self, filename: &str, input: Vec<u8>) -> Result<Vec<u8>, Report<Error>> {
-        let formatter = if filename.ends_with(".sql") {
-            self.sql.clone()
+        let (base_dir, formatter) = if filename.ends_with(".sql") {
+            (&self.api_base_dir, self.config.sql.clone())
         } else if filename.ends_with(".rs") {
-            self.rust.clone().or(Some(vec!["rustfmt".to_string()]))
+            (
+                &self.api_base_dir,
+                self.config
+                    .rust
+                    .clone()
+                    .or(Some(vec!["rustfmt".to_string()])),
+            )
         } else if filename.ends_with(".ts") || filename.ends_with(".js") {
-            self.js.clone().or(Some(vec!["prettier".to_string()]))
+            (
+                &self.web_base_dir,
+                self.config
+                    .js
+                    .clone()
+                    .or(Some(vec!["prettier".to_string()])),
+            )
         } else {
-            None
+            (&self.api_base_dir, None)
         };
 
         let formatter = formatter.filter(|s| !s.is_empty());
@@ -40,6 +59,7 @@ impl Formatters {
         };
 
         let mut format_process = std::process::Command::new(&formatter[0])
+            .current_dir(base_dir)
             .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

@@ -36,7 +36,7 @@ pub enum ReadOperation {
 pub struct ModelGenerator<'a> {
     pub model: Model,
     pub model_map: &'a ModelMap,
-    pub(super) renderer: &'a Renderer<'a>,
+    pub(super) renderer: &'a Renderer,
     pub config: &'a Config,
     children: Vec<HasModel>,
     context: Option<tera::Context>,
@@ -45,7 +45,7 @@ pub struct ModelGenerator<'a> {
 impl<'a> ModelGenerator<'a> {
     pub fn new(
         config: &'a Config,
-        renderer: &'a Renderer<'a>,
+        renderer: &'a Renderer,
         model_map: &'a ModelMap,
         model: Model,
     ) -> Result<Self, Error> {

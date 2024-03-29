@@ -12,7 +12,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use self::{job::QueueConfig, storage::StorageConfig};
 use crate::{
-    format::Formatters,
+    format::FormatterConfig,
     model::{field::ModelField, Model, ModelAuthScope, SqlDialect},
     state::State,
     Error,
@@ -48,7 +48,7 @@ pub struct Config {
     pub shared_types: Vec<String>,
 
     #[serde(default)]
-    pub formatter: Formatters,
+    pub formatter: FormatterConfig,
     // Maybe support SQLite some day
     // /// The SQL dialect to use. Defaults to postgresql
     // #[serde(default = "Config::default_sql_dialect")]

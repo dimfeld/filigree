@@ -9,21 +9,21 @@ use error_stack::{Report, ResultExt};
 use rust_embed::RustEmbed;
 use tera::{Tera, Value};
 
-use crate::{config::Config, Error, RenderedFile, RenderedFileLocation};
+use crate::{format::Formatters, Error, RenderedFile, RenderedFileLocation};
 
-pub struct Renderer<'a> {
+pub struct Renderer {
     tera: Tera,
     passthrough_files: HashMap<String, Cow<'static, str>>,
-    config: &'a Config,
+    formatters: Formatters,
 }
 
-impl<'a> Renderer<'a> {
-    pub fn new(config: &'a Config) -> Self {
+impl Renderer {
+    pub fn new(formatters: Formatters) -> Self {
         let (tera, passthrough_files) = create_tera();
         Self {
             tera,
             passthrough_files,
-            config,
+            formatters,
         }
     }
 
@@ -70,8 +70,7 @@ impl<'a> Renderer<'a> {
         let filename = template_name.strip_suffix(".tera").unwrap_or(template_name);
 
         let output = self
-            .config
-            .formatter
+            .formatters
             .run_formatter(filename, output)
             .change_context(Error::Formatter)?;
 

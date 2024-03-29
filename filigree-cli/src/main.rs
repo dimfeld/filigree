@@ -7,6 +7,7 @@ use std::{
 use clap::Parser;
 use config::Config;
 use error_stack::{Report, ResultExt};
+use format::Formatters;
 use itertools::Itertools;
 use merge_files::MergeTracker;
 use migrations::{resolve_migration, save_migration_state, SingleMigration};
@@ -186,6 +187,12 @@ pub fn main() -> Result<(), Report<Error>> {
         ..
     } = config;
 
+    let formatter = Formatters {
+        config: config.formatter.clone(),
+        api_base_dir: api_dir.clone(),
+        web_base_dir: web_dir.clone(),
+    };
+
     // Make sure there's a default worker config.
     if !config.worker.contains_key("default") {
         config.worker.insert(
@@ -199,7 +206,7 @@ pub fn main() -> Result<(), Report<Error>> {
     let web_merge_tracker =
         MergeTracker::new(state_dir.join("web"), web_dir.clone(), args.overwrite);
 
-    let renderer = templates::Renderer::new(&config);
+    let renderer = templates::Renderer::new(formatter.clone());
 
     let models = build_models(&config, config_models);
     let model_map = ModelMap::new(&models);
@@ -328,12 +335,9 @@ pub fn main() -> Result<(), Report<Error>> {
         let up_filename = format!("{timestamp}_{migration_name}.up.sql");
         let down_filename = format!("{timestamp}_{migration_name}.down.sql");
 
-        let up = config
-            .formatter
-            .run_formatter(&up_filename, migration.up.into_owned().into_bytes())?;
-        let down = config
-            .formatter
-            .run_formatter(&down_filename, migration.down.into_owned().into_bytes())?;
+        let up = formatter.run_formatter(&up_filename, migration.up.into_owned().into_bytes())?;
+        let down =
+            formatter.run_formatter(&down_filename, migration.down.into_owned().into_bytes())?;
 
         std::fs::write(migrations_dir.join(&up_filename), &up)
             .change_context(Error::WriteFile)
