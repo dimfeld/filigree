@@ -219,7 +219,7 @@ impl FileModelOptions {
             belongs_to: Some(super::BelongsTo::Simple(parent.name.clone())),
             // The object is only accessible via the parent model, so don't generate endpoints
             // here.
-            endpoints: Endpoints::All(false),
+            standard_endpoints: Endpoints::All(false),
             plural: None,
             default_sort_field: None,
             pagination: Pagination::default(),
@@ -228,6 +228,7 @@ impl FileModelOptions {
             global: false,
             allow_id_in_create: false,
             auth_scope: None,
+            endpoints: Vec::new(),
             indexes: vec![],
             index_created_at: true,
             index_updated_at: true,

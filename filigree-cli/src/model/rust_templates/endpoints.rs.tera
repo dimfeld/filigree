@@ -81,7 +81,7 @@ async fn delete(
 
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
 
-    {% for c in children 
+    {% for c in children
         | filter(attribute="file_upload")
         | filter(attribute="file_upload.retain_file_on_delete", value=false) -%}
     let {{ c.module }}_files = crate::models::{{c.module}}::storage::get_storage_keys_by_parent_id(
@@ -97,7 +97,7 @@ async fn delete(
 
     tx.commit().await.change_context(Error::Db)?;
 
-    {% for c in children 
+    {% for c in children
         | filter(attribute="file_upload")
         | filter(attribute="file_upload.retain_file_on_delete", value=false) -%}
     for file in {{ c.module }}_files {
@@ -272,8 +272,8 @@ async fn upsert_child_{{c.module}}(
     auth: Authed,
     Path(parent_id): Path<{{id_type}}>,
     {% if c.file_upload -%}
-    body: axum::body::Body,
     Query(qs): Query<filigree::storage::QueryFilename>,
+    body: axum::body::Body,
     {%- else -%}
     FormOrJson(mut payload): FormOrJson<{{c.struct_base}}UpdatePayload>,
     {%- endif %}
@@ -385,6 +385,26 @@ async fn delete_child_{{c.module}}(
 
 {% endfor %}
 
+{% for e in custom_endpoints %}
+
+{{e.rust.input_type_def}}
+
+{{e.rust.output_type_def}}
+
+{{e.rust.query_type_def}}
+
+async fn {{ e.snake_name }}(
+    {{e.rust.args}}
+) -> Result<impl IntoResponse, Error> {
+    // Add your code here
+
+    let output = {{e.output_type}} {
+        // add data here
+    };
+
+    Ok(Json(output))
+}
+{% endfor %}
 
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
@@ -462,6 +482,13 @@ pub fn create_routes() -> axum::Router<ServerState> {
         )
 
     {% endif %}
+    {% endfor %}
+
+    {% for e in custom_endpoints %}
+        .route("{{e.rust.path}}",
+            routing::{{e.rust.method}}({{e.snake_name}})
+                .route_layer(has_any_permission(vec![{{e.rust.permission}}, "org_admin"]))
+            )
     {% endfor %}
 }
 

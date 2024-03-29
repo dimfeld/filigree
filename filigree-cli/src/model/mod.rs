@@ -16,7 +16,7 @@ use self::{
     field::{Access, ModelField, ModelFieldReference, SqlType},
     file::FileModelOptions,
 };
-use crate::Error;
+use crate::{config::custom_endpoint::CustomEndpoint, Error};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Model {
@@ -44,7 +44,13 @@ pub struct Model {
     #[serde(default)]
     pub fields: Vec<ModelField>,
     /// If true, generate API endpoints for this model.
-    pub endpoints: Endpoints,
+    pub standard_endpoints: Endpoints,
+
+    #[serde(default)]
+    /// Custom endpoints to create. This will generate Rust code and equivalent Typescript
+    /// functions and types.
+    endpoints: Vec<CustomEndpoint>,
+
     /// The default field to order by on list operations. Prefix with '-' to order descending.
     /// If omitted, "-updated_at" is used.
     pub default_sort_field: Option<String>,
@@ -191,7 +197,8 @@ impl Model {
             self.id_prefix = other_model.id_prefix;
         }
 
-        self.endpoints.merge_from(other_model.endpoints);
+        self.standard_endpoints
+            .merge_from(other_model.standard_endpoints);
         match (
             self.extra_create_table_sql.is_empty(),
             other_model.extra_create_table_sql.is_empty(),

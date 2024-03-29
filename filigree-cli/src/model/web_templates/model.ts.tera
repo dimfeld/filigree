@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { ObjectPermission } from '../model_types.js';
 {{ts_imports}}
 
+export type {{id_type}} = string;
+
 {% for struct in structs %}
 export const {{struct.name}}Schema = z.object({
   {{struct.zod_fields_content}}
@@ -52,3 +54,29 @@ export const {{name}}Model : ModelDefinition<typeof {{struct_base}}Schema> = {
   ],
 };
 
+{% for e in custom_endpoints %}
+export interface {{e.pascal_name}}Args {
+  {{e.ts.args_struct}},
+  fetch?: typeof fetch,
+}
+
+{{e.ts.input_type_def}}
+
+{{e.ts.output_type_def}}
+
+{{e.ts.query_type_def}}
+
+export async function {{e.name}}({ fetch, {{e.ts.args}} }: {{e.pascal_name}}Args) {
+  return client({
+    url: `{{e.ts.path}}`,
+    method: '{{e.ts.method}}',
+    fetch,
+    {% if e.query_type -%}
+    query: query,
+    {%- endif %}
+    {% if e.has_payload -%}
+    json: payload,
+    {%- endif %}
+  }).json<{{e.output_type}}>();
+}
+{% endfor %}
