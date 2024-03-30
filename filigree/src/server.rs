@@ -1,6 +1,7 @@
 use axum::extract::Host;
 use futures::FutureExt;
 use tokio::signal;
+use tracing::{event, Level};
 
 use crate::{
     auth::{oauth::providers::OAuthProvider, SessionBackend},
@@ -118,6 +119,7 @@ pub async fn shutdown_signal() {
             _ = terminate => {},
         }
 
+        event!(Level::INFO, "Shutting down server...");
         shutdown_tx.send(()).ok();
     });
 

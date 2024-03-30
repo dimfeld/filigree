@@ -182,7 +182,6 @@ impl Server {
         self,
         shutdown: impl Future<Output = ()> + Send + 'static,
     ) -> Result<(), Report<Error>> {
-        event!(Level::INFO, "Shutting down server");
         axum::serve(self.listener, self.app)
             .with_graceful_shutdown(shutdown)
             .await
