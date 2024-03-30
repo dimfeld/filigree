@@ -41,7 +41,7 @@ pub enum StorageError {
     #[error("Object not found")]
     NotFound(#[source] object_store::Error),
     /// Storage backend error
-    #[error("Storage backend error")]
+    #[error("Storage backend error: {0}")]
     ObjectStore(#[source] object_store::Error),
     /// Invalid configuration
     #[error("Invalid configuration: {0}")]
