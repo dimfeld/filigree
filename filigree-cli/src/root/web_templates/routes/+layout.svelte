@@ -1,7 +1,7 @@
 <script>
   import { ThemeInit, ThemeSwitch, settings } from 'svelte-ux';
   import { page } from '$app/stores';
-  import '../app.pcss';
+  import '../app.postcss';
 
   let { data } = $props();
 
