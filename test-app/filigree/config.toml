@@ -3,6 +3,10 @@ company_name = "Daniel Imfeld"
 
 default_auth_scope = "model"
 
+[secrets]
+deepgram = "DEEPGRAM_API_KEY"
+openai = "OPENAI_API_KEY"
+
 [server]
 dotenv = true
 hosts = ["localhost"]
