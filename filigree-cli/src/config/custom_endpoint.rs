@@ -178,11 +178,11 @@ impl CustomEndpoint {
     }
 
     fn input_type_def(&self) -> (String, String) {
-        self.type_def(&self.input, "Input")
+        self.type_def(&self.input, "Payload")
     }
 
     fn output_type_def(&self) -> (String, String) {
-        self.type_def(&self.output, "Output")
+        self.type_def(&self.output, "Response")
     }
 
     fn query_type_def(&self) -> (String, String) {
@@ -208,13 +208,13 @@ impl CustomEndpoint {
             .input
             .struct_name()
             .map(Cow::Borrowed)
-            .unwrap_or_else(|| Cow::Owned(format!("{}Input", self.name.to_case(Case::Pascal))));
+            .unwrap_or_else(|| Cow::Owned(format!("{}Payload", self.name.to_case(Case::Pascal))));
 
         let output_type_name = self
             .output
             .struct_name()
             .map(Cow::Borrowed)
-            .unwrap_or_else(|| Cow::Owned(format!("{}Output", self.name.to_case(Case::Pascal))));
+            .unwrap_or_else(|| Cow::Owned(format!("{}Response", self.name.to_case(Case::Pascal))));
 
         let query_type_name = match self.query {
             EmptyOrStringOrMap::Empty => Cow::Borrowed(""),
@@ -223,7 +223,7 @@ impl CustomEndpoint {
                 .struct_name()
                 .map(Cow::Borrowed)
                 .unwrap_or_else(|| {
-                    Cow::Owned(format!("{}Output", self.name.to_case(Case::Pascal)))
+                    Cow::Owned(format!("{}Response", self.name.to_case(Case::Pascal)))
                 }),
         };
 
