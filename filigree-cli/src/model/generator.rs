@@ -467,13 +467,14 @@ impl<'a> ModelGenerator<'a> {
             .collect::<Vec<_>>();
 
         let endpoints = if belongs_to_field.is_none() {
-            &self.endpoints
+            &self.standard_endpoints
         } else {
             // Right now we don't generate any endpoints for child models. They can only be
             // accessed through the endpoints for themselves on the parent model.
             &Endpoints::All(false)
         };
 
+        let id_type = self.object_id_type();
         let json_value = json!({
             "dir": base_dir,
             "module_name": &self.model.module_name(),
@@ -505,12 +506,13 @@ impl<'a> ModelGenerator<'a> {
             "pagination": self.pagination,
             "full_default_sort_field": full_default_sort_field,
             "default_sort_field": default_sort_field,
-            "id_type": self.object_id_type(),
+            "id_type": &id_type,
             "id_prefix": self.id_prefix(),
             "predefined_object_id": predefined_object_id,
             "url_path": self.plural().as_ref().to_case(Case::Snake),
             "has_any_endpoints": endpoints.any_enabled(),
             "endpoints": endpoints.per_endpoint(),
+            "custom_endpoints": self.model.endpoints.iter().map(|e| e.template_context(&id_type)).collect::<Vec<_>>(),
             "auth_scope": self.auth_scope.unwrap_or(self.config.default_auth_scope),
             "parent_model_name": parent_model_name,
             "file_for": self.file_for.as_ref().map(|f| f.0.as_str()),

@@ -210,6 +210,7 @@ impl FileModelOptions {
             file_for: Some((parent.name.clone(), self.clone())),
             // file upload submodel does not have embedded file upload submodels
             files: Vec::new(),
+            shared_types: Vec::new(),
             id_prefix: self.id_prefix.clone().or_else(|| {
                 let self_prefix: String = self.name.to_lowercase().chars().take(3).collect();
                 Some(format!("{}{}", parent.id_prefix(), self_prefix))
@@ -218,7 +219,7 @@ impl FileModelOptions {
             belongs_to: Some(super::BelongsTo::Simple(parent.name.clone())),
             // The object is only accessible via the parent model, so don't generate endpoints
             // here.
-            endpoints: Endpoints::All(false),
+            standard_endpoints: Endpoints::All(false),
             plural: None,
             default_sort_field: None,
             pagination: Pagination::default(),
@@ -227,6 +228,7 @@ impl FileModelOptions {
             global: false,
             allow_id_in_create: false,
             auth_scope: None,
+            endpoints: Vec::new(),
             indexes: vec![],
             index_created_at: true,
             index_updated_at: true,

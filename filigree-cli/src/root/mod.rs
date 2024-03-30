@@ -97,7 +97,18 @@ pub fn render_files(
     );
 
     context.insert("web_relative_to_api", &web_relative_to_api);
-    context.insert("shared_types", &config.shared_types);
+
+    let mut shared_types = config.shared_types.clone();
+    for model in models {
+        let module = model.module_name();
+        let types = model
+            .shared_types
+            .iter()
+            .map(|s| format!("crate::models::{}::{}", module, s));
+        shared_types.extend(types);
+    }
+
+    context.insert("shared_types", &shared_types);
 
     let storage_context = config
         .storage

@@ -91,7 +91,8 @@ impl Formatters {
                     "Formatter {cmd} exited with code {code}",
                     cmd = formatter.join(" ")
                 ))
-                .attach_printable(String::from_utf8(result.stderr).unwrap_or_default());
+                .attach_printable(String::from_utf8(result.stderr).unwrap_or_default())
+                .attach_printable(String::from_utf8(result.stdout).unwrap_or_default());
         }
 
         Ok(result.stdout)

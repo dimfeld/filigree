@@ -1,3 +1,4 @@
+pub mod custom_endpoint;
 pub mod job;
 pub mod storage;
 
