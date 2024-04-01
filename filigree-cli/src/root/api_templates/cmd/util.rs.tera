@@ -1,6 +1,6 @@
 use clap::{Args, Subcommand};
 use error_stack::{Report, ResultExt};
-{% if shared_types %}use ts_rs::TS;{% endif %}
+use schemars::schema_for;
 
 use crate::Error;
 
@@ -13,9 +13,7 @@ pub struct UtilCommand {
 #[derive(Debug, Subcommand)]
 pub enum UtilSubcommand {
     HashPassword(HashPasswordCommand),
-    {% if shared_types -%}
     SyncTypes,
-    {%- endif %}
 }
 
 #[derive(Args, Debug)]
@@ -33,54 +31,45 @@ impl UtilCommand {
                     .0;
                 println!("{hash}");
             },
-            {% if shared_types -%}
             UtilSubcommand::SyncTypes => sync_types()?,
-            {%- endif %}
         }
 
         Ok(())
     }
 }
 
-{% if shared_types %}
-macro_rules! export {
-    ($name:ty) => {
-        <$name>::export_to_string()
-            .change_context(Error::TypeExport)
-            .attach_printable(stringify!($name))?
-    };
-}
-
 fn sync_types() -> Result<(), Report<Error>> {
-    let mut output = vec![];
+    let schemas = [
+        schema_for!(crate::users::users::SelfUser),
+        {% for type in shared_types -%}
+        schema_for!({{type}}),
+        {%- endfor -%}
+    ];
 
-    {% for type in shared_types -%}
-    output.push(export!({{type}}));
-    {%- endfor %}
+    let merged = schemars_zod::merge_schemas(schemas.into_iter());
+    let converted = schemars_zod::convert(merged);
 
-    // Each exported type string has a comment above it. Leave the first one but strip the rest
-    // since they're all identical.
-    let trimmed = output
-        .iter()
-        .enumerate()
-        .map(|(i, s)| {
-            if i == 0 {
-                return s.as_str();
-            }
+    let header = "import { z } from 'zod';
 
-            let newline = s.char_indices().find(|(_, c)| *c == '\n').map(|(i, _)| i);
-            if let Some(newline) = newline {
-                s[newline + 1..].trim()
-            } else {
-                s.as_str()
-            }
-        })
+function memoizeOne(fn: () => ZodTypeAny) : () => ZodTypeAny {
+  let cached: ZodTypeAny|undefined;
+  return function() {
+    if(!cached) {
+      cached = fn();
+    }
+    return cached;
+  };
+}";
+
+    let types = converted.iter().map(|(_, v)| v.as_str());
+
+    let output = std::iter::once(header)
+        .chain(types)
         .collect::<Vec<_>>()
         .join("\n\n");
 
     let output_path = "../web/src/lib/api_types.ts";
-    std::fs::write(output_path, trimmed.as_bytes()).change_context(Error::TypeExport)?;
+    std::fs::write(output_path, &output).change_context(Error::TypeExport)?;
 
     Ok(())
 }
-{% endif %}

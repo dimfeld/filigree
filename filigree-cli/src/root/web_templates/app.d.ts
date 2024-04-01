@@ -1,3 +1,5 @@
+import type { Self } from '$lib/api_types.js';
+
 // See https://kit.svelte.dev/docs/types#app
 // for information about these interfaces
 declare global {
@@ -8,7 +10,7 @@ declare global {
       error: unknown;
     }
     interface Locals {
-      user: unknown;
+      user: Self;
     }
     // interface PageData {}
     // interface Platform {}

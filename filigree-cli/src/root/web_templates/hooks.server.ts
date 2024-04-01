@@ -1,5 +1,7 @@
-export async function handle({ event, resolve }) {
-  return resolve(event);
+import { getUser } from '$lib/server/user.js';
+
+export function handle(event) {
+  return getUser(event);
 }
 
 export function handleError({ error, event, message, status }) {
@@ -10,3 +12,4 @@ export function handleError({ error, event, message, status }) {
     error: error.stack ?? JSON.stringify(error, null, 2),
   };
 }
+

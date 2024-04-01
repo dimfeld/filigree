@@ -44,7 +44,7 @@ pub struct Config {
     pub secrets: BTreeMap<String, String>,
 
     /// Full paths to types that exist in the Rust application and should be replicated in
-    /// Typescript. These types must derive or otherwise implement the [ts_rs::TS] trait.
+    /// Typescript. These types must derive or otherwise implement the [schemars::JsonSchema] trait.
     #[serde(default)]
     pub shared_types: Vec<String>,
 

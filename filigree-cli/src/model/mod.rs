@@ -28,7 +28,7 @@ pub struct Model {
     pub files: Vec<FileModelOptions>,
 
     /// Paths to types that exist in the Rust application and should be replicated in
-    /// Typescript. These types must derive or otherwise implement the [ts_rs::TS] trait.
+    /// Typescript. These types must derive or otherwise implement the [schemars::JsonSchema] trait.
     ///
     /// The paths here will be prefixed with `crate::models::MODEL_MODULE::`. For types not specific to a
     /// model you can use `shared_types` in the primary configuration file.
