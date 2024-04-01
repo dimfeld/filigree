@@ -117,6 +117,8 @@ pub fn render_files(
     context.insert("storage", &storage_context);
 
     let base_path = PathBuf::from("src");
+    // These files don't go in src and so should not have it prepended.
+    let non_base_files = ["build.rs", "tailwind.config.js"];
 
     let web_files = RootWebTemplates::iter().map(|f| (RenderedFileLocation::Web, f));
     let api_files = RootApiTemplates::iter().map(|f| (RenderedFileLocation::Api, f));
@@ -137,7 +139,11 @@ pub fn render_files(
             let filename = file.strip_prefix("root/").unwrap();
             let filename = filename.strip_suffix(".tera").unwrap_or(filename);
 
-            let path = base_path.join(filename);
+            let path = if non_base_files.contains(&filename) {
+                PathBuf::from(filename)
+            } else {
+                base_path.join(filename)
+            };
             renderer.render_with_full_path(path, &file, location, &context)
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -160,15 +166,6 @@ pub fn render_files(
         })
         .collect::<Result<Vec<_>, _>>()?;
     output.extend(job_template);
-
-    // build.rs doesn't go in src
-    let build_rs = renderer.render_with_full_path(
-        PathBuf::from("build.rs"),
-        "root/build.rs.tera",
-        RenderedFileLocation::Api,
-        &context,
-    )?;
-    output.push(build_rs);
 
     Ok(output)
 }
