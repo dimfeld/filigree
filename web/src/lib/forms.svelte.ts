@@ -28,7 +28,7 @@ export function isValidationFailure(
 }
 
 export interface FormResponse<MODEL extends object, ERROR = unknown> {
-  form: Partial<MODEL>;
+  form?: Partial<MODEL>;
   message?: string;
   toast?: never; // TODO make a toast type
   error?: ERROR;
