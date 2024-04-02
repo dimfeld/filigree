@@ -4,7 +4,13 @@ import { hasPermissions, protectRoutes } from 'filigree-web/auth/routes';
 import { sequence } from '@sveltejs/kit/hooks';
 
 const protect = protectRoutes({
-  allowUnauthed: ['/login', '/forgot', '/auth'],
+  allowUnauthed: [
+    // API does its own auth so we don't check here
+    '/api/',
+    '/login',
+    '/forgot',
+    '/auth'
+  ],
   // requireAuth: [],
   check: {
     '/organization/admin': hasPermissions(['org_admin']),
