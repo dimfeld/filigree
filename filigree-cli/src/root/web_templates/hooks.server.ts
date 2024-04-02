@@ -1,6 +1,6 @@
 import { getUser } from '$lib/server/user.js';
 import { type Handle, error, redirect } from '@sveltejs/kit';
-import { hasPermissions, protectRoutes } from 'filigree-web';
+import { hasPermissions, protectRoutes } from 'filigree-web/auth/routes';
 import { sequence } from '@sveltejs/kit/hooks';
 
 const protect = protectRoutes({
