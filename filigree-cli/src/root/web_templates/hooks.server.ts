@@ -1,9 +1,30 @@
 import { getUser } from '$lib/server/user.js';
-import type { Handle } from '@sveltejs/kit';
+import { type Handle, error, redirect } from '@sveltejs/kit';
+import { hasPermissions, protectRoutes } from 'filigree-web';
 import { sequence } from '@sveltejs/kit/hooks';
+
+const protect = protectRoutes({
+  allowUnauthed: ['/login', '/forgot', '/auth'],
+  // requireAuth: [],
+  check: {
+    '/organization/admin': hasPermissions(['org_admin']),
+    '/admin': hasPermissions(['_global:admin']),
+  },
+})
 
 const auth: Handle = async ({ event, resolve }) => {
   event.locals.user = await getUser(event);
+
+  const protectResult = protect(event);
+  if(protectResult === 'unknown-user') {
+    let qs = new URLSearchParams({
+      redirectTo: event.url.pathname,
+    });
+    redirect(302, '/login?' + qs.toString());
+  } else if(protectResult === 'forbidden') {
+    error(403);
+  }
+
   return resolve(event);
 };
 
