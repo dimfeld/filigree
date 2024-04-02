@@ -1,4 +1,4 @@
-import type { Self } from '$lib/api_types.js';
+import type { SelfUser } from '$lib/api_types.js';
 
 // See https://kit.svelte.dev/docs/types#app
 // for information about these interfaces
@@ -10,7 +10,7 @@ declare global {
       error: unknown;
     }
     interface Locals {
-      user: Self;
+      user: SelfUser;
     }
     // interface PageData {}
     // interface Platform {}

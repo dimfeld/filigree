@@ -1,24 +1,24 @@
-import type { Handle } from '@sveltejs/kit';
+import type { RequestEvent } from '@sveltejs/kit';
+import type { SelfUser } from '$lib/api_types.js';
 import { client } from 'filigree-web';
 
-/** Fetch info for the current user. This places the user at `event.locals.user`,
- * which allows subsequent calls in the same request to use the first call's result. */
-export const getUser: Handle = async ({ event, resolve }) => {
-  if (!event.cookies.get('sid')) {
-    return resolve(event);
+/** A SvelteKit server hook that fetches info for the current user and places it at event.locals.user. */
+export async function getUser({ fetch, cookies }: RequestEvent): Promise<SelfUser | null> {
+  if (!cookies.get('sid')) {
+    return null;
   }
 
   const response = await client({
     url: '/api/self',
-    fetch: event.fetch,
+    fetch,
     // 401 means user is not logged in
     tolerateFailure: [401],
   });
 
   if (response.status === 200) {
-    event.locals.user = await response.json();
+    return (await response.json()) as SelfUser;
+  } else {
+    return null;
   }
-
-  return resolve(event);
-};
+}
 
