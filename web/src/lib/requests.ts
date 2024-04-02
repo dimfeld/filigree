@@ -23,10 +23,20 @@ export function forwardToApi(
   options?: Partial<RequestOptions> & { client?: Client }
 ) {
   const thisClient = options?.client ?? client;
+
+  let headers = new Headers(event.request.headers);
+
+  // Let the server fetch implenentation manage these headers itself.
+  // Most notably, modern browsers may accept certain encodings like zstd which
+  // Node currently doesn't support, and not removing it breaks things when the
+  // API sends back a response that Node can't decode.
+  headers.delete('accept-encoding');
+  headers.delete('connection');
+
   return thisClient({
     url: '/api/' + url,
     method,
-    headers: event.request.headers,
+    headers,
     signal: event.request.signal,
     body: event.request.body,
     fetch: event.fetch,
