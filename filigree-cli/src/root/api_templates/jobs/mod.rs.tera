@@ -6,10 +6,11 @@ pub mod {{job}};
 {%- endfor %}
 
 use effectum::{Queue, Worker};
+use error_stack::ResultExt;
 use futures::FutureExt;
 
 use std::path::Path;
-use crate::server::ServerState;
+use crate::{server::ServerState, Error};
 
 #[derive(thiserror::Error, Debug)]
 enum JobError {
@@ -37,24 +38,40 @@ pub async fn create_queue(queue_location: &Path) -> Result<Queue, effectum::Erro
     Queue::new(queue_location).await
 }
 
-pub async fn init(state: &ServerState, init_recurring_jobs: bool) -> Result<QueueWorkers, effectum::Error> {
+pub async fn init(state: &ServerState, init_recurring_jobs: bool) -> Result<QueueWorkers, error_stack::Report<Error>> {
     // register the jobs
     {% for job in job_list -%}
-    let {{job}}_runner = {{job}}::register(&state.queue, init_recurring_jobs).await?;
+    let {{job}}_runner = {{job}}::register(&state.queue, init_recurring_jobs)
+        .await
+        .change_context(Error::TaskQueue)?;
     {%- endfor %}
 
     // create the workers
     {%- for worker in job_workers %}
+        let worker_{{worker.name}}_min_concurrency =
+            filigree::config::parse_option::<u16>(std::env::var(
+                "{{env_prefix}}WORKER_{{worker.name_upper}}_MIN_CONCURRENCY"
+            ).ok())
+            .change_context(Error::Config)?
+            .unwrap_or({{worker.min_concurrency}});
+        let worker_{{worker.name}}_max_concurrency =
+            filigree::config::parse_option::<u16>(std::env::var(
+                "{{env_prefix}}WORKER_{{worker.name_upper}}_MAX_CONCURRENCY"
+            ).ok())
+            .change_context(Error::Config)?
+            .unwrap_or({{worker.max_concurrency}});
+
         let worker_{{worker.name}} = Worker::builder(&state.queue, state.clone())
-            .max_concurrency({{worker.max_concurrency}})
-            .min_concurrency({{worker.min_concurrency}})
+            .min_concurrency(worker_{{worker.name}}_min_concurrency)
+            .max_concurrency(worker_{{worker.name}}_max_concurrency)
             .jobs([
                 {% for job in worker.jobs -%}
                 {{job}}_runner,
                 {%- endfor %}
             ])
             .build()
-            .await?;
+            .await
+            .change_context(Error::TaskQueue)?;
     {% endfor %}
 
     let workers = QueueWorkers {

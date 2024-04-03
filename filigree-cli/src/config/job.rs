@@ -140,9 +140,6 @@ impl WorkerConfig {
         name: &str,
         jobs: &BTreeMap<String, JobConfig>,
     ) -> Option<serde_json::Value> {
-        let max_concurrency = self.max_concurrency.unwrap_or(4);
-        let min_concurrency = self.min_concurrency.unwrap_or(max_concurrency);
-
         let jobs_for_this_worker = jobs
             .iter()
             .filter(|(_, job)| job.worker == name)
@@ -156,10 +153,19 @@ impl WorkerConfig {
 
         Some(json!({
             "name": name,
+            "name_upper": name.to_case(Case::ScreamingSnake),
             "jobs": jobs_for_this_worker,
-            "min_concurrency": min_concurrency,
-            "max_concurrency": max_concurrency,
+            "min_concurrency": self.min_concurrency(),
+            "max_concurrency": self.max_concurrency(),
         }))
+    }
+
+    pub fn max_concurrency(&self) -> usize {
+        self.max_concurrency.unwrap_or(4)
+    }
+
+    pub fn min_concurrency(&self) -> usize {
+        self.min_concurrency.unwrap_or(self.max_concurrency())
     }
 }
 

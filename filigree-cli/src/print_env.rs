@@ -7,8 +7,9 @@ use filigree::storage::StoragePreset;
 
 use crate::{
     config::{
-        storage::{StorageBucketConfig, StorageConfig, StorageProviderConfig},
-        Config, FullConfig,
+        job::WorkerConfig,
+        storage::{StorageBucketConfig, StorageProviderConfig},
+        FullConfig,
     },
     Error,
 };
@@ -74,6 +75,7 @@ fn print_var(config: &PrintConfig, key: &str, default_value: impl Display, desc:
 }
 
 pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
+    let FullConfig { config, .. } = config;
     let pc = PrintConfig {
         mode: if args.dockerfile {
             EnvPrintMode::Dockerfile
@@ -82,18 +84,13 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         } else {
             EnvPrintMode::Shell
         },
-        env_prefix: config.config.server.env_prefix.clone().unwrap_or_default(),
+        env_prefix: config.server.env_prefix.clone().unwrap_or_default(),
         print_comments: args.comments,
     };
 
     print_var(&pc, "DATABASE_URL", "", "Database URL to connect to");
     print_var(&pc, "HOST", "127.0.0.1", "Host to bind to");
-    print_var(
-        &pc,
-        "PORT",
-        config.config.server.default_port,
-        "Port to listen on",
-    );
+    print_var(&pc, "PORT", config.server.default_port, "Port to listen on");
     print_var(&pc, "ENV", "development", "");
     print_var(
         &pc,
@@ -120,20 +117,20 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
     print_var(
         &pc,
         "DB_MIN_CONNECTIONS",
-        config.config.database.min_connections,
+        config.database.min_connections,
         "The minimum number of database connections to keep open",
     );
     print_var(
         &pc,
         "DB_MAX_CONNECTIONS",
-        config.config.database.max_connections,
+        config.database.max_connections,
         "The maximum number of database connections to open",
     );
 
     print_var(
         &pc,
         "EMAIL_SENDER_SERVICE",
-        &config.config.email.provider,
+        &config.email.provider,
         "The email sending service to use",
     );
 
@@ -147,36 +144,33 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
     print_var(
         &pc,
         "EMAIL_DEFAULT_FROM_ADDRESS",
-        &config.config.email.from,
+        &config.email.from,
         "The email address to use as the default sender",
     );
 
     print_var(
         &pc,
         "ALLOW_PUBLIC_SIGNUP",
-        config.config.users.allow_public_signup,
+        config.users.allow_public_signup,
         "Allow users to sign up themselves",
     );
     print_var(
         &pc,
         "ALLOW_INVITE_TO_SAME_ORG",
-        config.config.users.allow_invite_to_same_org,
+        config.users.allow_invite_to_same_org,
         "Allow users to invite people to their team",
     );
     print_var(
         &pc,
         "ALLOW_INVITE_TO_NEW_ORG",
-        config.config.users.allow_invite_to_new_org,
+        config.users.allow_invite_to_new_org,
         "Allow users to invite people to the app, in their own new team",
     );
 
     print_var(
         &pc,
         "SAME_ORG_INVITES_REQUIRE_EMAIL_VERIFICATION",
-        &config
-            .config
-            .users
-            .same_org_invites_require_email_verification,
+        &config.users.same_org_invites_require_email_verification,
         "Require email verification when inviting people to the same organization",
     );
 
@@ -190,7 +184,7 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
     print_var(
         &pc,
         "API_CORS",
-        config.config.server.api_cors,
+        config.server.api_cors,
         "The CORS configuration to use",
     );
 
@@ -208,7 +202,7 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         "Whether or not to obfuscate details from internal server errors. If omitted, the default is to obfuscate when env != \"development\".",
     );
 
-    if config.config.use_queue {
+    if config.use_queue {
         print_var(
             &pc,
             "QUEUE_PATH",
@@ -217,19 +211,40 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         );
     }
 
-    for (name, cfg) in &config.config.storage.provider {
+    for (name, cfg) in &config.worker {
+        print_worker_config_vars(&pc, name, cfg);
+    }
+
+    for (name, cfg) in &config.storage.provider {
         print_storage_provider_config_vars(&pc, name, cfg);
     }
 
-    for (name, cfg) in &config.config.storage.bucket {
+    for (name, cfg) in &config.storage.bucket {
         print_storage_bucket_config_vars(&pc, name, cfg);
     }
 
-    for (name, env) in config.config.secrets {
+    for (name, env) in config.secrets {
         print_var(&pc, env.as_str(), "", &format!("Value for secret '{name}'"))
     }
 
     Ok(())
+}
+
+fn print_worker_config_vars(pc: &PrintConfig, name: &str, cfg: &WorkerConfig) {
+    let base = format!("WORKER_{name}_", name = name.to_case(Case::ScreamingSnake));
+
+    print_var(
+        &pc,
+        &format!("{base}MIN_CONCURRENCY"),
+        &cfg.min_concurrency(),
+        "The worker will try to fetch more jobs when it is running fewer than this number.",
+    );
+    print_var(
+        &pc,
+        &format!("{base}MAX_CONCURRENCY"),
+        &cfg.max_concurrency(),
+        "The worker will run at most this many jobs.",
+    );
 }
 
 fn print_storage_provider_config_vars(pc: &PrintConfig, name: &str, cfg: &StorageProviderConfig) {
