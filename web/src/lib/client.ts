@@ -277,6 +277,8 @@ async function wrapRetry(
       }
     }
 
+    currentTry += 1;
+
     let fetchPromise =
       request instanceof Request ? thisFetch(request) : thisFetch(request.url, request);
     let response: Response | typeof TIMEOUT | undefined;
@@ -340,8 +342,6 @@ async function wrapRetry(
     }
 
     await sleep(sleepTime, signal);
-
-    currentTry += 1;
   }
 }
 
