@@ -109,22 +109,22 @@ impl StoragePreset {
     pub fn merge_env(&mut self, prefix: &str) -> Result<(), StorageError> {
         match self {
             StoragePreset::S3 { region } => {
-                merge_option_if_set(region, prefixed_env_var(prefix, "REGION").ok());
+                merge_option_if_set(region, prefixed_env_var(prefix, "S3_REGION").ok());
             }
             StoragePreset::DigitalOceanSpaces { region } => {
-                merge_option_if_set(region, prefixed_env_var(prefix, "REGION").ok());
+                merge_option_if_set(region, prefixed_env_var(prefix, "S3_REGION").ok());
             }
             StoragePreset::BackblazeB2 { region } => {
-                merge_option_if_set(region, prefixed_env_var(prefix, "REGION").ok());
+                merge_option_if_set(region, prefixed_env_var(prefix, "S3_REGION").ok());
             }
             StoragePreset::CloudflareR2 {
                 account_id,
                 jurisdiction,
             } => {
-                merge_option_if_set(account_id, prefixed_env_var(prefix, "ACCOUNT_ID").ok());
+                merge_option_if_set(account_id, prefixed_env_var(prefix, "R2_ACCOUNT_ID").ok());
                 merge_option_if_set(
                     jurisdiction,
-                    parse_option(prefixed_env_var(prefix, "JURISDICTION").ok())?,
+                    parse_option(prefixed_env_var(prefix, "R2_JURISDICTION").ok())?,
                 );
             }
         };
