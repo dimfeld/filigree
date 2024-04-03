@@ -9,7 +9,11 @@ use error_stack::{Report, ResultExt};
 use rust_embed::RustEmbed;
 use tera::{Tera, Value};
 
-use crate::{format::Formatters, Error, RenderedFile, RenderedFileLocation};
+use crate::{
+    format::Formatters,
+    write::{RenderedFile, RenderedFileLocation},
+    Error,
+};
 
 pub struct Renderer {
     tera: Tera,

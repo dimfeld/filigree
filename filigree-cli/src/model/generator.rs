@@ -18,7 +18,8 @@ use crate::{
     migrations::SingleMigration,
     model::{field::SortableType, ReferenceFetchType},
     templates::{ModelRustTemplates, ModelSqlTemplates, ModelWebTemplates, Renderer},
-    Error, GeneratorMap, ModelMap, RenderedFile, RenderedFileLocation,
+    write::{GeneratorMap, ModelMap, RenderedFile, RenderedFileLocation},
+    Error,
 };
 
 pub struct ChildField<'a> {
@@ -113,7 +114,7 @@ impl<'a> ModelGenerator<'a> {
             .render(
                 &PathBuf::new(),
                 "model/migrate_up.sql.tera",
-                crate::RenderedFileLocation::Api,
+                crate::write::RenderedFileLocation::Api,
                 self.template_context(),
             )
             .map(|f| f.contents)
@@ -124,7 +125,7 @@ impl<'a> ModelGenerator<'a> {
             .render(
                 &PathBuf::new(),
                 "model/migrate_down.sql.tera",
-                crate::RenderedFileLocation::Api,
+                crate::write::RenderedFileLocation::Api,
                 self.template_context(),
             )
             .map(|f| f.contents)

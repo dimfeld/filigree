@@ -46,11 +46,11 @@ pub struct StorageConfig {
 pub struct StorageBucketConfig {
     /// The name of an entry in storage_providers, or one of the preconfigured providers.
     /// This can be omitted if there is only a single provider.
-    provider: Option<String>,
+    pub provider: Option<String>,
     /// The name of the bucket within the storage provider
-    bucket: String,
+    pub bucket: String,
     /// The base URL of this bucket, if it is publically accessible to the internet
-    public_url: Option<Url>,
+    pub public_url: Option<Url>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -8,7 +8,7 @@ build-with-backup:
 
 build-test-app:
   cd filigree-cli && cargo lbuild
-  cd test-app && ../target/debug/filigree --overwrite && cargo lcheck
+  cd test-app && ../target/debug/filigree write --overwrite && cargo lcheck
 
 build-and-test *FLAGS:
   @just build-test-app
@@ -16,7 +16,7 @@ build-and-test *FLAGS:
 
 build-test-app-and-db *FLAGS:
   cd filigree-cli && cargo lbuild
-  cd test-app && ../target/debug/filigree --overwrite && (yes | sqlx database reset) && cargo ltest {{FLAGS}}
+  cd test-app && ../target/debug/filigree write --overwrite && (yes | sqlx database reset) && cargo ltest {{FLAGS}}
 
 build-web-types:
   true

@@ -6,6 +6,7 @@ use error_stack::Report;
 use filigree::{
     auth::AuthError,
     errors::{ErrorKind as FilErrorKind, ForceObfuscate, HttpError},
+    storage::StorageError,
     uploads::UploadInspectorError,
 };
 use thiserror::Error;
@@ -80,7 +81,8 @@ impl Error {
                 frame,
                 |e| e.status_code(),
                 AuthError,
-                UploadInspectorError
+                UploadInspectorError,
+                StorageError
             )
         })
     }
@@ -96,7 +98,8 @@ impl Error {
                 frame,
                 |e| e.error_kind(),
                 AuthError,
-                UploadInspectorError
+                UploadInspectorError,
+                StorageError
             )
         })
     }
@@ -142,7 +145,7 @@ impl HttpError for Error {
             Error::Login => FilErrorKind::Unauthenticated.as_str(),
             Error::MissingPermission(_) => FilErrorKind::Unauthenticated.as_str(),
             Error::InvalidHostHeader => FilErrorKind::InvalidHostHeader.as_str(),
-            Error::Storage => FilErrorKind::StorageWrite.as_str(),
+            Error::Storage => FilErrorKind::Storage.as_str(),
             // These aren't ever returned, we just need some value to fill out the match
             Error::Config => "config",
             Error::TypeExport => "cli",

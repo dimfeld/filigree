@@ -9,7 +9,8 @@ use crate::{
     config::Config,
     model::generator::ModelGenerator,
     templates::{Renderer, RootApiTemplates, RootWebTemplates},
-    Error, RenderedFile, RenderedFileLocation,
+    write::{RenderedFile, RenderedFileLocation},
+    Error,
 };
 
 pub fn render_files(

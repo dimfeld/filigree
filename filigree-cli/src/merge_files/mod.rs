@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use error_stack::{Report, ResultExt};
 
-use crate::RenderedFile;
+use crate::write::RenderedFile;
 
 #[derive(Debug)]
 pub struct MergeTracker {

@@ -162,6 +162,16 @@ pub enum CorsSetting {
     AllowAll,
 }
 
+impl std::fmt::Display for CorsSetting {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CorsSetting::None => write!(f, "None"),
+            CorsSetting::AllowHostList => write!(f, "AllowHostList"),
+            CorsSetting::AllowAll => write!(f, "AllowAll"),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, serde_derive_default::Default, Debug)]
 pub struct DatabaseConfig {
     /// If true, migrations will be run automatically when starting the application
@@ -194,10 +204,10 @@ const fn default_max_connections() -> u16 {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EmailConfig {
     /// The email service to use
-    provider: EmailProvider,
+    pub provider: EmailProvider,
 
     /// The address that emails are sent from, if not otherwise specified.
-    from: String,
+    pub from: String,
 }
 
 /// A choice of email service
@@ -208,6 +218,15 @@ pub enum EmailProvider {
     None,
     /// Send emails using Resend
     Resend,
+}
+
+impl std::fmt::Display for EmailProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EmailProvider::None => write!(f, "none"),
+            EmailProvider::Resend => write!(f, "resend"),
+        }
+    }
 }
 
 #[derive(Debug, serde_derive_default::Default, Serialize, Deserialize)]

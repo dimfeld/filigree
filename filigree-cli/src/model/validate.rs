@@ -1,4 +1,4 @@
-use crate::{config::Config, Error, ModelMap};
+use crate::{config::Config, write::ModelMap, Error};
 
 pub fn validate_model_configuration(config: &Config, models: &ModelMap) -> Result<(), Error> {
     for (_, model) in &models.0 {
