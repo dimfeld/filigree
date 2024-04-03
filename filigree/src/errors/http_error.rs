@@ -122,8 +122,8 @@ pub enum ErrorKind {
     Shutdown,
     /// Creation of new user accounts is disabled
     SignupDisabled,
-    /// Error writing storage
-    StorageWrite,
+    /// Error communicating with storage
+    Storage,
     /// The user is not logged in
     Unauthenticated,
     /// An upload failed in some way not covered by a more specific error message
@@ -168,7 +168,7 @@ impl ErrorKind {
             Self::SessionBackend => "session_backend",
             Self::Shutdown => "shutdown",
             Self::SignupDisabled => "signup_disabled",
-            Self::StorageWrite => "storage_write",
+            Self::Storage => "storage",
             Self::Unauthenticated => "unauthenticated",
             Self::UploadFailed => "upload_failed",
             Self::UploadTooLarge => "upload_too_large",

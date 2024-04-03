@@ -9,6 +9,7 @@ use tracing::instrument;
 use url::Url;
 
 use self::in_memory::InMemoryStore;
+use crate::errors::{ErrorKind, HttpError};
 
 mod config;
 pub(crate) mod in_memory;
@@ -54,6 +55,28 @@ impl From<object_store::Error> for StorageError {
             object_store::Error::NotFound { .. } => Self::NotFound(value),
             _ => Self::ObjectStore(value),
         }
+    }
+}
+
+impl HttpError for StorageError {
+    type Detail = ();
+
+    fn status_code(&self) -> hyper::StatusCode {
+        match self {
+            Self::NotFound(_) => hyper::StatusCode::NOT_FOUND,
+            _ => hyper::StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    fn error_kind(&self) -> &'static str {
+        match self {
+            Self::NotFound(_) => ErrorKind::NotFound.as_str(),
+            _ => ErrorKind::Storage.as_str(),
+        }
+    }
+
+    fn error_detail(&self) -> Self::Detail {
+        ()
     }
 }
 
@@ -172,7 +195,7 @@ impl Storage {
     }
 
     /// Stream an object from the store to a [Response]
-    pub async fn stream_to_client(&self, location: &str) -> Result<Body, object_store::Error> {
+    pub async fn stream_to_client(&self, location: &str) -> Result<Body, StorageError> {
         let stream = self.get(location).await?.into_stream();
         Ok(Body::from_stream(stream))
     }
