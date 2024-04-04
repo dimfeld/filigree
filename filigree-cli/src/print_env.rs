@@ -30,6 +30,7 @@ pub struct Command {
 }
 
 enum EnvPrintMode {
+    /// Shell, dotenv
     Shell,
     Dockerfile,
     DockerRun,
@@ -67,7 +68,7 @@ fn print_var(config: &PrintConfig, key: &str, default_value: impl Display, desc:
                 println!("# {desc}");
             }
             println!(
-                "ENV {env_prefix}{key}='{default_value}' # {desc}",
+                "ENV {env_prefix}{key}='{default_value}'",
                 env_prefix = config.env_prefix
             );
         }
