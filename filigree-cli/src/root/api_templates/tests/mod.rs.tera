@@ -86,6 +86,9 @@ pub async fn start_app_with_options(pg_pool: PgPool, options: TestAppOptions) ->
     let config = crate::server::Config {
         env: "test".into(),
         bind: crate::server::ServerBind::Listener(listener),
+        {% if server.forward_to_frontend -%}
+        frontend_port: {{server.frontend_port}},
+        {%- endif -%}
         insecure: true,
         request_timeout: std::time::Duration::from_secs(30),
         pg_pool: pg_pool.clone(),

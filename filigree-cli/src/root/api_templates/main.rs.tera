@@ -37,6 +37,12 @@ struct ServeCommand {
     #[clap(long, env = "{{env_prefix}}PORT", default_value_t = {{server.default_port}})]
     port: u16,
 
+    {% if server.forward_to_frontend %}
+    /// The port to forward non-API frontend requests to
+    #[clap(long, env = "{{env_prefix}}FRONTEND_PORT", default_value_t = {{server.frontend_port}})]
+    frontend_port: u16,
+    {% endif %}
+
     /// The environment in which this server is running
     #[clap(long = "env", env = "{{env_prefix}}ENV", default_value_t = String::from("development"))]
     env: String,
@@ -187,6 +193,9 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     let server = server::create_server(server::Config {
         env: cmd.env,
         bind: server::ServerBind::HostPort(cmd.host, cmd.port),
+        {% if server.forward_to_frontend -%}
+        frontend_port: cmd.frontend_port,
+        {%- endif -%}
         insecure: cmd.insecure,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),
         cookie_configuration: SessionCookieBuilder::new(secure_cookies, cmd.cookie_same_site),

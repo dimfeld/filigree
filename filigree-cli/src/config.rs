@@ -127,6 +127,16 @@ pub struct ServerConfig {
     #[serde(default = "default_port")]
     pub default_port: u16,
 
+    /// The port that the frontend listens on. If `forward_to_frontend` is enabled, this is the
+    /// port it will forward to.
+    #[serde(default = "default_frontend_port")]
+    pub frontend_port: u16,
+
+    /// If the server should forward requests that it doesn't handle to the frontend. Defaults to
+    /// true.
+    #[serde(default = "true_t")]
+    pub forward_to_frontend: bool,
+
     /// The hosts that the server should assume are pointing to it.
     #[serde(default)]
     pub hosts: Vec<String>,
@@ -147,6 +157,10 @@ pub struct ServerConfig {
 
 const fn default_port() -> u16 {
     7823
+}
+
+const fn default_frontend_port() -> u16 {
+    5173
 }
 
 /// Cross-origin Resource Sharing (CORS) configuration

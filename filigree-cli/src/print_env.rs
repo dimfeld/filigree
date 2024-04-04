@@ -92,6 +92,14 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
     print_var(&pc, "DATABASE_URL", "", "Database URL to connect to");
     print_var(&pc, "HOST", "::1", "Host to bind to");
     print_var(&pc, "PORT", config.server.default_port, "Port to listen on");
+    if config.server.forward_to_frontend {
+        print_var(
+            &pc,
+            "FRONTEND_PORT",
+            config.server.frontend_port,
+            "Port to forward non-API frontend requests to",
+        );
+    }
     print_var(&pc, "ENV", "development", "");
     print_var(
         &pc,
