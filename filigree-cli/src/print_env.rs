@@ -103,6 +103,24 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
     print_var(&pc, "ENV", "development", "");
     print_var(
         &pc,
+        "SERVE_FRONTEND",
+        "false",
+        "Set to true to serve the frontend assets and forward non-API requests",
+    );
+    print_var(
+        &pc,
+        "FRONTEND_ASSET_DIR",
+        "",
+        "The directory where the frontend static assets are located",
+    );
+    print_var(
+        &pc,
+        "FRONTEND_PORT",
+        config.server.frontend_port,
+        "The port on which the frontend server is listening",
+    );
+    print_var(
+        &pc,
         "REQUEST_TIMEOUT",
         60,
         "Request timeout for the default HTTP client used by the API",

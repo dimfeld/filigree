@@ -35,6 +35,14 @@ pub fn render_files(
     context.insert("email", &config.email);
     context.insert("server", &config.server);
     context.insert("secrets", &config.secrets);
+    let frontend_asset_dir = config.server.frontend_asset_dir.clone().unwrap_or_else(|| {
+        web_relative_to_api
+            .join("build")
+            .join("client")
+            .to_string_lossy()
+            .to_string()
+    });
+    context.insert("frontend_asset_dir", &frontend_asset_dir);
 
     let job_list = config
         .job

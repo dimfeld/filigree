@@ -132,6 +132,10 @@ pub struct ServerConfig {
     #[serde(default = "default_frontend_port")]
     pub frontend_port: u16,
 
+    /// Serve frontend static assets from this directory when in production mode. If omitted, defaults to
+    /// "<web_directory>/build/client".
+    pub frontend_asset_dir: Option<String>,
+
     /// If the server should forward requests that it doesn't handle to the frontend. Defaults to
     /// true.
     #[serde(default = "true_t")]
