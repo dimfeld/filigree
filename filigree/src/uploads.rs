@@ -1,6 +1,4 @@
-//! Helpers to manage file uploads, for use with [Storage::save_and_inspect_request_body].
-//! A lot of this feels silly, such as [UploadSize] which just sums the size of the stream,
-//! but it simplifies generation through the template system.
+//! Helpers to manage file uploads, for use with [Storage::save_and_inspect_request_body](super::Storage::save_and_inspect_request_body).
 
 use bytes::Bytes;
 use digest::Digest;
