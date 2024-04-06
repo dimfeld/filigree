@@ -140,15 +140,10 @@ export function manageForm<T extends z.AnyZodObject>(options: FormOptions<T>) {
   return new State(options);
 }
 
-function validate<T extends z.AnyZodObject>(
-  model: ModelDefinition<T> | T | undefined,
-  options: InternalOptions<T>
-) {
-  if (!model) {
+function validate<T extends z.AnyZodObject>(schema: T | undefined, options: InternalOptions<T>) {
+  if (!schema) {
     return true;
   }
-
-  let schema = 'schema' in model ? model.schema : model;
 
   let errors: FormErrors | undefined;
 
@@ -282,7 +277,7 @@ function plainEnhance<T extends z.AnyZodObject>(options: InternalOptions<T>) {
         submitData.cancel();
       };
 
-      let validated = validate(model ?? schema, options);
+      let validated = validate(schema ?? model?.schema, options);
       if (!validated) {
         submitData.cancel();
         return;
@@ -355,7 +350,7 @@ function nestedEnhance<T extends z.AnyZodObject>(options: InternalOptions<T>) {
 
       let payload = state.formData;
 
-      let validated = validate(model ?? schema, options);
+      let validated = validate(schema ?? model?.schema, options);
       if (!validated) {
         return;
       }
