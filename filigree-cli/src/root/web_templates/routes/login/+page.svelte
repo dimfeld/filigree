@@ -45,7 +45,7 @@
   let showMessage = $derived(message || errors?.messages?.[0]);
 </script>
 
-<div class="mx-auto mt-8 flex max-w-lg flex-col gap-8">
+<div class="mx-auto mt-8 w-full max-w-lg flex flex-col gap-8">
   {#if topMessage}
     <p>{topMessage}</p>
   {/if}
