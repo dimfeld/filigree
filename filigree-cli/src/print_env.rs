@@ -89,6 +89,12 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         print_comments: args.comments,
     };
 
+    print_var(
+        &pc,
+        "READ_DOTENV",
+        config.server.dotenv,
+        "Read .env file when starting",
+    );
     print_var(&pc, "DATABASE_URL", "", "Database URL to connect to");
     print_var(&pc, "HOST", "::1", "Host to bind to");
     print_var(&pc, "PORT", config.server.default_port, "Port to listen on");

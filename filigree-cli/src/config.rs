@@ -120,6 +120,8 @@ impl Config {
 #[derive(Serialize, Deserialize, serde_derive_default::Default, Debug)]
 pub struct ServerConfig {
     /// If set, the generated application will load .env files when it starts
+    /// by default. This can be altered at runtime by setting the {env_prefix}READ_DOTENV
+    /// environment variable.
     #[serde(default)]
     pub dotenv: bool,
 
