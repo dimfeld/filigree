@@ -172,6 +172,7 @@ function validate<T extends z.AnyZodObject>(schema: T | undefined, options: Inte
     };
   }
 
+  options.state.errors = errors;
   if (errors) {
     applyAction({
       type: 'failure',
