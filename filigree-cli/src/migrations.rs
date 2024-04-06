@@ -145,7 +145,7 @@ pub fn resolve_migration(
             existing_schema
                 .functions
                 .get(name.as_str())
-                .map(|existing| &existing == f)
+                .map(|existing| &existing != f)
                 .unwrap_or(true)
         })
         .map(|f| f.0.clone())
