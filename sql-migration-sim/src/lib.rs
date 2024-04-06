@@ -51,7 +51,8 @@ use std::{
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, Ident, ObjectName, ObjectType, Statement, TableConstraint,
+    ColumnOptionDef, CreateFunctionBody, DataType, Ident, ObjectName, ObjectType,
+    OperateFunctionArg, Statement, TableConstraint,
 };
 pub use sqlparser::{ast, dialect};
 
@@ -102,6 +103,20 @@ impl Column {
     }
 }
 
+/// A function in the database
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Function {
+    /// The name of the function
+    pub name: ObjectName,
+    /// The arguments of the function
+    pub args: Option<Vec<OperateFunctionArg>>,
+    /// The return type of the function
+    pub return_type: Option<DataType>,
+    /// The options and body of the function
+    pub params: CreateFunctionBody,
+}
+
 /// A table in the database
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
@@ -150,6 +165,9 @@ pub enum Error {
     /// Attempted to create a table that already exists
     #[error("Attempted to create table {0} that already exists")]
     TableAlreadyExists(String),
+    /// Attempted to create a function that already exists
+    #[error("Attempted to create function {0} that already exists")]
+    FunctionAlreadyExists(String),
     /// Attempted to create a column that already exists
     #[error("Attempted to create column {0} that already exists in table {1}")]
     ColumnAlreadyExists(String, String),
@@ -183,6 +201,8 @@ pub struct Schema {
     pub views: HashMap<String, View>,
     /// The created indices. The key is the index name and the value is the table the index is on.
     pub indices: HashMap<String, String>,
+    /// Functions in the schema
+    pub functions: HashMap<String, Function>,
     /// References to the schema objects, in the order they were created.
     pub creation_order: Vec<ObjectNameAndType>,
 }
@@ -213,6 +233,8 @@ pub enum SchemaObjectType {
     View,
     /// An index
     Index,
+    /// A Function
+    Function,
 }
 
 impl std::fmt::Display for SchemaObjectType {
@@ -221,6 +243,7 @@ impl std::fmt::Display for SchemaObjectType {
             SchemaObjectType::Table => write!(f, "table"),
             SchemaObjectType::View => write!(f, "view"),
             SchemaObjectType::Index => write!(f, "index"),
+            SchemaObjectType::Function => write!(f, "function"),
         }
     }
 }
@@ -238,6 +261,7 @@ impl Schema {
             tables: HashMap::new(),
             views: HashMap::new(),
             indices: HashMap::new(),
+            functions: HashMap::new(),
             creation_order: Vec::new(),
             dialect,
         }
@@ -282,6 +306,37 @@ impl Schema {
         self.creation_order.push(ObjectNameAndType {
             name: name_str,
             object_type: SchemaObjectType::View,
+        });
+
+        Ok(())
+    }
+
+    fn create_function(
+        &mut self,
+        name: ObjectName,
+        or_replace: bool,
+        args: Option<Vec<OperateFunctionArg>>,
+        return_type: Option<DataType>,
+        params: CreateFunctionBody,
+    ) -> Result<(), Error> {
+        let name_str = name.to_string();
+        if !or_replace && self.functions.contains_key(&name_str) {
+            return Err(Error::TableAlreadyExists(name_str));
+        }
+
+        self.functions.insert(
+            name_str.clone(),
+            Function {
+                name,
+                args,
+                return_type,
+                params,
+            },
+        );
+
+        self.creation_order.push(ObjectNameAndType {
+            name: name_str,
+            object_type: SchemaObjectType::Function,
         });
 
         Ok(())
@@ -489,6 +544,19 @@ impl Schema {
                     or_replace,
                     columns.into_iter().map(|c| c.name.value).collect(),
                 )?;
+            }
+
+            Statement::CreateFunction {
+                or_replace,
+                temporary,
+                name,
+                args,
+                return_type,
+                params,
+            } => {
+                if !temporary {
+                    self.create_function(name, or_replace, args, return_type, params)?;
+                }
             }
 
             Statement::Drop {
