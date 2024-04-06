@@ -107,10 +107,38 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         );
     }
     print_var(&pc, "ENV", "development", "");
+    print_var(&pc, "LOG", "info", "Trace logging level to use");
+
+    print_var(
+        &pc,
+        "TRACING_TYPE",
+        config.tracing.provider,
+        "Tracing provider to use",
+    );
+    print_var(
+        &pc,
+        "OTEL_SERVICE_NAME",
+        &config.tracing.api_service_name,
+        "The service name for the API service. If omitted, `api` is used.",
+    );
+
+    print_var(
+        &pc,
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        config.tracing.endpoint.as_deref().unwrap_or_default(),
+        "The endpoint to send traces to. This can be omitted for Honeycomb but is required to be specified here or in the environment for Jaeger.",
+    );
+    print_var(
+        &pc,
+        "HONEYCOMB_API_KEY",
+        "",
+        "Honeycomb API key. Required is using Honeycomb tracing",
+    );
+
     print_var(
         &pc,
         "SERVE_FRONTEND",
-        "false",
+        config.server.forward_to_frontend,
         "Set to true to serve the frontend assets and forward non-API requests",
     );
     print_var(

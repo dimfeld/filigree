@@ -1,6 +1,7 @@
 pub mod custom_endpoint;
 pub mod job;
 pub mod storage;
+pub mod tracing;
 
 use std::{
     collections::BTreeMap,
@@ -11,7 +12,7 @@ use error_stack::{Report, ResultExt};
 use glob::glob;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use self::{job::QueueConfig, storage::StorageConfig};
+use self::{job::QueueConfig, storage::StorageConfig, tracing::TracingConfig};
 use crate::{
     format::FormatterConfig,
     model::{field::ModelField, Model, ModelAuthScope, SqlDialect},
@@ -38,9 +39,14 @@ pub struct Config {
 
     pub server: ServerConfig,
 
+    /// Trace export configuration
+    #[serde(default)]
+    pub tracing: TracingConfig,
+
     /// A mapping of secret name to the environment variable used. If `env_prefix` is set, it will
     /// be prepended to the values here. The values here will become members of a `Secrets` struct
     /// in the `ServerState`.
+    #[serde(default)]
     pub secrets: BTreeMap<String, String>,
 
     /// Full paths to types that exist in the Rust application and should be replicated in
