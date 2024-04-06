@@ -2,7 +2,7 @@ use clap::{Args, Parser, Subcommand};
 use error_stack::{Report, ResultExt};
 use filigree::{
     auth::{CorsSetting, SameSiteArg, SessionCookieBuilder},
-    tracing_config::{configure_tracing, teardown_tracing, TracingExportConfig},
+    tracing_config::{configure_tracing, teardown_tracing, TracingProvider},
 };
 use filigree_test_app::{cmd, db, emails, server, Error};
 use tracing::{event, Level};
@@ -135,10 +135,17 @@ struct ServeCommand {
 async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     error_stack::Report::set_color_mode(error_stack::fmt::ColorMode::None);
 
-    // TODO make this configurable
+    let tracing_config = filigree::tracing_config::create_tracing_config(
+        "",
+        TracingProvider::None,
+        Some("".to_string()),
+        None,
+    )
+    .change_context(Error::ServerStart)?;
+
     configure_tracing(
         "",
-        TracingExportConfig::None,
+        tracing_config,
         tracing_subscriber::fmt::time::ChronoUtc::rfc_3339(),
         std::io::stdout,
     )
