@@ -138,6 +138,19 @@ pub fn resolve_migration(
         .map(|i| i.0.clone())
         .collect::<HashSet<_>>();
 
+    let functions_to_create = new_schema
+        .functions
+        .iter()
+        .filter(|(name, f)| {
+            existing_schema
+                .functions
+                .get(name.as_str())
+                .map(|existing| &existing == f)
+                .unwrap_or(true)
+        })
+        .map(|f| f.0.clone())
+        .collect::<HashSet<_>>();
+
     let create_migration = migrations.iter().map(|m| {
         m.statements
             .iter()
@@ -149,6 +162,9 @@ pub fn resolve_migration(
                     };
 
                     indices_to_create.contains(&name.to_string())
+                }
+                Statement::CreateFunction { name, .. } => {
+                    functions_to_create.contains(&name.to_string())
                 }
                 _ => false,
             })
@@ -293,6 +309,7 @@ impl TableChange {
                     name: table.clone(),
                     if_exists: false,
                     only: false,
+                    location: None,
                     operations: vec![AlterTableOperation::AddColumn {
                         column_keyword: true,
                         if_not_exists: false,
@@ -307,6 +324,7 @@ impl TableChange {
                     name: table.clone(),
                     if_exists: false,
                     only: false,
+                    location: None,
                     operations: vec![AlterTableOperation::DropColumn {
                         column_name: column.name.clone(),
                         if_exists: false,
@@ -325,6 +343,7 @@ impl TableChange {
                     name: table.clone(),
                     if_exists: false,
                     only: false,
+                    location: None,
                     operations: vec![AlterTableOperation::RenameColumn {
                         old_column_name: old_name.clone(),
                         new_column_name: new_name.clone(),
@@ -343,6 +362,7 @@ impl TableChange {
                         name: table.clone(),
                         if_exists: false,
                         only: false,
+                        location: None,
                         operations: vec![AlterTableOperation::AlterColumn {
                             column_name: column_name.clone(),
                             op: op.clone(),
@@ -361,6 +381,7 @@ impl TableChange {
                     name: table.clone(),
                     if_exists: false,
                     only: false,
+                    location: None,
                     operations: vec![AlterTableOperation::AddConstraint(constraint.clone())],
                 };
 
@@ -375,6 +396,7 @@ impl TableChange {
                     name: table.clone(),
                     if_exists: false,
                     only: false,
+                    location: None,
                     operations: vec![AlterTableOperation::DropConstraint {
                         if_exists: true,
                         cascade: false,
@@ -423,6 +445,7 @@ impl TableChange {
                             name: table.clone(),
                             if_exists: true,
                             only: false,
+                            location: None,
                             operations: vec![AlterTableOperation::AlterColumn {
                                 column_name: column_name.clone(),
                                 op,

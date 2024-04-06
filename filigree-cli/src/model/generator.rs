@@ -78,12 +78,20 @@ impl<'a> ModelGenerator<'a> {
     }
 
     pub fn fixed_migrations() -> (Vec<SingleMigration<'static>>, Vec<SingleMigration<'static>>) {
-        let before_up = vec![SingleMigration {
-            name: "delete_log".to_string(),
-            model: None,
-            up: Cow::from(include_str!("../../sql/delete_log.up.sql")),
-            down: Cow::from(include_str!("../../sql/delete_log.down.sql")),
-        }];
+        let before_up = vec![
+            SingleMigration {
+                name: "object_id_functions".to_string(),
+                model: None,
+                up: Cow::from(include_str!("../../sql/object_id_functions.up.sql")),
+                down: Cow::from(include_str!("../../sql/object_id_functions.down.sql")),
+            },
+            SingleMigration {
+                name: "delete_log".to_string(),
+                model: None,
+                up: Cow::from(include_str!("../../sql/delete_log.up.sql")),
+                down: Cow::from(include_str!("../../sql/delete_log.down.sql")),
+            },
+        ];
 
         let after_up = vec![
             SingleMigration {
