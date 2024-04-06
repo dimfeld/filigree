@@ -1,6 +1,6 @@
 name = "Report"
 id_prefix = "rep"
-endpoints = true
+standard_endpoints = true
 
 [[fields]]
 name = "title"

@@ -62,10 +62,10 @@ pub async fn get_populated(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: PostId,
-) -> Result<PostPopulatedGet, error_stack::Report<Error>> {
+) -> Result<PostPopulatedGetResult, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let object = query_file_as!(
-        PostPopulatedGet,
+        PostPopulatedGetResult,
         "src/models/post/select_one_populated.sql",
         id.as_uuid(),
         auth.organization_id.as_uuid(),
@@ -215,7 +215,7 @@ pub async fn list(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     filters: &ListQueryFilters,
-) -> Result<Vec<Post>, error_stack::Report<Error>> {
+) -> Result<Vec<PostListResult>, error_stack::Report<Error>> {
     let q = include_str!("list.sql");
     list_internal(q, db, auth, filters).await
 }
@@ -225,7 +225,7 @@ pub async fn list_populated(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     filters: &ListQueryFilters,
-) -> Result<Vec<PostPopulatedList>, error_stack::Report<Error>> {
+) -> Result<Vec<PostPopulatedListResult>, error_stack::Report<Error>> {
     let q = include_str!("list_populated.sql");
     list_internal(q, db, auth, filters).await
 }

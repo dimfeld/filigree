@@ -11,6 +11,8 @@ use filigree::{
         users::{add_user_email_login, CreateUserDetails, UserCreatorError},
     },
 };
+use schemars::JsonSchema;
+use serde::Serialize;
 use sqlx::{PgConnection, PgExecutor};
 
 use crate::{
@@ -168,13 +170,27 @@ impl filigree::users::users::UserCreator for UserCreator {
     }
 }
 
+/// The current user and other information to return to the client.
+#[derive(Serialize, Debug, JsonSchema)]
+pub struct SelfUser {
+    user: crate::models::user::User,
+    roles: Vec<crate::models::role::RoleId>,
+    permissions: Vec<String>,
+}
+
 async fn get_current_user_endpoint(
     State(state): State<ServerState>,
     authed: Authed,
 ) -> Result<impl IntoResponse, Error> {
-    // TODO This probably should be a more custom query, include organization info and permissions
+    // TODO This should be a more custom query, include organization info and permissions
     // and such, and work even if the user doesn't have the User:read permission.
     let user = crate::models::user::queries::get(&state.db, &authed, authed.user_id).await?;
+
+    let user = SelfUser {
+        user,
+        roles: authed.roles.clone(),
+        permissions: authed.permissions.clone(),
+    };
 
     Ok(Json(user))
 }

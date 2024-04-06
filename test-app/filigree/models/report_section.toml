@@ -1,6 +1,6 @@
 name = "ReportSection"
 id_prefix = "repsec"
-endpoints = true
+standard_endpoints = true
 belongs_to = "Report"
 
 [[fields]]

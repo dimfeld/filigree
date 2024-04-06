@@ -25,10 +25,10 @@ chrono = "0.4.34"
 clap = { version = "4.5.1", features = ["derive", "env"] }
 digest = "0.10.7"
 dotenvy = "0.15.7"
-effectum = "0.5.1"
+effectum = "0.6.0"
 error-stack = { version = "0.4.1", features = ["spantrace"] }
 eyre = "0.6.12"
-filigree = { version = "0.0.2", path = "../filigree" }
+filigree = { version = "0.0.3", path = "../filigree" }
 futures = "0.3.30"
 http = "1.0.0"
 hyper = { version = "1.2.0", features = ["server", "http1", "http2"] }
@@ -36,6 +36,7 @@ percent-encoding = "2.3.1"
 reqwest = { version = "0.11.24", features = ["cookies", "json"] }
 rust-embed = "8.3.0"
 schemars = { version = "0.8.16", features = ["chrono", "url", "uuid1"] }
+schemars-zod = "0.1.5"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.114"
 serde_with = { version = "3.6.1", features = ["json", "schemars_0_8"] }
@@ -50,7 +51,6 @@ tower-cookies = "0.10.0"
 tower-http = { version = "0.5.2", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["chrono"] }
-ts-rs = { version = "8.1.0", features = ["serde-compat", "chrono-impl", "serde-json-impl", "url-impl", "uuid-impl"] }
 url = "2.5.0"
 uuid = "1.7.0"
 

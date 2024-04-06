@@ -2,6 +2,8 @@ import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
+export type PostImageId = string;
+
 export const PostImageSchema = z.object({
 	id: z.string(),
 	organization_id: z.string(),
@@ -14,10 +16,12 @@ export const PostImageSchema = z.object({
 });
 
 export type PostImage = z.infer<typeof PostImageSchema>;
-export const PostImagePopulatedGetSchema = PostImageSchema;
-export type PostImagePopulatedGet = PostImage;
-export const PostImagePopulatedListSchema = PostImageSchema;
-export type PostImagePopulatedList = PostImage;
+export const PostImageListResultSchema = PostImageSchema;
+export type PostImageListResult = PostImage;
+export const PostImagePopulatedGetResultSchema = PostImageSchema;
+export type PostImagePopulatedGetResult = PostImage;
+export const PostImagePopulatedListResultSchema = PostImageSchema;
+export type PostImagePopulatedListResult = PostImage;
 export const PostImageCreateResultSchema = PostImageSchema;
 export type PostImageCreateResult = PostImage;
 

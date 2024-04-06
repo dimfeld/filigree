@@ -185,7 +185,7 @@ pub async fn list(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     filters: &ListQueryFilters,
-) -> Result<Vec<User>, error_stack::Report<Error>> {
+) -> Result<Vec<UserListResult>, error_stack::Report<Error>> {
     let q = include_str!("list.sql");
     list_internal(q, db, auth, filters).await
 }
@@ -276,8 +276,8 @@ pub async fn update(
         auth.organization_id.as_uuid(),
         &actor_ids,
         &payload.name as _,
-        payload.email.as_ref(),
-        payload.avatar_url.as_ref(),
+        payload.email.as_ref() as _,
+        payload.avatar_url.as_ref() as _,
     )
     .fetch_optional(&mut *db)
     .await

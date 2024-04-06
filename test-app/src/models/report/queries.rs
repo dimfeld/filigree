@@ -61,10 +61,10 @@ pub async fn get_populated(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     id: ReportId,
-) -> Result<ReportPopulatedGet, error_stack::Report<Error>> {
+) -> Result<ReportPopulatedGetResult, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let object = query_file_as!(
-        ReportPopulatedGet,
+        ReportPopulatedGetResult,
         "src/models/report/select_one_populated.sql",
         id.as_uuid(),
         auth.organization_id.as_uuid(),
@@ -214,7 +214,7 @@ pub async fn list(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     filters: &ListQueryFilters,
-) -> Result<Vec<Report>, error_stack::Report<Error>> {
+) -> Result<Vec<ReportListResult>, error_stack::Report<Error>> {
     let q = include_str!("list.sql");
     list_internal(q, db, auth, filters).await
 }
@@ -224,7 +224,7 @@ pub async fn list_populated(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     filters: &ListQueryFilters,
-) -> Result<Vec<ReportPopulatedList>, error_stack::Report<Error>> {
+) -> Result<Vec<ReportPopulatedListResult>, error_stack::Report<Error>> {
     let q = include_str!("list_populated.sql");
     list_internal(q, db, auth, filters).await
 }
@@ -369,7 +369,7 @@ pub async fn update(
         auth.organization_id.as_uuid(),
         &actor_ids,
         &payload.title as _,
-        payload.description.as_ref(),
+        payload.description.as_ref() as _,
         &payload.ui as _,
     )
     .fetch_optional(&mut *db)

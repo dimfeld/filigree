@@ -1,6 +1,6 @@
 name = "Tag"
 id_prefix = "tag"
-endpoints = true
+standard_endpoints = true
 
 [[fields]]
 name = "name"

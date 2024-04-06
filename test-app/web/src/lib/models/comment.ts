@@ -2,6 +2,8 @@ import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
+export type CommentId = string;
+
 export const CommentSchema = z.object({
 	id: z.string(),
 	organization_id: z.string(),
@@ -13,10 +15,12 @@ export const CommentSchema = z.object({
 });
 
 export type Comment = z.infer<typeof CommentSchema>;
-export const CommentPopulatedGetSchema = CommentSchema;
-export type CommentPopulatedGet = Comment;
-export const CommentPopulatedListSchema = CommentSchema;
-export type CommentPopulatedList = Comment;
+export const CommentListResultSchema = CommentSchema;
+export type CommentListResult = Comment;
+export const CommentPopulatedGetResultSchema = CommentSchema;
+export type CommentPopulatedGetResult = Comment;
+export const CommentPopulatedListResultSchema = CommentSchema;
+export type CommentPopulatedListResult = Comment;
 export const CommentCreateResultSchema = CommentSchema;
 export type CommentCreateResult = Comment;
 

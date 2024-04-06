@@ -2,6 +2,8 @@ import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
+export type OrganizationId = string;
+
 export const OrganizationSchema = z.object({
 	id: z.string(),
 	updated_at: z.string().datetime(),
@@ -13,10 +15,12 @@ export const OrganizationSchema = z.object({
 });
 
 export type Organization = z.infer<typeof OrganizationSchema>;
-export const OrganizationPopulatedGetSchema = OrganizationSchema;
-export type OrganizationPopulatedGet = Organization;
-export const OrganizationPopulatedListSchema = OrganizationSchema;
-export type OrganizationPopulatedList = Organization;
+export const OrganizationListResultSchema = OrganizationSchema;
+export type OrganizationListResult = Organization;
+export const OrganizationPopulatedGetResultSchema = OrganizationSchema;
+export type OrganizationPopulatedGetResult = Organization;
+export const OrganizationPopulatedListResultSchema = OrganizationSchema;
+export type OrganizationPopulatedListResult = Organization;
 export const OrganizationCreateResultSchema = OrganizationSchema;
 export type OrganizationCreateResult = Organization;
 

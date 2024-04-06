@@ -91,6 +91,7 @@ pub async fn start_app_with_options(
     let config = crate::server::Config {
         env: "test".into(),
         bind: crate::server::ServerBind::Listener(listener),
+        serve_frontend: None,
         insecure: true,
         request_timeout: std::time::Duration::from_secs(30),
         pg_pool: pg_pool.clone(),
@@ -101,6 +102,7 @@ pub async fn start_app_with_options(
             tower_cookies::cookie::SameSite::Strict,
         ),
         obfuscate_errors: options.obfuscate_errors,
+        secrets: crate::server::Secrets::empty(),
         session_expiry: ExpiryStyle::AfterIdle(std::time::Duration::from_secs(24 * 60 * 60)),
         oauth_redirect_url_base: base_url.clone(),
         oauth_providers: Some(vec![]),

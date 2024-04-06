@@ -6,6 +6,7 @@ use error_stack::Report;
 use filigree::{
     auth::AuthError,
     errors::{ErrorKind as FilErrorKind, ForceObfuscate, HttpError},
+    storage::StorageError,
     uploads::UploadInspectorError,
 };
 use thiserror::Error;
@@ -13,12 +14,15 @@ use thiserror::Error;
 /// The top-level error type from the platform
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Failed to intialize database
-    #[error("Failed to intialize database")]
+    /// Failed to initialize database
+    #[error("Failed to initialize database")]
     DbInit,
     /// Database error not otherwise handled
     #[error("Database error")]
     Db,
+    /// Configuration error
+    #[error("Configuration error")]
+    Config,
     /// Task queue error not otherwise handled
     #[error("Task Queue error")]
     TaskQueue,
@@ -55,6 +59,8 @@ pub enum Error {
     /// An invalid Host header was passed
     #[error("Invalid host")]
     InvalidHostHeader,
+    #[error("Type Export Error")]
+    TypeExport,
 }
 
 impl From<Report<Error>> for Error {
@@ -75,7 +81,8 @@ impl Error {
                 frame,
                 |e| e.status_code(),
                 AuthError,
-                UploadInspectorError
+                UploadInspectorError,
+                StorageError
             )
         })
     }
@@ -91,7 +98,8 @@ impl Error {
                 frame,
                 |e| e.error_kind(),
                 AuthError,
-                UploadInspectorError
+                UploadInspectorError,
+                StorageError
             )
         })
     }
@@ -137,7 +145,10 @@ impl HttpError for Error {
             Error::Login => FilErrorKind::Unauthenticated.as_str(),
             Error::MissingPermission(_) => FilErrorKind::Unauthenticated.as_str(),
             Error::InvalidHostHeader => FilErrorKind::InvalidHostHeader.as_str(),
-            Error::Storage => FilErrorKind::StorageWrite.as_str(),
+            Error::Storage => FilErrorKind::Storage.as_str(),
+            // These aren't ever returned, we just need some value to fill out the match
+            Error::Config => "config",
+            Error::TypeExport => "cli",
         }
     }
 
@@ -178,6 +189,8 @@ impl HttpError for Error {
             Error::Login => StatusCode::UNAUTHORIZED,
             Error::InvalidHostHeader => StatusCode::BAD_REQUEST,
             Error::Storage => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::Config => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::TypeExport => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 

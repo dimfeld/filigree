@@ -230,7 +230,7 @@ pub async fn list(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     filters: &ListQueryFilters,
-) -> Result<Vec<PostImage>, error_stack::Report<Error>> {
+) -> Result<Vec<PostImageListResult>, error_stack::Report<Error>> {
     let q = include_str!("list.sql");
     list_internal(q, db, auth, filters).await
 }
@@ -326,9 +326,9 @@ pub async fn update(
         &actor_ids,
         &payload.file_storage_key as _,
         &payload.file_storage_bucket as _,
-        payload.file_original_name.as_ref(),
-        payload.file_size.as_ref(),
-        payload.file_hash.as_ref(),
+        payload.file_original_name.as_ref() as _,
+        payload.file_size.as_ref() as _,
+        payload.file_hash.as_ref() as _,
         &payload.post_id as _,
     )
     .fetch_optional(&mut *db)

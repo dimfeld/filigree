@@ -25,9 +25,11 @@ pub struct PostImage {
     pub _permission: ObjectPermission,
 }
 
-pub type PostImagePopulatedGet = PostImage;
+pub type PostImageListResult = PostImage;
 
-pub type PostImagePopulatedList = PostImage;
+pub type PostImagePopulatedGetResult = PostImage;
+
+pub type PostImagePopulatedListResult = PostImage;
 
 pub type PostImageCreateResult = PostImage;
 

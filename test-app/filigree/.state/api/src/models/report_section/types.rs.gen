@@ -23,9 +23,11 @@ pub struct ReportSection {
     pub _permission: ObjectPermission,
 }
 
-pub type ReportSectionPopulatedGet = ReportSection;
+pub type ReportSectionListResult = ReportSection;
 
-pub type ReportSectionPopulatedList = ReportSection;
+pub type ReportSectionPopulatedGetResult = ReportSection;
+
+pub type ReportSectionPopulatedListResult = ReportSection;
 
 pub type ReportSectionCreateResult = ReportSection;
 

@@ -23,9 +23,11 @@ pub struct Reaction {
     pub _permission: ObjectPermission,
 }
 
-pub type ReactionPopulatedGet = Reaction;
+pub type ReactionListResult = Reaction;
 
-pub type ReactionPopulatedList = Reaction;
+pub type ReactionPopulatedGetResult = Reaction;
+
+pub type ReactionPopulatedListResult = Reaction;
 
 pub type ReactionCreateResult = Reaction;
 

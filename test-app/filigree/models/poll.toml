@@ -1,6 +1,6 @@
 name = "Poll"
 id_prefix = "pol"
-endpoints = true
+standard_endpoints = true
 belongs_to = "Post"
 
 [[fields]]

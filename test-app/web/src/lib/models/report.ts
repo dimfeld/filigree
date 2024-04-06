@@ -7,6 +7,8 @@ import {
 	ReportSectionUpdatePayloadSchema,
 } from "./report_section.js";
 
+export type ReportId = string;
+
 export const ReportSchema = z.object({
 	id: z.string(),
 	organization_id: z.string(),
@@ -19,6 +21,8 @@ export const ReportSchema = z.object({
 });
 
 export type Report = z.infer<typeof ReportSchema>;
+export const ReportListResultSchema = ReportSchema;
+export type ReportListResult = Report;
 
 export const ReportCreatePayloadSchema = z.object({
 	id: z.string().optional(),
@@ -30,7 +34,7 @@ export const ReportCreatePayloadSchema = z.object({
 
 export type ReportCreatePayload = z.infer<typeof ReportCreatePayloadSchema>;
 
-export const ReportPopulatedGetAndCreateResultSchema = z.object({
+export const ReportPopulatedGetResultAndCreateResultSchema = z.object({
 	id: z.string(),
 	organization_id: z.string(),
 	updated_at: z.string().datetime(),
@@ -42,15 +46,17 @@ export const ReportPopulatedGetAndCreateResultSchema = z.object({
 	_permission: ObjectPermission,
 });
 
-export type ReportPopulatedGetAndCreateResult = z.infer<
-	typeof ReportPopulatedGetAndCreateResultSchema
+export type ReportPopulatedGetResultAndCreateResult = z.infer<
+	typeof ReportPopulatedGetResultAndCreateResultSchema
 >;
-export const ReportPopulatedGetSchema = ReportPopulatedGetAndCreateResultSchema;
-export type ReportPopulatedGet = ReportPopulatedGetAndCreateResult;
-export const ReportCreateResultSchema = ReportPopulatedGetAndCreateResultSchema;
-export type ReportCreateResult = ReportPopulatedGetAndCreateResult;
+export const ReportPopulatedGetResultSchema =
+	ReportPopulatedGetResultAndCreateResultSchema;
+export type ReportPopulatedGetResult = ReportPopulatedGetResultAndCreateResult;
+export const ReportCreateResultSchema =
+	ReportPopulatedGetResultAndCreateResultSchema;
+export type ReportCreateResult = ReportPopulatedGetResultAndCreateResult;
 
-export const ReportPopulatedListSchema = z.object({
+export const ReportPopulatedListResultSchema = z.object({
 	id: z.string(),
 	organization_id: z.string(),
 	updated_at: z.string().datetime(),
@@ -62,7 +68,9 @@ export const ReportPopulatedListSchema = z.object({
 	_permission: ObjectPermission,
 });
 
-export type ReportPopulatedList = z.infer<typeof ReportPopulatedListSchema>;
+export type ReportPopulatedListResult = z.infer<
+	typeof ReportPopulatedListResultSchema
+>;
 
 export const ReportUpdatePayloadSchema = z.object({
 	id: z.string().optional(),

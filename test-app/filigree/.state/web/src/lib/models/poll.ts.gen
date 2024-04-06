@@ -2,6 +2,8 @@ import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
+export type PollId = string;
+
 export const PollSchema = z.object({
 	id: z.string(),
 	organization_id: z.string(),
@@ -14,10 +16,12 @@ export const PollSchema = z.object({
 });
 
 export type Poll = z.infer<typeof PollSchema>;
-export const PollPopulatedGetSchema = PollSchema;
-export type PollPopulatedGet = Poll;
-export const PollPopulatedListSchema = PollSchema;
-export type PollPopulatedList = Poll;
+export const PollListResultSchema = PollSchema;
+export type PollListResult = Poll;
+export const PollPopulatedGetResultSchema = PollSchema;
+export type PollPopulatedGetResult = Poll;
+export const PollPopulatedListResultSchema = PollSchema;
+export type PollPopulatedListResult = Poll;
 export const PollCreateResultSchema = PollSchema;
 export type PollCreateResult = Poll;
 

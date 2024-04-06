@@ -27,6 +27,8 @@ pub struct Report {
     pub _permission: ObjectPermission,
 }
 
+pub type ReportListResult = Report;
+
 impl Report {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
     // detect whether to add the extra :: in cases like DateTime::<Utc>::default
@@ -144,7 +146,7 @@ impl Default for ReportCreatePayload {
 
 #[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 
-pub struct ReportPopulatedGetAndCreateResult {
+pub struct ReportPopulatedGetResultAndCreateResult {
     pub id: ReportId,
     pub organization_id: crate::models::organization::OrganizationId,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -156,11 +158,11 @@ pub struct ReportPopulatedGetAndCreateResult {
     pub _permission: ObjectPermission,
 }
 
-pub type ReportPopulatedGet = ReportPopulatedGetAndCreateResult;
+pub type ReportPopulatedGetResult = ReportPopulatedGetResultAndCreateResult;
 
-pub type ReportCreateResult = ReportPopulatedGetAndCreateResult;
+pub type ReportCreateResult = ReportPopulatedGetResultAndCreateResult;
 
-impl ReportPopulatedGetAndCreateResult {
+impl ReportPopulatedGetResultAndCreateResult {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
     // detect whether to add the extra :: in cases like DateTime::<Utc>::default
 
@@ -197,9 +199,9 @@ impl ReportPopulatedGetAndCreateResult {
     }
 }
 
-sqlx_json_decode!(ReportPopulatedGetAndCreateResult);
+sqlx_json_decode!(ReportPopulatedGetResultAndCreateResult);
 
-impl Default for ReportPopulatedGetAndCreateResult {
+impl Default for ReportPopulatedGetResultAndCreateResult {
     fn default() -> Self {
         Self {
             id: Self::default_id(),
@@ -215,12 +217,13 @@ impl Default for ReportPopulatedGetAndCreateResult {
     }
 }
 
-impl Serialize for ReportPopulatedGetAndCreateResult {
+impl Serialize for ReportPopulatedGetResultAndCreateResult {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("ReportPopulatedGetAndCreateResult", 9)?;
+        let mut state =
+            serializer.serialize_struct("ReportPopulatedGetResultAndCreateResult", 9)?;
         state.serialize_field("id", &self.id)?;
         state.serialize_field("organization_id", &self.organization_id)?;
         state.serialize_field("updated_at", &self.updated_at)?;
@@ -236,7 +239,7 @@ impl Serialize for ReportPopulatedGetAndCreateResult {
 
 #[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 
-pub struct ReportPopulatedList {
+pub struct ReportPopulatedListResult {
     pub id: ReportId,
     pub organization_id: crate::models::organization::OrganizationId,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -248,7 +251,7 @@ pub struct ReportPopulatedList {
     pub _permission: ObjectPermission,
 }
 
-impl ReportPopulatedList {
+impl ReportPopulatedListResult {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
     // detect whether to add the extra :: in cases like DateTime::<Utc>::default
 
@@ -285,9 +288,9 @@ impl ReportPopulatedList {
     }
 }
 
-sqlx_json_decode!(ReportPopulatedList);
+sqlx_json_decode!(ReportPopulatedListResult);
 
-impl Default for ReportPopulatedList {
+impl Default for ReportPopulatedListResult {
     fn default() -> Self {
         Self {
             id: Self::default_id(),
@@ -303,12 +306,12 @@ impl Default for ReportPopulatedList {
     }
 }
 
-impl Serialize for ReportPopulatedList {
+impl Serialize for ReportPopulatedListResult {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("ReportPopulatedList", 9)?;
+        let mut state = serializer.serialize_struct("ReportPopulatedListResult", 9)?;
         state.serialize_field("id", &self.id)?;
         state.serialize_field("organization_id", &self.organization_id)?;
         state.serialize_field("updated_at", &self.updated_at)?;

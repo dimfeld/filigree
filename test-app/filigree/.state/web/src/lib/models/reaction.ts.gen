@@ -2,6 +2,8 @@ import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
+export type ReactionId = string;
+
 export const ReactionSchema = z.object({
 	id: z.string(),
 	organization_id: z.string(),
@@ -13,10 +15,12 @@ export const ReactionSchema = z.object({
 });
 
 export type Reaction = z.infer<typeof ReactionSchema>;
-export const ReactionPopulatedGetSchema = ReactionSchema;
-export type ReactionPopulatedGet = Reaction;
-export const ReactionPopulatedListSchema = ReactionSchema;
-export type ReactionPopulatedList = Reaction;
+export const ReactionListResultSchema = ReactionSchema;
+export type ReactionListResult = Reaction;
+export const ReactionPopulatedGetResultSchema = ReactionSchema;
+export type ReactionPopulatedGetResult = Reaction;
+export const ReactionPopulatedListResultSchema = ReactionSchema;
+export type ReactionPopulatedListResult = Reaction;
 export const ReactionCreateResultSchema = ReactionSchema;
 export type ReactionCreateResult = Reaction;
 

@@ -2,9 +2,11 @@
 #![allow(unused_imports, unused_variables, dead_code)]
 
 use effectum::{JobBuilder, JobRunner, Queue, RecurringJobSchedule, RunningJob};
+use error_stack::ResultExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use super::JobError;
 use crate::server::ServerState;
 
 /// The payload data for the send_annoying_emails background job
@@ -14,17 +16,21 @@ pub struct SendAnnoyingEmailsJobPayload {
 }
 
 /// Run the send_annoying_emails background job
-async fn run(job: RunningJob, context: ServerState) -> Result<(), crate::Error> {
-    // Fill in your job logic here
+async fn run(job: RunningJob, state: ServerState) -> Result<(), error_stack::Report<JobError>> {
+    let payload: SendAnnoyingEmailsJobPayload =
+        job.json_payload().change_context(JobError::Payload)?;
+
     Ok(())
 }
 
 /// Enqueue the send_annoying_emails job to run immediately
 pub async fn enqueue(
     state: &ServerState,
+    name: impl ToString,
     payload: &SendAnnoyingEmailsJobPayload,
 ) -> Result<uuid::Uuid, effectum::Error> {
     create_job_builder()
+        .name(name)
         .json_payload(payload)?
         .add_to(&state.queue)
         .await
@@ -33,8 +39,9 @@ pub async fn enqueue(
 /// Enqueue the send_annoying_emails job to run at a specific time
 pub async fn enqueue_at(
     state: &ServerState,
-    payload: &SendAnnoyingEmailsJobPayload,
+    name: impl ToString,
     at: chrono::DateTime<chrono::Utc>,
+    payload: &SendAnnoyingEmailsJobPayload,
 ) -> Result<uuid::Uuid, effectum::Error> {
     // convert to time crate
     let timestamp = at.timestamp();
@@ -42,6 +49,7 @@ pub async fn enqueue_at(
         .map_err(|_| effectum::Error::TimestampOutOfRange("at"))?;
 
     create_job_builder()
+        .name(name)
         .json_payload(payload)?
         .run_at(t)
         .add_to(&state.queue)
@@ -53,9 +61,9 @@ pub async fn register(
     queue: &Queue,
     init_recurring_jobs: bool,
 ) -> Result<JobRunner<ServerState>, effectum::Error> {
-    // TODO register the job with the system
     let runner = JobRunner::builder("send_annoying_emails", run)
         .autoheartbeat(false)
+        .format_failures_with_debug(true)
         .build();
 
     if init_recurring_jobs {

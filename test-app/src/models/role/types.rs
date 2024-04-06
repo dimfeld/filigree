@@ -21,9 +21,11 @@ pub struct Role {
     pub _permission: ObjectPermission,
 }
 
-pub type RolePopulatedGet = Role;
+pub type RoleListResult = Role;
 
-pub type RolePopulatedList = Role;
+pub type RolePopulatedGetResult = Role;
+
+pub type RolePopulatedListResult = Role;
 
 pub type RoleCreateResult = Role;
 

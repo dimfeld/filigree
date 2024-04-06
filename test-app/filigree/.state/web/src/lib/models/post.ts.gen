@@ -22,6 +22,8 @@ import {
 	ReactionUpdatePayloadSchema,
 } from "./reaction.js";
 
+export type PostId = string;
+
 export const PostSchema = z.object({
 	id: z.string(),
 	organization_id: z.string(),
@@ -33,6 +35,8 @@ export const PostSchema = z.object({
 });
 
 export type Post = z.infer<typeof PostSchema>;
+export const PostListResultSchema = PostSchema;
+export type PostListResult = Post;
 export const PostCreateResultSchema = PostSchema;
 export type PostCreateResult = Post;
 
@@ -50,7 +54,7 @@ export type PostCreatePayload = PostCreatePayloadAndUpdatePayload;
 export const PostUpdatePayloadSchema = PostCreatePayloadAndUpdatePayloadSchema;
 export type PostUpdatePayload = PostCreatePayloadAndUpdatePayload;
 
-export const PostPopulatedGetSchema = z.object({
+export const PostPopulatedGetResultSchema = z.object({
 	id: z.string(),
 	organization_id: z.string(),
 	updated_at: z.string().datetime(),
@@ -64,9 +68,11 @@ export const PostPopulatedGetSchema = z.object({
 	_permission: ObjectPermission,
 });
 
-export type PostPopulatedGet = z.infer<typeof PostPopulatedGetSchema>;
+export type PostPopulatedGetResult = z.infer<
+	typeof PostPopulatedGetResultSchema
+>;
 
-export const PostPopulatedListSchema = z.object({
+export const PostPopulatedListResultSchema = z.object({
 	id: z.string(),
 	organization_id: z.string(),
 	updated_at: z.string().datetime(),
@@ -78,7 +84,9 @@ export const PostPopulatedListSchema = z.object({
 	_permission: ObjectPermission,
 });
 
-export type PostPopulatedList = z.infer<typeof PostPopulatedListSchema>;
+export type PostPopulatedListResult = z.infer<
+	typeof PostPopulatedListResultSchema
+>;
 
 export const baseUrl = "posts";
 export const urlWithId = (id: string) => `${baseUrl}/${id}`;

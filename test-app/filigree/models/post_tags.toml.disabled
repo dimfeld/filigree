@@ -1,6 +1,6 @@
 name = "PostTag"
 id_prefix = "psttag"
-endpoints = true
+standard_endpoints = true
 
 joins = ["Post", "Tag"]
 

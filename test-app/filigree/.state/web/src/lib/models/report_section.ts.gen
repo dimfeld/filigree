@@ -2,6 +2,8 @@ import { client, type ModelDefinition } from "filigree-web";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
+export type ReportSectionId = string;
+
 export const ReportSectionSchema = z.object({
 	id: z.string(),
 	organization_id: z.string(),
@@ -15,10 +17,12 @@ export const ReportSectionSchema = z.object({
 });
 
 export type ReportSection = z.infer<typeof ReportSectionSchema>;
-export const ReportSectionPopulatedGetSchema = ReportSectionSchema;
-export type ReportSectionPopulatedGet = ReportSection;
-export const ReportSectionPopulatedListSchema = ReportSectionSchema;
-export type ReportSectionPopulatedList = ReportSection;
+export const ReportSectionListResultSchema = ReportSectionSchema;
+export type ReportSectionListResult = ReportSection;
+export const ReportSectionPopulatedGetResultSchema = ReportSectionSchema;
+export type ReportSectionPopulatedGetResult = ReportSection;
+export const ReportSectionPopulatedListResultSchema = ReportSectionSchema;
+export type ReportSectionPopulatedListResult = ReportSection;
 export const ReportSectionCreateResultSchema = ReportSectionSchema;
 export type ReportSectionCreateResult = ReportSection;
 

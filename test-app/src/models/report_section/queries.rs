@@ -210,7 +210,7 @@ pub async fn list(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     filters: &ListQueryFilters,
-) -> Result<Vec<ReportSection>, error_stack::Report<Error>> {
+) -> Result<Vec<ReportSectionListResult>, error_stack::Report<Error>> {
     let q = include_str!("list.sql");
     list_internal(q, db, auth, filters).await
 }

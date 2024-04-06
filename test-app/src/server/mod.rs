@@ -55,6 +55,8 @@ pub struct ServerStateInner {
     pub filigree: Arc<FiligreeState>,
     /// The Postgres database connection pool
     pub db: PgPool,
+    /// Secrets loaded from the environment
+    pub secrets: Secrets,
     pub queue: effectum::Queue,
     /// Object storage providers
     pub storage: storage::AppStorage,
@@ -116,6 +118,35 @@ impl FromRef<ServerState> for SessionBackend {
     }
 }
 
+pub struct Secrets {
+    pub deepgram: String,
+    pub openai: String,
+}
+
+impl Secrets {
+    /// Load the secrets from the environment
+    pub fn from_env() -> Result<Secrets, Report<Error>> {
+        Ok(Self {
+            deepgram: std::env::var("DEEPGRAM_API_KEY")
+                .change_context(Error::Config)
+                .attach_printable("Missing environment variable DEEPGRAM_API_KEY")?,
+            openai: std::env::var("OPENAI_API_KEY")
+                .change_context(Error::Config)
+                .attach_printable("Missing environment variable OPENAI_API_KEY")?,
+        })
+    }
+
+    #[cfg(test)]
+    /// Create a new Secrets struct with all the strings empty, for testing where we don't need any
+    /// secrets.
+    pub fn empty() -> Secrets {
+        Secrets {
+            deepgram: String::new(),
+            openai: String::new(),
+        }
+    }
+}
+
 /// The server and related information
 pub struct Server {
     /// The host the server is bound to
@@ -144,11 +175,14 @@ impl Server {
         self,
         shutdown: impl Future<Output = ()> + Send + 'static,
     ) -> Result<(), Report<Error>> {
-        event!(Level::INFO, "Shutting down server");
-        axum::serve(self.listener, self.app)
-            .with_graceful_shutdown(shutdown)
-            .await
-            .change_context(Error::ServerStart)?;
+        axum::serve(
+            self.listener,
+            self.app
+                .into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .with_graceful_shutdown(shutdown)
+        .await
+        .change_context(Error::ServerStart)?;
 
         event!(Level::INFO, "Shutting down queue");
         self.queue_workers.shutdown().await;
@@ -192,6 +226,8 @@ pub struct Config {
     pub env: String,
     /// The host and port to bind to, or an existing TCP listener
     pub bind: ServerBind,
+    /// The port and disk asset location of the frontend server.
+    pub serve_frontend: Option<(u16, String)>,
     /// True if the site is being hosted on plain HTTP. This should only be set in a development
     /// or testing environment.
     pub insecure: bool,
@@ -222,6 +258,9 @@ pub struct Config {
     ///
     /// OAuth can be disabled, regardless of environment variable settings, but passing `Some(Vec::new())`.
     pub oauth_providers: Option<Vec<Box<dyn OAuthProvider>>>,
+
+    /// Secrets for the server. Most often this should be initialized using [Secrets::from_env].
+    pub secrets: Secrets,
 
     /// The path to the queue file
     pub queue_path: std::path::PathBuf,
@@ -278,8 +317,8 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         }),
         insecure: config.insecure,
         db: config.pg_pool.clone(),
+        secrets: config.secrets,
         queue,
-
         storage: storage::AppStorage::new(config.storage).change_context(Error::ServerStart)?,
     }));
 
@@ -311,32 +350,53 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .merge(crate::auth::create_routes())
         .layer(
             ServiceBuilder::new()
-                .layer(panic_handler(production))
-                .layer(ObfuscateErrorLayer::new(ObfuscateErrorLayerSettings {
-                    enabled: obfuscate_errors,
-                    ..Default::default()
-                }))
-                .layer(
-                    TraceLayer::new_for_http()
-                        .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
-                        .on_response(DefaultOnResponse::new().level(Level::INFO))
-                        .on_request(DefaultOnRequest::new().level(Level::INFO))
-                        .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
-                )
-                .layer(TimeoutLayer::new(config.request_timeout))
-                .layer(api_cors_layer)
                 .layer(CompressionLayer::new())
-                .layer(tower_cookies::CookieManagerLayer::new())
-                .set_x_request_id(MakeRequestUuid)
-                .propagate_x_request_id()
                 .decompression()
-                .layer(filigree::auth::middleware::AuthLayer::new(auth_queries))
-                .into_inner(),
+                .layer(filigree::auth::middleware::AuthLayer::new(auth_queries)),
         );
 
     let api_routes: Router<()> = api_routes.with_state(state.clone());
 
     let app = Router::new().nest("/api", api_routes);
+
+    let app = if let Some((port, dir)) = config.serve_frontend {
+        let fallback =
+            filigree::route_services::ForwardRequest::new(format!("http://localhost:{port}"));
+
+        let serve_fs = tower_http::services::ServeDir::new(dir)
+            .precompressed_gzip()
+            .precompressed_br()
+            // Pass non-GET methods to the callback instead of returning 405
+            .call_fallback_on_method_not_allowed(true)
+            .fallback(fallback.clone());
+
+        app.route_service("/", fallback)
+            .route_service("/*path", serve_fs)
+    } else {
+        app
+    };
+
+    let app = app.layer(
+        ServiceBuilder::new()
+            .layer(panic_handler(production))
+            .layer(ObfuscateErrorLayer::new(ObfuscateErrorLayerSettings {
+                enabled: obfuscate_errors,
+                ..Default::default()
+            }))
+            .layer(
+                TraceLayer::new_for_http()
+                    .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                    .on_response(DefaultOnResponse::new().level(Level::INFO))
+                    .on_request(DefaultOnRequest::new().level(Level::INFO))
+                    .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
+            )
+            .layer(TimeoutLayer::new(config.request_timeout))
+            .layer(api_cors_layer)
+            .layer(tower_cookies::CookieManagerLayer::new())
+            .set_x_request_id(MakeRequestUuid)
+            .propagate_x_request_id()
+            .into_inner(),
+    );
 
     let listener = match config.bind {
         ServerBind::Listener(l) => l,

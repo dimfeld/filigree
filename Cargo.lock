@@ -3,12 +3,6 @@
 version = 3
 
 [[package]]
-name = "Inflector"
-version = "0.11.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
-
-[[package]]
 name = "addr2line"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1111,9 +1105,9 @@ checksum = "545b22097d44f8a9581187cdf93de7a71e4722bf51200cfaba810865b49a495d"
 
 [[package]]
 name = "effectum"
-version = "0.5.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b06e5f90be1030e550e923020a794ab7ff15abb330b006d28b140b377bc19d9a"
+checksum = "f437325217e4f83f71476ed71971a15191acde869c815a5b9192df1bcdee88d1"
 dependencies = [
  "ahash",
  "backoff",
@@ -1245,7 +1239,7 @@ checksum = "25cbce373ec4653f1a01a31e8a5e5ec0c622dc27ff9c4e6606eefef5cbbed4a5"
 
 [[package]]
 name = "filigree"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "argon2",
  "async-trait",
@@ -1263,6 +1257,7 @@ dependencies = [
  "futures",
  "http 1.1.0",
  "hyper 1.2.0",
+ "hyper-util",
  "indoc",
  "jsonschema",
  "log",
@@ -1299,7 +1294,7 @@ dependencies = [
 
 [[package]]
 name = "filigree-cli"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "cargo_toml",
  "chrono",
@@ -1355,6 +1350,7 @@ dependencies = [
  "reqwest",
  "rust-embed",
  "schemars",
+ "schemars-zod",
  "serde",
  "serde_json",
  "serde_with",
@@ -1370,7 +1366,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
- "ts-rs",
  "url",
  "uuid",
 ]
@@ -1900,6 +1895,7 @@ dependencies = [
  "pin-project-lite",
  "smallvec",
  "tokio",
+ "want",
 ]
 
 [[package]]
@@ -1948,6 +1944,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca38ef113da30126bbff9cd1705f9273e15d45498615d138b0c20279ac7a76aa"
 dependencies = [
  "bytes",
+ "futures-channel",
  "futures-util",
  "http 1.1.0",
  "http-body 1.0.0",
@@ -1955,6 +1952,9 @@ dependencies = [
  "pin-project-lite",
  "socket2",
  "tokio",
+ "tower",
+ "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -3498,6 +3498,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "schemars-zod"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d93f9994db2562b356d3dffeaddd26e54ae9a05bad8590aa4179ec8a2b700ae"
+dependencies = [
+ "schemars",
+ "serde_json",
+]
+
+[[package]]
 name = "schemars_derive"
 version = "0.8.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3910,9 +3920,8 @@ dependencies = [
 
 [[package]]
 name = "sqlparser"
-version = "0.43.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f95c4bae5aba7cd30bd506f7140026ade63cff5afd778af8854026f9606bf5d4"
+version = "0.44.0"
+source = "git+https://github.com/dimfeld/sqlparser-rs.git?branch=create-function-options#e393ebc9a8abe82ea4d23ea24746f60b95edc6e7"
 dependencies = [
  "log",
  "serde",
@@ -4301,15 +4310,6 @@ dependencies = [
  "serde_json",
  "slug",
  "unic-segment",
-]
-
-[[package]]
-name = "termcolor"
-version = "1.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
-dependencies = [
- "winapi-util",
 ]
 
 [[package]]
@@ -4733,33 +4733,6 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
-
-[[package]]
-name = "ts-rs"
-version = "8.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09d3fa4606cdab1e9b668cc65ce2545941d01f52bc27536a195c66c55b91cb84"
-dependencies = [
- "chrono",
- "serde_json",
- "thiserror",
- "ts-rs-macros",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "ts-rs-macros"
-version = "8.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f86ae36cbb2d58b86677ad413054feeb0712e382e822131cf9a4a1e580c419b5"
-dependencies = [
- "Inflector",
- "proc-macro2",
- "quote",
- "syn 2.0.52",
- "termcolor",
-]
 
 [[package]]
 name = "typed-builder"

@@ -22,9 +22,11 @@ pub struct User {
     pub _permission: ObjectPermission,
 }
 
-pub type UserPopulatedGet = User;
+pub type UserListResult = User;
 
-pub type UserPopulatedList = User;
+pub type UserPopulatedGetResult = User;
+
+pub type UserPopulatedListResult = User;
 
 pub type UserCreateResult = User;
 

@@ -21,9 +21,11 @@ pub struct Comment {
     pub _permission: ObjectPermission,
 }
 
-pub type CommentPopulatedGet = Comment;
+pub type CommentListResult = Comment;
 
-pub type CommentPopulatedList = Comment;
+pub type CommentPopulatedGetResult = Comment;
+
+pub type CommentPopulatedListResult = Comment;
 
 pub type CommentCreateResult = Comment;
 

@@ -1,6 +1,6 @@
 name = "Comment"
 id_prefix = "cmt"
-endpoints = true
+standard_endpoints = true
 belongs_to = "Post"
 
 [[fields]]

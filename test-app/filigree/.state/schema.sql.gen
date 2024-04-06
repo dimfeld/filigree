@@ -1,3 +1,28 @@
+CREATE OR REPLACE FUNCTION objectid_to_uuid (text)
+  RETURNS uuid
+  LANGUAGE sql
+  IMMUTABLE
+  RETURNS NULL ON NULL INPUT PARALLEL SAFE
+  AS $$
+  SELECT
+    encode(decode(replace(replace(
+	  RIGHT ($1, 22), '-', '+'), '_', '/') ||
+	    '==', 'base64'), 'hex')::uuid
+$$;
+
+CREATE OR REPLACE FUNCTION uuid_to_objectid (uuid)
+  RETURNS text
+  LANGUAGE sql
+  IMMUTABLE
+  RETURNS NULL ON NULL INPUT PARALLEL SAFE
+  AS $$
+  SELECT
+    replace(replace(
+      LEFT (encode(decode(replace($1::text, '-', ''), 'hex'),
+	'base64'), 22), '+', '-'), '/', '_')
+$$;
+
+
 CREATE TABLE delete_log (
   organization_id uuid NOT NULL,
   object_id uuid NOT NULL,
@@ -18,7 +43,11 @@ CREATE TABLE comments (
 
 CREATE INDEX comments_organization_id ON comments (organization_id);
 
-CREATE INDEX comments_post_id ON comments (post_id);
+CREATE INDEX comments_post_id ON comments (organization_id, post_id);
+
+CREATE INDEX comments_updated_at ON comments (organization_id, updated_at DESC);
+
+CREATE INDEX comments_created_at ON comments (organization_id, created_at DESC);
 
 
 CREATE TABLE users (
@@ -58,7 +87,11 @@ CREATE TABLE polls (
 
 CREATE INDEX polls_organization_id ON polls (organization_id);
 
-CREATE INDEX polls_post_id ON polls (post_id);
+CREATE INDEX polls_post_id ON polls (organization_id, post_id);
+
+CREATE INDEX polls_updated_at ON polls (organization_id, updated_at DESC);
+
+CREATE INDEX polls_created_at ON polls (organization_id, created_at DESC);
 
 
 CREATE TABLE post_images (
@@ -76,7 +109,11 @@ CREATE TABLE post_images (
 
 CREATE INDEX post_images_organization_id ON post_images (organization_id);
 
-CREATE INDEX post_images_post_id ON post_images (post_id);
+CREATE INDEX post_images_post_id ON post_images (organization_id, post_id);
+
+CREATE INDEX post_images_updated_at ON post_images (organization_id, updated_at DESC);
+
+CREATE INDEX post_images_created_at ON post_images (organization_id, created_at DESC);
 
 
 CREATE TABLE reactions (
@@ -90,7 +127,11 @@ CREATE TABLE reactions (
 
 CREATE INDEX reactions_organization_id ON reactions (organization_id);
 
-CREATE INDEX reactions_post_id ON reactions (post_id);
+CREATE INDEX reactions_post_id ON reactions (organization_id, post_id);
+
+CREATE INDEX reactions_updated_at ON reactions (organization_id, updated_at DESC);
+
+CREATE INDEX reactions_created_at ON reactions (organization_id, created_at DESC);
 
 
 CREATE TABLE posts (
@@ -103,6 +144,10 @@ CREATE TABLE posts (
 );
 
 CREATE INDEX posts_organization_id ON posts (organization_id);
+
+CREATE INDEX posts_updated_at ON posts (organization_id, updated_at DESC);
+
+CREATE INDEX posts_created_at ON posts (organization_id, created_at DESC);
 
 
 CREATE TABLE report_sections (
@@ -118,7 +163,11 @@ CREATE TABLE report_sections (
 
 CREATE INDEX report_sections_organization_id ON report_sections (organization_id);
 
-CREATE INDEX report_sections_report_id ON report_sections (report_id);
+CREATE INDEX report_sections_report_id ON report_sections (organization_id, report_id);
+
+CREATE INDEX report_sections_updated_at ON report_sections (organization_id, updated_at DESC);
+
+CREATE INDEX report_sections_created_at ON report_sections (organization_id, created_at DESC);
 
 
 CREATE TABLE reports (
@@ -132,6 +181,10 @@ CREATE TABLE reports (
 );
 
 CREATE INDEX reports_organization_id ON reports (organization_id);
+
+CREATE INDEX reports_updated_at ON reports (organization_id, updated_at DESC);
+
+CREATE INDEX reports_created_at ON reports (organization_id, created_at DESC);
 
 
 CREATE TABLE roles (

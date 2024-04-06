@@ -27,6 +27,8 @@ pub struct Post {
     pub _permission: ObjectPermission,
 }
 
+pub type PostListResult = Post;
+
 pub type PostCreateResult = Post;
 
 impl Post {
@@ -132,7 +134,7 @@ impl Default for PostCreatePayloadAndUpdatePayload {
 
 #[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 
-pub struct PostPopulatedGet {
+pub struct PostPopulatedGetResult {
     pub id: PostId,
     pub organization_id: crate::models::organization::OrganizationId,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -146,7 +148,7 @@ pub struct PostPopulatedGet {
     pub _permission: ObjectPermission,
 }
 
-impl PostPopulatedGet {
+impl PostPopulatedGetResult {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
     // detect whether to add the extra :: in cases like DateTime::<Utc>::default
 
@@ -191,9 +193,9 @@ impl PostPopulatedGet {
     }
 }
 
-sqlx_json_decode!(PostPopulatedGet);
+sqlx_json_decode!(PostPopulatedGetResult);
 
-impl Default for PostPopulatedGet {
+impl Default for PostPopulatedGetResult {
     fn default() -> Self {
         Self {
             id: Self::default_id(),
@@ -211,12 +213,12 @@ impl Default for PostPopulatedGet {
     }
 }
 
-impl Serialize for PostPopulatedGet {
+impl Serialize for PostPopulatedGetResult {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("PostPopulatedGet", 11)?;
+        let mut state = serializer.serialize_struct("PostPopulatedGetResult", 11)?;
         state.serialize_field("id", &self.id)?;
         state.serialize_field("organization_id", &self.organization_id)?;
         state.serialize_field("updated_at", &self.updated_at)?;
@@ -234,7 +236,7 @@ impl Serialize for PostPopulatedGet {
 
 #[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 
-pub struct PostPopulatedList {
+pub struct PostPopulatedListResult {
     pub id: PostId,
     pub organization_id: crate::models::organization::OrganizationId,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -246,7 +248,7 @@ pub struct PostPopulatedList {
     pub _permission: ObjectPermission,
 }
 
-impl PostPopulatedList {
+impl PostPopulatedListResult {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
     // detect whether to add the extra :: in cases like DateTime::<Utc>::default
 
@@ -283,9 +285,9 @@ impl PostPopulatedList {
     }
 }
 
-sqlx_json_decode!(PostPopulatedList);
+sqlx_json_decode!(PostPopulatedListResult);
 
-impl Default for PostPopulatedList {
+impl Default for PostPopulatedListResult {
     fn default() -> Self {
         Self {
             id: Self::default_id(),
@@ -301,12 +303,12 @@ impl Default for PostPopulatedList {
     }
 }
 
-impl Serialize for PostPopulatedList {
+impl Serialize for PostPopulatedListResult {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("PostPopulatedList", 9)?;
+        let mut state = serializer.serialize_struct("PostPopulatedListResult", 9)?;
         state.serialize_field("id", &self.id)?;
         state.serialize_field("organization_id", &self.organization_id)?;
         state.serialize_field("updated_at", &self.updated_at)?;

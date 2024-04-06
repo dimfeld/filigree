@@ -21,9 +21,11 @@ pub struct Organization {
     pub _permission: ObjectPermission,
 }
 
-pub type OrganizationPopulatedGet = Organization;
+pub type OrganizationListResult = Organization;
 
-pub type OrganizationPopulatedList = Organization;
+pub type OrganizationPopulatedGetResult = Organization;
+
+pub type OrganizationPopulatedListResult = Organization;
 
 pub type OrganizationCreateResult = Organization;
 

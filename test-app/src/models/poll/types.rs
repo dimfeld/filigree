@@ -22,9 +22,11 @@ pub struct Poll {
     pub _permission: ObjectPermission,
 }
 
-pub type PollPopulatedGet = Poll;
+pub type PollListResult = Poll;
 
-pub type PollPopulatedList = Poll;
+pub type PollPopulatedGetResult = Poll;
+
+pub type PollPopulatedListResult = Poll;
 
 pub type PollCreateResult = Poll;
 
