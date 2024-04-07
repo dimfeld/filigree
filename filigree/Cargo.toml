@@ -63,7 +63,7 @@ url = "2.5.0"
 uuid = { version = "1.7.0", features = ["serde", "v7"] }
 
 [features]
-default = ["tracing", "honeycomb", "jaeger", "resend", "storage_aws"]
+default = ["tracing", "honeycomb", "jaeger", "resend", "storage_aws", "sentry"]
 tracing = ["dep:log", "dep:tracing-subscriber", "dep:tracing-error", "dep:tracing-log"]
 opentelemetry = ["tracing", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
 honeycomb = ["tracing", "opentelemetry", "dep:tonic", "dep:opentelemetry-otlp"]
