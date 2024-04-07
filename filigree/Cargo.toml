@@ -40,6 +40,7 @@ opentelemetry_sdk = { version = "0.21.2", features = ["rt-tokio"], optional = tr
 reqwest = { version = "0.11.24", features = ["json", "cookies"] }
 rust-embed = "8.3.0"
 schemars = { version = "0.8.16", features = ["chrono", "uuid1"] }
+sentry = { version = "0.32.2", optional = true }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.114"
 serde_path_to_error = "0.1.15"
@@ -62,13 +63,13 @@ url = "2.5.0"
 uuid = { version = "1.7.0", features = ["serde", "v7"] }
 
 [features]
-default = ["tracing", "tracing_honeycomb", "tracing_jaeger", "email_provider_resend", "storage_aws"]
+default = ["tracing", "honeycomb", "jaeger", "resend", "storage_aws"]
 tracing = ["dep:log", "dep:tracing-subscriber", "dep:tracing-error", "dep:tracing-log"]
 opentelemetry = ["tracing", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
-tracing_honeycomb = ["tracing", "opentelemetry", "dep:tonic", "dep:opentelemetry-otlp"]
-tracing_jaeger = ["tracing", "opentelemetry", "dep:opentelemetry-jaeger"]
+honeycomb = ["tracing", "opentelemetry", "dep:tonic", "dep:opentelemetry-otlp"]
+jaeger = ["tracing", "opentelemetry", "dep:opentelemetry-jaeger"]
 # Code only needed when running the Filigree CLI, plus additional features
-filigree-cli = ["tracing_honeycomb", "tracing_jaeger"]
+filigree-cli = ["storage_aws", "tracing"]
 # Enable support for AWS S3 and compatible APIs
 storage_aws = ["object_store/aws"]
 # Enable support for Google Cloud Storage
@@ -76,7 +77,8 @@ storage_gcp = ["object_store/gcp"]
 # Enable support for Azure Blob Storage
 storage_azure = ["object_store/azure"]
 email_provider = []
-email_provider_resend = ["email_provider"]
+resend = ["email_provider"]
+sentry = ["dep:sentry"]
 test_slow = []
 test_password = []
 

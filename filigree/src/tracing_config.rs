@@ -14,7 +14,7 @@ use tracing_subscriber::{
 
 use crate::config::prefixed_env_var;
 
-#[cfg(feature = "tracing_honeycomb")]
+#[cfg(feature = "honeycomb")]
 /// Configuration for sending telemetry to Honeycomb
 #[derive(Deserialize, Debug, Clone)]
 pub struct HoneycombConfig {
@@ -26,7 +26,7 @@ pub struct HoneycombConfig {
     pub endpoint: Option<String>,
 }
 
-#[cfg(feature = "tracing_jaeger")]
+#[cfg(feature = "jaeger")]
 /// Configuration for sending telemetry to Jaeger
 #[derive(Deserialize, Debug, Clone)]
 pub struct JaegerConfig {
@@ -43,10 +43,10 @@ pub enum TracingExportConfig {
     /// Do not export tracing to an external service. This still prints it to the console.
     #[default]
     None,
-    #[cfg(feature = "tracing_honeycomb")]
+    #[cfg(feature = "honeycomb")]
     /// Export traces to Honeycomb
     Honeycomb(HoneycombConfig),
-    #[cfg(feature = "tracing_jaeger")]
+    #[cfg(feature = "jaeger")]
     /// Export traces to Jaeger
     Jaeger(JaegerConfig),
 }
@@ -108,10 +108,10 @@ pub fn create_tracing_config(
 
     let config = match tracing_type {
         TracingProvider::None => TracingExportConfig::None,
-        #[cfg(not(feature = "tracing_jaeger"))]
+        #[cfg(not(feature = "jaeger"))]
         TracingProvider::Jaeger => Err(Report::new(TraceConfigureError))
-            .attach_printable("Jaeger tracing requires the `tracing_jaeger` feature")?,
-        #[cfg(feature = "tracing_jaeger")]
+            .attach_printable("Jaeger tracing requires the `jaeger` feature")?,
+        #[cfg(feature = "jaeger")]
         TracingProvider::Jaeger => TracingExportConfig::Jaeger(JaegerConfig {
             service_name: prefixed_env_var(env_prefix, "OTEL_SERVICE_NAME")
                 .ok()
@@ -125,10 +125,10 @@ pub fn create_tracing_config(
                     )
                 })?,
         }),
-        #[cfg(not(feature = "tracing_honeycomb"))]
+        #[cfg(not(feature = "honeycomb"))]
         TracingProvider::Honeycomb => Err(Report::new(TraceConfigureError))
-            .attach_printable("Honeycomb tracing requires the `tracing_honeycomb` feature")?,
-        #[cfg(feature = "tracing_honeycomb")]
+            .attach_printable("Honeycomb tracing requires the `honeycomb` feature")?,
+        #[cfg(feature = "honeycomb")]
         TracingProvider::Honeycomb => TracingExportConfig::Honeycomb(HoneycombConfig {
             api_key: prefixed_env_var(env_prefix, "HONEYCOMB_API_KEY")
                 .change_context(TraceConfigureError)
@@ -188,7 +188,7 @@ where
         .with(ErrorLayer::default());
 
     match export_config {
-        #[cfg(feature = "tracing_honeycomb")]
+        #[cfg(feature = "honeycomb")]
         TracingExportConfig::Honeycomb(honeycomb_config) => {
             use opentelemetry_otlp::WithExportConfig;
             use tonic::metadata::{Ascii, MetadataValue};
@@ -227,7 +227,7 @@ where
             let subscriber = subscriber.with(telemetry);
             set_global_default(subscriber).expect("Setting subscriber");
         }
-        #[cfg(feature = "tracing_jaeger")]
+        #[cfg(feature = "jaeger")]
         TracingExportConfig::Jaeger(config) => {
             let tracer = opentelemetry_jaeger::new_agent_pipeline()
                 .with_service_name(&config.service_name)
