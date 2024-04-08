@@ -1,5 +1,5 @@
 import type { RequestHandler } from '@sveltejs/kit';
-import { client } from 'filigree-web';
+import { client } from 'filigree-svelte';
 
 export const GET: RequestHandler = async ({ url, params, fetch }) => {
   const provider = params.provider;
