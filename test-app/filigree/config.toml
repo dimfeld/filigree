@@ -14,6 +14,9 @@ openai = "OPENAI_API_KEY"
 dotenv = true
 hosts = ["localhost"]
 
+[web]
+framework = "sveltekit"
+
 [formatter]
 rust = ["rustfmt", "+nightly"]
 js = ["biome", "format", "--stdin-file-path=stdin.ts" ]

@@ -92,6 +92,15 @@ pub fn add_fixed_deps(
         add_dep(cwd, manifest, name, version, features)?;
     }
 
+    match config.web.framework {
+        /*
+        Some(crate::config::WebMode::Maud) => {
+            add_maud_deps(cwd, manifest)?;
+        }
+        */
+        _ => {}
+    };
+
     if config.use_queue {
         crate::config::job::add_deps(cwd, manifest)?;
     }

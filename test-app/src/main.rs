@@ -35,17 +35,13 @@ struct ServeCommand {
     #[clap(long, env = "PORT", default_value_t = 7823)]
     port: u16,
 
-    /// Enable to serve the frontend assets and forward non-API requests to the frontend server.
-    #[clap(long, env = "SERVE_FRONTEND")]
-    serve_frontend: bool,
-
     /// The port to forward non-API frontend requests to
-    #[clap(long, env = "FRONTEND_PORT", default_value_t = 5173)]
-    frontend_port: u16,
+    #[clap(long, env = "WEB_PORT")]
+    frontend_port: Option<u16>,
 
     /// Serve frontend static assets from this directory
-    #[clap(long, env = "FRONTEND_ASSET_DIR", default_value_t = String::from("web/build/client"))]
-    frontend_asset_dir: String,
+    #[clap(long, env = "WEB_ASSET_DIR")]
+    frontend_asset_dir: Option<String>,
 
     /// The environment in which this server is running
     #[clap(long = "env", env = "ENV", default_value_t = String::from("development"))]
@@ -185,9 +181,11 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     let server = server::create_server(server::Config {
         env: cmd.env,
         bind: server::ServerBind::HostPort(cmd.host, cmd.port),
-        serve_frontend: cmd
-            .serve_frontend
-            .then(|| (cmd.frontend_port, cmd.frontend_asset_dir)),
+        serve_frontend: (
+            cmd.frontend_port.or(Some(5173)),
+            cmd.frontend_asset_dir
+                .or_else(|| Some("web/build/client".to_string())),
+        ),
         insecure: cmd.insecure,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),
         cookie_configuration: SessionCookieBuilder::new(secure_cookies, cmd.cookie_same_site),

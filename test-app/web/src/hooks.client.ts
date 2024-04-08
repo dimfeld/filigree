@@ -1,3 +1,5 @@
+import type { HandleClientError } from "@sveltejs/kit";
+
 import * as Sentry from "@sentry/sveltekit";
 import { PUBLIC_SENTRY_DSN } from "$env/static/public";
 
@@ -8,13 +10,13 @@ if (PUBLIC_SENTRY_DSN) {
 	});
 }
 
-function errorHandler({ error, event, message, status }) {
+const errorHandler: HandleClientError = ({ error, event, message, status }) => {
 	console.dir(error);
 	return {
 		status,
 		message,
 		error,
 	};
-}
+};
 
 export const handleError = Sentry.handleErrorWithSentry(errorHandler);

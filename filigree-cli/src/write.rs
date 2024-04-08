@@ -119,6 +119,7 @@ fn build_models(config: &Config, mut config_models: Vec<Model>) -> Vec<Model> {
 }
 
 pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
+    let web_relative_to_api = config.web_relative_to_api();
     let FullConfig {
         crate_name,
         config,
@@ -149,6 +150,7 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
     crate::model::validate::validate_model_configuration(&config, &model_map)?;
 
     crate::add_deps::add_fixed_deps(&api_dir, &config, &mut crate_manifest)?;
+    config.web.add_deps(&api_dir, &mut crate_manifest)?;
     for model in &models {
         model.add_deps(&api_dir, &mut crate_manifest)?;
     }
@@ -176,8 +178,6 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
     for g in &mut generators {
         g.set_template_context(generator_contexts[&g.model.name].clone())
     }
-
-    let web_relative_to_api = pathdiff::diff_paths(&web_dir, &api_dir).unwrap();
 
     let mut model_files = None;
     let mut root_files = None;

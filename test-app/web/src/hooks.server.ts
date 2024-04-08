@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/sveltekit";
 import { PUBLIC_SENTRY_DSN } from "$env/static/public";
 
+import type { HandleServerError } from "@sveltejs/kit";
 import { getUser } from "$lib/server/user.js";
 import { type Handle, error, redirect, type HandleFetch } from "@sveltejs/kit";
 import { hasPermissions, protectRoutes } from "filigree-web/auth/routes";
@@ -46,14 +47,14 @@ const auth: Handle = async ({ event, resolve }) => {
 
 export const handle = sequence(Sentry.sentryHandle(), auth);
 
-function errorHandler({ error, event, message, status }) {
+const errorHandler: HandleServerError = ({ error, event, message, status }) => {
 	console.dir(error);
 	return {
 		status,
 		message,
 		error: error.stack ?? JSON.stringify(error, null, 2),
 	};
-}
+};
 
 export const handleError = Sentry.handleErrorWithSentry(errorHandler);
 

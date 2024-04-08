@@ -228,7 +228,7 @@ pub struct Config {
     /// The host and port to bind to, or an existing TCP listener
     pub bind: ServerBind,
     /// The port and disk asset location of the frontend server.
-    pub serve_frontend: Option<(u16, String)>,
+    pub serve_frontend: (Option<u16>, Option<String>),
     /// True if the site is being hosted on plain HTTP. This should only be set in a development
     /// or testing environment.
     pub insecure: bool,
@@ -349,33 +349,43 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .merge(filigree::auth::oauth::create_routes())
         .merge(crate::models::create_routes())
         .merge(crate::users::users::create_routes())
-        .merge(crate::auth::create_routes())
-        .layer(
-            ServiceBuilder::new()
-                .layer(CompressionLayer::new())
-                .decompression()
-                .layer(filigree::auth::middleware::AuthLayer::new(auth_queries)),
-        );
+        .merge(crate::auth::create_routes());
 
     let api_routes: Router<()> = api_routes.with_state(state.clone());
 
     let app = Router::new().nest("/api", api_routes);
 
-    let app = if let Some((port, dir)) = config.serve_frontend {
-        let fallback =
-            filigree::route_services::ForwardRequest::new(format!("http://localhost:{port}"));
+    let app = match config.serve_frontend {
+        (Some(web_port), Some(web_dir)) => {
+            let fallback = filigree::route_services::ForwardRequest::new(format!(
+                "http://localhost:{web_port}"
+            ));
 
-        let serve_fs = tower_http::services::ServeDir::new(dir)
-            .precompressed_gzip()
-            .precompressed_br()
-            // Pass non-GET methods to the callback instead of returning 405
-            .call_fallback_on_method_not_allowed(true)
-            .fallback(fallback.clone());
+            let serve_fs = tower_http::services::ServeDir::new(web_dir)
+                .precompressed_gzip()
+                .precompressed_br()
+                // Pass non-GET methods to the callback instead of returning 405
+                .call_fallback_on_method_not_allowed(true)
+                .fallback(fallback.clone());
 
-        app.route_service("/", fallback)
-            .route_service("/*path", serve_fs)
-    } else {
-        app
+            app.route_service("/", fallback)
+                .route_service("/*path", serve_fs)
+        }
+        (Some(web_port), None) => {
+            let fallback = filigree::route_services::ForwardRequest::new(format!(
+                "http://localhost:{web_port}"
+            ));
+
+            app.fallback_service(fallback)
+        }
+        (None, Some(web_dir)) => {
+            let serve_fs = tower_http::services::ServeDir::new(web_dir)
+                .precompressed_gzip()
+                .precompressed_br()
+                .append_index_html_on_directories(true);
+            app.route_service("/static/*path", serve_fs)
+        }
+        (None, None) => app,
     };
 
     let app = app.layer(
@@ -399,6 +409,9 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             .layer(tower_cookies::CookieManagerLayer::new())
             .set_x_request_id(MakeRequestUuid)
             .propagate_x_request_id()
+            .layer(CompressionLayer::new())
+            .decompression()
+            .layer(filigree::auth::middleware::AuthLayer::new(auth_queries))
             .into_inner(),
     );
 

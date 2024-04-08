@@ -2,6 +2,7 @@ pub mod custom_endpoint;
 pub mod job;
 pub mod storage;
 pub mod tracing;
+pub mod web;
 
 use std::{
     collections::BTreeMap,
@@ -12,7 +13,7 @@ use error_stack::{Report, ResultExt};
 use glob::glob;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use self::{job::QueueConfig, storage::StorageConfig, tracing::TracingConfig};
+use self::{job::QueueConfig, storage::StorageConfig, tracing::TracingConfig, web::WebConfig};
 use crate::{
     format::FormatterConfig,
     model::{field::ModelField, Model, ModelAuthScope, SqlDialect},
@@ -38,6 +39,9 @@ pub struct Config {
     pub web_dir: PathBuf,
 
     pub server: ServerConfig,
+
+    #[serde(default)]
+    pub web: WebConfig,
 
     #[serde(default)]
     pub error_reporting: ErrorReportingConfig,
@@ -151,20 +155,6 @@ pub struct ServerConfig {
     #[serde(default = "default_port")]
     pub default_port: u16,
 
-    /// The port that the frontend listens on. If `forward_to_frontend` is enabled, this is the
-    /// port it will forward to.
-    #[serde(default = "default_frontend_port")]
-    pub frontend_port: u16,
-
-    /// Serve frontend static assets from this directory when in production mode. If omitted, defaults to
-    /// "<web_directory>/build/client".
-    pub frontend_asset_dir: Option<String>,
-
-    /// If the server should forward requests that it doesn't handle to the frontend. Defaults to
-    /// true.
-    #[serde(default = "true_t")]
-    pub forward_to_frontend: bool,
-
     /// The hosts that the server should assume are pointing to it.
     #[serde(default)]
     pub hosts: Vec<String>,
@@ -185,10 +175,6 @@ pub struct ServerConfig {
 
 const fn default_port() -> u16 {
     7823
-}
-
-const fn default_frontend_port() -> u16 {
-    5173
 }
 
 /// Cross-origin Resource Sharing (CORS) configuration
@@ -391,6 +377,10 @@ impl FullConfig {
             crate_manifest: manifest,
             state,
         })
+    }
+
+    pub fn web_relative_to_api(&self) -> PathBuf {
+        pathdiff::diff_paths(&self.web_dir, &self.api_dir).unwrap()
     }
 }
 

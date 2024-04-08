@@ -76,6 +76,7 @@ fn print_var(config: &PrintConfig, key: &str, default_value: impl Display, desc:
 }
 
 pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
+    let web_relative_to_api = config.web_relative_to_api();
     let FullConfig { config, .. } = config;
     let pc = PrintConfig {
         mode: if args.dockerfile {
@@ -98,14 +99,6 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
     print_var(&pc, "DATABASE_URL", "", "Database URL to connect to");
     print_var(&pc, "HOST", "::1", "Host to bind to");
     print_var(&pc, "PORT", config.server.default_port, "Port to listen on");
-    if config.server.forward_to_frontend {
-        print_var(
-            &pc,
-            "FRONTEND_PORT",
-            config.server.frontend_port,
-            "Port to forward non-API frontend requests to",
-        );
-    }
     print_var(&pc, "ENV", "development", "");
     print_var(&pc, "LOG", "info", "Trace logging level to use");
 
@@ -149,21 +142,15 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
 
     print_var(
         &pc,
-        "SERVE_FRONTEND",
-        config.server.forward_to_frontend,
-        "Set to true to serve the frontend assets and forward non-API requests",
-    );
-    print_var(
-        &pc,
-        "FRONTEND_ASSET_DIR",
-        "",
+        "WEB_ASSET_DIR",
+        config.web.files(&web_relative_to_api).unwrap_or_default(),
         "The directory where the frontend static assets are located",
     );
     print_var(
         &pc,
-        "FRONTEND_PORT",
-        config.server.frontend_port,
-        "The port on which the frontend server is listening",
+        "WEB_PORT",
+        config.web.port().map(|p| p.to_string()).unwrap_or_default(),
+        "Port to forward non-API frontend requests to",
     );
     print_var(
         &pc,
