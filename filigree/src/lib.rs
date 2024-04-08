@@ -11,6 +11,8 @@ pub mod auth;
 pub mod config;
 /// Email templates and sending
 pub mod email;
+pub mod error_reporting;
+pub mod error_stack;
 /// Error handling
 pub mod errors;
 /// Request extractors

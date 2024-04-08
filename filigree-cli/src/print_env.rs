@@ -109,6 +109,18 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
     print_var(&pc, "ENV", "development", "");
     print_var(&pc, "LOG", "info", "Trace logging level to use");
 
+    match config.error_reporting.provider {
+        crate::config::ErrorReportingProvider::Sentry => {
+            print_var(
+                &pc,
+                "SENTRY_DSN",
+                "",
+                "Sentry DSN to use for error reporting",
+            );
+        }
+        _ => {}
+    }
+
     print_var(
         &pc,
         "TRACING_TYPE",

@@ -1269,6 +1269,7 @@ dependencies = [
  "hyper 1.2.0",
  "hyper-util",
  "indoc",
+ "itertools 0.12.1",
  "jsonschema",
  "log",
  "oauth2",
@@ -1285,6 +1286,7 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "sha3",
+ "smallvec",
  "sqlx",
  "tera",
  "thiserror",
@@ -1362,6 +1364,8 @@ dependencies = [
  "rust-embed",
  "schemars",
  "schemars-zod",
+ "sentry",
+ "sentry-tower",
  "serde",
  "serde_json",
  "serde_with",
@@ -3648,6 +3652,7 @@ dependencies = [
  "sentry-core",
  "sentry-debug-images",
  "sentry-panic",
+ "sentry-tower",
  "sentry-tracing",
  "tokio",
  "ureq",
@@ -3711,6 +3716,21 @@ checksum = "d1c18d0b5fba195a4950f2f4c31023725c76f00aabb5840b7950479ece21b5ca"
 dependencies = [
  "sentry-backtrace",
  "sentry-core",
+]
+
+[[package]]
+name = "sentry-tower"
+version = "0.32.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d87dfe009138dc515009842619b562e03b2b3f926a91318ec7ae23d09435f8b4"
+dependencies = [
+ "axum 0.7.4",
+ "http 1.1.0",
+ "pin-project",
+ "sentry-core",
+ "tower-layer",
+ "tower-service",
+ "url",
 ]
 
 [[package]]
@@ -3982,9 +4002,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.13.1"
+version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6ecd384b10a64542d77071bd64bd7b231f4ed5940fba55e98c3de13824cf3d7"
+checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 dependencies = [
  "serde",
 ]

@@ -33,6 +33,7 @@ pub fn render_files(
     );
     context.insert("crate_name", &crate_name.to_case(Case::Snake));
     context.insert("email", &config.email);
+    context.insert("error_reporting", &config.error_reporting);
     context.insert("server", &config.server);
     context.insert("secrets", &config.secrets);
     context.insert("tracing", &config.tracing);

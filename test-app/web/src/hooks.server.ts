@@ -1,7 +1,17 @@
+import * as Sentry from "@sentry/sveltekit";
+import { PUBLIC_SENTRY_DSN } from "$env/static/public";
+
 import { getUser } from "$lib/server/user.js";
 import { type Handle, error, redirect, type HandleFetch } from "@sveltejs/kit";
 import { hasPermissions, protectRoutes } from "filigree-web/auth/routes";
 import { sequence } from "@sveltejs/kit/hooks";
+
+if (PUBLIC_SENTRY_DSN) {
+	Sentry.init({
+		dsn: PUBLIC_SENTRY_DSN,
+		tracesSampleRate: 1.0,
+	});
+}
 
 const protect = protectRoutes({
 	allowUnauthed: ["/login", "/forgot", "/auth"],
@@ -34,9 +44,9 @@ const auth: Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
-export const handle = sequence(auth);
+export const handle = sequence(Sentry.sentryHandle(), auth);
 
-export function handleError({ error, event, message, status }) {
+function errorHandler({ error, event, message, status }) {
 	console.dir(error);
 	return {
 		status,
@@ -44,6 +54,8 @@ export function handleError({ error, event, message, status }) {
 		error: error.stack ?? JSON.stringify(error, null, 2),
 	};
 }
+
+export const handleError = Sentry.handleErrorWithSentry(errorHandler);
 
 const API_SERVER = process.env.API_SERVER || "localhost:7823";
 export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {

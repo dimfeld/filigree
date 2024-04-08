@@ -129,12 +129,6 @@ struct ServeCommand {
     #[clap(long, env = "{{env_prefix}}QUEUE_PATH", default_value_t = String::from("{{queue.path}}"))]
     queue_path: String,
     {% endif %}
-
-    // tracing endpoint (if any)
-    // honeycomb team
-    // honeycomb dataset
-    // jaeger service name
-    // jaeger endpoint
 }
 
 
@@ -256,8 +250,32 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     Ok(())
 }
 
-#[tokio::main(flavor = "multi_thread")]
-pub async fn main() -> Result<(), Report<Error>> {
+fn main() -> Result<(), Report<Error>> {
+    {% if error_reporting.provider == "sentry" -%}
+    // Sentry should be initialized prior to starting Tokio.
+    let env = std::env::var("{{env_prefix}}ENV").unwrap_or_else(|_| String::from("development"));
+    use sentry::IntoDsn;
+    let sentry_dsn = std::env::var("{{env_prefix}}SENTRY_DSN")
+        .ok()
+        .into_dsn()
+        .expect("Parsing {{env_prefix}}SENTRY_DSN");
+    let _sentry_guard = sentry::init(sentry::ClientOptions{
+        release: sentry::release_name!(),
+        environment: Some(std::borrow::Cow::Owned(env)),
+        default_integrations: true,
+        dsn: sentry_dsn,
+        ..Default::default()
+    });
+    {%- endif %}
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(actual_main())
+}
+
+pub async fn actual_main() -> Result<(), Report<Error>> {
     let read_dotenv = std::env::var("{{env_prefix}}READ_DOTENV")
         .ok()
         .and_then(|v| v.parse::<bool>().ok())

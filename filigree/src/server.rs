@@ -6,6 +6,7 @@ use tracing::{event, Level};
 use crate::{
     auth::{oauth::providers::OAuthProvider, SessionBackend},
     email::services::EmailSender,
+    error_reporting::ErrorReporter,
     users::users::UserCreator,
 };
 
@@ -33,6 +34,9 @@ pub struct FiligreeState {
 
     /// The enabled OAuth Providers. This can be populated using [create_supported_providers].
     pub oauth_providers: Vec<Box<dyn OAuthProvider>>,
+
+    /// Error reporting
+    pub error_reporter: ErrorReporter,
 }
 
 impl FiligreeState {

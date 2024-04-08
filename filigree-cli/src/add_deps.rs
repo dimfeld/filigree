@@ -24,7 +24,6 @@ const DEPS: &[DepVersion<'static>] = &[
     ("dotenvy", "0.15.7", &[]),
     ("error-stack", "0.4.1", &["spantrace"]),
     ("eyre", "0.6.11", &[]),
-    ("filigree", "0.0.3", &[]),
     ("futures", "0.3.30", &[]),
     ("http", "1.0.0", &[]),
     ("hyper", "1.1.0", &["server", "http1", "http2"]),
@@ -57,6 +56,38 @@ pub fn add_fixed_deps(
     config: &Config,
     manifest: &mut Manifest,
 ) -> Result<(), Report<Error>> {
+    let mut filigree_features = vec![];
+    match config.error_reporting.provider {
+        crate::config::ErrorReportingProvider::Sentry => {
+            add_dep(
+                cwd,
+                manifest,
+                "sentry",
+                "0.32.2",
+                &[
+                    "tokio",
+                    "tower",
+                    "tower-http",
+                    "tower-axum-matched-path",
+                    "tracing",
+                ],
+            )?;
+
+            add_dep(
+                cwd,
+                manifest,
+                "sentry-tower",
+                "0.32.2",
+                &["http", "axum-matched-path"],
+            )?;
+
+            filigree_features.push("sentry");
+        }
+        crate::config::ErrorReportingProvider::None => {}
+    };
+
+    add_dep(cwd, manifest, "filigree", "0.0.3", &filigree_features)?;
+
     for (name, version, features) in DEPS {
         add_dep(cwd, manifest, name, version, features)?;
     }

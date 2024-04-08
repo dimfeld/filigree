@@ -23,6 +23,7 @@ use filigree::{
         SessionCookieBuilder,
     },
     errors::{panic_handler, ObfuscateErrorLayer, ObfuscateErrorLayerSettings},
+    error_reporting::ErrorReporter,
     server::FiligreeState,
 };
 use sqlx::PgPool;
@@ -321,6 +322,11 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                 config.cookie_configuration,
                 config.session_expiry,
             ),
+            {% if error_reporting.provider == "sentry" -%}
+            error_reporter: ErrorReporter::Sentry,
+            {%- else -%}
+            error_reporter: ErrorReporter::Noop,
+            {%- endif %}
         }),
         insecure: config.insecure,
         db: config.pg_pool.clone(),
@@ -399,6 +405,10 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                     enabled: obfuscate_errors,
                     ..Default::default()
                 }))
+                {% if error_reporting.provider == "sentry" %}
+                .layer(sentry_tower::NewSentryLayer::<axum::extract::Request>::new_from_top())
+                .layer(sentry_tower::SentryHttpLayer::with_transaction())
+                {% endif %}
                 .layer(
                     TraceLayer::new_for_http()
                         .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
