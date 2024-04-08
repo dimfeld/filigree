@@ -1,3 +1,8 @@
+#![cfg_attr(
+    not(any(feature = "honeycomb", feature = "jaeger")),
+    allow(unused_variables)
+)]
+
 use std::str::FromStr;
 
 use error_stack::{Report, ResultExt};

@@ -22,6 +22,7 @@ use filigree::{
         oauth::providers::OAuthProvider, CorsSetting, ExpiryStyle, SessionBackend,
         SessionCookieBuilder,
     },
+    error_reporting::ErrorReporter,
     errors::{panic_handler, ObfuscateErrorLayer, ObfuscateErrorLayerSettings},
     server::FiligreeState,
 };
@@ -314,6 +315,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                 config.cookie_configuration,
                 config.session_expiry,
             ),
+            error_reporter: ErrorReporter::Sentry,
         }),
         insecure: config.insecure,
         db: config.pg_pool.clone(),

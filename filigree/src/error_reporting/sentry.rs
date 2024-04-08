@@ -9,7 +9,6 @@ use sentry::{
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::ErrorReporter;
 use crate::error_stack::{
     ContextWithAttachments, ContextWithAttachmentsExt, ErrorStackInformation,
 };
@@ -17,20 +16,21 @@ use crate::error_stack::{
 /// Sentry error reporting
 pub struct Sentry {}
 
-#[async_trait::async_trait]
-impl ErrorReporter for Sentry {
-    async fn send_error<E: std::error::Error + Send>(&self, err: E) {
-        sentry::capture_error(&err);
+impl Sentry {
+    /// Send an [std::error::Error]
+    pub fn send_error<E: std::error::Error + Send>(err: &E) {
+        sentry::capture_error(err);
     }
 
-    async fn send_report<C: Context>(&self, err: &Report<C>) {
+    /// Send an [error_stack::Report]
+    pub fn send_report<C: Context>(err: &Report<C>) {
         Hub::with_active(|hub| hub.capture_report(err));
     }
 
-    async fn send_error_with_metadata<E: std::error::Error + Send, T: Serialize + Send>(
-        &self,
-        err: E,
-        metadata: T,
+    /// Send an [std::error::Error] with additional metadata.
+    pub fn send_error_with_metadata<E: std::error::Error + Send, T: Serialize + Send>(
+        err: &E,
+        metadata: &T,
     ) {
         sentry::with_scope(
             |scope| {
@@ -43,10 +43,9 @@ impl ErrorReporter for Sentry {
     }
 
     /// Send an [error_stack::Report] with additional metadata.
-    async fn send_report_with_metadata<C: Context, T: Serialize + Send>(
-        &self,
+    pub fn send_report_with_metadata<C: Context, T: Serialize + Send>(
         err: &error_stack::Report<C>,
-        metadata: T,
+        metadata: &T,
     ) {
         sentry::with_scope(
             |scope| {
@@ -58,7 +57,8 @@ impl ErrorReporter for Sentry {
         );
     }
 
-    async fn send_message(&self, level: tracing::Level, message: &str) {
+    /// Send a text message
+    pub fn send_message(level: tracing::Level, message: &str) {
         let level = match level {
             tracing::Level::ERROR => sentry::Level::Error,
             tracing::Level::WARN => sentry::Level::Warning,
