@@ -383,6 +383,8 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                 enabled: obfuscate_errors,
                 ..Default::default()
             }))
+            .layer(sentry_tower::NewSentryLayer::<axum::extract::Request>::new_from_top())
+            .layer(sentry_tower::SentryHttpLayer::with_transaction())
             .layer(
                 TraceLayer::new_for_http()
                     .make_span_with(DefaultMakeSpan::new().level(Level::INFO))

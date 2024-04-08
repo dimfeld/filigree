@@ -1,6 +1,7 @@
-use std::error::Error;
+//! Support for Sentry error reporting
 
-use error_stack::{Context, FrameKind, Report};
+use error_stack::{AttachmentKind, Context, FrameKind, Report};
+use itertools::Itertools;
 use sentry::{
     protocol::{Event, Exception},
     Hub,
@@ -9,6 +10,9 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::ErrorReporter;
+use crate::error_stack::{
+    ContextWithAttachments, ContextWithAttachmentsExt, ErrorStackInformation,
+};
 
 pub struct Sentry {}
 
@@ -85,36 +89,42 @@ impl ErrorStackHubExt for Hub {
 
 /// Create a Sentry [Event] from an [Report].
 pub fn event_from_report(report: &error_stack::Report<impl Context>) -> Event<'static> {
-    let main_err_dbg = format!("{:?}", report.current_context());
+    let info = ErrorStackInformation::new(report);
+    let exceptions = report
+        .frames()
+        .by_error()
+        .map(|e| {
+            let result = exception_from_context_and_attachments(e);
+            result
+        })
+        .collect::<Vec<_>>();
 
-    // TODO Attach spantrace if there is one
-    // TODO Attach backtrace if there is one
-    // TODO This should walk the frames and make each one an exception.
-    let ty = sentry::parse_type_from_debug(&main_err_dbg);
-    let value = format!("{:?}", report);
-    let exception = Exception {
-        ty: ty.to_string(),
-        value: Some(value),
-        ..Default::default()
-    };
+    let extra = [
+        ("backtrace", info.backtrace.map(|b| b.to_string())),
+        ("spantrace", info.spantrace.map(|s| s.to_string())),
+    ]
+    .into_iter()
+    .filter_map(|(k, v)| v.map(|s| (k.to_string(), serde_json::Value::from(s))))
+    .collect();
 
     Event {
         event_id: Uuid::now_v7(),
-        exception: vec![exception].into(),
+        exception: exceptions.into(),
         level: sentry::Level::Error,
-
+        extra,
         ..Default::default()
     }
 }
 
-// a list of frames is a singly-linked list where items are pushed onto the front,
-// so whenever we see an attachment we know that it will be associated with the next
-// Context that we see in the list
-
-/*
-fn exception_from_context(err: &dyn Context) -> Exception {
-    let dbg = format!("{err:?}");
-    let value = err.to_string();
+fn exception_from_context_and_attachments<'a>(err: ContextWithAttachments<'a>) -> Exception {
+    let dbg = format!("{:?}", err.context);
+    let attachments = err.attachments.iter().filter_map(|a| match a {
+        AttachmentKind::Printable(p) => Some(format!("  {p}")),
+        _ => None,
+    });
+    let value = std::iter::once(err.context.to_string())
+        .chain(attachments)
+        .join("\n");
     let ty = sentry::parse_type_from_debug(&dbg);
 
     Exception {
@@ -123,4 +133,3 @@ fn exception_from_context(err: &dyn Context) -> Exception {
         ..Default::default()
     }
 }
-*/

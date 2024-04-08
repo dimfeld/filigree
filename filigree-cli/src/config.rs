@@ -39,6 +39,9 @@ pub struct Config {
 
     pub server: ServerConfig,
 
+    #[serde(default)]
+    pub error_reporting: ErrorReportingConfig,
+
     /// Trace export configuration
     #[serde(default)]
     pub tracing: TracingConfig,
@@ -121,6 +124,19 @@ impl Config {
     pub const fn default_sql_dialect() -> SqlDialect {
         SqlDialect::Postgresql
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct ErrorReportingConfig {
+    pub provider: ErrorReportingProvider,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorReportingProvider {
+    #[default]
+    None,
+    Sentry,
 }
 
 #[derive(Serialize, Deserialize, serde_derive_default::Default, Debug)]
