@@ -250,7 +250,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), Report<Error>> {
     {% if error_reporting.provider == "sentry" -%}
     // Sentry should be initialized prior to starting Tokio.
     let env = std::env::var("{{env_prefix}}ENV").unwrap_or_else(|_| String::from("development"));
@@ -272,7 +272,7 @@ fn main() {
         .enable_all()
         .build()
         .unwrap()
-        .block_on(actual_main());
+        .block_on(actual_main())
 }
 
 pub async fn actual_main() -> Result<(), Report<Error>> {

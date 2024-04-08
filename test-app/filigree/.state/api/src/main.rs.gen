@@ -226,7 +226,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), Report<Error>> {
     // Sentry should be initialized prior to starting Tokio.
     let env = std::env::var("ENV").unwrap_or_else(|_| String::from("development"));
     use sentry::IntoDsn;
@@ -246,7 +246,7 @@ fn main() {
         .enable_all()
         .build()
         .unwrap()
-        .block_on(actual_main());
+        .block_on(actual_main())
 }
 
 pub async fn actual_main() -> Result<(), Report<Error>> {

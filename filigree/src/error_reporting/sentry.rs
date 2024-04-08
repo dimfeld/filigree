@@ -1,6 +1,6 @@
 //! Support for Sentry error reporting
 
-use error_stack::{AttachmentKind, Context, FrameKind, Report};
+use error_stack::{AttachmentKind, Context, Report};
 use itertools::Itertools;
 use sentry::{
     protocol::{Event, Exception},
@@ -14,11 +14,8 @@ use crate::error_stack::{
     ContextWithAttachments, ContextWithAttachmentsExt, ErrorStackInformation,
 };
 
+/// Sentry error reporting
 pub struct Sentry {}
-
-impl Sentry {
-    fn init() {}
-}
 
 #[async_trait::async_trait]
 impl ErrorReporter for Sentry {

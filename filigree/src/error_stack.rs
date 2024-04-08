@@ -1,10 +1,6 @@
-//! Utilities for working with error_stack::Report
+//! Utilities for working with [error_stack::Report]
 
-use std::{
-    any::Any,
-    backtrace::{Backtrace, BacktraceStatus},
-    fmt::Display,
-};
+use std::backtrace::{Backtrace, BacktraceStatus};
 
 use error_stack::{AttachmentKind, Context, Frame, FrameKind, Report};
 use smallvec::SmallVec;

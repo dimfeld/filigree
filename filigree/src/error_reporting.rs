@@ -1,3 +1,5 @@
+//! Interface to error reporting services
+
 #[cfg(feature = "sentry")]
 // [Sentry](https://sentry.io) Error Reporting
 pub mod sentry;
@@ -6,6 +8,7 @@ use error_stack::Context;
 use serde::Serialize;
 use tracing::Level;
 
+/// A generic interface to an error reporting service
 #[async_trait::async_trait]
 pub trait ErrorReporter {
     /// Send an error to the error reporting service
