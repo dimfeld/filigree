@@ -1,0 +1,55 @@
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing,
+};
+use maud::{html, Markup, DOCTYPE};
+
+use crate::{
+    auth::{has_any_permission, Authed},
+    server::ServerState,
+    Error,
+};
+
+mod login;
+mod logout;
+
+/// The HTML shell that every page should be wrapped in to enable basic functionality.
+fn page_wrapper(title: &str, slot: Markup) -> Markup {
+    html! {
+         (DOCTYPE)
+         html {
+             head {
+                 meta charset="utf-8";
+                 meta name="viewport" content="width=device-width, initial-scale=1";
+                 title { (title) }
+             }
+             body {
+                 (slot)
+             }
+         }
+    }
+}
+
+/// The root layout of the application
+fn root_layout(auth: &Option<Authed>, title: &str, slot: Markup) -> Markup {
+    page_wrapper(
+        title,
+        html! {
+            (slot)
+        },
+    )
+}
+
+async fn home(auth: Option<Authed>) -> impl IntoResponse {
+    root_layout(&auth, "Home", html! { h1 { "Home" } })
+}
+
+pub fn create_routes() -> axum::Router<ServerState> {
+    axum::Router::new()
+        .route("/", routing::get(home))
+        .route("/login", routing::get(self::login::login_page))
+        .route("/logout", routing::get(self::logout::login_page))
+    // TODO
+}

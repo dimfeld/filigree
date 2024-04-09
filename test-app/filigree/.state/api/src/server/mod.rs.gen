@@ -351,9 +351,9 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .merge(crate::users::users::create_routes())
         .merge(crate::auth::create_routes());
 
-    let api_routes: Router<()> = api_routes.with_state(state.clone());
-
     let app = Router::new().nest("/api", api_routes);
+
+    let app: Router<()> = app.with_state(state.clone());
 
     let app = match config.serve_frontend {
         (Some(web_port), Some(web_dir)) => {

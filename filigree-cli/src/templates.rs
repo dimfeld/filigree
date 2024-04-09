@@ -112,11 +112,6 @@ pub struct ModelSqlTemplates;
 pub struct ModelRustTemplates;
 
 #[derive(RustEmbed)]
-#[prefix = "model_pages/"]
-#[folder = "$CARGO_MANIFEST_DIR/src/model/rust_pages_templates/"]
-pub struct ModelRustPagesTemplates;
-
-#[derive(RustEmbed)]
 #[prefix = "model/"]
 #[folder = "$CARGO_MANIFEST_DIR/src/model/svelte_templates/"]
 pub struct ModelSvelteTemplates;
@@ -138,7 +133,6 @@ fn create_tera() -> (Tera, HashMap<String, Cow<'static, str>>) {
 
     let (template_files, passthrough_files): (Vec<_>, Vec<_>) = get_files::<RootApiTemplates>()
         .chain(get_files::<ModelRustTemplates>())
-        .chain(get_files::<ModelRustPagesTemplates>())
         .chain(get_files::<ModelSqlTemplates>())
         .chain(get_files::<RootSvelteTemplates>())
         .chain(get_files::<RootHtmxTemplates>())

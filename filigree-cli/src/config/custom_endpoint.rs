@@ -2,7 +2,7 @@ use std::{borrow::Cow, collections::BTreeMap};
 
 use convert_case::{Case, Casing};
 use itertools::Itertools;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 #[derive(Deserialize, Clone, Debug)]
@@ -259,6 +259,7 @@ impl CustomEndpoint {
             "name": &self.name,
             "snake_name": self.name.to_case(Case::Snake),
             "pascal_name": self.name.to_case(Case::Pascal),
+            "upper_name": self.name.to_case(Case::ScreamingSnake),
             "has_payload": self.has_payload(),
             "input_type": input_type_name,
             "output_type": output_type_name,

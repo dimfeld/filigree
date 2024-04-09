@@ -17,10 +17,7 @@ use crate::{
     config::Config,
     migrations::SingleMigration,
     model::{field::SortableType, ReferenceFetchType},
-    templates::{
-        ModelRustPagesTemplates, ModelRustTemplates, ModelSqlTemplates, ModelSvelteTemplates,
-        Renderer,
-    },
+    templates::{ModelRustTemplates, ModelSqlTemplates, ModelSvelteTemplates, Renderer},
     write::{GeneratorMap, ModelMap, RenderedFile, RenderedFileLocation},
     Error,
 };
@@ -216,32 +213,7 @@ impl<'a> ModelGenerator<'a> {
             })
             .chain(populate_queries);
 
-        let api_pages_files = if self.config.web.has_api_pages() {
-            let rust_pages_base = PathBuf::from("src/pages").join(self.model.module_name());
-            ModelRustPagesTemplates::iter()
-                .map(|f| {
-                    let subpath = f
-                        .strip_prefix("model_pages/")
-                        .unwrap()
-                        .strip_suffix(".tera")
-                        .unwrap();
-                    let outfile = rust_pages_base.join(subpath);
-                    (
-                        f,
-                        outfile,
-                        RenderedFileLocation::Rust,
-                        self.template_context(),
-                    )
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
-
-        let files = web_files
-            .chain(api_files)
-            .chain(api_pages_files)
-            .collect::<Vec<_>>();
+        let files = web_files.chain(api_files).collect::<Vec<_>>();
 
         let output = files
             .into_par_iter()
