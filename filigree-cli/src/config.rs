@@ -1,5 +1,7 @@
 pub mod custom_endpoint;
+pub mod generators;
 pub mod job;
+pub mod pages;
 pub mod storage;
 pub mod tracing;
 pub mod web;
