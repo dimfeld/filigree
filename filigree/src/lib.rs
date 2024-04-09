@@ -17,8 +17,12 @@ pub mod error_stack;
 pub mod errors;
 /// Request extractors
 pub mod extract;
+#[cfg(feature = "htmx")]
+pub mod htmx;
 /// Extension trait to inspect the body of a Reqwest error response
 pub mod inspect_response;
+#[cfg(feature = "maud")]
+pub mod maud;
 /// A UUIDv7-based type for handling object IDs with a more compact representation.
 pub mod object_id;
 /// Common query string structures for use with Axum's [Query](axum::extract::Query) extractor

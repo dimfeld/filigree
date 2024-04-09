@@ -4,7 +4,10 @@ use cargo_toml::{Dependency, DependencyDetail, Manifest};
 use error_stack::{Report, ResultExt};
 use semver::{Version, VersionReq};
 
-use crate::{config::Config, Error};
+use crate::{
+    config::{web::WebFramework, Config},
+    Error,
+};
 
 pub type DepVersion<'a> = (&'a str, &'a str, &'a [&'a str]);
 
@@ -57,6 +60,7 @@ pub fn add_fixed_deps(
     manifest: &mut Manifest,
 ) -> Result<(), Report<Error>> {
     let mut filigree_features = vec![];
+
     match config.error_reporting.provider {
         crate::config::ErrorReportingProvider::Sentry => {
             add_dep(
@@ -86,20 +90,13 @@ pub fn add_fixed_deps(
         crate::config::ErrorReportingProvider::None => {}
     };
 
+    filigree_features.extend(config.web.filigree_features());
+
     add_dep(cwd, manifest, "filigree", "0.0.3", &filigree_features)?;
 
     for (name, version, features) in DEPS {
         add_dep(cwd, manifest, name, version, features)?;
     }
-
-    match config.web.framework {
-        /*
-        Some(crate::config::WebMode::Maud) => {
-            add_maud_deps(cwd, manifest)?;
-        }
-        */
-        _ => {}
-    };
 
     if config.use_queue {
         crate::config::job::add_deps(cwd, manifest)?;

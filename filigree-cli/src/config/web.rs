@@ -68,7 +68,7 @@ impl WebConfig {
 
     pub fn add_deps(&self, cwd: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
         match self.framework {
-            // Some(WebFramework::Maud) => Self::add_maud_deps(cwd, manifest)?,
+            Some(WebFramework::Maud) => Self::add_maud_deps(cwd, manifest)?,
             _ => {}
         }
 
@@ -81,14 +81,21 @@ impl WebConfig {
 
         Ok(())
     }
+
+    pub fn filigree_features(&self) -> Vec<&'static str> {
+        match self.framework {
+            Some(WebFramework::Maud) => vec!["htmx", "maud"],
+            _ => vec![],
+        }
+    }
 }
 
 /// The frontend framework to use
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum WebFramework {
-    // /// This application uses Maud and HTMX templates to render its frontend
-    // #[serde(rename = "maud")]
-    // Maud,
+    /// This application uses Maud and HTMX templates to render its frontend
+    #[serde(rename = "maud")]
+    Maud,
     /// This application uses a SvelteKit with a separate server for its frontend
     #[serde(rename = "sveltekit")]
     SvelteKit,
