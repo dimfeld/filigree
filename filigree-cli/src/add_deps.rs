@@ -34,7 +34,6 @@ const DEPS: &[DepVersion<'static>] = &[
     ("reqwest", "0.11.23", &["cookies", "json"]),
     ("rust-embed", "8.1.0", &[]),
     ("schemars", "0.8.16", &["chrono", "url", "uuid1"]),
-    ("schemars-zod", "0.1.5", &[]),
     ("serde", "1.0.193", &["derive"]),
     ("serde_json", "1.0.113", &[]),
     ("serde_with", "3.6.1", &["json", "schemars_0_8"]),

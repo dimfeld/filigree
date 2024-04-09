@@ -37,6 +37,7 @@ impl WebConfig {
             "port": self.port(),
             "files": self.files(web_relative_to_api),
             "has_api_pages": self.has_api_pages(),
+            "generate_js_types_code": self.generate_js_types_code(),
         })
     }
 
@@ -80,6 +81,10 @@ impl WebConfig {
             _ => {}
         }
 
+        if self.generate_js_types_code() {
+            add_dep(cwd, manifest, "schemars-zod", "0.1.5", &[])?;
+        }
+
         Ok(())
     }
 
@@ -105,6 +110,10 @@ impl WebConfig {
             Some(WebFramework::SvelteKit) => false,
             None => false,
         }
+    }
+
+    pub fn generate_js_types_code(&self) -> bool {
+        matches!(self.framework, Some(WebFramework::SvelteKit))
     }
 }
 
