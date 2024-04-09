@@ -6,9 +6,9 @@ use itertools::Itertools;
 use rayon::prelude::*;
 
 use crate::{
-    config::Config,
+    config::{web::WebFramework, Config},
     model::generator::ModelGenerator,
-    templates::{Renderer, RootApiTemplates, RootWebTemplates},
+    templates::{Renderer, RootApiTemplates, RootHtmxTemplates, RootSvelteTemplates},
     write::{RenderedFile, RenderedFileLocation},
     Error,
 };
@@ -126,10 +126,19 @@ pub fn render_files(
     // These files don't go in src and so should not have it prepended.
     let non_base_files = ["build.rs", "tailwind.config.js"];
 
-    let web_files = RootWebTemplates::iter().map(|f| (RenderedFileLocation::Web, f));
-    let api_files = RootApiTemplates::iter().map(|f| (RenderedFileLocation::Api, f));
+    let mut files = RootApiTemplates::iter()
+        .map(|f| (RenderedFileLocation::Rust, f))
+        .collect::<Vec<_>>();
 
-    let files = web_files.chain(api_files).collect::<Vec<_>>();
+    match config.web.framework {
+        Some(WebFramework::SvelteKit) => {
+            files.extend(RootSvelteTemplates::iter().map(|f| (RenderedFileLocation::Svelte, f)));
+        }
+        Some(WebFramework::MaudHtmx) => {
+            files.extend(RootHtmxTemplates::iter().map(|f| (RenderedFileLocation::Htmx, f)));
+        }
+        None => {}
+    };
 
     let job_template_path = "root/jobs/_one_job.rs.tera";
     let skip_files = [
@@ -138,9 +147,20 @@ pub fn render_files(
         job_template_path,
     ];
 
+    let has_api_pages = config.web.has_api_pages();
     let mut output = files
         .into_par_iter()
-        .filter(|(_, file)| !skip_files.contains(&file.as_ref()))
+        .filter(|(_, file)| {
+            if skip_files.contains(&file.as_ref()) {
+                return false;
+            }
+
+            if !has_api_pages && file.starts_with("root/pages/") {
+                return false;
+            }
+
+            true
+        })
         .map(|(location, file)| {
             let filename = file.strip_prefix("root/").unwrap();
             let filename = filename.strip_suffix(".tera").unwrap_or(filename);
@@ -166,7 +186,7 @@ pub fn render_files(
             renderer.render_with_full_path(
                 output_path,
                 job_template_path,
-                RenderedFileLocation::Api,
+                RenderedFileLocation::Rust,
                 &context,
             )
         })

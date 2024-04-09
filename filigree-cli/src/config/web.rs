@@ -22,6 +22,7 @@ pub struct WebConfig {
     /// Serve frontend static assets from this directory when in production mode. If omitted, defaults to:
     ///
     /// - "<web_directory>/build/client" when framework is sveltekit
+    /// - "<web_directory>/build" when framework is maud
     ///
     /// This can be set at runtime using the
     pub files: Option<String>,
@@ -35,6 +36,7 @@ impl WebConfig {
             "framework": self.framework,
             "port": self.port(),
             "files": self.files(web_relative_to_api),
+            "has_api_pages": self.has_api_pages(),
         })
     }
 
@@ -48,6 +50,12 @@ impl WebConfig {
                 web_relative_to_api
                     .join("build")
                     .join("client")
+                    .to_string_lossy()
+                    .to_string(),
+            ),
+            Some(WebFramework::MaudHtmx) => Some(
+                web_relative_to_api
+                    .join("build")
                     .to_string_lossy()
                     .to_string(),
             ),
@@ -68,7 +76,7 @@ impl WebConfig {
 
     pub fn add_deps(&self, cwd: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
         match self.framework {
-            Some(WebFramework::Maud) => Self::add_maud_deps(cwd, manifest)?,
+            Some(WebFramework::MaudHtmx) => Self::add_maud_deps(cwd, manifest)?,
             _ => {}
         }
 
@@ -84,8 +92,18 @@ impl WebConfig {
 
     pub fn filigree_features(&self) -> Vec<&'static str> {
         match self.framework {
-            Some(WebFramework::Maud) => vec!["htmx", "maud"],
+            Some(WebFramework::MaudHtmx) => vec!["htmx", "maud"],
             _ => vec![],
+        }
+    }
+
+    /// If this application renders pages from the API. This controls if the API `pages` templates
+    /// are rendered
+    pub fn has_api_pages(&self) -> bool {
+        match self.framework {
+            Some(WebFramework::MaudHtmx) => true,
+            Some(WebFramework::SvelteKit) => false,
+            None => false,
         }
     }
 }
@@ -94,8 +112,8 @@ impl WebConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum WebFramework {
     /// This application uses Maud and HTMX templates to render its frontend
-    #[serde(rename = "maud")]
-    Maud,
+    #[serde(rename = "maud_htmx")]
+    MaudHtmx,
     /// This application uses a SvelteKit with a separate server for its frontend
     #[serde(rename = "sveltekit")]
     SvelteKit,

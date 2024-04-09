@@ -26,8 +26,9 @@ pub struct Command {
 }
 
 pub enum RenderedFileLocation {
-    Api,
-    Web,
+    Rust,
+    Svelte,
+    Htmx,
 }
 
 pub struct RenderedFile {
@@ -287,7 +288,7 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
     let (api_files, web_files): (Vec<_>, Vec<_>) = root_files
         .into_iter()
         .chain(model_files.into_iter().flatten())
-        .partition(|f| matches!(f.location, RenderedFileLocation::Api));
+        .partition(|f| matches!(f.location, RenderedFileLocation::Rust));
 
     let filesets = [
         (api_files, &api_dir, &api_merge_tracker),
@@ -343,7 +344,7 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
     let model_mod = renderer.render_with_full_path(
         models_main_mod_path,
         "model/main_mod.rs.tera",
-        RenderedFileLocation::Api,
+        RenderedFileLocation::Rust,
         &model_mod_context,
     )?;
 
