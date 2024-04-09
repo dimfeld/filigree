@@ -4,10 +4,7 @@ use cargo_toml::{Dependency, DependencyDetail, Manifest};
 use error_stack::{Report, ResultExt};
 use semver::{Version, VersionReq};
 
-use crate::{
-    config::{web::WebFramework, Config},
-    Error,
-};
+use crate::{config::Config, Error};
 
 pub type DepVersion<'a> = (&'a str, &'a str, &'a [&'a str]);
 

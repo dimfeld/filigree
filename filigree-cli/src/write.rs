@@ -37,14 +37,6 @@ pub struct RenderedFile {
     pub location: RenderedFileLocation,
 }
 
-impl RenderedFile {
-    /// Return true if the file is empty after trimming whitespace.
-    pub fn is_empty(&self) -> bool {
-        let contents = String::from_utf8_lossy(&self.contents);
-        contents.trim().is_empty()
-    }
-}
-
 pub struct ModelMap(pub std::collections::HashMap<String, Model>);
 
 impl ModelMap {
@@ -129,6 +121,7 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         state_dir,
         api_dir,
         web_dir,
+        pages,
         ..
     } = config;
 
@@ -182,6 +175,7 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
 
     let mut model_files = None;
     let mut root_files = None;
+    let mut page_files = None;
     rayon::scope(|s| {
         s.spawn(|_| {
             model_files = Some(
@@ -200,6 +194,10 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
                 &renderer,
             ))
         });
+
+        if config.web.has_api_pages() {
+            s.spawn(|_| page_files = Some(crate::root::pages::render_pages(pages, &renderer)));
+        }
     });
 
     let model_files = model_files.expect("model_files was not set")?;

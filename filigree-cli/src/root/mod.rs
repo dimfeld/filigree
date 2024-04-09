@@ -1,3 +1,5 @@
+pub mod pages;
+
 use std::path::PathBuf;
 
 use convert_case::{Case, Casing};
@@ -5,6 +7,7 @@ use error_stack::{Report, ResultExt};
 use itertools::Itertools;
 use rayon::prelude::*;
 
+use self::pages::{NON_PAGE_NODE_PATH, PAGE_PATH};
 use crate::{
     config::{web::WebFramework, Config},
     model::generator::ModelGenerator,
@@ -142,12 +145,20 @@ pub fn render_files(
 
     let job_template_path = "root/jobs/_one_job.rs.tera";
     let skip_files = [
+        // Just source for other templates
         "root/auth/fetch_base.sql.tera",
+        // Rendered separately since it's not in `src`
         "root/build.rs.tera",
+        // Rendered custom for each job at the end
         job_template_path,
+        // These are rendered by [render_pages]
+        "root/pages/mod.rs.tera",
+        PAGE_PATH,
+        NON_PAGE_NODE_PATH,
     ];
 
     let has_api_pages = config.web.has_api_pages();
+
     let mut output = files
         .into_par_iter()
         .filter(|(_, file)| {
@@ -176,7 +187,7 @@ pub fn render_files(
 
     let job_template = config
         .job
-        .iter()
+        .par_iter()
         .map(|(k, v)| {
             let module_name = k.to_case(Case::Snake);
             let context = tera::Context::from_value(v.template_context(k)).unwrap();

@@ -1,0 +1,69 @@
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing,
+};
+use maud::{html, Markup};
+
+use crate::{
+    auth::{has_any_permission, Authed},
+    pages::layout::root_layout_page,
+    server::ServerState,
+    Error,
+};
+
+{% for s in submodules %}
+pub mod {{s}};
+{% endfor %}
+
+{% for action in actions %}
+
+
+{% endfor %}
+
+{% if form %}
+{{form.input_type_def}}
+
+async fn {{name}}_form(
+{{form_args}}
+) -> Result<impl IntoResponse Error> {
+    html! {}
+}
+{% endif %}
+
+{{query_type_def}}
+
+async fn {{name}}_page(
+    {{args}}
+) -> Result<impl IntoResponse, Error> {
+   root_layout_page(&auth, "title", html! {})
+}
+
+pub fn create_routes() -> Router<ServerState> {
+    Router::new()
+        .route("{{path}}", routing::get({{name}}_page)
+            {% if permission %}
+            .route_layer(has_any_permission(vec!["{{permission}}", "org_admin"]))
+            {% endif %}
+            )
+        {% if form %}
+        .route("{{path}}", routing::post({{name}}_form)
+            {% if form.permission %}
+            .route_layer(has_any_permission(vec!["{{form.permission}}", "org_admin"]))
+            {% endif %}
+
+            )
+        {% endif %}
+        {% for a in actions %}
+        .route("{{a.path}}", routing::{{a.method}}({{a.name}}_action)
+            {% if a.permission %}
+            .route_layer(has_any_permission(vec!["{{a.permission}}", "org_admin"]))
+            {% endif %}
+            )
+        {% endif %}
+        {% for s in submodules %}
+        .merge({{s}}::create_routes())
+        {% endfor %}
+
+}

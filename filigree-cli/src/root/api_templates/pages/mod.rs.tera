@@ -12,35 +12,16 @@ use crate::{
     Error,
 };
 
+mod forgot;
+mod layout;
 mod login;
 mod logout;
+mod reset;
+{% for m in root_modules -%}
+mod {m};
+{% endfor %}
 
-/// The HTML shell that every page should be wrapped in to enable basic functionality.
-fn page_wrapper(title: &str, slot: Markup) -> Markup {
-    html! {
-         (DOCTYPE)
-         html {
-             head {
-                 meta charset="utf-8";
-                 meta name="viewport" content="width=device-width, initial-scale=1";
-                 title { (title) }
-             }
-             body {
-                 (slot)
-             }
-         }
-    }
-}
-
-/// The root layout of the application
-fn root_layout(auth: &Option<Authed>, title: &str, slot: Markup) -> Markup {
-    page_wrapper(
-        title,
-        html! {
-            (slot)
-        },
-    )
-}
+use layout::*;
 
 async fn home(auth: Option<Authed>) -> impl IntoResponse {
     root_layout(&auth, "Home", html! { h1 { "Home" } })
@@ -50,6 +31,10 @@ pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
         .route("/", routing::get(home))
         .route("/login", routing::get(self::login::login_page))
-        .route("/logout", routing::get(self::logout::login_page))
-    // TODO
+        .route("/logout", routing::get(self::logout::logout_page))
+        .route("/forgot", routing::get(self::forgot::forgot_page))
+        .route("/reset", routing::get(self::reset::reset_page))
+        {% for m in root_modules -%}
+        .merge({{m}}::create_routes())
+        {% endfor %}
 }

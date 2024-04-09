@@ -1,6 +1,5 @@
 use std::{borrow::Cow, collections::BTreeMap, ops::Deref};
 
-use filigree::auth::ObjectPermission;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
@@ -28,6 +27,10 @@ impl ObjectRefOrDef {
             ObjectRefOrDef::Empty => true,
             _ => false,
         }
+    }
+
+    pub fn is_definition(&self) -> bool {
+        matches!(self, ObjectRefOrDef::Map(_))
     }
 
     fn define_rust_type(&self, prefix: &str, suffix: &str, contents: &str) -> String {
@@ -66,7 +69,7 @@ impl ObjectRefOrDef {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct EndpointPath(pub String);
 
 impl Deref for EndpointPath {
@@ -77,6 +80,12 @@ impl Deref for EndpointPath {
 }
 
 impl EndpointPath {
+    pub fn normalize(&mut self) {
+        if self.0.ends_with("/") {
+            self.0.pop();
+        }
+    }
+
     pub fn segments(&self) -> impl Iterator<Item = &str> {
         self.0.split('/').filter(|s| !s.is_empty())
     }

@@ -1,0 +1,13 @@
+use crate::server::ServerState;
+
+{% for s in submodules %}
+pub mod {{s}};
+{% endfor %}
+
+pub fn create_routes() -> Router<ServerState> {
+    Router::new()
+        {% for s in submodules -%}
+        .merge({{submodule}}::create_routes())
+        {% endfor %}
+}
+

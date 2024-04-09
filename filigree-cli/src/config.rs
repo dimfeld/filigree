@@ -15,7 +15,13 @@ use error_stack::{Report, ResultExt};
 use glob::glob;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use self::{job::QueueConfig, storage::StorageConfig, tracing::TracingConfig, web::WebConfig};
+use self::{
+    job::QueueConfig,
+    pages::{PageConfig, PagesConfigFile},
+    storage::StorageConfig,
+    tracing::TracingConfig,
+    web::WebConfig,
+};
 use crate::{
     format::FormatterConfig,
     model::{field::ModelField, Model, ModelAuthScope, SqlDialect},
@@ -311,6 +317,7 @@ const fn true_t() -> bool {
 pub struct FullConfig {
     pub crate_name: String,
     pub config: Config,
+    pub pages: Vec<PageConfig>,
     pub models: Vec<Model>,
     pub state_dir: PathBuf,
     pub crate_manifest: cargo_toml::Manifest,
@@ -351,6 +358,17 @@ impl FullConfig {
             .name
             .clone();
 
+        let pages_config_path = dir.join("pages.toml");
+        let mut pages = if pages_config_path.exists() {
+            read_toml::<PagesConfigFile>(&pages_config_path)?
+        } else {
+            PagesConfigFile { pages: Vec::new() }
+        };
+
+        for page in pages.pages.iter_mut() {
+            page.normalize_path();
+        }
+
         let models_glob = dir.join("models/*.toml");
         let models = glob(&models_glob.to_string_lossy())
             .expect("parsing glob")
@@ -372,6 +390,7 @@ impl FullConfig {
         Ok(FullConfig {
             crate_name,
             config,
+            pages: pages.pages,
             models,
             state_dir,
             api_dir,
