@@ -4,7 +4,7 @@ import { PUBLIC_SENTRY_DSN } from "$env/static/public";
 import type { HandleServerError } from "@sveltejs/kit";
 import { getUser } from "$lib/server/user.js";
 import { type Handle, error, redirect, type HandleFetch } from "@sveltejs/kit";
-import { hasPermissions, protectRoutes } from "filigree-web/auth/routes";
+import { hasPermissions, protectRoutes } from "filigree-svelte/auth/routes";
 import { sequence } from "@sveltejs/kit/hooks";
 
 if (PUBLIC_SENTRY_DSN) {

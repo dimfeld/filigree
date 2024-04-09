@@ -1,6 +1,6 @@
 import type { RequestEvent } from "@sveltejs/kit";
 import type { SelfUser } from "$lib/api_types.js";
-import { client } from "filigree-web";
+import { client } from "filigree-svelte";
 
 /** A SvelteKit server hook that fetches info for the current user and places it at event.locals.user. */
 export async function getUser({

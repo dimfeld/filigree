@@ -1,4 +1,4 @@
-import { client, type ModelDefinition } from "filigree-web";
+import { client, type ModelDefinition } from "filigree-svelte";
 import { z } from "zod";
 import { ObjectPermission } from "../model_types.js";
 
