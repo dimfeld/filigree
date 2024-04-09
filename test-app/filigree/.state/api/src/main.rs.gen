@@ -182,9 +182,9 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         env: cmd.env,
         bind: server::ServerBind::HostPort(cmd.host, cmd.port),
         serve_frontend: (
-            cmd.frontend_port.or(Some(5173)),
+            cmd.frontend_port,
             cmd.frontend_asset_dir
-                .or_else(|| Some("web/build/client".to_string())),
+                .or_else(|| Some("web/build".to_string())),
         ),
         insecure: cmd.insecure,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),

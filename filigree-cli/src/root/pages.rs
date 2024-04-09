@@ -13,8 +13,9 @@ use crate::{
 };
 
 pub const PAGE_PATH: &str = "root/pages/_page.rs.tera";
-pub const NON_PAGE_NODE_PATH: &str = "root/pages/intermediate_non_page.rs.tera";
+pub const NON_PAGE_NODE_PATH: &str = "root/pages/_intermediate_non_page.rs.tera";
 
+#[derive(Debug)]
 struct ModuleTree<'a> {
     name: &'a str,
     path: String,
@@ -24,7 +25,7 @@ struct ModuleTree<'a> {
 
 impl<'a> ModuleTree<'a> {
     fn add_path<'b>(&'b mut self, page: &'a PageConfig, path: Vec<&'a str>, index: usize) {
-        if index == path.len() - 1 {
+        if index == path.len() {
             self.page = Some(page);
             return;
         }
@@ -51,7 +52,11 @@ impl<'a> ModuleTree<'a> {
     }
 
     fn result<'b>(&'b mut self, output: &'b mut Vec<ModuleTreeResult<'a>>) {
-        let submodules = self.children.iter().map(|c| c.name).collect();
+        let submodules = self
+            .children
+            .iter()
+            .map(|c| c.name.replace(":", "_"))
+            .collect();
 
         output.push(ModuleTreeResult {
             name: self.name.to_string(),
@@ -66,11 +71,12 @@ impl<'a> ModuleTree<'a> {
     }
 }
 
+#[derive(Debug)]
 struct ModuleTreeResult<'a> {
     name: String,
     path: String,
     page: Option<&'a PageConfig>,
-    submodules: Vec<&'a str>,
+    submodules: Vec<String>,
 }
 
 pub fn render_pages(
@@ -124,7 +130,7 @@ pub fn render_pages(
             };
 
             let path = module.path.replace(':', "_");
-            let output_path = format!("src/pages/{}.rs", path);
+            let output_path = format!("src/pages{}.rs", path);
             renderer.render_with_full_path(
                 PathBuf::from(output_path),
                 template,

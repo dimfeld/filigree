@@ -147,7 +147,7 @@ pub fn ts_field_type(t: &str) -> &str {
     match t {
         "bool" => "boolean",
         "i32" | "u32" | "i64" | "f64" | "isize" | "usize" => "number",
-        "String" | "uuid" | "Uuid" => "string",
+        "text" | "String" | "uuid" | "Uuid" => "string",
         "date" | "date-time" | "datetime" => "string",
         "json" => "object",
         t => t,
@@ -158,7 +158,7 @@ pub fn rust_field_type(t: &str) -> &str {
     match t {
         "boolean" => "bool",
         "number" => "usize",
-        "string" => "String",
+        "text" | "string" => "String",
         "uuid" | "Uuid" => "uuid::Uuid",
         "date" | "date-time" | "datetime" => "chrono::DateTime<chrono::Utc>",
         "json" => "serde_json::Value",

@@ -17,6 +17,7 @@ name = "test-app"
 async-trait = "0.1.77"
 axum = { version = "0.7.4", features = ["tokio", "http1", "http2", "macros"] }
 axum-extra = { version = "0.9.2", features = ["query"] }
+axum-htmx = "0.5.0"
 axum-jsonschema = "0.8.0"
 axum-sqlx-tx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls"] }
 blake3 = { version = "1.5.1", features = ["traits-preview"] }
@@ -32,6 +33,7 @@ filigree = { version = "0.0.3", path = "../filigree" }
 futures = "0.3.30"
 http = "1.0.0"
 hyper = { version = "1.2.0", features = ["server", "http1", "http2"] }
+maud = "0.26.0"
 percent-encoding = "2.3.1"
 reqwest = { version = "0.11.24", features = ["cookies", "json"] }
 rust-embed = "8.3.0"

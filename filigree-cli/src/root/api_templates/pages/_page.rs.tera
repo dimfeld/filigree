@@ -1,10 +1,13 @@
+#![allow(unused_imports)]
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing,
 };
+use filigree::extract::FormOrJson;
 use maud::{html, Markup};
+use schemars::JsonSchema;
 
 use crate::{
     auth::{has_any_permission, Authed},
@@ -19,6 +22,17 @@ pub mod {{s}};
 
 {% for action in actions %}
 
+{{action.input_type_def}}
+
+{{action.query_type_def}}
+
+async fn {{action.name}}_action(
+    {{action.args}}
+) -> Result<impl IntoResponse, Error> {
+    let body = html! {};
+
+    Ok(body)
+}
 
 {% endfor %}
 
@@ -26,9 +40,11 @@ pub mod {{s}};
 {{form.input_type_def}}
 
 async fn {{name}}_form(
-{{form_args}}
-) -> Result<impl IntoResponse Error> {
-    html! {}
+{{form.args}}
+) -> Result<impl IntoResponse, Error> {
+    let body = html! {};
+
+    Ok(body)
 }
 {% endif %}
 
@@ -37,11 +53,13 @@ async fn {{name}}_form(
 async fn {{name}}_page(
     {{args}}
 ) -> Result<impl IntoResponse, Error> {
-   root_layout_page(&auth, "title", html! {})
+    let body = html!{};
+
+    Ok(root_layout_page(auth.as_ref(), "title", body))
 }
 
-pub fn create_routes() -> Router<ServerState> {
-    Router::new()
+pub fn create_routes() -> axum::Router<ServerState> {
+    axum::Router::new()
         .route("{{path}}", routing::get({{name}}_page)
             {% if permission %}
             .route_layer(has_any_permission(vec!["{{permission}}", "org_admin"]))
@@ -61,7 +79,7 @@ pub fn create_routes() -> Router<ServerState> {
             .route_layer(has_any_permission(vec!["{{a.permission}}", "org_admin"]))
             {% endif %}
             )
-        {% endif %}
+        {% endfor %}
         {% for s in submodules %}
         .merge({{s}}::create_routes())
         {% endfor %}

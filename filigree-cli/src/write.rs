@@ -202,6 +202,7 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
 
     let model_files = model_files.expect("model_files was not set")?;
     let root_files = root_files.expect("root_files was not set")?;
+    let page_files = page_files.unwrap_or(Ok(Vec::new()))?;
 
     let mut model_migrations = generators
         .iter()
@@ -285,6 +286,7 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
 
     let (api_files, web_files): (Vec<_>, Vec<_>) = root_files
         .into_iter()
+        .chain(page_files.into_iter())
         .chain(model_files.into_iter().flatten())
         .partition(|f| matches!(f.location, RenderedFileLocation::Rust));
 

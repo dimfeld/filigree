@@ -338,6 +338,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-htmx"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40f7051fdc094b6e5ea06cab9bca4b198c54dee4472a9419155f0ff19f19901e"
+dependencies = [
+ "async-trait",
+ "axum-core 0.4.3",
+ "http 1.1.0",
+]
+
+[[package]]
 name = "axum-jsonschema"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1345,6 +1356,7 @@ dependencies = [
  "async-trait",
  "axum 0.7.4",
  "axum-extra",
+ "axum-htmx",
  "axum-jsonschema",
  "axum-sqlx-tx",
  "blake3",
@@ -1360,6 +1372,7 @@ dependencies = [
  "futures",
  "http 1.1.0",
  "hyper 1.2.0",
+ "maud",
  "percent-encoding",
  "reqwest",
  "rust-embed",

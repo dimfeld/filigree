@@ -16,10 +16,8 @@ mod forgot;
 mod layout;
 mod login;
 mod logout;
+mod reports;
 mod reset;
-{% for m in root_modules -%}
-mod {{m}};
-{% endfor %}
 
 use layout::*;
 
@@ -34,7 +32,5 @@ pub fn create_routes() -> axum::Router<ServerState> {
         .merge(logout::create_routes())
         .merge(forgot::create_routes())
         .merge(reset::create_routes())
-        {% for m in root_modules -%}
-        .merge({{m}}::create_routes())
-        {% endfor %}
+        .merge(reports::create_routes())
 }

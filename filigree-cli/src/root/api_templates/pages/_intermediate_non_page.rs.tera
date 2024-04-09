@@ -4,10 +4,10 @@ use crate::server::ServerState;
 pub mod {{s}};
 {% endfor %}
 
-pub fn create_routes() -> Router<ServerState> {
-    Router::new()
+pub fn create_routes() -> axum::Router<ServerState> {
+    axum::Router::new()
         {% for s in submodules -%}
-        .merge({{submodule}}::create_routes())
+        .merge({{s}}::create_routes())
         {% endfor %}
 }
 

@@ -53,7 +53,7 @@ impl PageConfig {
         }
     }
 
-    pub fn template_context(&self, submodules: Vec<&str>) -> serde_json::Value {
+    pub fn template_context(&self, submodules: Vec<String>) -> serde_json::Value {
         let name = self
             .path
             .segments()
@@ -136,7 +136,7 @@ impl PageConfig {
 /// Form handler configuration
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PageForm {
-    /// The name of the payload type for this model. If omitted, an empty structure will be generated for you to fill in.
+    /// The payload type for this form.
     #[serde(default)]
     input: ObjectRefOrDef,
 
@@ -220,7 +220,7 @@ impl PageAction {
         json!({
             "name": self.name,
             "path": full_path.0,
-            "method": self.method,
+            "method": self.method.to_lowercase(),
             "permission": permission,
             "input_type_def": input_struct,
             "query_type_def": query_struct,

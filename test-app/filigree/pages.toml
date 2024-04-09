@@ -1,22 +1,26 @@
 [[pages]]
 path = "/reports"
 
-[[pages.form]]
+[pages.form]
 require_auth = true
 permission = "Report:write"
+input.subject = "text"
+input.body = "text"
 
 [[pages.actions]]
 name = "favorite"
+path = "favorite/:id"
+require_auth = true
 method = "POST"
 input.new_state = "bool"
-
 
 
 [[pages]]
 path = "/reports/:id"
 params.id = "crate::models::report::ReportId"
 
-
+[[pages]]
+path = "/reports/:id/views/public"
 
 [[pages]]
 path = "/reports/:id/edit"
