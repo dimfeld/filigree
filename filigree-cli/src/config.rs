@@ -17,7 +17,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use self::{
     job::QueueConfig,
-    pages::{PageConfig, PagesConfigFile},
+    pages::{Page, PagesConfigFile},
     storage::StorageConfig,
     tracing::TracingConfig,
     web::WebConfig,
@@ -317,7 +317,7 @@ const fn true_t() -> bool {
 pub struct FullConfig {
     pub crate_name: String,
     pub config: Config,
-    pub pages: Vec<PageConfig>,
+    pub pages: Vec<Page>,
     pub models: Vec<Model>,
     pub state_dir: PathBuf,
     pub crate_manifest: cargo_toml::Manifest,
@@ -359,19 +359,31 @@ impl FullConfig {
             .clone();
 
         let pages_config_path = dir.join("pages.toml");
-        let mut pages = if pages_config_path.exists() {
-            read_toml::<PagesConfigFile>(&pages_config_path)?
+        let root_level_pages = if pages_config_path.exists() {
+            Some(read_toml::<PagesConfigFile>(&pages_config_path)?)
         } else {
-            PagesConfigFile { pages: Vec::new() }
+            None
         };
 
-        for page in pages.pages.iter_mut() {
-            page.normalize_path();
-        }
+        let pages_glob = dir.join("pages/*.toml");
+        let mut pages = glob(&pages_glob.to_string_lossy())
+            .expect("parsing pages glob")
+            .map(|page_path| {
+                let page_path = page_path.change_context(Error::ReadConfigFile)?;
+                read_toml::<PagesConfigFile>(&page_path)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        pages.extend(root_level_pages);
+
+        let pages = pages
+            .into_iter()
+            .flat_map(|page| page.into_pages().into_iter())
+            .collect::<Vec<_>>();
 
         let models_glob = dir.join("models/*.toml");
         let models = glob(&models_glob.to_string_lossy())
-            .expect("parsing glob")
+            .expect("parsing models glob")
             .map(|model_path| {
                 let model_path = model_path.change_context(Error::ReadConfigFile)?;
                 read_toml::<Model>(&model_path)
@@ -390,7 +402,7 @@ impl FullConfig {
         Ok(FullConfig {
             crate_name,
             config,
-            pages: pages.pages,
+            pages,
             models,
             state_dir,
             api_dir,

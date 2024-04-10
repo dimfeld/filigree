@@ -6,7 +6,7 @@ use rayon::prelude::*;
 use serde_json::json;
 
 use crate::{
-    config::pages::PageConfig,
+    config::pages::Page,
     templates::Renderer,
     write::{RenderedFile, RenderedFileLocation},
     Error,
@@ -19,12 +19,12 @@ pub const NON_PAGE_NODE_PATH: &str = "root/pages/_intermediate_non_page.rs.tera"
 struct ModuleTree<'a> {
     name: &'a str,
     path: String,
-    page: Option<&'a PageConfig>,
+    page: Option<&'a Page>,
     children: Vec<ModuleTree<'a>>,
 }
 
 impl<'a> ModuleTree<'a> {
-    fn add_path<'b>(&'b mut self, page: &'a PageConfig, path: Vec<&'a str>, index: usize) {
+    fn add_path<'b>(&'b mut self, page: &'a Page, path: Vec<&'a str>, index: usize) {
         if index == path.len() {
             self.page = Some(page);
             return;
@@ -75,12 +75,12 @@ impl<'a> ModuleTree<'a> {
 struct ModuleTreeResult<'a> {
     name: String,
     path: String,
-    page: Option<&'a PageConfig>,
+    page: Option<&'a Page>,
     submodules: Vec<String>,
 }
 
 pub fn render_pages(
-    pages: Vec<PageConfig>,
+    pages: Vec<Page>,
     renderer: &Renderer,
 ) -> Result<Vec<RenderedFile>, Report<Error>> {
     let mut module_tree = ModuleTree {
@@ -91,7 +91,7 @@ pub fn render_pages(
     };
 
     for page in &pages {
-        let path = page.path.segments().collect::<Vec<_>>();
+        let path = page.config.path.segments().collect::<Vec<_>>();
         module_tree.add_path(page, path, 0);
     }
 

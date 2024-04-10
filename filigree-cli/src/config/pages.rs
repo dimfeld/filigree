@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::BTreeMap};
+use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
 use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,36 @@ use super::generators::{EndpointPath, ObjectRefOrDef};
 
 #[derive(Deserialize)]
 pub struct PagesConfigFile {
+    #[serde(flatten)]
+    pub global_config: GlobalPageConfig,
     pub pages: Vec<PageConfig>,
+}
+
+impl PagesConfigFile {
+    pub fn into_pages(self) -> Vec<Page> {
+        let global = Arc::new(self.global_config);
+
+        self.pages
+            .into_iter()
+            .map(|mut page| {
+                let global = global.clone();
+                page.normalize_path();
+                Page {
+                    config: page,
+                    global,
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+}
+
+#[derive(Deserialize, Debug, Default)]
+pub struct GlobalPageConfig {
+    /// Require auth for all pages in this file
+    pub require_auth: Option<bool>,
+
+    /// Require this permission for all pages in this file
+    pub permission: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -18,7 +47,7 @@ pub struct PageConfig {
     pub path: EndpointPath,
 
     #[serde(default)]
-    require_auth: bool,
+    require_auth: Option<bool>,
 
     /// A permission needed to view this page.
     permission: Option<String>,
@@ -41,7 +70,7 @@ pub struct PageConfig {
 }
 
 impl PageConfig {
-    pub fn normalize_path(&mut self) {
+    fn normalize_path(&mut self) {
         self.path.normalize();
         for action in &mut self.actions {
             if let Some(path) = &mut action.path {
@@ -52,9 +81,22 @@ impl PageConfig {
             }
         }
     }
+}
 
+#[derive(Debug)]
+pub struct Page {
+    pub config: PageConfig,
+    pub global: Arc<GlobalPageConfig>,
+}
+
+impl Page {
     pub fn template_context(&self, submodules: Vec<String>) -> serde_json::Value {
-        let name = self
+        let page = &self.config;
+        let global = &self.global;
+
+        let permission = global.permission.as_deref().or(page.permission.as_deref());
+
+        let name = page
             .path
             .segments()
             .filter(|s| !s.starts_with(':'))
@@ -63,7 +105,7 @@ impl PageConfig {
             .to_case(Case::Snake);
         let pascal_name = name.to_case(Case::Pascal);
 
-        let query_type_name = self
+        let query_type_name = page
             .query
             .as_ref()
             .map(|q| {
@@ -73,21 +115,23 @@ impl PageConfig {
             })
             .unwrap_or_default();
 
-        let query_struct = self
+        let require_auth = page.require_auth.or(global.require_auth);
+
+        let query_struct = page
             .query
             .as_ref()
             .filter(|q| q.is_definition())
             .map(|q| q.type_def(&query_type_name, "").0);
 
         let args = rust_args(
-            &self.path,
-            &self.params,
-            self.require_auth || self.permission.is_some(),
+            &page.path,
+            &page.params,
+            require_auth.unwrap_or(permission.is_some()),
             "",
             &query_type_name,
         );
 
-        let form = if let Some(form) = &self.form {
+        let form = if let Some(form) = &page.form {
             let input_type_name = form
                 .input
                 .struct_name()
@@ -100,20 +144,20 @@ impl PageConfig {
                 String::new()
             };
 
+            let form_permission = permission.or(form.permission.as_deref());
             let form_args = rust_args(
-                &self.path,
-                &self.params,
-                self.require_auth
-                    || form.require_auth
-                    || self.permission.is_some()
-                    || form.permission.is_some(),
+                &page.path,
+                &page.params,
+                form.require_auth
+                    .or(require_auth)
+                    .unwrap_or(form_permission.is_some()),
                 &input_type_name,
                 "",
             );
 
             json!({
               "args": form_args,
-              "permission": self.permission,
+              "permission": form_permission,
               "input_type_def": form_struct
             })
         } else {
@@ -122,12 +166,12 @@ impl PageConfig {
 
         json!({
             "name": name,
-            "path": self.path.0,
+            "path": page.path.0,
             "args": args,
-            "permission": self.permission,
+            "permission": permission,
             "query_type_def": query_struct,
             "form": form,
-            "actions": self.actions.iter().map(|a| a.template_context(&self)).collect::<Vec<_>>(),
+            "actions": page.actions.iter().map(|a| a.template_context(&page, permission, require_auth)).collect::<Vec<_>>(),
             "submodules": submodules,
         })
     }
@@ -141,8 +185,7 @@ pub struct PageForm {
     input: ObjectRefOrDef,
 
     /// Require authentication to submit the form, even if anonymous users can view the page.
-    #[serde(default)]
-    require_auth: bool,
+    require_auth: Option<bool>,
 
     permission: Option<String>,
 }
@@ -159,8 +202,7 @@ pub struct PageAction {
 
     /// Require users to be authenticated to perform this action. If omitted and the parent page
     /// requires authentication, then this action will to.
-    #[serde(default)]
-    require_auth: bool,
+    require_auth: Option<bool>,
 
     /// A permission needed to perform this action. If omitted and the
     /// action's parent page has a permission, that permission will be used.
@@ -180,7 +222,12 @@ pub struct PageAction {
 }
 
 impl PageAction {
-    pub fn template_context(&self, parent: &PageConfig) -> serde_json::Value {
+    pub fn template_context(
+        &self,
+        parent: &PageConfig,
+        parent_permission: Option<&str>,
+        parent_require_auth: Option<bool>,
+    ) -> serde_json::Value {
         let full_path = EndpointPath(format!(
             "{parent_path}/_action/{path}",
             parent_path = parent.path.0,
@@ -215,7 +262,7 @@ impl PageAction {
             .map(|i| i.type_def(&query_name, "").0)
             .unwrap_or_default();
 
-        let permission = self.permission.as_deref().or(parent.permission.as_deref());
+        let permission = self.permission.as_deref().or(parent_permission);
 
         json!({
             "name": self.name,
@@ -227,7 +274,7 @@ impl PageAction {
             "args": rust_args(
                 &full_path,
                 &self.params,
-                self.require_auth || parent.require_auth || permission.is_some(),
+                self.require_auth.or(parent_require_auth).unwrap_or(permission.is_some()),
                 &input_name,
                 &query_name
             )
