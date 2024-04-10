@@ -12,6 +12,7 @@ use crate::{
     Error,
 };
 
+mod auth;
 mod error;
 mod forgot;
 mod generic_error;

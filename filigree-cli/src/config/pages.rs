@@ -310,7 +310,7 @@ fn rust_args(
 
     if !input_type_name.is_empty() {
         args.push(format!(
-            "FormOrJson(payload): FormOrJson<{}>",
+            "ValidatedForm {{ data, form, errors }}: ValidatedForm<{}>",
             input_type_name
         ));
     }

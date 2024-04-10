@@ -67,22 +67,14 @@ pub async fn register(
         .build();
 
     if init_recurring_jobs {
-        // Convert to the payload type just to make sure it's valid. This would be better
-        // done by making the type directly so we get compile safety but that's difficult
-        // to do from the template. Feel free to replace it with the equivalent.
-        let payload: SendAnnoyingEmailsJobPayload =
-            serde_json::from_value(json!(null)).map_err(effectum::Error::PayloadError)?;
-        let daily_job = create_job_builder().json_payload(&payload)?.build();
-        queue
-            .upsert_recurring_job(
-                "daily".to_string(),
-                RecurringJobSchedule::Cron {
-                    spec: "0 9 * * *".to_string(),
-                },
-                daily_job,
-                false,
-            )
-            .await?;
+        // daily is disabled
+        match queue.delete_recurring_job("daily".to_string()).await {
+            Ok(_) => {}
+            // It's ok if the job doesn't exist. This just means it was already deleted
+            // on a previous execution.
+            Err(effectum::Error::NotFound) => {}
+            Err(e) => return Err(e),
+        };
 
         // monthly is disabled
         match queue.delete_recurring_job("monthly".to_string()).await {

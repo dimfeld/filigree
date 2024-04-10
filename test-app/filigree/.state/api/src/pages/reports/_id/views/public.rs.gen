@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
     routing,
 };
-use filigree::extract::FormOrJson;
+use filigree::extract::ValidatedForm;
 use maud::{html, Markup};
 use schemars::JsonSchema;
 

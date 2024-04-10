@@ -261,6 +261,7 @@ pub struct ValidationErrorResponse {
 }
 
 impl ValidationErrorResponse {
+    /// Return true if there are no validation errors
     pub fn is_empty(&self) -> bool {
         self.messages.is_empty() && self.fields.is_empty()
     }

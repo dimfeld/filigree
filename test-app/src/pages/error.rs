@@ -1,11 +1,12 @@
 use axum::{
     extract::FromRequestParts,
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Redirect, Response},
 };
 use filigree::errors::HttpError;
-use http::StatusCode;
+use http::{StatusCode, Uri};
 use maud::Markup;
 
+use super::auth::make_login_link;
 use crate::Error;
 
 pub struct HtmlError(pub Error);
@@ -33,5 +34,13 @@ impl IntoResponse for HtmlError {
 }
 
 fn unauthenticated_error(err: &Error) -> Response {
-    axum::response::Redirect::to("/login").into_response()
+    axum::response::Redirect::to(&make_login_link(None)).into_response()
+}
+
+pub fn handle_page_error(uri: Uri, err: Error) -> Response {
+    match err.status_code() {
+        StatusCode::NOT_FOUND => super::not_found::not_found_page(),
+        StatusCode::UNAUTHORIZED => Redirect::to(&make_login_link(Some(&uri))).into_response(),
+        _ => super::generic_error::generic_error_page(&err),
+    }
 }

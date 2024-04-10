@@ -1,11 +1,12 @@
 use axum::{
     extract::FromRequestParts,
-    response::{Redirect, Response},
+    response::{IntoResponse, Redirect, Response},
 };
-use http::{request::Parts, StatusCode};
+use filigree::errors::HttpError;
+use http::{request::Parts, StatusCode, Uri};
 use url::Url;
 
-use crate::auth::AuthInfo;
+use crate::{auth::AuthInfo, Error};
 
 pub struct WebAuthed(std::sync::Arc<AuthInfo>);
 
@@ -29,19 +30,25 @@ where
             Ok(auth_info) => Ok(WebAuthed(auth_info)),
             Err(e) => match e.status_code() {
                 StatusCode::UNAUTHORIZED => {
-                    let redirect_to = parts.uri().path_and_query().map(|p| p.as_str());
-
-                    let mut login_url = Url::parse("/login").unwrap();
-                    if let Some(r) = redirect_to {
-                        login_url
-                            .query_pairs_mut()
-                            .append_pair("redirect_to", redirect_to.unwrap());
-                    }
-
-                    Err(Redirect::to(login_url.as_str()))
+                    let login_url = make_login_link(Some(&parts.uri));
+                    Err(Redirect::to(login_url.as_str()).into_response())
                 }
-                _ => Err(super::generic_error::generic_error_page(&e)),
+                _ => {
+                    let e = Error::from(e);
+                    Err(super::generic_error::generic_error_page(&e))
+                }
             },
         }
     }
+}
+
+pub fn make_login_link(redirect_to: Option<&Uri>) -> String {
+    let mut login_url = Url::parse("/login").unwrap();
+    if let Some(r) = redirect_to {
+        let redirect_to = r.path_and_query().map(|p| p.as_str());
+        login_url
+            .query_pairs_mut()
+            .append_pair("redirect_to", redirect_to.unwrap());
+    }
+    login_url.into()
 }

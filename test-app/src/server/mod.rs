@@ -349,7 +349,9 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .merge(filigree::auth::oauth::create_routes())
         .merge(crate::models::create_routes())
         .merge(crate::users::users::create_routes())
-        .merge(crate::auth::create_routes());
+        .merge(crate::auth::create_routes())
+        // Return not found here so we don't run the other non-API fallbacks
+        .fallback(|| async { Error::NotFound("Route") });
 
     let web_routes = crate::pages::create_routes();
 
@@ -385,7 +387,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                 .precompressed_gzip()
                 .precompressed_br()
                 .append_index_html_on_directories(true);
-            app.route_service("/static/*path", serve_fs)
+            app.fallback_service(serve_fs)
         }
         (None, None) => app,
     };
@@ -401,7 +403,18 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             .layer(sentry_tower::SentryHttpLayer::with_transaction())
             .layer(
                 TraceLayer::new_for_http()
-                    .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                    .make_span_with(|req: &axum::extract::Request| {
+                        let method = req.method();
+                        let uri = req.uri();
+
+                        // Add the matched route to the span
+                        let route = req
+                            .extensions()
+                            .get::<axum::extract::MatchedPath>()
+                            .map(|matched_path| matched_path.as_str());
+
+                        tracing::info_span!("request", %method, %uri, route)
+                    })
                     .on_response(DefaultOnResponse::new().level(Level::INFO))
                     .on_request(DefaultOnRequest::new().level(Level::INFO))
                     .on_failure(DefaultOnFailure::new().level(Level::ERROR)),

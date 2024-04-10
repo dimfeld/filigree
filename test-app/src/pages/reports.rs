@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
     routing,
 };
-use filigree::extract::FormOrJson;
+use filigree::extract::ValidatedForm;
 use maud::{html, Markup};
 use schemars::JsonSchema;
 
@@ -27,8 +27,8 @@ async fn favorite_action(
     State(state): State<ServerState>,
     auth: Authed,
     Path(id): Path<String>,
-    FormOrJson(payload): FormOrJson<FavoriteActionPayload>,
-) -> Result<impl IntoResponse, HtmlError> {
+    ValidatedForm { data, form, errors }: ValidatedForm<FavoriteActionPayload>,
+) -> Result<impl IntoResponse, Error> {
     let body = html! {};
 
     Ok(body)
@@ -43,7 +43,7 @@ pub struct ReportsPayload {
 async fn reports_form(
     State(state): State<ServerState>,
     auth: Authed,
-    FormOrJson(payload): FormOrJson<ReportsPayload>,
+    ValidatedForm { data, form, errors }: ValidatedForm<ReportsPayload>,
 ) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};
 

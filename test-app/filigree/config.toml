@@ -58,6 +58,7 @@ account_id = "define-in-env"
 [[job.send_annoying_emails.schedule]]
 name = "daily"
 schedule = "0 9 * * *"
+disabled = true
 
 [[job.send_annoying_emails.schedule]]
 name = "monthly"
