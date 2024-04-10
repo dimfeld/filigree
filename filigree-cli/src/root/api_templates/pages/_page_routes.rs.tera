@@ -1,0 +1,21 @@
+        .route("{{path}}", routing::get({{name}}_page)
+            {% if permission %}
+            .route_layer(has_any_permission(vec!["{{permission}}", "org_admin"]))
+            {% endif %}
+            )
+        {% if form %}
+        .route("{{path}}", routing::post({{name}}_form)
+            {% if form.permission %}
+            .route_layer(has_any_permission(vec!["{{form.permission}}", "org_admin"]))
+            {% endif %}
+
+            )
+        {% endif %}
+        {% for a in actions %}
+        .route("{{a.path}}", routing::{{a.method}}({{a.name}}_action)
+            {% if a.permission %}
+            .route_layer(has_any_permission(vec!["{{a.permission}}", "org_admin"]))
+            {% endif %}
+            )
+        {% endfor %}
+

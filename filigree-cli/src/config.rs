@@ -16,8 +16,9 @@ use glob::glob;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use self::{
+    generators::EndpointPath,
     job::QueueConfig,
-    pages::{Page, PagesConfigFile},
+    pages::{Page, PageConfig, PagesConfigFile},
     storage::StorageConfig,
     tracing::TracingConfig,
     web::WebConfig,
@@ -359,10 +360,13 @@ impl FullConfig {
             .clone();
 
         let pages_config_path = dir.join("pages.toml");
-        let root_level_pages = if pages_config_path.exists() {
-            Some(read_toml::<PagesConfigFile>(&pages_config_path)?)
+        let mut root_level_pages = if pages_config_path.exists() {
+            read_toml::<PagesConfigFile>(&pages_config_path)?
         } else {
-            None
+            PagesConfigFile {
+                global_config: Default::default(),
+                pages: Default::default(),
+            }
         };
 
         let pages_glob = dir.join("pages/*.toml");
@@ -374,7 +378,18 @@ impl FullConfig {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        pages.extend(root_level_pages);
+        let root_page_defined = pages
+            .iter()
+            .chain(std::iter::once(&root_level_pages))
+            .any(|config| config.pages.iter().any(|p| p.path.0 == "/"));
+        if !root_page_defined {
+            root_level_pages.pages.push(PageConfig {
+                path: EndpointPath("/".to_string()),
+                ..Default::default()
+            });
+        }
+
+        pages.push(root_level_pages);
 
         let pages = pages
             .into_iter()

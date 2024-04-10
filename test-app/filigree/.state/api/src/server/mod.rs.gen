@@ -1,13 +1,3 @@
-// Dependencies
-// axum = "0.7.2"
-// axum-auth = "0.4.1"
-// axum-extra = { version = "0.9.0", features = ["typed-routing", "form"] }
-// error-stack = { version = "0.4.1", features = ["eyre"] }
-// hyper = "^0.14"
-// tower = "0.4.13"
-// tower-http = { version = "0.4.4", features = ["util", "catch-panic", "request-id", "trace", "limit", "compression-deflate", "compression-gzip", "compression-zstd", "decompression-full"] }
-// tracing = "0.1.40"
-
 use std::{
     future::Future,
     net::{IpAddr, SocketAddr},
@@ -15,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use axum::{extract::FromRef, routing::get, Router};
+use axum::{extract::FromRef, handler::Handler, routing::get, Router};
 use error_stack::{Report, ResultExt};
 use filigree::{
     auth::{
@@ -33,7 +23,7 @@ use tower_http::{
     cors::CorsLayer,
     request_id::MakeRequestUuid,
     timeout::TimeoutLayer,
-    trace::{DefaultMakeSpan, DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+    trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer},
     ServiceBuilderExt,
 };
 use tracing::{event, Level};
@@ -357,8 +347,6 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
 
     let app = Router::new().nest("/api", api_routes).merge(web_routes);
 
-    let app: Router<()> = app.with_state(state.clone());
-
     let app = match config.serve_frontend {
         (Some(web_port), Some(web_dir)) => {
             let fallback = filigree::route_services::ForwardRequest::new(format!(
@@ -386,13 +374,14 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             let serve_fs = tower_http::services::ServeDir::new(web_dir)
                 .precompressed_gzip()
                 .precompressed_br()
-                .append_index_html_on_directories(true);
+                .append_index_html_on_directories(true)
+                .fallback(crate::pages::not_found::not_found_fallback.with_state(state.clone()));
             app.fallback_service(serve_fs)
         }
         (None, None) => app,
     };
 
-    let app = app.layer(
+    let app = app.with_state(state.clone()).layer(
         ServiceBuilder::new()
             .layer(panic_handler(production))
             .layer(ObfuscateErrorLayer::new(ObfuscateErrorLayerSettings {

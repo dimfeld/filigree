@@ -153,6 +153,8 @@ pub fn render_files(
         job_template_path,
         // These are rendered by [render_pages]
         "root/pages/mod.rs.tera",
+        "root/pages/_page_handlers.rs.tera",
+        "root/pages/_page_routes.rs.tera",
         PAGE_PATH,
         NON_PAGE_NODE_PATH,
     ];

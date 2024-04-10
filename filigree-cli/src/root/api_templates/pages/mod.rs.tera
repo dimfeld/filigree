@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -8,6 +9,7 @@ use maud::{html, Markup, DOCTYPE};
 
 use crate::{
     auth::{has_any_permission, Authed},
+    pages::error::HtmlError,
     server::ServerState,
     Error,
 };
@@ -19,9 +21,9 @@ mod generic_error;
 mod layout;
 mod login;
 mod logout;
-mod not_found;
+pub mod not_found;
 mod reset;
-{% for m in root_modules -%}
+{% for m in submodules -%}
 mod {{m}};
 {% endfor %}
 
@@ -29,19 +31,26 @@ use layout::*;
 pub use not_found::*;
 pub use generic_error::*;
 
-async fn home(auth: Option<Authed>) -> impl IntoResponse {
-    root_layout_page(auth.as_ref(), "Home", html! { h1 { "Home" } })
+{% if has_handler %}
+{% include "root/pages/_page_handlers.rs.tera" %}
+{% else %}
+async fn home_page(
+    authed: Option<Authed>
+) -> Result<impl IntoResponse, HtmlError> {
+    let body = html!{};
+
+    Ok(root_layout_page(auth.as_ref(), "title", body))
 }
+{% endif %}
 
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
-        .route("/", routing::get(home))
+        {% include "root/pages/_page_routes.rs.tera" %}
         .merge(login::create_routes())
         .merge(logout::create_routes())
         .merge(forgot::create_routes())
         .merge(reset::create_routes())
-        {% for m in root_modules -%}
+        {% for m in submodules -%}
         .merge({{m}}::create_routes())
         {% endfor %}
-        .fallback(|| async { not_found_page() })
 }

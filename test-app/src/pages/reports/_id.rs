@@ -16,11 +16,11 @@ use crate::{
     Error,
 };
 
-pub mod views;
-
 pub mod edit;
 
 pub mod stats;
+
+pub mod views;
 
 async fn reports_page(
     State(state): State<ServerState>,
@@ -35,7 +35,7 @@ async fn reports_page(
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
         .route("/reports/:id", routing::get(reports_page))
-        .merge(views::create_routes())
         .merge(edit::create_routes())
         .merge(stats::create_routes())
+        .merge(views::create_routes())
 }

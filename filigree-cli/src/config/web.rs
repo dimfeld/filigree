@@ -89,7 +89,7 @@ impl WebConfig {
     }
 
     fn add_maud_deps(cwd: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
-        add_dep(cwd, manifest, "maud", "0.26.0", &[])?;
+        add_dep(cwd, manifest, "maud", "0.26.0", &["axum"])?;
         add_dep(cwd, manifest, "axum-htmx", "0.5.0", &[])?;
 
         Ok(())

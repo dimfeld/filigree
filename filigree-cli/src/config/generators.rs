@@ -81,7 +81,7 @@ impl Deref for EndpointPath {
 
 impl EndpointPath {
     pub fn normalize(&mut self) {
-        if self.0.ends_with("/") {
+        if self.0.len() > 1 && self.0.ends_with("/") {
             self.0.pop();
         }
     }

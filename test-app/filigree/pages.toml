@@ -1,4 +1,11 @@
 [[pages]]
+path = "/"
+
+[[pages.actions]]
+name = "count"
+method = "POST"
+
+[[pages]]
 path = "/reports"
 
 [pages.form]

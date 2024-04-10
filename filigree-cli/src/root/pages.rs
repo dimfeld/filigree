@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use error_stack::Report;
 use itertools::Itertools;
 use rayon::prelude::*;
-use serde_json::json;
 
 use crate::{
     config::pages::Page,
@@ -56,6 +55,7 @@ impl<'a> ModuleTree<'a> {
             .children
             .iter()
             .map(|c| c.name.replace(":", "_"))
+            .sorted_by(|a, b| a.cmp(b))
             .collect();
 
         output.push(ModuleTreeResult {
@@ -84,8 +84,8 @@ pub fn render_pages(
     renderer: &Renderer,
 ) -> Result<Vec<RenderedFile>, Report<Error>> {
     let mut module_tree = ModuleTree {
-        name: "",
-        path: String::new(),
+        name: "home",
+        path: "/".to_string(),
         page: None,
         children: vec![],
     };
@@ -97,26 +97,28 @@ pub fn render_pages(
 
     let mut output = Vec::with_capacity(pages.len());
 
-    let root_modules = module_tree
-        .children
-        .iter()
-        .map(|c| c.name.to_string())
-        .sorted_by(|a, b| a.cmp(&b))
-        .collect::<Vec<_>>();
-
-    for child in &mut module_tree.children {
-        child.result(&mut output);
-    }
-
+    module_tree.result(&mut output);
     output.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let root_context = tera::Context::from_value(json!({
-        "root_modules": &root_modules
-    }))
-    .unwrap();
+    let root_page = output
+        .iter()
+        .find(|page| page.path == "/")
+        .expect("finding root page");
+    let root_page_context = root_page
+        .page
+        .map(|page| page.template_context(root_page.submodules.clone()))
+        .expect("creating template context for root page");
+
+    let root_page_output = renderer.render_with_full_path(
+        PathBuf::from("src/pages/mod.rs"),
+        "root/pages/mod.rs.tera",
+        RenderedFileLocation::Rust,
+        &tera::Context::from_value(root_page_context).unwrap(),
+    )?;
 
     let mut output = output
         .into_par_iter()
+        .filter(|module| module.path != "/")
         .map(|module| {
             let (context, template) = if let Some(page) = module.page {
                 let context = page.template_context(module.submodules);
@@ -124,6 +126,7 @@ pub fn render_pages(
                 (context, PAGE_PATH)
             } else {
                 let mut context = tera::Context::new();
+                context.insert("has_handler", &false);
                 context.insert("submodules", &module.submodules);
                 // todo actually need a modules-only template
                 (context, NON_PAGE_NODE_PATH)
@@ -140,13 +143,7 @@ pub fn render_pages(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let root_page = renderer.render_with_full_path(
-        PathBuf::from("src/pages/mod.rs"),
-        "root/pages/mod.rs.tera",
-        RenderedFileLocation::Rust,
-        &root_context,
-    )?;
-    output.push(root_page);
+    output.push(root_page_output);
 
     Ok(output)
 }

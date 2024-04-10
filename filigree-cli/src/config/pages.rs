@@ -40,33 +40,33 @@ pub struct GlobalPageConfig {
     pub permission: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct PageConfig {
     /// The URL for this endpoint. A parameter named `:id` will be given the ID type of the model, and all other
     /// parameters will default to `String` if not otherwise specified in `params`.
     pub path: EndpointPath,
 
     #[serde(default)]
-    require_auth: Option<bool>,
+    pub require_auth: Option<bool>,
 
     /// A permission needed to view this page.
-    permission: Option<String>,
+    pub permission: Option<String>,
 
     /// Customize the types of certain path parameters.
     #[serde(default)]
-    params: BTreeMap<String, String>,
+    pub params: BTreeMap<String, String>,
 
     /// If set, this page is also a form with a POST handler. The value here can be a string to reference an
     /// already-existing type, or an object to define a new object.
-    form: Option<PageForm>,
+    pub form: Option<PageForm>,
 
     /// The query parameters that this endpoint accepts.
-    query: Option<ObjectRefOrDef>,
+    pub query: Option<ObjectRefOrDef>,
 
     /// Action definitions for this page. Each action is a POST endpoint that should return an
     /// HTML fragment for htmx.
     #[serde(default)]
-    actions: Vec<PageAction>,
+    pub actions: Vec<PageAction>,
 }
 
 impl PageConfig {
@@ -96,13 +96,16 @@ impl Page {
 
         let permission = global.permission.as_deref().or(page.permission.as_deref());
 
-        let name = page
-            .path
-            .segments()
-            .filter(|s| !s.starts_with(':'))
-            .last()
-            .unwrap()
-            .to_case(Case::Snake);
+        let name = if page.path.0 == "/" {
+            "home".to_string()
+        } else {
+            page.path
+                .segments()
+                .filter(|s| !s.starts_with(':'))
+                .last()
+                .unwrap()
+                .to_case(Case::Snake)
+        };
         let pascal_name = name.to_case(Case::Pascal);
 
         let query_type_name = page
@@ -167,7 +170,8 @@ impl Page {
 
         json!({
             "name": name,
-            "path": page.path.0,
+            "has_handler": true,
+            "path": if page.path.0 == "" { "/" } else { &page.path.0 },
             "args": args,
             "require_auth": main_require_auth,
             "permission": permission,
@@ -230,11 +234,18 @@ impl PageAction {
         parent_permission: Option<&str>,
         parent_require_auth: Option<bool>,
     ) -> serde_json::Value {
+        let parent_path = if parent.path.0 == "/" {
+            ""
+        } else {
+            &parent.path.0
+        };
+
         let full_path = EndpointPath(format!(
             "{parent_path}/_action/{path}",
-            parent_path = parent.path.0,
+            parent_path = parent_path,
             path = self.path.as_deref().unwrap_or(&self.name)
         ));
+
         let has_input = self.input.is_some();
         let pascal_name = self.name.to_case(Case::Pascal);
 

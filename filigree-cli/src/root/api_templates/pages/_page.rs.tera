@@ -23,66 +23,11 @@ use crate::{
 pub mod {{s}};
 {% endfor %}
 
-{% for action in actions %}
-
-{{action.input_type_def}}
-
-{{action.query_type_def}}
-
-async fn {{action.name}}_action(
-    {{action.args}}
-) -> Result<impl IntoResponse, Error> {
-    let body = html! {};
-
-    Ok(body)
-}
-
-{% endfor %}
-
-{% if form %}
-{{form.input_type_def}}
-
-async fn {{name}}_form(
-{{form.args}}
-) -> Result<impl IntoResponse, HtmlError> {
-    let body = html! {};
-
-    Ok(body)
-}
-{% endif %}
-
-{{query_type_def}}
-
-async fn {{name}}_page(
-    {{args}}
-) -> Result<impl IntoResponse, HtmlError> {
-    let body = html!{};
-
-    Ok(root_layout_page({% if require_auth %}Some(&auth){% else %}auth.as_ref(){% endif %}, "title", body))
-}
+{% include "root/pages/_page_handlers.rs.tera" %}
 
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
-        .route("{{path}}", routing::get({{name}}_page)
-            {% if permission %}
-            .route_layer(has_any_permission(vec!["{{permission}}", "org_admin"]))
-            {% endif %}
-            )
-        {% if form %}
-        .route("{{path}}", routing::post({{name}}_form)
-            {% if form.permission %}
-            .route_layer(has_any_permission(vec!["{{form.permission}}", "org_admin"]))
-            {% endif %}
-
-            )
-        {% endif %}
-        {% for a in actions %}
-        .route("{{a.path}}", routing::{{a.method}}({{a.name}}_action)
-            {% if a.permission %}
-            .route_layer(has_any_permission(vec!["{{a.permission}}", "org_admin"]))
-            {% endif %}
-            )
-        {% endfor %}
+        {% include "root/pages/_page_routes.rs.tera" %}
         {% for s in submodules %}
         .merge({{s}}::create_routes())
         {% endfor %}

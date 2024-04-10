@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -8,6 +9,7 @@ use maud::{html, Markup, DOCTYPE};
 
 use crate::{
     auth::{has_any_permission, Authed},
+    pages::error::HtmlError,
     server::ServerState,
     Error,
 };
@@ -19,7 +21,7 @@ mod generic_error;
 mod layout;
 mod login;
 mod logout;
-mod not_found;
+pub mod not_found;
 mod reports;
 mod reset;
 
@@ -27,17 +29,31 @@ pub use generic_error::*;
 use layout::*;
 pub use not_found::*;
 
-async fn home(auth: Option<Authed>) -> impl IntoResponse {
-    root_layout_page(auth.as_ref(), "Home", html! { h1 { "Home" } })
+async fn count_action(
+    State(state): State<ServerState>,
+    auth: Option<Authed>,
+) -> Result<impl IntoResponse, Error> {
+    let body = html! {};
+
+    Ok(body)
+}
+
+async fn home_page(
+    State(state): State<ServerState>,
+    auth: Option<Authed>,
+) -> Result<impl IntoResponse, HtmlError> {
+    let body = html! {};
+
+    Ok(root_layout_page(auth.as_ref(), "title", body))
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
-        .route("/", routing::get(home))
+        .route("/", routing::get(home_page))
+        .route("/_action/count", routing::post(count_action))
         .merge(login::create_routes())
         .merge(logout::create_routes())
         .merge(forgot::create_routes())
         .merge(reset::create_routes())
         .merge(reports::create_routes())
-        .fallback(|| async { not_found_page() })
 }
