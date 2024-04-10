@@ -11,7 +11,7 @@ use schemars::JsonSchema;
 
 use crate::{
     auth::{has_any_permission, Authed},
-    pages::layout::root_layout_page,
+    pages::{error::HtmlError, layout::root_layout_page},
     server::ServerState,
     Error,
 };
@@ -26,7 +26,7 @@ async fn reports_page(
     State(state): State<ServerState>,
     auth: Option<Authed>,
     Path(id): Path<crate::models::report::ReportId>,
-) -> Result<impl IntoResponse, Error> {
+) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};
 
     Ok(root_layout_page(auth.as_ref(), "title", body))

@@ -11,7 +11,7 @@ use schemars::JsonSchema;
 
 use crate::{
     auth::{has_any_permission, Authed},
-    pages::layout::root_layout_page,
+    pages::{error::HtmlError, layout::root_layout_page},
     server::ServerState,
     Error,
 };
@@ -28,7 +28,7 @@ async fn favorite_action(
     auth: Authed,
     Path(id): Path<String>,
     FormOrJson(payload): FormOrJson<FavoriteActionPayload>,
-) -> Result<impl IntoResponse, Error> {
+) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};
 
     Ok(body)
@@ -44,7 +44,7 @@ async fn reports_form(
     State(state): State<ServerState>,
     auth: Authed,
     FormOrJson(payload): FormOrJson<ReportsPayload>,
-) -> Result<impl IntoResponse, Error> {
+) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};
 
     Ok(body)
@@ -53,7 +53,7 @@ async fn reports_form(
 async fn reports_page(
     State(state): State<ServerState>,
     auth: Option<Authed>,
-) -> Result<impl IntoResponse, Error> {
+) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};
 
     Ok(root_layout_page(auth.as_ref(), "title", body))
@@ -62,7 +62,11 @@ async fn reports_page(
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
         .route("/reports", routing::get(reports_page))
-        .route("/reports", routing::post(reports_form))
+        .route(
+            "/reports",
+            routing::post(reports_form)
+                .route_layer(has_any_permission(vec!["Report:write", "org_admin"])),
+        )
         .route(
             "/reports/_action/favorite/:id",
             routing::post(favorite_action),

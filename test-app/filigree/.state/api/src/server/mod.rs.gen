@@ -366,7 +366,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             let serve_fs = tower_http::services::ServeDir::new(web_dir)
                 .precompressed_gzip()
                 .precompressed_br()
-                // Pass non-GET methods to the callback instead of returning 405
+                // Pass non-GET methods to the fallback instead of returning 405
                 .call_fallback_on_method_not_allowed(true)
                 .fallback(fallback.clone());
 
@@ -384,7 +384,8 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             let serve_fs = tower_http::services::ServeDir::new(web_dir)
                 .precompressed_gzip()
                 .precompressed_br()
-                .append_index_html_on_directories(true);
+                .append_index_html_on_directories(true)
+                .fallback(|| crate::pages::not_found_page());
             app.route_service("/static/*path", serve_fs)
         }
         (None, None) => app,

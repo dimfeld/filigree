@@ -10,9 +10,8 @@ use schemars::JsonSchema;
 
 use crate::{
     auth::{has_any_permission, Authed},
-    pages::layout::root_layout_page,
+    pages::{error::HtmlError, layout::root_layout_page},
     server::ServerState,
-    Error,
 };
 
 #[derive(serde::Deserialize, Debug, JsonSchema)]
@@ -22,8 +21,8 @@ pub struct ResetPayload {
 
 async fn reset_form(
     State(state): State<ServerState>,
-    FormOrJson(payload): FormOrJson<ResetPayload>,
-) -> impl IntoResponse {
+    payload: FormOrJson<ResetPayload>,
+) -> Result<impl IntoResponse, HtmlError> {
     Ok(html! {})
 }
 

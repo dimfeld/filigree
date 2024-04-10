@@ -11,7 +11,10 @@ use schemars::JsonSchema;
 
 use crate::{
     auth::{has_any_permission, Authed},
-    pages::layout::root_layout_page,
+    pages::{
+        error::HtmlError,
+        layout::root_layout_page
+    },
     server::ServerState,
     Error,
 };
@@ -28,7 +31,7 @@ pub mod {{s}};
 
 async fn {{action.name}}_action(
     {{action.args}}
-) -> Result<impl IntoResponse, Error> {
+) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};
 
     Ok(body)
@@ -41,7 +44,7 @@ async fn {{action.name}}_action(
 
 async fn {{name}}_form(
 {{form.args}}
-) -> Result<impl IntoResponse, Error> {
+) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};
 
     Ok(body)
@@ -52,7 +55,7 @@ async fn {{name}}_form(
 
 async fn {{name}}_page(
     {{args}}
-) -> Result<impl IntoResponse, Error> {
+) -> Result<impl IntoResponse, HtmlError> {
     let body = html!{};
 
     Ok(root_layout_page(auth.as_ref(), "title", body))

@@ -12,14 +12,19 @@ use crate::{
     Error,
 };
 
+mod error;
 mod forgot;
+mod generic_error;
 mod layout;
 mod login;
 mod logout;
+mod not_found;
 mod reports;
 mod reset;
 
+pub use generic_error::*;
 use layout::*;
+pub use not_found::*;
 
 async fn home(auth: Option<Authed>) -> impl IntoResponse {
     root_layout(auth.as_ref(), "Home", html! { h1 { "Home" } })
@@ -33,4 +38,5 @@ pub fn create_routes() -> axum::Router<ServerState> {
         .merge(forgot::create_routes())
         .merge(reset::create_routes())
         .merge(reports::create_routes())
+        .fallback(not_found_page)
 }
