@@ -6,6 +6,7 @@ use axum::{
     Json,
 };
 use futures::future::BoxFuture;
+use http::header::CONTENT_TYPE;
 use tower::{Layer, Service, ServiceExt};
 
 use super::{ErrorResponseData, ForceObfuscate};
@@ -89,6 +90,16 @@ where
         Box::pin(async move {
             let res = fut.await?.into_response();
             if !settings.enabled {
+                return Ok(res);
+            }
+
+            let is_json = res
+                .headers()
+                .get(CONTENT_TYPE)
+                .map(|s| s.as_bytes().starts_with(b"application/json"))
+                .unwrap_or(false);
+
+            if !is_json {
                 return Ok(res);
             }
 

@@ -23,7 +23,7 @@ async fn edit_page(
 ) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};
 
-    Ok(root_layout_page(auth.as_ref(), "title", body))
+    Ok(root_layout_page(Some(&auth), "title", body))
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {

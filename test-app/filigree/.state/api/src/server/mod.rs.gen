@@ -384,8 +384,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             let serve_fs = tower_http::services::ServeDir::new(web_dir)
                 .precompressed_gzip()
                 .precompressed_br()
-                .append_index_html_on_directories(true)
-                .fallback(|| crate::pages::not_found_page());
+                .append_index_html_on_directories(true);
             app.route_service("/static/*path", serve_fs)
         }
         (None, None) => app,

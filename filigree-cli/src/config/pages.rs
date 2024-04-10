@@ -123,10 +123,11 @@ impl Page {
             .filter(|q| q.is_definition())
             .map(|q| q.type_def(&query_type_name, "").0);
 
+        let main_require_auth = require_auth.unwrap_or(permission.is_some());
         let args = rust_args(
             &page.path,
             &page.params,
-            require_auth.unwrap_or(permission.is_some()),
+            main_require_auth,
             "",
             &query_type_name,
         );
@@ -168,6 +169,7 @@ impl Page {
             "name": name,
             "path": page.path.0,
             "args": args,
+            "require_auth": main_require_auth,
             "permission": permission,
             "query_type_def": query_struct,
             "form": form,

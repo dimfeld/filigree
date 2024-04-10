@@ -249,7 +249,7 @@ impl Schemas {
 pub type SchemaErrors = VecDeque<OutputUnit<ErrorDescription>>;
 
 /// Validation errors, formatted for return to the client
-#[derive(Debug, Serialize)]
+#[derive(Debug, Default, Serialize)]
 pub struct ValidationErrorResponse {
     /// Validation messages not specific to a particular field.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -258,6 +258,12 @@ pub struct ValidationErrorResponse {
     /// JSON Pointer format.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub fields: BTreeMap<String, Vec<String>>,
+}
+
+impl ValidationErrorResponse {
+    pub fn is_empty(&self) -> bool {
+        self.messages.is_empty() && self.fields.is_empty()
+    }
 }
 
 impl From<SchemaErrors> for ValidationErrorResponse {

@@ -29,7 +29,7 @@ pub use not_found::*;
 pub use generic_error::*;
 
 async fn home(auth: Option<Authed>) -> impl IntoResponse {
-    root_layout(auth.as_ref(), "Home", html! { h1 { "Home" } })
+    root_layout_page(auth.as_ref(), "Home", html! { h1 { "Home" } })
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {
@@ -42,5 +42,5 @@ pub fn create_routes() -> axum::Router<ServerState> {
         {% for m in root_modules -%}
         .merge({{m}}::create_routes())
         {% endfor %}
-        .fallback(not_found_page)
+        .fallback(|| async { not_found_page() })
 }

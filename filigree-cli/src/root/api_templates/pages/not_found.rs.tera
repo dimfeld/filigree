@@ -1,4 +1,5 @@
 use axum::response::{IntoResponse, Response};
+use http::StatusCode;
 use maud::html;
 
 use crate::Error;
@@ -6,5 +7,5 @@ use crate::Error;
 pub fn not_found_page() -> Response {
     let body = html! {};
 
-    body.into_response()
+    (StatusCode::NOT_FOUND, body).into_response()
 }

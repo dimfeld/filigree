@@ -2,6 +2,7 @@ use axum::{
     extract::FromRequestParts,
     response::{IntoResponse, Response},
 };
+use filigree::errors::HttpError;
 use http::StatusCode;
 use maud::Markup;
 
@@ -24,9 +25,9 @@ impl From<error_stack::Report<Error>> for HtmlError {
 impl IntoResponse for HtmlError {
     fn into_response(self) -> Response {
         match self.0.status_code() {
-            _ => super::generic_error::generic_error_page(&self.0),
-            StatusCode::NOT_FOUND => super::not_found::not_found_page(&self.0),
+            StatusCode::NOT_FOUND => super::not_found::not_found_page(),
             StatusCode::UNAUTHORIZED => unauthenticated_error(&self.0),
+            _ => super::generic_error::generic_error_page(&self.0),
         }
     }
 }

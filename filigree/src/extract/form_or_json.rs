@@ -10,7 +10,10 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 
 use super::Rejection;
-use crate::requests::{multipart::parse_multipart, urlencoded::value_from_urlencoded, ContentType};
+use crate::requests::{
+    json_schema::ValidationErrorResponse, multipart::parse_multipart,
+    urlencoded::value_from_urlencoded, ContentType,
+};
 
 /// Extract a body from either JSON or form submission, and perform JSON schema validation.
 #[derive(Debug)]
@@ -42,7 +45,7 @@ where
             req.headers()
                 .get("content-type")
                 .and_then(|value| value.to_str().ok())
-                // Try JSON if there is no content-type, to accomodate lazy curl and similar
+                // Try JSON if there is no content-type, to accomodate lazy uses of curl and similar
                 .unwrap_or("application/json"),
         );
 
@@ -72,6 +75,39 @@ where
         serde_path_to_error::deserialize(value)
             .map(FormOrJson)
             .map_err(Rejection::Serde)
+    }
+}
+
+/// Result of extracting and validating a form body
+pub type FormOrJsonResult<T> = Result<T, Rejection>;
+
+/// The result of a form validation, unpacked for use in server-side rendering
+pub struct ValidatedForm<T> {
+    /// The data, if it validated properly
+    pub data: Option<T>,
+    /// The form that was submitted, if the validation failed
+    pub form: serde_json::Value,
+    /// The errors encountered
+    pub errors: ValidationErrorResponse,
+}
+
+impl<T> TryFrom<FormOrJsonResult<T>> for ValidatedForm<T> {
+    type Error = Rejection;
+
+    fn try_from(value: FormOrJsonResult<T>) -> Result<ValidatedForm<T>, Rejection> {
+        match value {
+            Ok(data) => Ok(ValidatedForm {
+                data: Some(data),
+                form: serde_json::Value::Null,
+                errors: ValidationErrorResponse::default(),
+            }),
+            Err(Rejection::Validation((form, errors))) => Ok(ValidatedForm {
+                data: None,
+                form,
+                errors: ValidationErrorResponse::from(errors),
+            }),
+            Err(e) => Err(e),
+        }
     }
 }
 

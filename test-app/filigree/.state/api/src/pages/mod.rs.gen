@@ -27,7 +27,7 @@ use layout::*;
 pub use not_found::*;
 
 async fn home(auth: Option<Authed>) -> impl IntoResponse {
-    root_layout(auth.as_ref(), "Home", html! { h1 { "Home" } })
+    root_layout_page(auth.as_ref(), "Home", html! { h1 { "Home" } })
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {
@@ -38,5 +38,5 @@ pub fn create_routes() -> axum::Router<ServerState> {
         .merge(forgot::create_routes())
         .merge(reset::create_routes())
         .merge(reports::create_routes())
-        .fallback(not_found_page)
+        .fallback(|| async { not_found_page() })
 }

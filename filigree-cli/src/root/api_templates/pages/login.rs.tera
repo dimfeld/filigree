@@ -24,10 +24,10 @@ struct RedirectTo {
 
 async fn login_form(
     State(state): State<ServerState>,
-    FormOrJson(payload): FormOrJson<EmailAndPassword>,
     Query(query): Query<RedirectTo>,
+    FormOrJson(payload): FormOrJson<EmailAndPassword>,
 ) -> impl IntoResponse {
-    Ok(html! {})
+    html! {}
 }
 
 async fn login_page(State(state): State<ServerState>) -> impl IntoResponse {
