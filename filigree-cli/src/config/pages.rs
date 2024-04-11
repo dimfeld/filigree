@@ -320,10 +320,7 @@ fn rust_args(
     }
 
     if !input_type_name.is_empty() {
-        args.push(format!(
-            "ValidatedForm {{ data, form, errors }}: ValidatedForm<{}>",
-            input_type_name
-        ));
+        args.push(format!("form: ValidatedForm<{}>", input_type_name));
     }
 
     args.join(",\n")

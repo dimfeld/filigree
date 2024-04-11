@@ -5,7 +5,9 @@ use axum::{
     response::IntoResponse,
     routing,
 };
+use filigree::extract::ValidatedForm;
 use maud::{html, Markup, DOCTYPE};
+use schemars::JsonSchema;
 
 use crate::{
     auth::{has_any_permission, Authed},
@@ -44,7 +46,7 @@ async fn home_page(
 ) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};
 
-    Ok(root_layout_page(auth.as_ref(), "title", body))
+    Ok(root_layout_page(auth.as_ref(), "Home", body))
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {

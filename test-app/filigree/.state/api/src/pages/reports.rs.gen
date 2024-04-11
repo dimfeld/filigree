@@ -27,7 +27,7 @@ async fn favorite_action(
     State(state): State<ServerState>,
     auth: Authed,
     Path(id): Path<String>,
-    ValidatedForm { data, form, errors }: ValidatedForm<FavoriteActionPayload>,
+    form: ValidatedForm<FavoriteActionPayload>,
 ) -> Result<impl IntoResponse, Error> {
     let body = html! {};
 
@@ -43,7 +43,7 @@ pub struct ReportsPayload {
 async fn reports_form(
     State(state): State<ServerState>,
     auth: Authed,
-    ValidatedForm { data, form, errors }: ValidatedForm<ReportsPayload>,
+    form: ValidatedForm<ReportsPayload>,
 ) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};
 

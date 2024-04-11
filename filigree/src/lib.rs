@@ -48,6 +48,8 @@ pub mod tracing_config;
 pub mod uploads;
 /// Manage users, roles, and related data
 pub mod users;
+#[cfg(feature = "maud")]
+pub mod vite_manifest;
 
 /// A simple structure for sending back a message-only response
 #[derive(Serialize, Debug)]

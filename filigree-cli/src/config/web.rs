@@ -24,7 +24,7 @@ pub struct WebConfig {
     /// - "<web_directory>/build/client" when framework is sveltekit
     /// - "<web_directory>/build" when framework is maud
     ///
-    /// This can be set at runtime using the
+    /// This can be set at runtime using the WEB_ASSET_DIR environment variable
     pub files: Option<String>,
 
     pub forward_to_frontend: Option<bool>,

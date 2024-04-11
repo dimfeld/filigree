@@ -3,6 +3,8 @@ use std::{borrow::Cow, collections::BTreeMap, ops::Deref};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
+use crate::Error;
+
 /// A reference to an existing object, or a definition of a new one.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(untagged)]
@@ -80,9 +82,14 @@ impl Deref for EndpointPath {
 }
 
 impl EndpointPath {
+    /// Make sure paths start with a slash and do not end with a slash
     pub fn normalize(&mut self) {
         if self.0.len() > 1 && self.0.ends_with("/") {
             self.0.pop();
+        }
+
+        if !self.0.starts_with('/') {
+            self.0 = format!("/{p}", p = self.0);
         }
     }
 

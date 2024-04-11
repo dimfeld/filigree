@@ -1,7 +1,7 @@
 //! Maud Utilities
 
 use axum::response::IntoResponse;
-use maud::{html, Markup, DOCTYPE};
+use maud::Markup;
 
 /// A wrapper for `Markup` that implements `IntoResponse`
 pub struct Html(Markup);

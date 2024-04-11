@@ -367,13 +367,17 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .nest("/api", api_routes)
         {%- if web.has_api_pages %}.merge(web_routes){% endif %};
 
-    let app = match config.serve_frontend {
+    let (mut web_port, mut web_dir) = config.serve_frontend;
+    web_port = web_port.filter(|p| *p != 0);
+    web_dir = web_dir.filter(|p| !p.is_empty());
+
+    let app = match (web_port, web_dir) {
         (Some(web_port), Some(web_dir)) => {
             let fallback = filigree::route_services::ForwardRequest::new(
                 format!("http://localhost:{web_port}")
             );
 
-            let serve_fs = tower_http::services::ServeDir::new(web_dir)
+            let serve_fs = tower_http::services::ServeDir::new(&web_dir)
                 .precompressed_gzip()
                 .precompressed_br()
                 // Pass non-GET methods to the fallback instead of returning 405
@@ -381,8 +385,9 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                 .fallback(fallback.clone());
 
             app
+                .merge(filigree::route_services::serve_immutable_files(&web_dir))
                 .route_service("/", fallback)
-                .route_service("/*path", serve_fs)
+                .fallback_service(serve_fs)
         }
         (Some(web_port), None) => {
             let fallback = filigree::route_services::ForwardRequest::new(
@@ -392,14 +397,17 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             app.fallback_service(fallback)
         }
         (None, Some(web_dir)) => {
-            let serve_fs = tower_http::services::ServeDir::new(web_dir)
+            let serve_fs = tower_http::services::ServeDir::new(&web_dir)
                 .precompressed_gzip()
                 .precompressed_br()
                 .append_index_html_on_directories(true)
                 {% if web.has_api_pages -%}
                 .fallback(crate::pages::not_found::not_found_fallback.with_state(state.clone()));
                 {%- endif %};
-            app.fallback_service(serve_fs)
+
+            app
+                .merge(filigree::route_services::serve_immutable_files(&web_dir))
+                .fallback_service(serve_fs)
         }
         (None, None) => app
     };
