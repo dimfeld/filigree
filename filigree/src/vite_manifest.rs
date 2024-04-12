@@ -42,7 +42,9 @@ struct ViteManifestEntry {
     file: String,
     // name: String,
     // src: String,
+    #[serde(default)]
     is_entry: bool,
+    #[serde(default)]
     is_dynamic_entry: bool,
     #[serde(default)]
     css: Vec<String>,
@@ -89,6 +91,7 @@ impl Manifest {
         base_url: &str,
         manifest_path: &Path,
     ) -> Result<(), Report<ManifestError>> {
+        tracing::debug!("reading manifest {}", manifest_path.display());
         let manifest_file = std::fs::read_to_string(manifest_path);
 
         let manifest_file = match manifest_file {
@@ -132,7 +135,11 @@ impl Manifest {
             })
             .collect::<Result<HashMap<String, Raw<String>>, _>>()?;
 
-        let index_data = entries.get("index").unwrap().clone();
+        let index_data = entries
+            .get("index.js")
+            .ok_or(ManifestError::Inconsistent)
+            .attach_printable("No entry for index")?
+            .clone();
 
         let mut wrapper = self.0.write().unwrap();
         if let Some(data) = wrapper.as_mut() {

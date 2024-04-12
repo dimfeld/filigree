@@ -6,7 +6,7 @@ use axum::{
     routing,
 };
 use filigree::extract::ValidatedForm;
-use hypertext::{maud, Renderable};
+use hypertext::{rsx, Renderable};
 use schemars::JsonSchema;
 
 use crate::{
@@ -29,9 +29,9 @@ async fn favorite_action(
     Path(id): Path<String>,
     form: ValidatedForm<FavoriteActionPayload>,
 ) -> Result<impl IntoResponse, Error> {
-    let body = maud! {}.render();
+    let body = rsx! {};
 
-    Ok(body)
+    Ok(body.render())
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, JsonSchema)]
@@ -45,16 +45,16 @@ async fn reports_form(
     auth: Authed,
     form: ValidatedForm<ReportsPayload>,
 ) -> Result<impl IntoResponse, HtmlError> {
-    let body = maud! {}.render();
+    let body = rsx! {};
 
-    Ok(body)
+    Ok(body.render())
 }
 
 async fn reports_page(
     State(state): State<ServerState>,
     auth: Option<Authed>,
 ) -> Result<impl IntoResponse, HtmlError> {
-    let body = maud! {};
+    let body = rsx! {};
 
     Ok(root_layout_page(auth.as_ref(), "title", body))
 }

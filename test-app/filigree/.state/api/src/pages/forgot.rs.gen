@@ -5,7 +5,7 @@ use axum::{
     routing,
 };
 use filigree::{extract::FormOrJson, html_elements};
-use hypertext::{maud, Renderable};
+use hypertext::{rsx, Renderable};
 use schemars::JsonSchema;
 
 use crate::{
@@ -23,11 +23,11 @@ async fn forgot_form(
     State(state): State<ServerState>,
     FormOrJson(payload): FormOrJson<ForgotPayload>,
 ) -> Result<impl IntoResponse, HtmlError> {
-    Ok(maud! {}.render())
+    Ok(rsx! {}.render())
 }
 
 async fn forgot_page(State(state): State<ServerState>) -> impl IntoResponse {
-    root_layout_page(None, "Forgot", maud! { h1 { "Forgot" } })
+    root_layout_page(None, "Forgot", rsx! { <h1>Forgot</h1> })
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {

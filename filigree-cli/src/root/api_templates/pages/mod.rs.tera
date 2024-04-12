@@ -5,8 +5,11 @@ use axum::{
     response::IntoResponse,
     routing,
 };
-use filigree::extract::ValidatedForm;
-use hypertext::{maud, Renderable};
+use filigree::{
+    extract::ValidatedForm,
+    html_elements,
+};
+use hypertext::{rsx, GlobalAttributes, Renderable};
 use schemars::JsonSchema;
 
 use crate::{
@@ -39,7 +42,7 @@ pub use generic_error::*;
 async fn home_page(
     authed: Option<Authed>
 ) -> Result<impl IntoResponse, HtmlError> {
-    let body = maud!{};
+    let body = rsx!{};
 
     Ok(root_layout_page(auth.as_ref(), "title", body))
 }

@@ -4,7 +4,7 @@ use filigree::{
     html_elements,
     vite_manifest::{watch::ManifestWatcher, Manifest, ManifestError},
 };
-use hypertext::{maud, Renderable, Rendered};
+use hypertext::{rsx, Renderable, Rendered};
 
 use crate::auth::Authed;
 
@@ -33,27 +33,25 @@ pub fn init_manifest(
 /// The HTML shell that every page should be wrapped in to enable basic functionality.
 pub fn page_wrapper(title: &str, slot: impl Renderable) -> Rendered<String> {
     let client_tags = MANIFEST.index();
-    maud! {
-        !DOCTYPE
-         html {
-             head {
-                 meta charset="utf-8";
-                 meta name="viewport" content="width=device-width, initial-scale=1";
-                 (client_tags)
-                 title { (title) }
-             }
-             body {
-                 (slot)
-             }
-         }
+    rsx! {
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                {client_tags}
+                <title>{title}</title>
+            </head>
+            <body>(slot)</body>
+        </html>
     }
     .render()
 }
 
 /// The root layout of the application
 pub fn root_layout(auth: Option<&Authed>, slot: impl Renderable) -> impl Renderable {
-    maud! {
-        (slot)
+    rsx! {
+        {slot}
     }
 }
 

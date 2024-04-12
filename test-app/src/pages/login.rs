@@ -9,7 +9,7 @@ use filigree::{
     extract::FormOrJson,
     html_elements,
 };
-use hypertext::{maud, Renderable};
+use hypertext::{rsx, Renderable};
 use schemars::JsonSchema;
 
 use crate::{
@@ -28,11 +28,11 @@ async fn login_form(
     Query(query): Query<RedirectTo>,
     FormOrJson(payload): FormOrJson<EmailAndPassword>,
 ) -> impl IntoResponse {
-    maud! {}.render()
+    rsx! {}.render()
 }
 
 async fn login_page(State(state): State<ServerState>) -> impl IntoResponse {
-    root_layout_page(None, "Login", maud! { h1 { "Login" } })
+    root_layout_page(None, "Login", rsx! { <h1>Login</h1> })
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {

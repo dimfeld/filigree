@@ -6,7 +6,7 @@ use axum::{
     routing,
 };
 use filigree::extract::ValidatedForm;
-use hypertext::{maud, Renderable};
+use hypertext::{rsx, Renderable};
 use schemars::JsonSchema;
 
 use crate::{
@@ -21,7 +21,7 @@ async fn public_page(
     auth: Option<Authed>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, HtmlError> {
-    let body = maud! {};
+    let body = rsx! {};
 
     Ok(root_layout_page(auth.as_ref(), "title", body))
 }
