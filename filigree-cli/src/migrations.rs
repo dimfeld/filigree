@@ -314,6 +314,7 @@ impl TableChange {
                         column_keyword: true,
                         if_not_exists: false,
                         column_def: column.0.clone(),
+                        column_position: None,
                     }],
                 };
 
@@ -570,12 +571,28 @@ fn process_column_option_to_table_constraint(
         ColumnOption::Unique {
             is_primary,
             characteristics,
-        } => Some(TableConstraint::Unique {
-            name: option.name.clone(),
-            columns: vec![column_name.clone()],
-            is_primary: *is_primary,
-            characteristics: characteristics.clone(),
-        }),
+        } => {
+            if *is_primary {
+                Some(TableConstraint::PrimaryKey {
+                    name: option.name.clone(),
+                    index_name: None,
+                    index_type: None,
+                    index_options: vec![],
+                    columns: vec![column_name.clone()],
+                    characteristics: characteristics.clone(),
+                })
+            } else {
+                Some(TableConstraint::Unique {
+                    name: option.name.clone(),
+                    columns: vec![column_name.clone()],
+                    characteristics: characteristics.clone(),
+                    index_name: None,
+                    index_type: None,
+                    index_options: vec![],
+                    index_type_display: sql_migration_sim::ast::KeyOrIndexDisplay::None,
+                })
+            }
+        }
 
         ColumnOption::Check(expr) => Some(TableConstraint::Check {
             name: option.name.clone(),

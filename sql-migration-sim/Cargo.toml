@@ -13,7 +13,7 @@ documentation = "https://docs.rs/sql-migration-sim"
 
 [dependencies]
 serde = { version = "1.0.197", optional = true }
-sqlparser = { git = "https://github.com/dimfeld/sqlparser-rs.git", branch = "create-function-options" }
+sqlparser = "0.45.0"
 thiserror = "1.0.57"
 
 [features]

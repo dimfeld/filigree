@@ -680,6 +680,7 @@ fn object_schema_and_name(name: &ObjectName) -> (Option<&Ident>, &Ident) {
 pub fn table_constraint_name(constraint: &TableConstraint) -> &Option<Ident> {
     match constraint {
         TableConstraint::Unique { name, .. } => name,
+        TableConstraint::PrimaryKey { name, .. } => name,
         TableConstraint::ForeignKey { name, .. } => name,
         TableConstraint::Check { name, .. } => name,
         TableConstraint::Index { name, .. } => name,
