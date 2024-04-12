@@ -33,7 +33,7 @@ filigree = { version = "0.0.3", path = "../filigree" }
 futures = "0.3.30"
 http = "1.0.0"
 hyper = { version = "1.2.0", features = ["server", "http1", "http2"] }
-hypertext = { version = "0.5.0", features = ["axum"] }
+maud = { version = "0.26.0", features = ["axum"] }
 percent-encoding = "2.3.1"
 reqwest = { version = "0.11.24", features = ["cookies", "json"] }
 rust-embed = "8.3.0"

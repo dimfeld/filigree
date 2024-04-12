@@ -7,15 +7,15 @@ use std::{
 };
 
 use error_stack::{Report, ResultExt};
-use hypertext::Raw;
+use maud::PreEscaped;
 use serde::Deserialize;
 use thiserror::Error;
 
 struct ManifestData {
     /// The data for the index page
-    index: Raw<String>,
+    index: PreEscaped<String>,
     /// All the entry points
-    entries: HashMap<String, Raw<String>>,
+    entries: HashMap<String, PreEscaped<String>>,
 }
 
 /// A parsed Vite manifest
@@ -131,9 +131,9 @@ impl Manifest {
                     )
                 }
 
-                Ok::<_, Report<ManifestError>>((key.to_string(), Raw(output)))
+                Ok::<_, Report<ManifestError>>((key.to_string(), PreEscaped(output)))
             })
-            .collect::<Result<HashMap<String, Raw<String>>, _>>()?;
+            .collect::<Result<HashMap<String, PreEscaped<String>>, _>>()?;
 
         let index_data = entries
             .get("index.js")
@@ -156,7 +156,7 @@ impl Manifest {
     }
 
     /// Get the HTML to include the JS and CSS for the index page
-    pub fn index(&self) -> Raw<String> {
+    pub fn index(&self) -> PreEscaped<String> {
         self.0
             .read()
             .unwrap()
@@ -167,7 +167,7 @@ impl Manifest {
     }
 
     /// Get the HTML to include the JS and CSS for an entrypoint
-    pub fn get(&self, name: &str) -> Option<Raw<String>> {
+    pub fn get(&self, name: &str) -> Option<PreEscaped<String>> {
         self.0
             .read()
             .unwrap()

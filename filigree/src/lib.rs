@@ -17,8 +17,6 @@ pub mod error_stack;
 pub mod errors;
 /// Request extractors
 pub mod extract;
-#[cfg(feature = "hypertext")]
-pub mod html_elements;
 #[cfg(feature = "htmx")]
 pub mod htmx;
 /// Extension trait to inspect the body of a Reqwest error response
@@ -48,7 +46,7 @@ pub mod tracing_config;
 pub mod uploads;
 /// Manage users, roles, and related data
 pub mod users;
-#[cfg(feature = "htmx")]
+#[cfg(feature = "maud")]
 pub mod vite_manifest;
 
 /// A simple structure for sending back a message-only response

@@ -7,5 +7,5 @@ members = [
 ]
 resolver = "2"
 
-[profile.dev.package.hypertext-macros]
+[profile.dev.package.maud_macros]
 opt-level = 3

@@ -48,8 +48,7 @@ struct ServeCommand {
     #[clap(long, env = "VITE_MANIFEST")]
     vite_manifest: Option<String>,
 
-    /// Path to the frontend manifest file. Defaults to "<frontend_asset_dir>/.vite/manifest.json"
-    /// if frontend_asset_dir is set.
+    /// Watch the Vite manifest for changes
     #[clap(long, env = "WATCH_VITE_MANIFEST")]
     watch_vite_manifest: bool,
 

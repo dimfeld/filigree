@@ -6,7 +6,7 @@ use axum::{
     routing,
 };
 use filigree::extract::ValidatedForm;
-use hypertext::{rsx, Renderable};
+use maud::html;
 use schemars::JsonSchema;
 
 use crate::{
@@ -35,18 +35,18 @@ async fn count_action(
     State(state): State<ServerState>,
     auth: Option<Authed>,
 ) -> Result<impl IntoResponse, Error> {
-    let body = rsx! {};
+    let body = html! {};
 
-    Ok(body.render())
+    Ok(body)
 }
 
 async fn home_page(
     State(state): State<ServerState>,
     auth: Option<Authed>,
 ) -> Result<impl IntoResponse, HtmlError> {
-    let body = rsx! {};
+    let body = html! {};
 
-    Ok(root_layout_page(auth.as_ref(), "Home", body))
+    Ok(root_layout_page(auth.as_ref(), "title", body))
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {

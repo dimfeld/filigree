@@ -89,7 +89,7 @@ impl WebConfig {
     }
 
     fn add_htmx_deps(cwd: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
-        add_dep(cwd, manifest, "hypertext", "0.5.0", &["axum"])?;
+        add_dep(cwd, manifest, "maud", "0.26.0", &["axum"])?;
         add_dep(cwd, manifest, "axum-htmx", "0.5.0", &[])?;
 
         Ok(())
@@ -97,7 +97,7 @@ impl WebConfig {
 
     pub fn filigree_features(&self) -> Vec<&'static str> {
         match self.framework {
-            Some(WebFramework::Htmx) => vec!["htmx", "hypertext", "watch-manifest"],
+            Some(WebFramework::Htmx) => vec!["htmx", "maud", "watch-manifest"],
             _ => vec![],
         }
     }
@@ -120,7 +120,7 @@ impl WebConfig {
 /// The frontend framework to use
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum WebFramework {
-    /// This application uses Hypertext/RSX/Maud and HTMX to render its frontend
+    /// This application uses Maud and HTMX to render its frontend
     #[serde(rename = "htmx")]
     Htmx,
     /// This application uses a SvelteKit with a separate server for its frontend

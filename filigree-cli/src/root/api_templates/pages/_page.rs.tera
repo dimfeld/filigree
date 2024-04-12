@@ -6,7 +6,7 @@ use axum::{
     routing,
 };
 use filigree::extract::ValidatedForm;
-use hypertext::{rsx, GlobalAttributes, Renderable};
+use maud::html;
 use schemars::JsonSchema;
 
 use crate::{

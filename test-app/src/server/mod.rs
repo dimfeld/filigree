@@ -151,6 +151,8 @@ pub struct Server {
     /// The server's TCP listener
     pub listener: tokio::net::TcpListener,
     pub queue_workers: crate::jobs::QueueWorkers,
+    /// Vite manifest watcher for replacing web builds at runtime
+    manifest_watcher: Option<filigree::vite_manifest::watch::ManifestWatcher>,
 }
 
 impl Server {
@@ -443,7 +445,6 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             .set_x_request_id(MakeRequestUuid)
             .propagate_x_request_id()
             .layer(CompressionLayer::new())
-            .decompression()
             .layer(filigree::auth::middleware::AuthLayer::new(auth_queries))
             .into_inner(),
     );
@@ -464,6 +465,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         app,
         state,
         listener,
+        manifest_watcher,
         queue_workers,
     })
 }

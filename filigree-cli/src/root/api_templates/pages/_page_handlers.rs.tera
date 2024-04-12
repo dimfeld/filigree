@@ -7,9 +7,9 @@
 async fn {{action.name}}_action(
     {{action.args}}
 ) -> Result<impl IntoResponse, Error> {
-    let body = rsx! {};
+    let body = html! {};
 
-    Ok(body.render())
+    Ok(body)
 }
 
 {% endfor %}
@@ -20,9 +20,9 @@ async fn {{action.name}}_action(
 async fn {{name}}_form(
     {{form.args}}
 ) -> Result<impl IntoResponse, HtmlError> {
-    let body = rsx! {};
+    let body = html! {};
 
-    Ok(body.render())
+    Ok(body)
 }
 {% endif %}
 
@@ -31,7 +31,7 @@ async fn {{name}}_form(
 async fn {{name}}_page(
     {{args}}
 ) -> Result<impl IntoResponse, HtmlError> {
-    let body = rsx!{};
+    let body = html! {};
 
     Ok(root_layout_page({% if require_auth %}Some(&auth){% else %}auth.as_ref(){% endif %}, "title", body))
 }
