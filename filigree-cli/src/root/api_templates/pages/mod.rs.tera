@@ -5,10 +5,8 @@ use axum::{
     response::IntoResponse,
     routing,
 };
-use filigree::{
-    extract::ValidatedForm,
-};
-use maud::html;
+use filigree::extract::ValidatedForm;
+use maud::{html, Markup};
 use schemars::JsonSchema;
 
 use crate::{
