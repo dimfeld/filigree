@@ -6,3 +6,6 @@ members = [
   "test-app"
 ]
 resolver = "2"
+
+[profile.dev.package.maud_macros]
+opt-level = 3

@@ -1,4 +1,4 @@
-use std::{convert::Infallible, net::SocketAddr};
+use std::{convert::Infallible, net::SocketAddr, path::Path};
 
 use axum::{
     body::Body,
@@ -6,9 +6,10 @@ use axum::{
     response::IntoResponse,
 };
 use futures::future::BoxFuture;
-use http::Uri;
+use http::{HeaderValue, Uri};
 use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
-use tower::Service;
+use tower::{Service, ServiceExt};
+use tower_http::services::{fs::ServeFileSystemResponseBody, ServeDir};
 use tracing::{event, Level};
 
 type Client = hyper_util::client::legacy::Client<HttpConnector, Body>;
@@ -90,4 +91,77 @@ impl Service<Request> for ForwardRequest {
 
         Box::pin(fut)
     }
+}
+
+/// Serve a directory and return a cache-control header with every successful response
+#[derive(Clone, Debug)]
+pub struct ServeDirWithCache {
+    inner: tower_http::services::ServeDir,
+    cache_header: HeaderValue,
+}
+
+impl ServeDirWithCache {
+    /// Create a new [ServeDirWithCache] with this header value
+    pub fn new(dir: tower_http::services::ServeDir, cache_header: HeaderValue) -> Self {
+        Self {
+            inner: dir,
+            cache_header,
+        }
+    }
+
+    /// Serve a directory with cache header for immutable values. This generally should be used for
+    /// static files with hashes in the filename.
+    pub fn immutable(dir: tower_http::services::ServeDir) -> Self {
+        Self::new(
+            dir,
+            HeaderValue::from_static("max-age=300, s-maxage=2592000"),
+        )
+    }
+}
+
+impl Service<Request> for ServeDirWithCache {
+    type Response = hyper::Response<ServeFileSystemResponseBody>;
+    type Error = Infallible;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        <ServeDir as Service<Request>>::poll_ready(&mut self.inner, cx)
+    }
+
+    fn call(&mut self, req: Request) -> Self::Future {
+        let clone = self.inner.clone();
+        let inner = std::mem::replace(&mut self.inner, clone);
+        let header = self.cache_header.clone();
+        let fut = async move {
+            let mut response = inner.oneshot(req).await?;
+
+            if response.status().is_success() {
+                response.headers_mut().insert("cache-control", header);
+            }
+            Ok(response)
+        };
+
+        Box::pin(fut)
+    }
+}
+
+/// Create a router that serves the _app/immutable directory with appropriate cache headers.
+/// The `base_dir` parameter should be the base directory of the built app,
+/// which contains the _app/immutable directory.
+pub fn serve_immutable_files<P, T>(base_dir: P) -> axum::Router<T>
+where
+    P: AsRef<std::ffi::OsStr>,
+    T: Send + Sync + Clone + 'static,
+{
+    let full_path = Path::new(base_dir.as_ref()).join("_app/immutable");
+    let service = ServeDirWithCache::immutable(
+        ServeDir::new(full_path)
+            .precompressed_br()
+            .precompressed_gzip(),
+    );
+
+    axum::Router::new().nest_service("/_app/immutable", service)
 }

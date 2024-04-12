@@ -22,8 +22,9 @@ pub struct WebConfig {
     /// Serve frontend static assets from this directory when in production mode. If omitted, defaults to:
     ///
     /// - "<web_directory>/build/client" when framework is sveltekit
+    /// - "<web_directory>/build" when framework is htmx
     ///
-    /// This can be set at runtime using the
+    /// This can be set at runtime using the WEB_ASSET_DIR environment variable
     pub files: Option<String>,
 
     pub forward_to_frontend: Option<bool>,
@@ -35,6 +36,8 @@ impl WebConfig {
             "framework": self.framework,
             "port": self.port(),
             "files": self.files(web_relative_to_api),
+            "has_api_pages": self.has_api_pages(),
+            "generate_js_types_code": self.generate_js_types_code(),
         })
     }
 
@@ -48,6 +51,12 @@ impl WebConfig {
                 web_relative_to_api
                     .join("build")
                     .join("client")
+                    .to_string_lossy()
+                    .to_string(),
+            ),
+            Some(WebFramework::Htmx) => Some(
+                web_relative_to_api
+                    .join("build")
                     .to_string_lossy()
                     .to_string(),
             ),
@@ -68,27 +77,57 @@ impl WebConfig {
 
     pub fn add_deps(&self, cwd: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
         match self.framework {
-            // Some(WebFramework::Maud) => Self::add_maud_deps(cwd, manifest)?,
+            Some(WebFramework::Htmx) => Self::add_htmx_deps(cwd, manifest)?,
             _ => {}
+        }
+
+        if self.generate_js_types_code() {
+            add_dep(cwd, manifest, "schemars-zod", "0.1.5", &[])?;
+        }
+
+        if self.has_api_pages() {
+            // for livereload
+            add_dep(cwd, manifest, "tokio-stream", "0.1.15", &[])?;
         }
 
         Ok(())
     }
 
-    fn add_maud_deps(cwd: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
-        add_dep(cwd, manifest, "maud", "0.26.0", &[])?;
+    fn add_htmx_deps(cwd: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
+        add_dep(cwd, manifest, "maud", "0.26.0", &["axum"])?;
         add_dep(cwd, manifest, "axum-htmx", "0.5.0", &[])?;
 
         Ok(())
+    }
+
+    pub fn filigree_features(&self) -> Vec<&'static str> {
+        match self.framework {
+            Some(WebFramework::Htmx) => vec!["htmx", "maud", "watch-manifest"],
+            _ => vec![],
+        }
+    }
+
+    /// If this application renders pages from the API. This controls if the API `pages` templates
+    /// are rendered
+    pub fn has_api_pages(&self) -> bool {
+        match self.framework {
+            Some(WebFramework::Htmx) => true,
+            Some(WebFramework::SvelteKit) => false,
+            None => false,
+        }
+    }
+
+    pub fn generate_js_types_code(&self) -> bool {
+        matches!(self.framework, Some(WebFramework::SvelteKit))
     }
 }
 
 /// The frontend framework to use
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum WebFramework {
-    // /// This application uses Maud and HTMX templates to render its frontend
-    // #[serde(rename = "maud")]
-    // Maud,
+    /// This application uses Maud and HTMX to render its frontend
+    #[serde(rename = "htmx")]
+    Htmx,
     /// This application uses a SvelteKit with a separate server for its frontend
     #[serde(rename = "sveltekit")]
     SvelteKit,

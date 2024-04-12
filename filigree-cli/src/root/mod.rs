@@ -1,3 +1,5 @@
+pub mod pages;
+
 use std::path::PathBuf;
 
 use convert_case::{Case, Casing};
@@ -5,10 +7,11 @@ use error_stack::{Report, ResultExt};
 use itertools::Itertools;
 use rayon::prelude::*;
 
+use self::pages::{NON_PAGE_NODE_PATH, PAGE_PATH};
 use crate::{
-    config::Config,
+    config::{web::WebFramework, Config},
     model::generator::ModelGenerator,
-    templates::{Renderer, RootApiTemplates, RootWebTemplates},
+    templates::{Renderer, RootApiTemplates, RootHtmxTemplates, RootSvelteTemplates},
     write::{RenderedFile, RenderedFileLocation},
     Error,
 };
@@ -126,21 +129,51 @@ pub fn render_files(
     // These files don't go in src and so should not have it prepended.
     let non_base_files = ["build.rs", "tailwind.config.js"];
 
-    let web_files = RootWebTemplates::iter().map(|f| (RenderedFileLocation::Web, f));
-    let api_files = RootApiTemplates::iter().map(|f| (RenderedFileLocation::Api, f));
+    let mut files = RootApiTemplates::iter()
+        .map(|f| (RenderedFileLocation::Rust, f))
+        .collect::<Vec<_>>();
 
-    let files = web_files.chain(api_files).collect::<Vec<_>>();
+    match config.web.framework {
+        Some(WebFramework::SvelteKit) => {
+            files.extend(RootSvelteTemplates::iter().map(|f| (RenderedFileLocation::Svelte, f)));
+        }
+        Some(WebFramework::Htmx) => {
+            files.extend(RootHtmxTemplates::iter().map(|f| (RenderedFileLocation::Htmx, f)));
+        }
+        None => {}
+    };
 
     let job_template_path = "root/jobs/_one_job.rs.tera";
     let skip_files = [
+        // Just source for other templates
         "root/auth/fetch_base.sql.tera",
+        // Rendered separately since it's not in `src`
         "root/build.rs.tera",
+        // Rendered custom for each job at the end
         job_template_path,
+        // These are rendered by [render_pages]
+        "root/pages/mod.rs.tera",
+        "root/pages/_page_handlers.rs.tera",
+        "root/pages/_page_routes.rs.tera",
+        PAGE_PATH,
+        NON_PAGE_NODE_PATH,
     ];
+
+    let has_api_pages = config.web.has_api_pages();
 
     let mut output = files
         .into_par_iter()
-        .filter(|(_, file)| !skip_files.contains(&file.as_ref()))
+        .filter(|(_, file)| {
+            if skip_files.contains(&file.as_ref()) {
+                return false;
+            }
+
+            if !has_api_pages && file.starts_with("root/pages/") {
+                return false;
+            }
+
+            true
+        })
         .map(|(location, file)| {
             let filename = file.strip_prefix("root/").unwrap();
             let filename = filename.strip_suffix(".tera").unwrap_or(filename);
@@ -156,7 +189,7 @@ pub fn render_files(
 
     let job_template = config
         .job
-        .iter()
+        .par_iter()
         .map(|(k, v)| {
             let module_name = k.to_case(Case::Snake);
             let context = tera::Context::from_value(v.template_context(k)).unwrap();
@@ -166,7 +199,7 @@ pub fn render_files(
             renderer.render_with_full_path(
                 output_path,
                 job_template_path,
-                RenderedFileLocation::Api,
+                RenderedFileLocation::Rust,
                 &context,
             )
         })

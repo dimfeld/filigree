@@ -45,6 +45,17 @@ struct ServeCommand {
     #[clap(long, env = "{{env_prefix}}WEB_ASSET_DIR")]
     frontend_asset_dir: Option<String>,
 
+    {% if web.has_api_pages %}
+    /// Path to the frontend manifest file. Defaults to "<frontend_asset_dir>/.vite/manifest.json"
+    /// if frontend_asset_dir is set.
+    #[clap(long, env = "{{env_prefix}}VITE_MANIFEST")]
+    vite_manifest: Option<String>,
+
+    /// Watch the filesystem for changes and enable live reload
+    #[clap(long, env = "{{env_prefix}}DEV")]
+    dev: bool,
+    {% endif %}
+
     /// The environment in which this server is running
     #[clap(long = "env", env = "{{env_prefix}}ENV", default_value_t = String::from("development"))]
     env: String,
@@ -199,13 +210,25 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         )
     });
 
+    let frontend_asset_dir =
+            cmd.frontend_asset_dir{% if web.files %}.or_else(|| Some("{{web.files}}".to_string())){% endif %};
+    let vite_manifest = cmd.vite_manifest
+        .or_else(|| {
+            frontend_asset_dir
+                .as_ref()
+                .map(|base| format!("{base}/.vite/manifest.json"))
+        });
+
     let server = server::create_server(server::Config {
         env: cmd.env,
         bind: server::ServerBind::HostPort(cmd.host, cmd.port),
-        serve_frontend: (
-            cmd.frontend_port{% if web.port %}.or(Some({{web.port}})){% endif %},
-            cmd.frontend_asset_dir{% if web.files %}.or_else(|| Some("{{web.files}}".to_string())){% endif %},
-        ),
+        serve_frontend: server::ServeFrontend {
+            port: cmd.frontend_port{% if web.port %}.or(Some({{web.port}})){% endif %},
+            path: frontend_asset_dir,
+            vite_manifest,
+            watch_vite_manifest: cmd.dev,
+            livereload: cmd.dev,
+        },
         insecure: cmd.insecure,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),
         cookie_configuration: SessionCookieBuilder::new(secure_cookies, cmd.cookie_same_site),

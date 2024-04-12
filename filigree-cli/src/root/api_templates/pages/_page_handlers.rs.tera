@@ -1,0 +1,47 @@
+{% for action in actions %}
+
+{{action.input_type_def}}
+
+{{action.query_type_def}}
+
+fn {{action.name}}_action_fragment() -> Markup {
+    html! {}
+}
+
+
+async fn {{action.name}}_action(
+    {{action.args}}
+) -> Result<impl IntoResponse, Error> {
+    let body = {{action.name}}_action_fragment();
+
+    Ok(body)
+}
+
+{% endfor %}
+
+{% if form %}
+{{form.input_type_def}}
+
+fn {{name}}_form_fragment() -> Markup {
+   html! {}
+}
+
+async fn {{name}}_form(
+    {{form.args}}
+) -> Result<impl IntoResponse, HtmlError> {
+    let body = {{name}}_form_fragment();
+
+    Ok(body)
+}
+{% endif %}
+
+{{query_type_def}}
+
+async fn {{name}}_page(
+    {{args}}
+) -> Result<impl IntoResponse, HtmlError> {
+    let body = html! {};
+
+    Ok(root_layout_page({% if require_auth %}Some(&auth){% else %}auth.as_ref(){% endif %}, "title", body))
+}
+

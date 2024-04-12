@@ -17,7 +17,7 @@ use crate::{
     config::Config,
     migrations::SingleMigration,
     model::{field::SortableType, ReferenceFetchType},
-    templates::{ModelRustTemplates, ModelSqlTemplates, ModelWebTemplates, Renderer},
+    templates::{ModelRustTemplates, ModelSqlTemplates, ModelSvelteTemplates, Renderer},
     write::{GeneratorMap, ModelMap, RenderedFile, RenderedFileLocation},
     Error,
 };
@@ -122,7 +122,7 @@ impl<'a> ModelGenerator<'a> {
             .render(
                 &PathBuf::new(),
                 "model/migrate_up.sql.tera",
-                crate::write::RenderedFileLocation::Api,
+                crate::write::RenderedFileLocation::Rust,
                 self.template_context(),
             )
             .map(|f| f.contents)
@@ -133,7 +133,7 @@ impl<'a> ModelGenerator<'a> {
             .render(
                 &PathBuf::new(),
                 "model/migrate_down.sql.tera",
-                crate::write::RenderedFileLocation::Api,
+                crate::write::RenderedFileLocation::Rust,
                 self.template_context(),
             )
             .map(|f| f.contents)
@@ -148,7 +148,7 @@ impl<'a> ModelGenerator<'a> {
         }
 
         let web_base_path = PathBuf::from("src/lib/models");
-        let web_files = ModelWebTemplates::iter()
+        let web_files = ModelSvelteTemplates::iter()
             .filter(|f| !f.ends_with(".macros.tera"))
             .map(|f| {
                 let outfile = if f == "model/model.ts.tera" {
@@ -164,7 +164,7 @@ impl<'a> ModelGenerator<'a> {
                 (
                     f,
                     outfile,
-                    RenderedFileLocation::Web,
+                    RenderedFileLocation::Svelte,
                     self.template_context(),
                 )
             });
@@ -194,7 +194,7 @@ impl<'a> ModelGenerator<'a> {
             (
                 Cow::Borrowed(infile),
                 rust_base_path.join(outfile),
-                RenderedFileLocation::Api,
+                RenderedFileLocation::Rust,
                 &populate_context,
             )
         });
@@ -207,7 +207,7 @@ impl<'a> ModelGenerator<'a> {
                 (
                     f,
                     outfile,
-                    RenderedFileLocation::Api,
+                    RenderedFileLocation::Rust,
                     self.template_context(),
                 )
             })

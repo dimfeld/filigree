@@ -6,9 +6,9 @@ build-with-backup:
   git add .
   @just build-test-app
 
-build-test-app:
+build-test-app *FLAGS:
   cd filigree-cli && cargo lbuild
-  cd test-app && ../target/debug/filigree write --overwrite && cargo lcheck
+  cd test-app && ../target/debug/filigree write {{FLAGS}} && cargo lcheck
 
 build-and-test *FLAGS:
   @just build-test-app

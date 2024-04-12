@@ -10,7 +10,10 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 
 use super::Rejection;
-use crate::requests::{multipart::parse_multipart, urlencoded::value_from_urlencoded, ContentType};
+use crate::requests::{
+    json_schema::ValidationErrorResponse, multipart::parse_multipart,
+    urlencoded::value_from_urlencoded, ContentType,
+};
 
 /// Extract a body from either JSON or form submission, and perform JSON schema validation.
 #[derive(Debug)]
@@ -38,41 +41,93 @@ where
     type Rejection = Rejection;
 
     async fn from_request(req: Request<Body>, _state: &S) -> Result<Self, Self::Rejection> {
-        let content_type = ContentType::new(
-            req.headers()
-                .get("content-type")
-                .and_then(|value| value.to_str().ok())
-                // Try JSON if there is no content-type, to accomodate lazy curl and similar
-                .unwrap_or("application/json"),
-        );
-
-        let (value, coerce_arrays) = if content_type.is_json() {
-            let value = Json::<serde_json::Value>::from_request(req, _state)
-                .await
-                .map(|json| FormOrJson(json.0))
-                .map_err(Rejection::Json)?
-                .0;
-            (value, false)
-        } else if content_type.is_form() {
-            let bytes = axum::body::to_bytes(req.into_limited_body(), usize::MAX)
-                .await
-                .map_err(Rejection::ReadBody)?;
-            let value = value_from_urlencoded(&bytes);
-            (value, true)
-        } else if content_type.is_multipart() {
-            let (value, _) = parse_multipart::<serde_json::Value>(req).await?;
-            (value, true)
-        } else {
-            return Err(Rejection::UnsupportedContentType);
-        };
-
-        let value = crate::requests::json_schema::validate::<T>(value, coerce_arrays)
-            .map_err(Rejection::Validation)?;
-
-        serde_path_to_error::deserialize(value)
-            .map(FormOrJson)
-            .map_err(Rejection::Serde)
+        let (data, _) = form_or_json_from_request(req, _state).await?;
+        Ok(FormOrJson(data))
     }
+}
+
+/// Result of extracting and validating a form body
+pub type FormOrJsonResult<T> = Result<T, Rejection>;
+
+/// The result of a form validation, unpacked for use in server-side rendering
+pub struct ValidatedForm<T> {
+    /// The data, if it validated properly
+    pub data: Option<T>,
+    /// The form that was submitted, if the validation failed
+    pub form: serde_json::Value,
+    /// The errors encountered
+    pub errors: ValidationErrorResponse,
+}
+
+#[async_trait]
+impl<T, S> FromRequest<S> for ValidatedForm<T>
+where
+    T: Debug + JsonSchema + DeserializeOwned + 'static,
+    S: Sync + Send,
+{
+    type Rejection = Rejection;
+
+    async fn from_request(req: Request<Body>, _state: &S) -> Result<Self, Self::Rejection> {
+        let value = form_or_json_from_request(req, _state).await;
+
+        match value {
+            Ok((data, form)) => Ok(ValidatedForm {
+                data: Some(data),
+                form,
+                errors: ValidationErrorResponse::default(),
+            }),
+            Err(Rejection::Validation((form, errors))) => Ok(ValidatedForm {
+                data: None,
+                form,
+                errors: ValidationErrorResponse::from(errors),
+            }),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+async fn form_or_json_from_request<T, S>(
+    req: Request<Body>,
+    _state: &S,
+) -> Result<(T, serde_json::Value), Rejection>
+where
+    T: Debug + JsonSchema + DeserializeOwned + 'static,
+    S: Sync + Send,
+{
+    let content_type = ContentType::new(
+        req.headers()
+            .get("content-type")
+            .and_then(|value| value.to_str().ok())
+            // Try JSON if there is no content-type, to accomodate lazy uses of curl and similar
+            .unwrap_or("application/json"),
+    );
+
+    let (value, coerce_arrays) = if content_type.is_json() {
+        let value = Json::<serde_json::Value>::from_request(req, _state)
+            .await
+            .map(|json| FormOrJson(json.0))
+            .map_err(Rejection::Json)?
+            .0;
+        (value, false)
+    } else if content_type.is_form() {
+        let bytes = axum::body::to_bytes(req.into_limited_body(), usize::MAX)
+            .await
+            .map_err(Rejection::ReadBody)?;
+        let value = value_from_urlencoded(&bytes);
+        (value, true)
+    } else if content_type.is_multipart() {
+        let (value, _) = parse_multipart::<serde_json::Value>(req).await?;
+        (value, true)
+    } else {
+        return Err(Rejection::UnsupportedContentType);
+    };
+
+    let value = crate::requests::json_schema::validate::<T>(value, coerce_arrays)
+        .map_err(Rejection::Validation)?;
+
+    let data = serde_path_to_error::deserialize(&value).map_err(Rejection::Serde)?;
+
+    Ok((data, value))
 }
 
 #[cfg(test)]

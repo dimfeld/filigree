@@ -6,7 +6,8 @@ use axum::{
     Json,
 };
 use futures::future::BoxFuture;
-use tower::{Layer, Service};
+use http::header::CONTENT_TYPE;
+use tower::{Layer, Service, ServiceExt};
 
 use super::{ErrorResponseData, ForceObfuscate};
 
@@ -66,7 +67,7 @@ pub struct ObfuscateError<S> {
 
 impl<S> Service<Request> for ObfuscateError<S>
 where
-    S: Service<Request> + Send + 'static,
+    S: Service<Request> + Clone + Send + 'static,
     S::Future: Send + 'static,
     S::Response: IntoResponse + Send + 'static,
 {
@@ -83,10 +84,22 @@ where
 
     fn call(&mut self, req: Request) -> Self::Future {
         let settings = self.settings.clone();
-        let fut = self.inner.call(req);
+        let clone = self.inner.clone();
+        let inner = std::mem::replace(&mut self.inner, clone);
+        let fut = inner.oneshot(req);
         Box::pin(async move {
             let res = fut.await?.into_response();
             if !settings.enabled {
+                return Ok(res);
+            }
+
+            let is_json = res
+                .headers()
+                .get(CONTENT_TYPE)
+                .map(|s| s.as_bytes().starts_with(b"application/json"))
+                .unwrap_or(false);
+
+            if !is_json {
                 return Ok(res);
             }
 

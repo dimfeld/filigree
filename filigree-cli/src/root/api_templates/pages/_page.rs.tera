@@ -1,0 +1,35 @@
+#![allow(unused_imports)]
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing,
+};
+use filigree::extract::ValidatedForm;
+use maud::{html, Markup};
+use schemars::JsonSchema;
+
+use crate::{
+    auth::{has_any_permission, Authed},
+    pages::{
+        error::HtmlError,
+        layout::root_layout_page
+    },
+    server::ServerState,
+    Error,
+};
+
+{% for s in submodules %}
+pub mod {{s}};
+{% endfor %}
+
+{% include "root/pages/_page_handlers.rs.tera" %}
+
+pub fn create_routes() -> axum::Router<ServerState> {
+    axum::Router::new()
+        {% include "root/pages/_page_routes.rs.tera" %}
+        {% for s in submodules %}
+        .merge({{s}}::create_routes())
+        {% endfor %}
+
+}

@@ -1,4 +1,4 @@
-{% if has_any_endpoints -%}
+{% if has_any_endpoints or custom_endpoints | length -%}
 #![allow(unused_imports, unused_variables, dead_code)]
 use std::{borrow::Cow, str::FromStr};
 

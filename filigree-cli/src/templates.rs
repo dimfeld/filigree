@@ -88,8 +88,13 @@ impl Renderer {
 
 #[derive(RustEmbed)]
 #[prefix = "root/"]
-#[folder = "$CARGO_MANIFEST_DIR/src/root/web_templates"]
-pub struct RootWebTemplates;
+#[folder = "$CARGO_MANIFEST_DIR/src/root/svelte_templates"]
+pub struct RootSvelteTemplates;
+
+#[derive(RustEmbed)]
+#[prefix = "root/"]
+#[folder = "$CARGO_MANIFEST_DIR/src/root/htmx_templates"]
+pub struct RootHtmxTemplates;
 
 #[derive(RustEmbed)]
 #[prefix = "root/"]
@@ -108,8 +113,8 @@ pub struct ModelRustTemplates;
 
 #[derive(RustEmbed)]
 #[prefix = "model/"]
-#[folder = "$CARGO_MANIFEST_DIR/src/model/web_templates/"]
-pub struct ModelWebTemplates;
+#[folder = "$CARGO_MANIFEST_DIR/src/model/svelte_templates/"]
+pub struct ModelSvelteTemplates;
 
 fn get_files<FILES: RustEmbed>() -> impl Iterator<Item = (String, Cow<'static, str>)> {
     FILES::iter().map(|f| {
@@ -129,8 +134,9 @@ fn create_tera() -> (Tera, HashMap<String, Cow<'static, str>>) {
     let (template_files, passthrough_files): (Vec<_>, Vec<_>) = get_files::<RootApiTemplates>()
         .chain(get_files::<ModelRustTemplates>())
         .chain(get_files::<ModelSqlTemplates>())
-        .chain(get_files::<RootWebTemplates>())
-        .chain(get_files::<ModelWebTemplates>())
+        .chain(get_files::<RootSvelteTemplates>())
+        .chain(get_files::<RootHtmxTemplates>())
+        .chain(get_files::<ModelSvelteTemplates>())
         .partition(|(filename, _)| filename.ends_with(".tera"));
 
     let passthrough_files = passthrough_files.into_iter().collect::<HashMap<_, _>>();

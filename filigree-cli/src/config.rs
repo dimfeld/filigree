@@ -1,5 +1,7 @@
 pub mod custom_endpoint;
+pub mod generators;
 pub mod job;
+pub mod pages;
 pub mod storage;
 pub mod tracing;
 pub mod web;
@@ -13,7 +15,14 @@ use error_stack::{Report, ResultExt};
 use glob::glob;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use self::{job::QueueConfig, storage::StorageConfig, tracing::TracingConfig, web::WebConfig};
+use self::{
+    generators::EndpointPath,
+    job::QueueConfig,
+    pages::{Page, PageConfig, PagesConfigFile},
+    storage::StorageConfig,
+    tracing::TracingConfig,
+    web::WebConfig,
+};
 use crate::{
     format::FormatterConfig,
     model::{field::ModelField, Model, ModelAuthScope, SqlDialect},
@@ -309,6 +318,7 @@ const fn true_t() -> bool {
 pub struct FullConfig {
     pub crate_name: String,
     pub config: Config,
+    pub pages: Vec<Page>,
     pub models: Vec<Model>,
     pub state_dir: PathBuf,
     pub crate_manifest: cargo_toml::Manifest,
@@ -349,9 +359,46 @@ impl FullConfig {
             .name
             .clone();
 
+        let pages_config_path = dir.join("pages.toml");
+        let mut root_level_pages = if pages_config_path.exists() {
+            read_toml::<PagesConfigFile>(&pages_config_path)?
+        } else {
+            PagesConfigFile {
+                global_config: Default::default(),
+                pages: Default::default(),
+            }
+        };
+
+        let pages_glob = dir.join("pages/*.toml");
+        let mut pages = glob(&pages_glob.to_string_lossy())
+            .expect("parsing pages glob")
+            .map(|page_path| {
+                let page_path = page_path.change_context(Error::ReadConfigFile)?;
+                read_toml::<PagesConfigFile>(&page_path)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let root_page_defined = pages
+            .iter()
+            .chain(std::iter::once(&root_level_pages))
+            .any(|config| config.pages.iter().any(|p| p.path.0 == "/"));
+        if !root_page_defined {
+            root_level_pages.pages.push(PageConfig {
+                path: EndpointPath("/".to_string()),
+                ..Default::default()
+            });
+        }
+
+        pages.push(root_level_pages);
+
+        let pages = pages
+            .into_iter()
+            .flat_map(|page| page.into_pages().into_iter())
+            .collect::<Vec<_>>();
+
         let models_glob = dir.join("models/*.toml");
         let models = glob(&models_glob.to_string_lossy())
-            .expect("parsing glob")
+            .expect("parsing models glob")
             .map(|model_path| {
                 let model_path = model_path.change_context(Error::ReadConfigFile)?;
                 read_toml::<Model>(&model_path)
@@ -370,6 +417,7 @@ impl FullConfig {
         Ok(FullConfig {
             crate_name,
             config,
+            pages,
             models,
             state_dir,
             api_dir,

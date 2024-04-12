@@ -31,7 +31,6 @@ const DEPS: &[DepVersion<'static>] = &[
     ("reqwest", "0.11.23", &["cookies", "json"]),
     ("rust-embed", "8.1.0", &[]),
     ("schemars", "0.8.16", &["chrono", "url", "uuid1"]),
-    ("schemars-zod", "0.1.5", &[]),
     ("serde", "1.0.193", &["derive"]),
     ("serde_json", "1.0.113", &[]),
     ("serde_with", "3.6.1", &["json", "schemars_0_8"]),
@@ -57,6 +56,7 @@ pub fn add_fixed_deps(
     manifest: &mut Manifest,
 ) -> Result<(), Report<Error>> {
     let mut filigree_features = vec![];
+
     match config.error_reporting.provider {
         crate::config::ErrorReportingProvider::Sentry => {
             add_dep(
@@ -86,20 +86,13 @@ pub fn add_fixed_deps(
         crate::config::ErrorReportingProvider::None => {}
     };
 
+    filigree_features.extend(config.web.filigree_features());
+
     add_dep(cwd, manifest, "filigree", "0.0.3", &filigree_features)?;
 
     for (name, version, features) in DEPS {
         add_dep(cwd, manifest, name, version, features)?;
     }
-
-    match config.web.framework {
-        /*
-        Some(crate::config::WebMode::Maud) => {
-            add_maud_deps(cwd, manifest)?;
-        }
-        */
-        _ => {}
-    };
 
     if config.use_queue {
         crate::config::job::add_deps(cwd, manifest)?;
