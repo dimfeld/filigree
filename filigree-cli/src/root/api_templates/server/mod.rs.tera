@@ -476,7 +476,6 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                 .set_x_request_id(MakeRequestUuid)
                 .propagate_x_request_id()
                 .layer(CompressionLayer::new())
-                .decompression()
                 .layer(filigree::auth::middleware::AuthLayer::new(auth_queries))
                 .into_inner(),
         );
