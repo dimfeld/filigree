@@ -185,12 +185,16 @@ pub mod watch {
 
     use super::{Manifest, ManifestError};
 
+    /// A file watcher for the Manifest
+    pub type ManifestWatcher = Debouncer<FsEventWatcher>;
+
     /// Watch the manifest and reload when it changes
+    #[must_use = "Dropping the watcher will cause watching to stop"]
     pub fn watch_manifest(
         base_url: String,
         manifest_path: PathBuf,
         manifest: &'static Manifest,
-    ) -> Debouncer<FsEventWatcher> {
+    ) -> ManifestWatcher {
         let path = manifest_path.clone();
         let mut watcher = new_debouncer(
             Duration::from_millis(500),

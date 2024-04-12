@@ -51,6 +51,10 @@ pub struct ServerStateInner {
     {% if queue -%}
     pub queue: effectum::Queue,
     {%- endif %}
+    {% if api.has_api_pages -%}
+    /// Vite manifest watcher for replacing web builds at runtime
+    manifest_watcher: Option<filigree::vite_manifest::watcher::ManifestWatcher>,
+    {% endif -%}
     {% if storage -%}
     /// Object storage providers
     pub storage: storage::AppStorage,
@@ -211,6 +215,15 @@ pub enum ServerBind {
     Listener(tokio::net::TcpListener),
 }
 
+pub struct ServeFrontend {
+    pub port: Option<u16>,
+    pub path: Option<String>,
+    {% if web.has_api_pages -%}
+    pub vite_manifest: Option<String>,
+    pub watch_vite_manifest: bool,
+    {%- endif -%}
+}
+
 /// Configuration for the server
 pub struct Config {
     /// The environment we're running in. Currently this just distinguishes between
@@ -219,7 +232,7 @@ pub struct Config {
     /// The host and port to bind to, or an existing TCP listener
     pub bind: ServerBind,
     /// The port and disk asset location of the frontend server.
-    pub serve_frontend: (Option<u16>, Option<String>),
+    pub serve_frontend: ServeFrontend,
     /// True if the site is being hosted on plain HTTP. This should only be set in a development
     /// or testing environment.
     pub insecure: bool,
@@ -367,9 +380,25 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .nest("/api", api_routes)
         {%- if web.has_api_pages %}.merge(web_routes){% endif %};
 
-    let (mut web_port, mut web_dir) = config.serve_frontend;
+    let ServeFrontend {
+        port: mut web_port,
+        path: mut web_dir,
+        {% if web.has_api_pages -%}
+        vite_manifest,
+        watch_vite_manifest,
+        {%- endif -%}
+    } = config.serve_frontend;
     web_port = web_port.filter(|p| *p != 0);
     web_dir = web_dir.filter(|p| !p.is_empty());
+
+    {% if web.has_api_pages %}
+    let manifest_watcher = if let Some(vite_manifest) = vite_manifest {
+        crate::pages::layout::init_manifest(std::path::Path::new(&vite_manifest), watch_vite_manifest)
+            .change_context(Error::ServerStart)?
+    } else {
+        None
+    };
+    {% endif %}
 
     let app = match (web_port, web_dir) {
         (Some(web_port), Some(web_dir)) => {
@@ -468,6 +497,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         app,
         state,
         listener,
+        {% if api.has_api_pages -%}manifest_watcher,{%- endif -%}
         {% if queue %}queue_workers,{% endif %}
     })
 }

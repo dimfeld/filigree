@@ -3,8 +3,6 @@ use std::{borrow::Cow, collections::BTreeMap, ops::Deref};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::Error;
-
 /// A reference to an existing object, or a definition of a new one.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(untagged)]

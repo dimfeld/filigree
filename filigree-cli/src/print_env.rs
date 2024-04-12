@@ -140,10 +140,11 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         "Honeycomb API key. Required is using Honeycomb tracing",
     );
 
+    let default_web_asset_dir = config.web.files(&web_relative_to_api);
     print_var(
         &pc,
         "WEB_ASSET_DIR",
-        config.web.files(&web_relative_to_api).unwrap_or_default(),
+        default_web_asset_dir.clone().unwrap_or_default(),
         "The directory where the frontend static assets are located",
     );
     print_var(
@@ -152,6 +153,26 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         config.web.port().map(|p| p.to_string()).unwrap_or_default(),
         "Port to forward non-API frontend requests to",
     );
+
+    if config.web.has_api_pages() {
+        let default_manifest = default_web_asset_dir
+            .as_ref()
+            .map(|s| format!("{s}/.vite/manifest.json"))
+            .unwrap_or_default();
+        print_var(
+            &pc,
+            "VITE_MANIFEST",
+            default_manifest,
+            "The location of the Vite manifest",
+        );
+        print_var(
+            &pc,
+            "WATCH_VITE_MANIFEST",
+            false,
+            "Watch the Vite manifest for changes",
+        );
+    }
+
     print_var(
         &pc,
         "REQUEST_TIMEOUT",

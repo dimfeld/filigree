@@ -20,7 +20,7 @@ mod auth;
 mod error;
 mod forgot;
 mod generic_error;
-mod layout;
+pub mod layout;
 mod login;
 mod logout;
 pub mod not_found;

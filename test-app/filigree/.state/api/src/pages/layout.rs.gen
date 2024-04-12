@@ -1,15 +1,42 @@
+use std::path::Path;
+
+use filigree::vite_manifest::{watch::ManifestWatcher, Manifest, ManifestError};
 use maud::{html, Markup, DOCTYPE};
 
 use crate::auth::Authed;
 
+pub static MANIFEST: Manifest = Manifest::new();
+
+pub fn init_manifest(
+    manifest_path: &Path,
+    watch: bool,
+) -> Result<Option<ManifestWatcher>, error_stack::Report<ManifestError>> {
+    let base_url = "/";
+    MANIFEST.read_manifest(base_url, manifest_path)?;
+
+    let watcher = if watch {
+        Some(filigree::vite_manifest::watch::watch_manifest(
+            base_url.to_string(),
+            manifest_path.to_path_buf(),
+            &MANIFEST,
+        ))
+    } else {
+        None
+    };
+
+    Ok(watcher)
+}
+
 /// The HTML shell that every page should be wrapped in to enable basic functionality.
 pub fn page_wrapper(title: &str, slot: Markup) -> Markup {
+    let client_tags = MANIFEST.index();
     html! {
          (DOCTYPE)
          html {
              head {
                  meta charset="utf-8";
                  meta name="viewport" content="width=device-width, initial-scale=1";
+                 (client_tags)
                  title { (title) }
              }
              body {

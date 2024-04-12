@@ -97,7 +97,7 @@ impl WebConfig {
 
     pub fn filigree_features(&self) -> Vec<&'static str> {
         match self.framework {
-            Some(WebFramework::MaudHtmx) => vec!["htmx", "maud"],
+            Some(WebFramework::MaudHtmx) => vec!["htmx", "maud", "watch-manifest"],
             _ => vec![],
         }
     }
