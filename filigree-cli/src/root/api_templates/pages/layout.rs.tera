@@ -1,7 +1,10 @@
 use std::path::Path;
 
-use filigree::vite_manifest::{watch::ManifestWatcher, Manifest, ManifestError};
-use maud::{html, Markup, DOCTYPE};
+use filigree::{
+    html_elements,
+    vite_manifest::{watch::ManifestWatcher, Manifest, ManifestError},
+};
+use hypertext::{maud, Renderable, Rendered};
 
 use crate::auth::Authed;
 
@@ -28,10 +31,10 @@ pub fn init_manifest(
 }
 
 /// The HTML shell that every page should be wrapped in to enable basic functionality.
-pub fn page_wrapper(title: &str, slot: Markup) -> Markup {
+pub fn page_wrapper(title: &str, slot: impl Renderable) -> Rendered<String> {
     let client_tags = MANIFEST.index();
-    html! {
-         (DOCTYPE)
+    maud! {
+        !DOCTYPE
          html {
              head {
                  meta charset="utf-8";
@@ -44,16 +47,21 @@ pub fn page_wrapper(title: &str, slot: Markup) -> Markup {
              }
          }
     }
+    .render()
 }
 
 /// The root layout of the application
-pub fn root_layout(auth: Option<&Authed>, slot: Markup) -> Markup {
-    html! {
+pub fn root_layout(auth: Option<&Authed>, slot: impl Renderable) -> impl Renderable {
+    maud! {
         (slot)
     }
 }
 
 /// The root layout of the application, as a full HTML page
-pub fn root_layout_page(auth: Option<&Authed>, title: &str, slot: Markup) -> Markup {
+pub fn root_layout_page(
+    auth: Option<&Authed>,
+    title: &str,
+    slot: impl Renderable,
+) -> Rendered<String> {
     page_wrapper(title, root_layout(auth, slot))
 }

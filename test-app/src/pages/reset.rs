@@ -4,8 +4,8 @@ use axum::{
     response::IntoResponse,
     routing,
 };
-use filigree::extract::FormOrJson;
-use maud::{html, Markup, DOCTYPE};
+use filigree::{extract::FormOrJson, html_elements};
+use hypertext::{maud, Renderable};
 use schemars::JsonSchema;
 
 use crate::{
@@ -23,11 +23,11 @@ async fn reset_form(
     State(state): State<ServerState>,
     payload: FormOrJson<ResetPayload>,
 ) -> Result<impl IntoResponse, HtmlError> {
-    Ok(html! {})
+    Ok(maud! {}.render())
 }
 
 async fn reset_page(State(state): State<ServerState>) -> impl IntoResponse {
-    root_layout_page(None, "Reset", html! { h1 { "Reset" } })
+    root_layout_page(None, "Reset", maud! { h1 { "Reset" } })
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {

@@ -22,7 +22,7 @@ pub struct WebConfig {
     /// Serve frontend static assets from this directory when in production mode. If omitted, defaults to:
     ///
     /// - "<web_directory>/build/client" when framework is sveltekit
-    /// - "<web_directory>/build" when framework is maud
+    /// - "<web_directory>/build" when framework is htmx
     ///
     /// This can be set at runtime using the WEB_ASSET_DIR environment variable
     pub files: Option<String>,
@@ -54,7 +54,7 @@ impl WebConfig {
                     .to_string_lossy()
                     .to_string(),
             ),
-            Some(WebFramework::MaudHtmx) => Some(
+            Some(WebFramework::Htmx) => Some(
                 web_relative_to_api
                     .join("build")
                     .to_string_lossy()
@@ -77,7 +77,7 @@ impl WebConfig {
 
     pub fn add_deps(&self, cwd: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
         match self.framework {
-            Some(WebFramework::MaudHtmx) => Self::add_maud_deps(cwd, manifest)?,
+            Some(WebFramework::Htmx) => Self::add_htmx_deps(cwd, manifest)?,
             _ => {}
         }
 
@@ -88,8 +88,8 @@ impl WebConfig {
         Ok(())
     }
 
-    fn add_maud_deps(cwd: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
-        add_dep(cwd, manifest, "maud", "0.26.0", &["axum"])?;
+    fn add_htmx_deps(cwd: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
+        add_dep(cwd, manifest, "hypertext", "0.5.0", &["axum"])?;
         add_dep(cwd, manifest, "axum-htmx", "0.5.0", &[])?;
 
         Ok(())
@@ -97,7 +97,7 @@ impl WebConfig {
 
     pub fn filigree_features(&self) -> Vec<&'static str> {
         match self.framework {
-            Some(WebFramework::MaudHtmx) => vec!["htmx", "maud", "watch-manifest"],
+            Some(WebFramework::Htmx) => vec!["htmx", "hypertext", "watch-manifest"],
             _ => vec![],
         }
     }
@@ -106,7 +106,7 @@ impl WebConfig {
     /// are rendered
     pub fn has_api_pages(&self) -> bool {
         match self.framework {
-            Some(WebFramework::MaudHtmx) => true,
+            Some(WebFramework::Htmx) => true,
             Some(WebFramework::SvelteKit) => false,
             None => false,
         }
@@ -120,9 +120,9 @@ impl WebConfig {
 /// The frontend framework to use
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum WebFramework {
-    /// This application uses Maud and HTMX templates to render its frontend
-    #[serde(rename = "maud_htmx")]
-    MaudHtmx,
+    /// This application uses Hypertext/RSX/Maud and HTMX to render its frontend
+    #[serde(rename = "htmx")]
+    Htmx,
     /// This application uses a SvelteKit with a separate server for its frontend
     #[serde(rename = "sveltekit")]
     SvelteKit,

@@ -7,8 +7,9 @@ use axum::{
 use filigree::{
     auth::password::{login_with_password, EmailAndPassword},
     extract::FormOrJson,
+    html_elements,
 };
-use maud::{html, Markup, DOCTYPE};
+use hypertext::{maud, Renderable};
 use schemars::JsonSchema;
 
 use crate::{
@@ -27,11 +28,11 @@ async fn login_form(
     Query(query): Query<RedirectTo>,
     FormOrJson(payload): FormOrJson<EmailAndPassword>,
 ) -> impl IntoResponse {
-    html! {}
+    maud! {}.render()
 }
 
 async fn login_page(State(state): State<ServerState>) -> impl IntoResponse {
-    root_layout_page(None, "Login", html! { h1 { "Login" } })
+    root_layout_page(None, "Login", maud! { h1 { "Login" } })
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {

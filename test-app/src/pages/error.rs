@@ -4,7 +4,6 @@ use axum::{
 };
 use filigree::errors::HttpError;
 use http::{StatusCode, Uri};
-use maud::Markup;
 
 use super::auth::make_login_link;
 use crate::Error;

@@ -4,8 +4,11 @@ use axum::{
     response::IntoResponse,
     routing,
 };
-use filigree::auth::password::{login_with_password, EmailAndPassword};
-use maud::{html, Markup, DOCTYPE};
+use filigree::{
+    auth::password::{login_with_password, EmailAndPassword},
+    html_elements,
+};
+use hypertext::maud;
 
 use crate::{
     auth::{has_any_permission, Authed},
@@ -15,7 +18,7 @@ use crate::{
 };
 
 async fn logout_page(State(state): State<ServerState>) -> impl IntoResponse {
-    root_layout_page(None, "Logout", html! { h1 { "Logout" } })
+    root_layout_page(None, "Logout", maud! { h1 { "Logout" } })
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {

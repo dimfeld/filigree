@@ -1,6 +1,7 @@
 use axum::response::{IntoResponse, Response};
+use filigree::html_elements;
 use http::StatusCode;
-use maud::html;
+use hypertext::maud;
 
 use super::root_layout_page;
 
@@ -11,7 +12,7 @@ pub async fn not_found_fallback() -> Response {
 
 /// Render the not found page from any context.
 pub fn not_found_page() -> Response {
-    let body = html! {
+    let body = maud! {
         p { "Couldn't find this page"}
     };
 

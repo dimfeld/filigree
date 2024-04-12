@@ -137,7 +137,7 @@ pub fn render_files(
         Some(WebFramework::SvelteKit) => {
             files.extend(RootSvelteTemplates::iter().map(|f| (RenderedFileLocation::Svelte, f)));
         }
-        Some(WebFramework::MaudHtmx) => {
+        Some(WebFramework::Htmx) => {
             files.extend(RootHtmxTemplates::iter().map(|f| (RenderedFileLocation::Htmx, f)));
         }
         None => {}

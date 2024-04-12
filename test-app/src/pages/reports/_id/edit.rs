@@ -6,7 +6,7 @@ use axum::{
     routing,
 };
 use filigree::extract::ValidatedForm;
-use maud::{html, Markup};
+use hypertext::{maud, Renderable};
 use schemars::JsonSchema;
 
 use crate::{
@@ -21,7 +21,7 @@ async fn edit_page(
     auth: Authed,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, HtmlError> {
-    let body = html! {};
+    let body = maud! {};
 
     Ok(root_layout_page(Some(&auth), "title", body))
 }

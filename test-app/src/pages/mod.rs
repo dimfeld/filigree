@@ -6,7 +6,7 @@ use axum::{
     routing,
 };
 use filigree::extract::ValidatedForm;
-use maud::{html, Markup, DOCTYPE};
+use hypertext::{maud, Renderable};
 use schemars::JsonSchema;
 
 use crate::{
@@ -35,7 +35,7 @@ async fn count_action(
     State(state): State<ServerState>,
     auth: Option<Authed>,
 ) -> Result<impl IntoResponse, Error> {
-    let body = html! {};
+    let body = maud! {}.render();
 
     Ok(body)
 }
@@ -44,7 +44,7 @@ async fn home_page(
     State(state): State<ServerState>,
     auth: Option<Authed>,
 ) -> Result<impl IntoResponse, HtmlError> {
-    let body = html! {};
+    let body = maud! {};
 
     Ok(root_layout_page(auth.as_ref(), "Home", body))
 }
