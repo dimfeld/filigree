@@ -48,9 +48,9 @@ struct ServeCommand {
     #[clap(long, env = "VITE_MANIFEST")]
     vite_manifest: Option<String>,
 
-    /// Watch the Vite manifest for changes
-    #[clap(long, env = "WATCH_VITE_MANIFEST")]
-    watch_vite_manifest: bool,
+    /// Watch the filesystem for changes and enable live reload
+    #[clap(long, env = "DEV")]
+    dev: bool,
 
     /// The environment in which this server is running
     #[clap(long = "env", env = "ENV", default_value_t = String::from("development"))]
@@ -203,7 +203,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
             port: cmd.frontend_port,
             path: frontend_asset_dir,
             vite_manifest,
-            watch_vite_manifest: cmd.watch_vite_manifest,
+            watch_vite_manifest: cmd.dev,
         },
         insecure: cmd.insecure,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),

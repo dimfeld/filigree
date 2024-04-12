@@ -362,18 +362,14 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         vite_manifest,
         watch_vite_manifest,
     } = config.serve_frontend;
+
+    let manifest_path = vite_manifest.as_ref().map(std::path::Path::new);
+    let manifest_watcher =
+        crate::pages::layout::init_page_layout(manifest_path, watch_vite_manifest)
+            .change_context(Error::ServerStart)?;
+
     web_port = web_port.filter(|p| *p != 0);
     web_dir = web_dir.filter(|p| !p.is_empty());
-
-    let manifest_watcher = if let Some(vite_manifest) = vite_manifest {
-        crate::pages::layout::init_manifest(
-            std::path::Path::new(&vite_manifest),
-            watch_vite_manifest,
-        )
-        .change_context(Error::ServerStart)?
-    } else {
-        None
-    };
 
     let app = match (web_port, web_dir) {
         (Some(web_port), Some(web_dir)) => {

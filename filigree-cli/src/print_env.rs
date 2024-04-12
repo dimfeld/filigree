@@ -167,9 +167,9 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         );
         print_var(
             &pc,
-            "WATCH_VITE_MANIFEST",
+            "DEV",
             false,
-            "Watch the Vite manifest for changes",
+            "Watch the filesystem for changes and enable live reload",
         );
     }
 
