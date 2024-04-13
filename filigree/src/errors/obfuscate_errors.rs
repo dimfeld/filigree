@@ -146,7 +146,7 @@ mod test {
         http::{Method, Request, StatusCode},
         response::IntoResponse,
         routing::get,
-        Router,
+        Json, Router,
     };
     use serde_json::json;
     use tower::ServiceExt;
@@ -156,18 +156,23 @@ mod test {
 
     fn make_app(enabled: bool) -> Router {
         Router::new()
-            .route("/200", get(|| async { (StatusCode::OK, "success") }))
+            .route("/200", get(|| async { (StatusCode::OK, Json("success")) }))
             .route(
                 "/500",
-                get(|| async { (StatusCode::INTERNAL_SERVER_ERROR, "error 500 with info") }),
+                get(|| async {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json("error 500 with info"),
+                    )
+                }),
             )
             .route(
                 "/401",
-                get(|| async { (StatusCode::UNAUTHORIZED, "error 401 with info") }),
+                get(|| async { (StatusCode::UNAUTHORIZED, Json("error 401 with info")) }),
             )
             .route(
                 "/403",
-                get(|| async { (StatusCode::FORBIDDEN, "error 403 with info") }),
+                get(|| async { (StatusCode::FORBIDDEN, Json("error 403 with info")) }),
             )
             .layer(ObfuscateErrorLayer::new(ObfuscateErrorLayerSettings {
                 enabled,
@@ -206,19 +211,19 @@ mod test {
 
         let (code, body) = send_req(&app, "/200").await;
         assert_eq!(code, 200, "/200 status code");
-        assert_eq!(body, "success", "/200 body");
+        assert_eq!(body, "\"success\"", "/200 body");
 
         let (code, body) = send_req(&app, "/401").await;
         assert_eq!(code, 401, "/401 status code");
-        assert_eq!(body, "error 401 with info", "/401 body");
+        assert_eq!(body, "\"error 401 with info\"", "/401 body");
 
         let (code, body) = send_req(&app, "/403").await;
         assert_eq!(code, 403, "/403 status code");
-        assert_eq!(body, "error 403 with info", "/403 body");
+        assert_eq!(body, "\"error 403 with info\"", "/403 body");
 
         let (code, body) = send_req(&app, "/500").await;
         assert_eq!(code, 500, "/500 status code");
-        assert_eq!(body, "error 500 with info", "/500 body");
+        assert_eq!(body, "\"error 500 with info\"", "/500 body");
     }
 
     #[tokio::test]
@@ -227,7 +232,7 @@ mod test {
 
         let (code, body) = send_req(&app, "/200").await;
         assert_eq!(code, 200, "/200 status code");
-        assert_eq!(body, "success", "/200 body");
+        assert_eq!(body, "\"success\"", "/200 body");
 
         let (code, body) = send_req(&app, "/401").await;
         assert_eq!(code, 401, "/401 status code");
@@ -260,7 +265,8 @@ mod test {
             .route(
                 "/401",
                 get(|| async {
-                    let mut res = (StatusCode::UNAUTHORIZED, "error 401 with info").into_response();
+                    let mut res =
+                        (StatusCode::UNAUTHORIZED, Json("error 401 with info")).into_response();
                     res.extensions_mut().insert(ForceObfuscate {
                         kind: "force_401".into(),
                         message: "Forced 401".into(),
@@ -272,7 +278,8 @@ mod test {
             .route(
                 "/403",
                 get(|| async {
-                    let mut res = (StatusCode::FORBIDDEN, "error 403 with info").into_response();
+                    let mut res =
+                        (StatusCode::FORBIDDEN, Json("error 403 with info")).into_response();
                     res.extensions_mut().insert(ForceObfuscate {
                         kind: "force_403".into(),
                         message: "Forced 403".into(),
