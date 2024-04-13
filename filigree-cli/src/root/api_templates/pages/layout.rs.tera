@@ -43,7 +43,7 @@ pub fn page_wrapper(title: &str, slot: Markup) -> Markup {
                 (client_tags)
                 title { (title) }
             }
-            body {
+            body hx-boost="true" {
                 (slot)
             }
         }
