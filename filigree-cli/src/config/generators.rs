@@ -41,6 +41,15 @@ impl ObjectRefOrDef {
         format!("export interface {prefix}{suffix} {{\n{contents}\n}}")
     }
 
+    fn parse_type(v: &str) -> (bool, &str) {
+        let optional = v.starts_with('?');
+        if optional {
+            (true, &v[1..])
+        } else {
+            (false, v)
+        }
+    }
+
     pub fn type_def(&self, prefix: &str, suffix: &str) -> (String, String) {
         match self {
             ObjectRefOrDef::Empty => (
@@ -52,12 +61,26 @@ impl ObjectRefOrDef {
             ObjectRefOrDef::Map(m) => {
                 let rust_contents = m
                     .iter()
-                    .map(|(k, v)| format!("pub {k}: {v},\n", v = rust_field_type(v)))
+                    .map(|(k, v)| {
+                        let (optional, v) = Self::parse_type(v);
+                        if optional {
+                            format!("pub {k}: Option<{v}>,\n", v = rust_field_type(v))
+                        } else {
+                            format!("pub {k}: {v},\n", v = rust_field_type(v))
+                        }
+                    })
                     .join("");
 
                 let ts_contents = m
                     .iter()
-                    .map(|(k, v)| format!("{k}: {v},\n", v = ts_field_type(v)))
+                    .map(|(k, v)| {
+                        let (optional, v) = Self::parse_type(v);
+                        format!(
+                            "{k}{q}: {v},\n",
+                            q = if optional { "?" } else { "" },
+                            v = ts_field_type(v)
+                        )
+                    })
                     .join("");
 
                 (
