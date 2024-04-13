@@ -153,7 +153,7 @@ pub struct ListQueryFilters {
     {%- for field in fields | filter(attribute="filterable", value="exact") -%}
         {% set_global has_filterable = true %}
     #[serde(default)]
-    pub {{field.rust_name}}: Vec<{{field.base_rust_type}}>,
+    pub {{field.rust_name}}: {% if field.base_rust_type == "bool" %}Option{% else %}Vec{% endif %}<{{field.base_rust_type}}>,
     {%- endfor -%}
     {%- for field in fields | filter(attribute="filterable", value="range") -%}
         {% set_global has_filterable = true %}
@@ -172,9 +172,15 @@ impl ListQueryFilters {
 
 
         {% for field in fields | filter(attribute="filterable", value="exact") %}
+            {% if field.base_rust_type == "bool" -%}
+            if self.{{field.rust_name}}.is_some() {
+                bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}, BindingOperator::Eq);
+            }
+            {%- else -%}
             if !self.{{field.rust_name}}.is_empty() {
                 bindings.add_vec("{{field.sql_name}}", &self.{{field.rust_name}});
             }
+            {%- endif %}
         {% endfor %}
         {% for field in fields | filter(attribute="filterable", value="range") %}
             if self.{{field.rust_name}}_lte.is_some() {
@@ -204,7 +210,11 @@ impl ListQueryFilters {
 
 
         {% for field in fields | filter(attribute="filterable", value="exact") %}
+            {% if field.base_rust_type == "bool" -%}
+            if self.{{field.rust_name}}.is_some() {
+            {% else %}
             if !self.{{field.rust_name}}.is_empty() {
+                {% endif %}
                 event!(Level::DEBUG, {{field.rust_name}} = ?self.{{field.rust_name}});
                 query = query.bind(&self.{{field.rust_name}});
             }
