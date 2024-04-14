@@ -133,6 +133,7 @@ impl Page {
             main_require_auth,
             "",
             &query_type_name,
+            false,
         );
 
         let form = if let Some(form) = &page.form {
@@ -157,6 +158,7 @@ impl Page {
                     .unwrap_or(form_permission.is_some()),
                 &input_type_name,
                 "",
+                false,
             );
 
             json!({
@@ -277,6 +279,13 @@ impl PageAction {
 
         let permission = self.permission.as_deref().or(parent_permission);
 
+        let merged_path_params = parent
+            .params
+            .iter()
+            .chain(self.params.iter())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<BTreeMap<_, _>>();
+
         json!({
             "name": self.name,
             "path": full_path.0,
@@ -286,10 +295,11 @@ impl PageAction {
             "query_type_def": query_struct,
             "args": rust_args(
                 &full_path,
-                &self.params,
+                &merged_path_params,
                 self.require_auth.or(parent_require_auth).unwrap_or(permission.is_some()),
                 &input_name,
-                &query_name
+                &query_name,
+                true
             )
         })
     }
@@ -301,6 +311,7 @@ fn rust_args(
     require_authed: bool,
     input_type_name: &str,
     query_type_name: &str,
+    is_action: bool,
 ) -> String {
     let mut args = vec![
         "State(state): State<ServerState>".to_string(),
@@ -320,7 +331,15 @@ fn rust_args(
     }
 
     if !input_type_name.is_empty() {
-        args.push(format!("form: ValidatedForm<{}>", input_type_name));
+        let form_type = if is_action {
+            // Assume that arguments to actions are programmatically created and so
+            // dpn't need the full validation. Can switch over types as needed.
+            "Form"
+        } else {
+            "ValidatedForm"
+        };
+
+        args.push(format!("form: {form_type}<{}>", input_type_name));
     }
 
     args.join(",\n")
