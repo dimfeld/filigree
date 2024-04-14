@@ -58,3 +58,40 @@ where
         (self.contents)().render_to(buf);
     }
 }
+
+/// Render an SVG with custom classes. This assumes that the icon SVG starts with
+/// the string "<svg".
+pub struct Svg<'svg, 'class> {
+    svg: &'svg str,
+    class: &'class str,
+}
+
+impl<'svg, 'class> Svg<'svg, 'class> {
+    /// Render with the `fill-current` class
+    pub fn new(svg: &'svg str) -> Self {
+        Svg {
+            svg,
+            class: "fill-current",
+        }
+    }
+
+    /// An icon that renders with a custom class
+    pub fn class(svg: &'svg str, class: &'class str) -> Self {
+        Svg { svg, class }
+    }
+}
+
+impl<'svg, 'class> Render for Svg<'svg, 'class> {
+    fn render_to(&self, buf: &mut String) {
+        buf.push_str("<svg");
+
+        if !self.class.is_empty() {
+            buf.push_str(" class=\"");
+            buf.push_str(self.class);
+            buf.push('"');
+        }
+
+        let icon_rest = &self.svg[4..];
+        buf.push_str(icon_rest);
+    }
+}
