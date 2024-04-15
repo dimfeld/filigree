@@ -3,10 +3,12 @@
 
 use std::{
     any::TypeId,
+    borrow::Cow,
     cell::RefCell,
     collections::{BTreeMap, HashMap, VecDeque},
 };
 
+use itertools::Itertools;
 use jsonschema::{
     output::{BasicOutput, ErrorDescription, OutputUnit},
     JSONSchema,
@@ -264,6 +266,35 @@ impl ValidationErrorResponse {
     /// Return true if there are no validation errors
     pub fn is_empty(&self) -> bool {
         self.messages.is_empty() && self.fields.is_empty()
+    }
+
+    /// Add a validation error for a field
+    pub fn add_field(&mut self, field: impl Into<String>, message: impl Into<String>) {
+        self.fields
+            .entry(field.into())
+            .or_default()
+            .push(message.into());
+    }
+
+    /// Get the errors for a field, joined by a period and a space. If there are no errors for the field, an empty string is
+    pub fn field(&self, field: &str) -> Cow<str> {
+        self.field_joined(field, ". ")
+    }
+
+    /// Get the errors for a field, joined by the specified string. If there are no errors
+    /// for the field, an empty string is returned.
+    pub fn field_joined(&self, field: &str, join: &str) -> Cow<str> {
+        if let Some(messages) = self.fields.get(field) {
+            if messages.len() == 1 {
+                // There's almost never more than one message, so just return a reference if we
+                // can.
+                messages[0].as_str().into()
+            } else {
+                messages.iter().map(|m| m.as_str()).join(join).into()
+            }
+        } else {
+            "".into()
+        }
     }
 }
 
