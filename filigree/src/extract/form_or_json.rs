@@ -50,13 +50,24 @@ where
 pub type FormOrJsonResult<T> = Result<T, Rejection>;
 
 /// The result of a form validation, unpacked for use in server-side rendering
-pub struct ValidatedForm<T> {
+#[derive(Debug)]
+pub struct ValidatedForm<T: Debug + JsonSchema + DeserializeOwned + 'static> {
     /// The data, if it validated properly
     pub data: Option<T>,
     /// The form that was submitted, if the validation failed
     pub form: serde_json::Value,
     /// The errors encountered
     pub errors: ValidationErrorResponse,
+}
+
+impl<T: Debug + JsonSchema + DeserializeOwned + 'static> Default for ValidatedForm<T> {
+    fn default() -> Self {
+        Self {
+            data: None,
+            form: serde_json::Value::Object(serde_json::Map::new()),
+            errors: ValidationErrorResponse::default(),
+        }
+    }
 }
 
 #[async_trait]
