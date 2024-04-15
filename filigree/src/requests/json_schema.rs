@@ -21,6 +21,8 @@ use schemars::{
 use serde::Serialize;
 use serde_json::Number;
 
+use crate::html::HtmlList;
+
 thread_local! {
     static SCHEMAS: RefCell<Schemas> = RefCell::new(Schemas::new());
 }
@@ -262,6 +264,9 @@ pub struct ValidationErrorResponse {
     pub fields: BTreeMap<String, Vec<String>>,
 }
 
+// Something to send to HtmlList when there are no items.
+const EMPTY: [String; 0] = [];
+
 impl ValidationErrorResponse {
     /// Return true if there are no validation errors
     pub fn is_empty(&self) -> bool {
@@ -276,25 +281,19 @@ impl ValidationErrorResponse {
             .push(message.into());
     }
 
-    /// Get the errors for a field, joined by a period and a space. If there are no errors for the field, an empty string is
-    pub fn field(&self, field: &str) -> Cow<str> {
-        self.field_joined(field, ". ")
+    /// Get the errors for a field, formatted with `<li>` elements.
+    pub fn field_li<'a>(&'a self, field: &str) -> HtmlList<'a, 'static, String> {
+        HtmlList::new(
+            self.fields
+                .get(field)
+                .map(|v| v.as_slice())
+                .unwrap_or(&EMPTY),
+        )
     }
 
-    /// Get the errors for a field, joined by the specified string. If there are no errors
-    /// for the field, an empty string is returned.
-    pub fn field_joined(&self, field: &str, join: &str) -> Cow<str> {
-        if let Some(messages) = self.fields.get(field) {
-            if messages.len() == 1 {
-                // There's almost never more than one message, so just return a reference if we
-                // can.
-                messages[0].as_str().into()
-            } else {
-                messages.iter().map(|m| m.as_str()).join(join).into()
-            }
-        } else {
-            "".into()
-        }
+    /// Get the errors for a field, wrapping the output of [field_li] in a `<ul>` tag.
+    pub fn field_ul<'a, 'b>(&'a self, field: &str, class: &'b str) -> HtmlList<'a, 'b, String> {
+        self.field_li(field).ul_class(class)
     }
 }
 

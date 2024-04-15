@@ -3,11 +3,15 @@
 #![cfg_attr(not(feature = "sentry"), allow(unused_variables))]
 
 #[cfg(feature = "sentry")]
-// [Sentry](https://sentry.io) Error Reporting
+/// [Sentry](https://sentry.io) Error Reporting
 pub mod sentry;
+
+use std::fmt::Debug;
 
 use error_stack::{Context, Report};
 use serde::Serialize;
+
+use crate::errors::HttpError;
 
 /// An error reporting service
 #[derive(Default)]
@@ -71,6 +75,86 @@ impl ErrorReporter {
             #[cfg(feature = "sentry")]
             ErrorReporter::Sentry => sentry::Sentry::send_message(level, message),
             ErrorReporter::Noop => {}
+        }
+    }
+}
+
+/// An extension trait to report errors on any [HttpError]
+pub trait HandleError {
+    /// If this is an error, trace it and report it to the error reporting service
+    fn report_error(self) -> Self;
+    /// If this is an error, trace it and report it to the error reporting service with additional metadata
+    fn report_error_with_info<META: Debug + Serialize + Send + Sync>(self, meta: &META) -> Self;
+    /// Retun the error's [StatusCode] if it is an error, or [StatusCode::OK] otherwise
+    fn status_code(&self) -> hyper::StatusCode;
+}
+
+impl<T, E> HandleError for Result<T, E>
+where
+    E: HttpError + std::error::Error + Sync + Send,
+{
+    fn report_error(self) -> Self {
+        self.report_error_with_info(&())
+    }
+
+    fn report_error_with_info<META: Debug + Serialize + Send + Sync>(self, meta: &META) -> Self {
+        if let Err(error) = &self {
+            tracing::error!(?error, ?meta);
+
+            let code = error.status_code();
+            if code.is_server_error() {
+                #[cfg(feature = "sentry")]
+                sentry::Sentry::send_error_with_metadata(&error, meta);
+            }
+        }
+
+        self
+    }
+
+    fn status_code(&self) -> hyper::StatusCode {
+        match self {
+            Ok(_) => hyper::StatusCode::OK,
+            Err(error) => error.status_code(),
+        }
+    }
+}
+
+/// An extension trait to report errors on a [Report]. This is similar to [HandleErrorExt]
+/// but needs to be a separate trait until specialization is stablized.
+pub trait HandleErrorReport {
+    /// If this is an error, trace it and report it to the error reporting service
+    fn report_error(self) -> Self;
+    /// If this is an error, trace it and report it to the error reporting service with additional metadata
+    fn report_error_with_info<META: Debug + Serialize + Send + Sync>(self, meta: &META) -> Self;
+    /// Retun the error's [StatusCode] if it is an error, or [StatusCode::OK] otherwise
+    fn status_code(&self) -> hyper::StatusCode;
+}
+
+impl<T, E> HandleErrorReport for Result<T, error_stack::Report<E>>
+where
+    E: HttpError + std::error::Error + Sync + Send + 'static,
+{
+    fn report_error(self) -> Self {
+        self.report_error_with_info(&())
+    }
+
+    fn report_error_with_info<META: Debug + Serialize + Send + Sync>(self, meta: &META) -> Self {
+        if let Err(error) = &self {
+            tracing::error!(error = ?error, ?meta);
+
+            let code = error.current_context().status_code();
+            if code.is_server_error() {
+                #[cfg(feature = "sentry")]
+                sentry::Sentry::send_report_with_metadata(error, meta);
+            }
+        }
+        self
+    }
+
+    fn status_code(&self) -> hyper::StatusCode {
+        match self {
+            Ok(_) => hyper::StatusCode::OK,
+            Err(error) => error.current_context().status_code(),
         }
     }
 }

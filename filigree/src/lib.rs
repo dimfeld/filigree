@@ -17,6 +17,8 @@ pub mod error_stack;
 pub mod errors;
 /// Request extractors
 pub mod extract;
+#[cfg(feature = "maud")]
+pub mod html;
 #[cfg(feature = "htmx")]
 pub mod htmx;
 /// Extension trait to inspect the body of a Reqwest error response
