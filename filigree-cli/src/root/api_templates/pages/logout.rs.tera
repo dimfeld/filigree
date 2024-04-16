@@ -1,21 +1,17 @@
 use axum::{
-    extract::{Path, Query, State},
-    http::StatusCode,
-    response::IntoResponse,
+    extract::State,
+    response::{IntoResponse, Response},
     routing,
 };
-use filigree::auth::password::{login_with_password, EmailAndPassword};
 use maud::html;
+use tower_cookies::Cookies;
 
-use crate::{
-    auth::{has_any_permission, Authed},
-    pages::layout::root_layout_page,
-    server::ServerState,
-    Error,
-};
+use crate::{pages::layout::root_layout_page, server::ServerState};
 
-async fn logout_page(State(state): State<ServerState>) -> impl IntoResponse {
-    root_layout_page(None, "Logout", html! { h1 { "Logout" } })
+async fn logout_page(State(state): State<ServerState>, cookies: Cookies) -> Response {
+    state.session_backend.delete_session(&cookies).await.ok();
+    let body = root_layout_page(None, "Logout", html! { p { "You have logged out" } });
+    body.into_response()
 }
 
 pub fn create_routes() -> axum::Router<ServerState> {

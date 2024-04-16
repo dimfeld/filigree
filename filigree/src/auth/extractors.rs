@@ -11,6 +11,13 @@ use super::{lookup::AuthLookup, AuthError, AuthInfo};
 /// Extract authentication info from the Request, or return an error if the user is not valid.
 pub struct Authed<T: AuthInfo>(Arc<T>);
 
+impl<T: AuthInfo> Authed<T> {
+    /// Create a new `Authed` when you already have the `AuthInfo`
+    pub fn new(auth_info: Arc<T>) -> Self {
+        Self(auth_info)
+    }
+}
+
 impl<T> Deref for Authed<T>
 where
     T: AuthInfo,

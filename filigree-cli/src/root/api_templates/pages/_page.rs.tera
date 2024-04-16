@@ -13,6 +13,7 @@ use schemars::JsonSchema;
 use crate::{
     auth::{has_any_permission, Authed},
     pages::{
+        auth::WebAuthed,
         error::HtmlError,
         layout::root_layout_page
     },

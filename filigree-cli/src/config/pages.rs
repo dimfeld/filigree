@@ -131,6 +131,7 @@ impl Page {
             &page.path,
             &page.params,
             main_require_auth,
+            true,
             "",
             &query_type_name,
             false,
@@ -156,6 +157,7 @@ impl Page {
                 form.require_auth
                     .or(require_auth)
                     .unwrap_or(form_permission.is_some()),
+                false,
                 &input_type_name,
                 "",
                 false,
@@ -297,6 +299,7 @@ impl PageAction {
                 &full_path,
                 &merged_path_params,
                 self.require_auth.or(parent_require_auth).unwrap_or(permission.is_some()),
+                false,
                 &input_name,
                 &query_name,
                 true
@@ -309,17 +312,20 @@ fn rust_args(
     path: &EndpointPath,
     path_params: &BTreeMap<String, String>,
     require_authed: bool,
+    web_auth: bool,
     input_type_name: &str,
     query_type_name: &str,
     is_action: bool,
 ) -> String {
     let mut args = vec![
         "State(state): State<ServerState>".to_string(),
-        if require_authed {
-            "auth: Authed".to_string()
-        } else {
-            "auth: Option<Authed>".to_string()
-        },
+        match (require_authed, web_auth) {
+            (true, true) => "WebAuthed(auth): WebAuthed".to_string(),
+            (true, false) => "auth: Authed".to_string(),
+            (false, true) => "auth: Option<WebAuthed>".to_string(),
+            (false, false) => "auth: Option<Authed>".to_string(),
+        }
+        .to_string(),
     ];
 
     if let Some(path) = path.parse_to_rust_args("String", path_params) {
