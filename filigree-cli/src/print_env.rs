@@ -131,7 +131,7 @@ pub fn run(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         &pc,
         "OTEL_EXPORTER_OTLP_ENDPOINT",
         config.tracing.endpoint.as_deref().unwrap_or_default(),
-        "The endpoint to send traces to. This can be omitted for Honeycomb but is required to be specified here or in the environment for Jaeger.",
+        "The endpoint to send traces to. This can be omitted for Honeycomb but is required to be specified here or in the environment for other OTLP collectors.",
     );
     print_var(
         &pc,

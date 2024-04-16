@@ -147,8 +147,8 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         "{{env_prefix}}",
         {% if tracing.provider == "none" -%}
         TracingProvider::None,
-        {%- elif tracing.provider == "jaeger" -%}
-        TracingProvider::Jaeger,
+        {%- elif tracing.provider == "otlp_tonic" -%}
+        TracingProvider::OtlpTonic,
         {%- elif tracing.provider == "honeycomb" -%}
         TracingProvider::Honeycomb,
         {%- endif %}

@@ -6,6 +6,12 @@
 use std::str::FromStr;
 
 use error_stack::{Report, ResultExt};
+#[cfg(feature = "tracing_export")]
+use opentelemetry::KeyValue;
+#[cfg(feature = "tracing_export")]
+use opentelemetry_otlp::WithExportConfig;
+#[cfg(feature = "tracing_export")]
+use opentelemetry_sdk::{runtime, Resource};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::subscriber::set_global_default;
@@ -19,7 +25,7 @@ use tracing_subscriber::{
 
 use crate::config::prefixed_env_var;
 
-#[cfg(feature = "honeycomb")]
+#[cfg(feature = "tracing_export")]
 /// Configuration for sending telemetry to Honeycomb
 #[derive(Deserialize, Debug, Clone)]
 pub struct HoneycombConfig {
@@ -31,13 +37,13 @@ pub struct HoneycombConfig {
     pub endpoint: Option<String>,
 }
 
-#[cfg(feature = "jaeger")]
-/// Configuration for sending telemetry to Jaeger
+#[cfg(feature = "tracing_export")]
+/// Configuration for sending telemetry to an OTLP Tonic endpoint
 #[derive(Deserialize, Debug, Clone)]
-pub struct JaegerConfig {
-    /// The Jaeger service name
+pub struct OtlpTonicConfig {
+    /// The OTLP service name
     pub service_name: String,
-    /// The Jaeger endpoint to send tracing to
+    /// The OTLP Tonic endpoint to send tracing to
     pub endpoint: String,
 }
 
@@ -48,12 +54,12 @@ pub enum TracingExportConfig {
     /// Do not export tracing to an external service. This still prints it to the console.
     #[default]
     None,
-    #[cfg(feature = "honeycomb")]
+    #[cfg(feature = "tracing_export")]
     /// Export traces to Honeycomb
     Honeycomb(HoneycombConfig),
-    #[cfg(feature = "jaeger")]
-    /// Export traces to Jaeger
-    Jaeger(JaegerConfig),
+    #[cfg(feature = "tracing_export")]
+    /// Export traces to an OTLP collector
+    OtlpTonic(OtlpTonicConfig),
 }
 
 /// Supported tracing providers
@@ -63,10 +69,10 @@ pub enum TracingProvider {
     /// Do not export tracing to an external service
     #[default]
     None,
-    /// Export traces to Honeycomb
+    /// Export traces to Honeycomb.
     Honeycomb,
-    /// Export traces to Jaeger
-    Jaeger,
+    /// Export traces to an OTLP collector using Tonic
+    OtlpTonic,
 }
 
 impl std::str::FromStr for TracingProvider {
@@ -76,7 +82,7 @@ impl std::str::FromStr for TracingProvider {
         match s {
             "none" => Ok(TracingProvider::None),
             "honeycomb" => Ok(TracingProvider::Honeycomb),
-            "jaeger" => Ok(TracingProvider::Jaeger),
+            "otlp_tonic" => Ok(TracingProvider::OtlpTonic),
             _ => Err(Report::new(TraceConfigureError))
                 .attach_printable_lazy(|| format!("Unknown tracing provider: {s}")),
         }
@@ -88,7 +94,7 @@ impl std::fmt::Display for TracingProvider {
         match self {
             TracingProvider::None => write!(f, "none"),
             TracingProvider::Honeycomb => write!(f, "honeycomb"),
-            TracingProvider::Jaeger => write!(f, "jaeger"),
+            TracingProvider::OtlpTonic => write!(f, "otlp_tonic"),
         }
     }
 }
@@ -113,11 +119,11 @@ pub fn create_tracing_config(
 
     let config = match tracing_type {
         TracingProvider::None => TracingExportConfig::None,
-        #[cfg(not(feature = "jaeger"))]
-        TracingProvider::Jaeger => Err(Report::new(TraceConfigureError))
-            .attach_printable("Jaeger tracing requires the `jaeger` feature")?,
-        #[cfg(feature = "jaeger")]
-        TracingProvider::Jaeger => TracingExportConfig::Jaeger(JaegerConfig {
+        #[cfg(not(feature = "tracing_export"))]
+        TracingProvider::OtlpTonic => Err(Report::new(TraceConfigureError))
+            .attach_printable("OTLP Tonic tracing requires the `tracing_export` feature")?,
+        #[cfg(feature = "tracing_export")]
+        TracingProvider::OtlpTonic => TracingExportConfig::OtlpTonic(OtlpTonicConfig {
             service_name: prefixed_env_var(env_prefix, "OTEL_SERVICE_NAME")
                 .ok()
                 .or(service_name)
@@ -125,15 +131,13 @@ pub fn create_tracing_config(
             endpoint: prefixed_env_var(env_prefix, "OTEL_EXPORTER_OTLP_ENDPOINT")
                 .change_context(TraceConfigureError)
                 .attach_printable_lazy(|| {
-                    format!(
-                        "{env_prefix}OTEL_EXPORTER_OTLP_ENDPOINT must be set for Jaeger tracing"
-                    )
+                    format!("{env_prefix}OTEL_EXPORTER_OTLP_ENDPOINT must be set for OTLP tracing")
                 })?,
         }),
-        #[cfg(not(feature = "honeycomb"))]
+        #[cfg(not(feature = "tracing_export"))]
         TracingProvider::Honeycomb => Err(Report::new(TraceConfigureError))
             .attach_printable("Honeycomb tracing requires the `honeycomb` feature")?,
-        #[cfg(feature = "honeycomb")]
+        #[cfg(feature = "tracing_export")]
         TracingProvider::Honeycomb => TracingExportConfig::Honeycomb(HoneycombConfig {
             api_key: prefixed_env_var(env_prefix, "HONEYCOMB_API_KEY")
                 .change_context(TraceConfigureError)
@@ -193,9 +197,15 @@ where
         .with(ErrorLayer::default());
 
     match export_config {
-        #[cfg(feature = "honeycomb")]
+        #[cfg(feature = "tracing_export")]
         TracingExportConfig::Honeycomb(honeycomb_config) => {
-            use opentelemetry_otlp::WithExportConfig;
+            let endpoint = honeycomb_config
+                .endpoint
+                .as_deref()
+                .unwrap_or("api.honeycomb.io:443");
+
+            tracing::info!("Exporting traces to Honeycomb at {}", endpoint);
+
             use tonic::metadata::{Ascii, MetadataValue};
             let mut otlp_meta = tonic::metadata::MetadataMap::new();
             otlp_meta.insert(
@@ -208,12 +218,7 @@ where
 
             let exporter = opentelemetry_otlp::new_exporter()
                 .tonic()
-                .with_endpoint(
-                    honeycomb_config
-                        .endpoint
-                        .as_deref()
-                        .unwrap_or("api.honeycomb.io:443"),
-                )
+                .with_endpoint(endpoint)
                 .with_metadata(otlp_meta);
 
             let otlp = opentelemetry_otlp::new_pipeline()
@@ -232,13 +237,23 @@ where
             let subscriber = subscriber.with(telemetry);
             set_global_default(subscriber).expect("Setting subscriber");
         }
-        #[cfg(feature = "jaeger")]
-        TracingExportConfig::Jaeger(config) => {
-            let tracer = opentelemetry_jaeger::new_agent_pipeline()
-                .with_service_name(&config.service_name)
-                .with_endpoint(config.endpoint.as_str())
-                .install_batch(opentelemetry_sdk::runtime::Tokio)
-                .unwrap();
+        #[cfg(feature = "tracing_export")]
+        TracingExportConfig::OtlpTonic(config) => {
+            tracing::info!("Exporting traces to {}", config.endpoint);
+            let tracer =
+                opentelemetry_otlp::new_pipeline()
+                    .tracing()
+                    .with_exporter(
+                        opentelemetry_otlp::new_exporter()
+                            .tonic()
+                            .with_endpoint(config.endpoint.as_str()),
+                    )
+                    .with_trace_config(opentelemetry_sdk::trace::config().with_resource(
+                        Resource::new(vec![KeyValue::new("service.name", config.service_name)]),
+                    ))
+                    .install_batch(runtime::Tokio)
+                    .change_context(TraceConfigureError)?;
+
             let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
             let subscriber = subscriber.with(telemetry);

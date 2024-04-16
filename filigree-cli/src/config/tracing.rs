@@ -9,7 +9,7 @@ pub struct TracingConfig {
     #[serde(default = "default_api_service_name")]
     pub api_service_name: String,
     /// The endpoint to send traces to. This can be omitted for Honeycomb but is
-    /// required to be specified here or in the environment for Jaeger.
+    /// required to be specified here or in the environment for other providers.
     pub endpoint: Option<String>,
 }
 

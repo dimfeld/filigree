@@ -3,12 +3,10 @@
 
 use std::{
     any::TypeId,
-    borrow::Cow,
     cell::RefCell,
     collections::{BTreeMap, HashMap, VecDeque},
 };
 
-use itertools::Itertools;
 use jsonschema::{
     output::{BasicOutput, ErrorDescription, OutputUnit},
     JSONSchema,
