@@ -21,6 +21,7 @@ use schemars::{
 use serde::Serialize;
 use serde_json::Number;
 
+#[cfg(feature = "maud")]
 use crate::html::HtmlList;
 
 thread_local! {
@@ -264,9 +265,6 @@ pub struct ValidationErrorResponse {
     pub fields: BTreeMap<String, Vec<String>>,
 }
 
-// Something to send to HtmlList when there are no items.
-const EMPTY: [String; 0] = [];
-
 impl ValidationErrorResponse {
     /// Return true if there are no validation errors
     pub fn is_empty(&self) -> bool {
@@ -280,7 +278,14 @@ impl ValidationErrorResponse {
             .or_default()
             .push(message.into());
     }
+}
 
+// Something to send to HtmlList when there are no items.
+#[cfg(feature = "maud")]
+const EMPTY: [String; 0] = [];
+
+#[cfg(feature = "maud")]
+impl ValidationErrorResponse {
     /// Get the errors for a field, formatted with `<li>` elements.
     pub fn field_li<'a>(&'a self, field: &str) -> HtmlList<'a, 'static, String> {
         HtmlList::new(
