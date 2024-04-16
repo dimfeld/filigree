@@ -14,7 +14,7 @@ use super::{
     Endpoints, HasModel, Model,
 };
 use crate::{
-    config::Config,
+    config::{web::WebFramework, Config},
     migrations::SingleMigration,
     model::{field::SortableType, ReferenceFetchType},
     templates::{ModelRustTemplates, ModelSqlTemplates, ModelSvelteTemplates, Renderer},
@@ -148,26 +148,30 @@ impl<'a> ModelGenerator<'a> {
         }
 
         let web_base_path = PathBuf::from("src/lib/models");
-        let web_files = ModelSvelteTemplates::iter()
-            .filter(|f| !f.ends_with(".macros.tera"))
-            .map(|f| {
-                let outfile = if f == "model/model.ts.tera" {
-                    // The main file. Right now we render this straight into lib
-                    web_base_path.join(format!("{}.ts", self.model.module_name()))
-                } else {
-                    // Other files go in a subdirectory
-                    web_base_path
-                        .join(self.model.module_name())
-                        .join(strip_path(f.as_ref()))
-                };
+        let web_files = match self.config.web.framework {
+            Some(WebFramework::SvelteKit) => ModelSvelteTemplates::iter()
+                .filter(|f| !f.ends_with(".macros.tera"))
+                .map(|f| {
+                    let outfile = if f == "model/model.ts.tera" {
+                        // The main file. Right now we render this straight into lib
+                        web_base_path.join(format!("{}.ts", self.model.module_name()))
+                    } else {
+                        // Other files go in a subdirectory
+                        web_base_path
+                            .join(self.model.module_name())
+                            .join(strip_path(f.as_ref()))
+                    };
 
-                (
-                    f,
-                    outfile,
-                    RenderedFileLocation::Svelte,
-                    self.template_context(),
-                )
-            });
+                    (
+                        f,
+                        outfile,
+                        RenderedFileLocation::Svelte,
+                        self.template_context(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            _ => vec![],
+        };
 
         let rust_base_path = PathBuf::from("src/models").join(self.model.module_name());
         let skip_files = [
@@ -213,7 +217,7 @@ impl<'a> ModelGenerator<'a> {
             })
             .chain(populate_queries);
 
-        let files = web_files.chain(api_files).collect::<Vec<_>>();
+        let files = web_files.into_iter().chain(api_files).collect::<Vec<_>>();
 
         let output = files
             .into_par_iter()
