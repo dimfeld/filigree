@@ -92,6 +92,7 @@ pub async fn start_app_with_options(pg_pool: PgPool, options: TestAppOptions) ->
             {% if web.has_api_pages -%}
             vite_manifest: None,
             watch_vite_manifest: false,
+            livereload: false,
             {%- endif -%}
         },
         insecure: true,

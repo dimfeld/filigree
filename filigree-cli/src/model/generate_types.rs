@@ -8,6 +8,7 @@ use crate::Error;
 
 struct StructContents {
     suffix: &'static str,
+    similar_to: Option<&'static str>,
     fields: GeneratedStruct,
     flags: ImplFlags,
 }
@@ -44,6 +45,7 @@ impl<'a> ModelGenerator<'a> {
         let struct_list = [
             StructContents {
                 suffix: "AllFields",
+                similar_to: None,
                 fields: Self::struct_contents(
                     self.all_fields()?.filter(|f| !f.never_read),
                     |_| false,
@@ -56,6 +58,7 @@ impl<'a> ModelGenerator<'a> {
             },
             StructContents {
                 suffix: "ListResult",
+                similar_to: None,
                 fields: Self::struct_contents(
                     self.all_fields()?
                         .filter(|f| !f.never_read && !f.omit_in_list),
@@ -69,6 +72,7 @@ impl<'a> ModelGenerator<'a> {
             },
             StructContents {
                 suffix: "PopulatedGetResult",
+                similar_to: Some("AllFields"),
                 fields: Self::struct_contents(
                     self.all_fields()?.filter(|f| !f.never_read).chain(
                         self.virtual_fields(super::generator::ReadOperation::Get)?
@@ -84,6 +88,7 @@ impl<'a> ModelGenerator<'a> {
             },
             StructContents {
                 suffix: "PopulatedListResult",
+                similar_to: Some("ListResult"),
                 fields: Self::struct_contents(
                     self.all_fields()?
                         .filter(|f| !f.never_read && !f.omit_in_list)
@@ -101,6 +106,7 @@ impl<'a> ModelGenerator<'a> {
             },
             StructContents {
                 suffix: "CreatePayload",
+                similar_to: None,
                 fields: Self::struct_contents(
                     self.write_payload_struct_fields(false)?,
                     |_| false,
@@ -110,6 +116,7 @@ impl<'a> ModelGenerator<'a> {
             },
             StructContents {
                 suffix: "CreateResult",
+                similar_to: None,
                 fields: Self::struct_contents(
                     self.all_fields()?.filter(|f| !f.never_read).chain(
                         self.write_payload_child_fields(false)?.map(|f| {
@@ -134,6 +141,7 @@ impl<'a> ModelGenerator<'a> {
             },
             StructContents {
                 suffix: "UpdatePayload",
+                similar_to: None,
                 fields: Self::struct_contents(
                     self.write_payload_struct_fields(true)?,
                     |f| {
@@ -155,12 +163,13 @@ impl<'a> ModelGenerator<'a> {
             ts_contents: String,
             has_permissions_field: bool,
             flags: ImplFlags,
-            suffixes: Vec<&'static str>,
+            suffixes: Vec<(&'static str, Option<&'static str>)>,
         }
 
         let mut grouped_fields = HashMap::new();
         for StructContents {
             suffix,
+            similar_to,
             fields,
             flags,
         } in struct_list
@@ -175,7 +184,7 @@ impl<'a> ModelGenerator<'a> {
                     suffixes: Vec::new(),
                 });
             entry.flags = entry.flags.or(&flags);
-            entry.suffixes.push(suffix);
+            entry.suffixes.push((suffix, similar_to));
         }
 
         let owner_and_user_different_access =
@@ -198,22 +207,33 @@ impl<'a> ModelGenerator<'a> {
                         suffixes,
                     },
                 )| {
-                    let name = if suffixes.contains(&"AllFields") {
+                    let suffix = if suffixes.iter().find(|(s, _)| *s == "AllFields").is_some() {
                         // The AllFields struct should just have the base name
-                        Cow::Borrowed(&struct_base)
+                        Cow::Borrowed("")
                     } else {
-                        Cow::Owned(format!(
-                            "{struct_base}{suffix}",
-                            suffix = suffixes.join("And")
-                        ))
+                        let suffix = suffixes
+                            .iter()
+                            .filter(|(_, similar_to)| {
+                                let Some(similar_to) = similar_to else {
+                                    return true;
+                                };
+
+                                suffixes.iter().find(|(s, _)| s == similar_to).is_none()
+                            })
+                            .map(|(s, _)| s)
+                            .join("And");
+
+                        Cow::Owned(suffix)
                     };
+
+                    let name = format!("{struct_base}{suffix}");
 
                     let aliases = (suffixes.len() > 1)
                         .then(|| {
                             suffixes
                                 .iter()
-                                .filter(|suffix| **suffix != "AllFields")
-                                .map(|suffix| format!("{struct_base}{suffix}"))
+                                .filter(|(s, _)| *s != "AllFields" && *s != suffix)
+                                .map(|(s, _)| format!("{struct_base}{s}"))
                                 .collect::<Vec<_>>()
                         })
                         .unwrap_or_default();
