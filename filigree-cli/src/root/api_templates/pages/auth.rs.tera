@@ -1,12 +1,14 @@
 use std::borrow::Cow;
 
 use axum::{
-    extract::FromRequestParts,
+    extract::{FromRequestParts, Request},
     response::{IntoResponse, Redirect, Response},
 };
 use axum_htmx::HxLocation;
-use filigree::errors::HttpError;
+use filigree::{auth::AuthInfo as _, errors::HttpError};
+use futures::future::BoxFuture;
 use http::{request::Parts, StatusCode, Uri};
+use tower::{Layer, Service};
 
 use crate::{
     auth::{AuthInfo, Authed},
@@ -42,11 +44,7 @@ where
             Err(e) => match e.status_code() {
                 StatusCode::UNAUTHORIZED => {
                     let login_url = make_login_link(Some(&parts.uri));
-                    Err((
-                        HxLocation::from_uri(login_url.clone()),
-                        Redirect::to(&login_url.to_string()),
-                    )
-                        .into_response())
+                    Err(redirect_body(login_url))
                 }
                 _ => {
                     let e = Error::from(e);
@@ -55,6 +53,11 @@ where
             },
         }
     }
+}
+
+fn redirect_body(to: Uri) -> Response {
+    let t = to.to_string();
+    (HxLocation::from_uri(to), Redirect::to(&t)).into_response()
 }
 
 pub fn make_login_link(redirect_to: Option<&Uri>) -> Uri {
@@ -72,5 +75,67 @@ pub fn make_login_link(redirect_to: Option<&Uri>) -> Uri {
             .unwrap_or_else(|_| "/login".parse().unwrap())
     } else {
         "/login".parse().unwrap()
+    }
+}
+
+/// Disallow fallback anonymous users and return a redirect to the login page.
+#[allow(dead_code)]
+pub fn web_not_anonymous() -> NotAnonymousLayer {
+    NotAnonymousLayer {}
+}
+
+/// The middleware layer for disallowing anonymous fallback users
+#[derive(Clone)]
+pub struct NotAnonymousLayer {}
+
+impl<S> Layer<S> for NotAnonymousLayer {
+    type Service = NotAnonymousService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        NotAnonymousService { inner }
+    }
+}
+
+/// The middleware service for disallowing anonymous fallback users
+#[derive(Clone)]
+pub struct NotAnonymousService<S> {
+    inner: S,
+}
+
+impl<S> Service<Request> for NotAnonymousService<S>
+where
+    S: Service<Request, Response = axum::response::Response> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: IntoResponse,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: Request) -> Self::Future {
+        let cloned = self.inner.clone();
+        let mut inner = std::mem::replace(&mut self.inner, cloned);
+
+        Box::pin(async move {
+            let (request, info) = match filigree::auth::get_auth_info::<AuthInfo>(request).await {
+                Ok(x) => x,
+                Err(e) => return Ok(e.into_response()),
+            };
+
+            if info.is_anonymous() {
+                let uri = request.uri();
+                let to = make_login_link(Some(uri));
+                return Ok(redirect_body(to));
+            }
+
+            inner.call(request).await
+        })
     }
 }

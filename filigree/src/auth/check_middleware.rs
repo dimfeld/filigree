@@ -352,3 +352,105 @@ where
         })
     }
 }
+
+/// Generate a middleware layer that disallows anonymous fallback users.
+pub fn not_anonymous<INFO>() -> NotAnonymousLayer<INFO>
+where
+    INFO: AuthInfo,
+{
+    NotAnonymousLayer {
+        _marker: PhantomData,
+    }
+}
+
+/// The middleware layer for disallowing anonymous fallback users
+pub struct NotAnonymousLayer<INFO>
+where
+    INFO: AuthInfo,
+{
+    _marker: PhantomData<INFO>,
+}
+
+impl<INFO> Clone for NotAnonymousLayer<INFO>
+where
+    INFO: AuthInfo,
+{
+    fn clone(&self) -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, INFO> Layer<S> for NotAnonymousLayer<INFO>
+where
+    INFO: AuthInfo,
+{
+    type Service = NotAnonymousService<S, INFO>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        NotAnonymousService {
+            inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
+/// The middleware service for disallowing anonymous fallback users
+pub struct NotAnonymousService<S, INFO>
+where
+    INFO: AuthInfo,
+{
+    inner: S,
+    _marker: PhantomData<INFO>,
+}
+
+impl<S, INFO> Clone for NotAnonymousService<S, INFO>
+where
+    INFO: AuthInfo,
+    S: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            _marker: self._marker.clone(),
+        }
+    }
+}
+
+impl<S, INFO> Service<Request> for NotAnonymousService<S, INFO>
+where
+    INFO: AuthInfo,
+    S: Service<Request, Response = axum::response::Response> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: IntoResponse,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: Request) -> Self::Future {
+        let cloned = self.inner.clone();
+        let mut inner = std::mem::replace(&mut self.inner, cloned);
+
+        Box::pin(async move {
+            let (request, info) = match get_auth_info::<INFO>(request).await {
+                Ok(x) => x,
+                Err(e) => return Ok(e.into_response()),
+            };
+
+            if info.is_anonymous() {
+                return Ok(AuthError::Unauthenticated.into_response());
+            }
+
+            inner.call(request).await
+        })
+    }
+}

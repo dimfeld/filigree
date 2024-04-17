@@ -53,6 +53,10 @@ impl filigree::auth::AuthInfo for AuthInfo {
         }
     }
 
+    fn is_anonymous(&self) -> bool {
+        self.anonymous
+    }
+
     fn has_permission(&self, permission: &str) -> bool {
         self.permissions.iter().any(|p| p == permission)
     }
@@ -138,6 +142,11 @@ pub fn has_all_permissions(
     permissions: Vec<impl Into<Cow<'static, str>>>,
 ) -> filigree::auth::HasPermissionLayer<AuthInfo, impl PermissionChecker<AuthInfo>> {
     filigree::auth::has_all_permissions(permissions)
+}
+
+/// Disallow anonymous users
+pub fn not_anonymous() -> filigree::auth::NotAnonymousLayer<AuthInfo> {
+    filigree::auth::not_anonymous()
 }
 
 pub fn has_auth_predicate<F>(

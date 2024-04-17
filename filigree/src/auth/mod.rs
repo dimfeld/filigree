@@ -198,6 +198,8 @@ pub trait AuthInfo: 'static + Send + Sync {
     /// Return Ok if the user is valid, or an [AuthError] if the user is not authenticated or
     /// authorized.
     fn check_valid(&self) -> Result<(), AuthError>;
+    /// Return true if this user is the anonymous user.
+    fn is_anonymous(&self) -> bool;
     /// Check if the user, or any of its associated objects (roles, etc.) has a specific permission.
     fn has_permission(&self, permission: &str) -> bool;
 
