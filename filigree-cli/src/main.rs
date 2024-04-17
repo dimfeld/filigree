@@ -9,6 +9,7 @@ use crate::config::FullConfig;
 mod add_deps;
 mod config;
 mod format;
+mod init;
 mod merge_files;
 mod migrations;
 mod model;
@@ -34,6 +35,8 @@ pub enum Command {
     Env(print_env::Command),
     /// Generate application code from the configuration files
     Write(write::Command),
+    /// Create a new project using Filigree
+    Init(init::Command),
 }
 
 #[derive(Error, Debug)]
@@ -52,6 +55,10 @@ pub enum Error {
     Formatter,
     #[error("Failed to run cargo")]
     Cargo,
+    #[error("Failed to run npm")]
+    Npm,
+    #[error("Failed to run psql")]
+    Psql,
     #[error("Input error")]
     Input,
     #[error("Missing model {0} in model {1} field {2}")]
@@ -77,6 +84,12 @@ pub enum Error {
 pub fn main() -> Result<(), Report<Error>> {
     let args = Cli::parse();
 
+    // Commands that don't expect a config file
+    match args.command {
+        Command::Init(cmd) => return init::run(cmd),
+        _ => {}
+    };
+
     let config_path = args.config.clone();
     let mut config = FullConfig::from_dir(config_path)?;
 
@@ -91,5 +104,6 @@ pub fn main() -> Result<(), Report<Error>> {
     match args.command {
         Command::Env(cmd) => print_env::run(config, cmd),
         Command::Write(cmd) => write::write(config, cmd),
+        Command::Init(_) => unreachable!(),
     }
 }

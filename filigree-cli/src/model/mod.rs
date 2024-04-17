@@ -386,6 +386,16 @@ pub enum ModelAuthScope {
     // Object,
 }
 
+impl std::fmt::Display for ModelAuthScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModelAuthScope::Model => write!(f, "model"),
+            // ModelAuthScope::Project => write!(f, "project"),
+            // ModelAuthScope::Object => write!(f, "object"),
+        }
+    }
+}
+
 /// How to fetch child models the parent model
 #[derive(Debug, Default, Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]

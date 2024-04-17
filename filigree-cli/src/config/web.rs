@@ -132,3 +132,12 @@ pub enum WebFramework {
     #[serde(rename = "sveltekit")]
     SvelteKit,
 }
+
+impl std::fmt::Display for WebFramework {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WebFramework::Htmx => write!(f, "htmx"),
+            WebFramework::SvelteKit => write!(f, "sveltekit"),
+        }
+    }
+}
