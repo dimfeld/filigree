@@ -28,7 +28,7 @@ use tower_http::{
 };
 use tracing::{event, Level};
 
-use crate::{error::Error, storage};
+use crate::{error::Error, {% if storage %}storage{% endif %}};
 
 mod health;
 mod meta;
