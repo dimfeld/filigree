@@ -392,6 +392,24 @@ pub fn run(cmd: Command) -> Result<(), Report<Error>> {
         .change_context(Error::WriteFile)
         .attach_printable_lazy(|| env_path.display().to_string())?;
 
+    println!("Adding entries to .gitignore");
+    let extra_git_ignore = indoc::indoc! {"
+        .env
+        .env.*
+    "};
+
+    let gitignore_path = dir.join(".gitignore");
+    let mut gitignore = std::fs::File::options()
+        .append(true)
+        .create(true)
+        .open(&gitignore_path)
+        .change_context(Error::WriteFile)
+        .attach_printable_lazy(|| gitignore_path.display().to_string())?;
+    gitignore
+        .write_all(extra_git_ignore.as_bytes())
+        .change_context(Error::WriteFile)
+        .attach_printable_lazy(|| gitignore_path.display().to_string())?;
+
     println!("Initialization complete!");
     println!("Your configuration file is as `filigree/config.toml.`");
     println!("Once you've set it up, un `filigree write` to scaffold yuor project.");
