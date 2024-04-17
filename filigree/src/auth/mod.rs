@@ -29,6 +29,7 @@ pub use sessions::*;
 use thiserror::Error;
 use uuid::Uuid;
 
+pub use self::lookup::FallbackAnonymousUser;
 use crate::{
     errors::{ErrorKind, ForceObfuscate, HttpError},
     make_object_id,
@@ -187,6 +188,9 @@ pub trait AuthQueries: Send + Sync {
         &self,
         session_key: &SessionKey,
     ) -> Result<Option<Self::AuthInfo>, sqlx::Error>;
+
+    /// Create an [AuthInfo] object for an anonymous user.
+    async fn anonymous_user(&self, user: UserId) -> Result<Option<Self::AuthInfo>, sqlx::Error>;
 }
 
 /// An object containing information about the current user.

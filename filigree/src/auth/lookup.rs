@@ -10,8 +10,19 @@ use uuid::Uuid;
 
 use super::{
     sessions::{get_session_cookie, SessionKey},
-    AuthError, AuthInfo, AuthQueries,
+    AuthError, AuthInfo, AuthQueries, UserId,
 };
+
+/// When an anonymous users accesses the site, authenticate as this user instead.
+/// This allows gives a proper context for anonymous users to interact with the site in a
+/// meaningful way, if desired.
+///
+/// To define an anonymous user, insert this structure into the request extensions. The easiest way
+/// to do this is through a middleware, such as by adding
+/// `.layer(Extension(AnonymousUser { user_id, organization_id }))` around the routes that you
+/// want.
+#[derive(Debug, Copy, Clone)]
+pub struct FallbackAnonymousUser(pub UserId);
 
 /// Functionality to fetch authorization info from the database given session cookies and Bearer tokens
 pub struct AuthLookup<T: AuthInfo> {
@@ -61,10 +72,26 @@ impl<T: AuthInfo> AuthLookup<T> {
 
         let session_key = get_session_cookie(request);
         if let Some(session_key) = session_key {
-            return self.get_info_from_session(&session_key).await;
+            match self.get_info_from_session(&session_key).await {
+                Ok(info) => return Ok(info),
+                Err(AuthError::Unauthenticated) => {
+                    let user = self.try_anonymous_user(request).await?;
+                    return user.ok_or(AuthError::Unauthenticated);
+                }
+                Err(e) => return Err(e),
+            }
         }
 
         Err(AuthError::Unauthenticated)
+    }
+
+    async fn try_anonymous_user(&self, request: &mut Parts) -> Result<Option<Arc<T>>, AuthError> {
+        let Some(anon) = request.extensions.get::<FallbackAnonymousUser>() else {
+            return Ok(None);
+        };
+
+        let info = self.queries.anonymous_user(anon.0).await?;
+        Ok(info.map(Arc::new))
     }
 
     /// Return the authorization info, fetching it if it hasn't yet been fetched for this request.

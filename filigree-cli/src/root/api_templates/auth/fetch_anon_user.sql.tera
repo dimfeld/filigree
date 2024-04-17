@@ -1,0 +1,12 @@
+{% extends "root/auth/fetch_base.sql.tera" %}
+{% block base_lookup %}
+  SELECT
+    users.id AS user_id,
+    users.organization_id,
+    om.active
+  FROM users
+  JOIN organization_members om ON users.id = om.user_id AND users.organization_id = om.organization_id
+  WHERE users.id = $1
+  LIMIT 1
+{% endblock base_lookup %}
+{% block anonymous %}true{% endblock anonymous %}
