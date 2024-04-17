@@ -241,7 +241,7 @@ pub fn write_env_vars(
         writer,
         &pc,
         "COOKIE_SAME_SITE",
-        "Strict",
+        "strict",
         "The SameSite setting to use when setting cookies",
     )?;
 

@@ -202,9 +202,9 @@ pub enum CorsSetting {
 impl std::fmt::Display for CorsSetting {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CorsSetting::None => write!(f, "None"),
-            CorsSetting::AllowHostList => write!(f, "AllowHostList"),
-            CorsSetting::AllowAll => write!(f, "AllowAll"),
+            CorsSetting::None => write!(f, "none"),
+            CorsSetting::AllowHostList => write!(f, "allow-host-list"),
+            CorsSetting::AllowAll => write!(f, "allow-all"),
         }
     }
 }
