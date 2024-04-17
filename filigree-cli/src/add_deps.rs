@@ -88,7 +88,7 @@ pub fn add_fixed_deps(
 
     filigree_features.extend(config.web.filigree_features());
 
-    add_dep(cwd, manifest, "filigree", "0.0.3", &filigree_features)?;
+    add_dep(cwd, manifest, "filigree", "0.1.0", &filigree_features)?;
 
     for (name, version, features) in DEPS {
         add_dep(cwd, manifest, name, version, features)?;
