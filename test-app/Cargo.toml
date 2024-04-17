@@ -1,7 +1,7 @@
 [package]
 name = "filigree-test-app"
 edition = "2021"
-version = "0.0.0"
+version = "0.0.1"
 publish = false
 
 [lib]
@@ -29,7 +29,7 @@ dotenvy = "0.15.7"
 effectum = "0.6.0"
 error-stack = { version = "0.4.1", features = ["spantrace"] }
 eyre = "0.6.12"
-filigree = { version = "0.0.3", path = "../filigree" }
+filigree = { version = "0.0.4", path = "../filigree" }
 futures = "0.3.30"
 http = "1.0.0"
 hyper = { version = "1.2.0", features = ["server", "http1", "http2"] }
