@@ -54,13 +54,13 @@ pub fn page_wrapper(title: &str, slot: Markup) -> Markup {
 }
 
 /// The root layout of the application
-pub fn root_layout(auth: Option<&Authed>, slot: Markup) -> Markup {
+pub fn root_layout(auth: Option<&WebAuthed>, slot: Markup) -> Markup {
     html! {
         (slot)
     }
 }
 
 /// The root layout of the application, as a full HTML page
-pub fn root_layout_page(auth: Option<&Authed>, title: &str, slot: Markup) -> Markup {
+pub fn root_layout_page(auth: Option<&WebAuthed>, title: &str, slot: Markup) -> Markup {
     page_wrapper(title, root_layout(auth, slot))
 }

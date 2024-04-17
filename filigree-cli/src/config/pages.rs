@@ -320,7 +320,7 @@ fn rust_args(
     let mut args = vec![
         "State(state): State<ServerState>".to_string(),
         match (require_authed, web_auth) {
-            (true, true) => "WebAuthed(auth): WebAuthed".to_string(),
+            (true, true) => "auth: WebAuthed".to_string(),
             (true, false) => "auth: Authed".to_string(),
             (false, true) => "auth: Option<WebAuthed>".to_string(),
             (false, false) => "auth: Option<Authed>".to_string(),
