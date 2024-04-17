@@ -178,7 +178,9 @@ pub fn render_files(
             let filename = file.strip_prefix("root/").unwrap();
             let filename = filename.strip_suffix(".tera").unwrap_or(filename);
 
-            let path = if non_base_files.contains(&filename) {
+            let path = if non_base_files.contains(&filename)
+                || matches!(location, RenderedFileLocation::Htmx)
+            {
                 PathBuf::from(filename)
             } else {
                 base_path.join(filename)
