@@ -29,18 +29,19 @@ impl Formatters {
         } else if filename.ends_with(".rs") {
             (
                 &self.api_base_dir,
-                self.config
-                    .rust
-                    .clone()
-                    .or(Some(vec!["rustfmt".to_string()])),
+                self.config.rust.clone().or(Some(vec![
+                    "rustfmt".to_string(),
+                    "--edition".to_string(),
+                    "2021".to_string(),
+                ])),
             )
         } else if filename.ends_with(".ts") || filename.ends_with(".js") {
             (
                 &self.web_base_dir,
-                self.config
-                    .js
-                    .clone()
-                    .or(Some(vec!["prettier".to_string()])),
+                self.config.js.clone().or(Some(vec![
+                    "prettier".to_string(),
+                    "--stdin-path=stdin.ts".to_string(),
+                ])),
             )
         } else {
             (&self.api_base_dir, None)
@@ -66,7 +67,8 @@ impl Formatters {
             .stderr(Stdio::piped())
             .spawn()
             .change_context(Error::Formatter)
-            .attach_printable_lazy(|| filename.to_string())?;
+            .attach_printable_lazy(|| format!("Tried to run {}", formatter.join(" ")))
+            .attach_printable_lazy(|| format!("on {filename}"))?;
 
         let mut stdin = format_process.stdin.take().ok_or(Error::Formatter)?;
         let writer_thread =

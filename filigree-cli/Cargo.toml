@@ -26,8 +26,10 @@ error-stack = "0.4.1"
 filigree = { version = "0.0.3", path = "../filigree", default-features = false, features = ["filigree-cli"] }
 glob = "0.3.1"
 ignore = "0.4.22"
+indoc = "2.0.5"
 itertools = "0.12.1"
 pathdiff = "0.2.1"
+rand = "0.8.5"
 rayon = "1.9.0"
 regex = "1.10.3"
 rust-embed = { version = "8.3.0", features = ["interpolate-folder-path"] }
