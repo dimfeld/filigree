@@ -1,4 +1,10 @@
+//! Request Handling and Validation
+
 use std::{borrow::Cow, fmt::Display};
+
+use axum::extract::Request;
+use tower_http::request_id::{MakeRequestId, RequestId};
+use uuid::Uuid;
 
 pub mod file;
 pub mod json_schema;
@@ -34,5 +40,16 @@ impl<'a> ContentType<'a> {
     /// Check if the content type is multipart
     pub fn is_multipart(&self) -> bool {
         self.0.starts_with("multipart/form-data")
+    }
+}
+
+/// A [`MakeRequestId`] that generates `UUIDv7`s.
+#[derive(Clone, Copy, Default)]
+pub struct MakeRequestUuidV7;
+
+impl MakeRequestId for MakeRequestUuidV7 {
+    fn make_request_id<B>(&mut self, _request: &Request<B>) -> Option<RequestId> {
+        let request_id = Uuid::now_v7().to_string().parse().unwrap();
+        Some(RequestId::new(request_id))
     }
 }

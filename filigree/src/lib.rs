@@ -29,7 +29,6 @@ pub mod maud;
 pub mod object_id;
 /// Common query string structures for use with Axum's [Query](axum::extract::Query) extractor
 pub mod query_string;
-/// Request Handling and Validation
 pub mod requests;
 /// Services that can be placed in the Axum router
 pub mod route_services;
