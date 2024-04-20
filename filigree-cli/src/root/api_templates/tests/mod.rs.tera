@@ -27,7 +27,7 @@ pub struct TestApp {
     pub pg_pool: PgPool,
     pub server_task: tokio::task::JoinHandle<Result<(), Report<Error>>>,
     pub sent_emails: Arc<Mutex<Vec<filigree::email::Email>>>,
-    queue_dir: temp_dir::TempDir,
+    {% if queue %}queue_dir: temp_dir::TempDir,{% endif %}
 }
 
 #[derive(Clone, Debug)]
@@ -149,7 +149,7 @@ pub async fn start_app_with_options(pg_pool: PgPool, options: TestAppOptions) ->
         server_task,
         sent_emails,
         pg_pool,
-        queue_dir,
+        {% if queue %} queue_dir,{% endif %}
     };
 
     (app, bootstrapped_data)
