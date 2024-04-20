@@ -111,7 +111,7 @@ impl ResponseExt for reqwest::Response {
             let status = self.status().as_u16();
             let url = self.url().clone();
             let text = self.text().await.unwrap_or_default();
-            event!(Level::ERROR, url=%url, %status, response=%text);
+            event!(Level::ERROR, url=%url, %status, response=text);
             Err(e)
         } else {
             Ok(self)

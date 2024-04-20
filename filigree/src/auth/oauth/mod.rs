@@ -255,7 +255,6 @@ pub async fn handle_login_code(
         )
         .await?;
     let access_token = token_response.access_token();
-    event!(Level::INFO, token=?access_token.secret(), "Got access token");
 
     let user_details = provider
         .fetch_user_details(state.http_client.clone(), access_token.secret())

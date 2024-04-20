@@ -116,7 +116,7 @@ pub fn create_store<'a>(config: &S3StoreConfig, bucket: &'a str) -> Result<Amazo
     };
 
     if let Some(endpoint) = config.endpoint.as_ref() {
-        event!(Level::TRACE, ?endpoint);
+        event!(Level::TRACE, %endpoint);
 
         // When using virtual host style, object_store requires us to prepend the bucket name
         // to the endpoint.

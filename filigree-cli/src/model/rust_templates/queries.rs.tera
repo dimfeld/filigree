@@ -203,7 +203,7 @@ impl ListQueryFilters {
             const DEFAULT_PER_PAGE: u32 = {{ pagination.default_per_page }};
             let per_page = self.per_page.unwrap_or(DEFAULT_PER_PAGE).min(MAX_PER_PAGE).max(1);
             let offset = self.page.unwrap_or(0) * per_page;
-            event!(Level::DEBUG, %per_page, %offset);
+            event!(Level::DEBUG, per_page, offset);
             query = query.bind(per_page as i32).bind(offset as i32);
         {% endif %}
 
@@ -279,7 +279,7 @@ where
     let mut query = sqlx::query_as::<_, T>(q.as_str());
 
     let actor_ids = auth.actor_ids();
-    event!(Level::DEBUG, organization_id=?auth.organization_id, actor_ids=?actor_ids);
+    event!(Level::DEBUG, organization_id=%auth.organization_id, actor_ids=?actor_ids);
     query = query
         {% if not global %}
         .bind(&auth.organization_id)
