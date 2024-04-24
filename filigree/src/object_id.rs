@@ -245,13 +245,13 @@ impl<'de, PREFIX: ObjectIdPrefix> serde::Deserialize<'de> for ObjectId<PREFIX> {
 /// Store and retrieve in Postgres as a raw UUID
 impl<PREFIX: ObjectIdPrefix> sqlx::Type<sqlx::Postgres> for ObjectId<PREFIX> {
     fn type_info() -> <sqlx::Postgres as Database>::TypeInfo {
-        Uuid::type_info()
+        <sqlx::types::Uuid as sqlx::Type<sqlx::Postgres>>::type_info()
     }
 }
 
 impl<PREFIX: ObjectIdPrefix> sqlx::postgres::PgHasArrayType for ObjectId<PREFIX> {
     fn array_type_info() -> PgTypeInfo {
-        Uuid::array_type_info()
+        <sqlx::types::Uuid as sqlx::postgres::PgHasArrayType>::array_type_info()
     }
 }
 
@@ -260,7 +260,7 @@ impl<'q, PREFIX: ObjectIdPrefix> sqlx::Encode<'q, sqlx::Postgres> for ObjectId<P
         &self,
         buf: &mut <sqlx::Postgres as sqlx::database::HasArguments<'q>>::ArgumentBuffer,
     ) -> sqlx::encode::IsNull {
-        self.0.encode_by_ref(buf)
+        <sqlx::types::Uuid as sqlx::Encode<'_, sqlx::Postgres>>::encode_by_ref(&self.0, buf)
     }
 }
 
@@ -268,7 +268,7 @@ impl<'r, PREFIX: ObjectIdPrefix> sqlx::Decode<'r, sqlx::Postgres> for ObjectId<P
     fn decode(
         value: <sqlx::Postgres as sqlx::database::HasValueRef<'r>>::ValueRef,
     ) -> Result<Self, sqlx::error::BoxDynError> {
-        let u = Uuid::decode(value)?;
+        let u = <sqlx::types::Uuid as sqlx::Decode<'r, sqlx::Postgres>>::decode(value)?;
         Ok(Self(u, PhantomData))
     }
 }
