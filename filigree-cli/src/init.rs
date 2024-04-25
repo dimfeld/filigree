@@ -106,7 +106,7 @@ pub fn run(cmd: Command) -> Result<(), Report<Error>> {
 
         let database_name = dialoguer::Input::with_theme(&ColorfulTheme::default())
             .with_prompt("What would you like to name your database?")
-            .with_initial_text(&app_name)
+            .default(app_name.clone())
             .validate_with(|input: &String| {
                 valid_id(input, "Database name cannot contain spaces or punctuation")
             })
@@ -115,10 +115,17 @@ pub fn run(cmd: Command) -> Result<(), Report<Error>> {
 
         let create_db_user = dialoguer::Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt("Create a user for this database?")
+            .default(true)
             .interact()
             .change_context(Error::Input)?;
 
         let db_user = create_db_user.then(|| {
+            let is_superuser = dialoguer::Confirm::with_theme(&ColorfulTheme::default())
+                .with_prompt("Should the database user be a superuser? This is necessary for the #[sqlx:test] macro to work.")
+                .default(true)
+                .interact()
+                .change_context(Error::Input)?;
+
             let user_name = dialoguer::Input::with_theme(&ColorfulTheme::default())
                 .with_prompt("Enter the username")
                 .with_initial_text(&app_name)
@@ -146,13 +153,15 @@ pub fn run(cmd: Command) -> Result<(), Report<Error>> {
                 password
             };
 
-            Ok::<_, Report<Error>>((user_name, password))
+            Ok::<_, Report<Error>>((user_name, is_superuser, password))
         }).transpose()
         .change_context(Error::Input)?;
 
-        let sql = if let Some((user, password)) = &db_user {
+        let sql = if let Some((user, is_superuser, password)) = &db_user {
+            let superuser = if *is_superuser { "SUPERUSER" } else { "" };
             format!(
-                "CREATE USER \"{user}\" WITH PASSWORD '{password}';\nCREATE DATABASE {database_name} WITH OWNER \"{user}\";\n"
+                "CREATE USER \"{user}\" WITH {superuser} PASSWORD '{password}';\nCREATE DATABASE {database_name} WITH OWNER \"{user}\";\n"
+
             )
         } else {
             format!("CREATE DATABASE {database_name};\n")
@@ -185,7 +194,7 @@ pub fn run(cmd: Command) -> Result<(), Report<Error>> {
 
         url.set_path(&database_name);
 
-        if let Some((user, password)) = &db_user {
+        if let Some((user, _, password)) = &db_user {
             url.set_username(&user).ok();
             url.set_password(Some(password.as_str())).ok();
         }
