@@ -224,7 +224,10 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
     model_migrations.sort_by(|m1, m2| {
         let m1 = &m1.model.unwrap();
         let m2 = &m2.model.unwrap();
-        m1.order_by_dependency(m2)
+        // The normal ordering places child tables first, so reverse it here. For migrations we want the child table to
+        // come second because the foreign key constraint is on the child table so the parent must
+        // be created first.
+        m1.order_by_dependency(m2).reverse()
     });
 
     let (first_fixed_migrations, last_fixed_migrations) = ModelGenerator::fixed_migrations();
