@@ -91,7 +91,7 @@ pub struct Model {
     #[serde(default = "true_t")]
     pub index_created_at: bool,
 
-    /// Add a descending index on the `created_at` field. Default true
+    /// Add a descending index on the `updated_at` field. Default true
     #[serde(default = "true_t")]
     pub index_updated_at: bool,
 
