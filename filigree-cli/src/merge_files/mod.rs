@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use error_stack::{Report, ResultExt};
 
@@ -28,6 +31,50 @@ impl MergeTracker {
 
     pub fn from_rendered_file(&self, file: RenderedFile) -> MergeFile {
         self.file(file.path, String::from_utf8(file.contents).unwrap())
+    }
+
+    /// Go backwards from an internal path to the output path it represents
+    fn empty_from_internal_file(&self, path: &Path) -> MergeFile {
+        let mut relative = pathdiff::diff_paths(path, &self.base_generated_path).unwrap();
+        let r = relative
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .strip_suffix(".gen")
+            .unwrap()
+            .to_string();
+        relative.set_file_name(r);
+
+        self.file(relative, String::new())
+    }
+
+    /// Generate a list of files that are in the state but were not generated on this run.
+    pub fn generate_empty_files(
+        &self,
+        existing_files: &[MergeFile],
+        always_keep: &[&str],
+    ) -> Vec<MergeFile> {
+        let mut with_content = existing_files
+            .iter()
+            .map(|f| f.base_generated_path.clone())
+            .collect::<HashSet<_>>();
+
+        for name in always_keep {
+            with_content.insert(self.internal_file_path(Path::new(name)));
+        }
+
+        let walker = ignore::Walk::new(&self.base_generated_path);
+
+        walker
+            .flatten()
+            .filter(|entry| {
+                let path = entry.path();
+                entry.file_type().map(|f| f.is_file()).unwrap_or(false)
+                    && path.extension().unwrap_or_default() == "gen"
+                    && !with_content.contains(path)
+            })
+            .map(|entry| self.empty_from_internal_file(entry.path()))
+            .collect()
     }
 
     pub fn file(&self, path: PathBuf, new_output: String) -> MergeFile {
@@ -121,7 +168,7 @@ fn generate_merged_output(
 }
 
 pub struct MergeFile {
-    base_generated_path: PathBuf,
+    pub base_generated_path: PathBuf,
     pub output_path: PathBuf,
     pub output_relative_path: PathBuf,
 

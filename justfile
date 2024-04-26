@@ -7,8 +7,12 @@ build-with-backup:
   @just build-test-app
 
 build-test-app *FLAGS:
+  @just write-files {{FLAGS}}
+  cd test-app && cargo lcheck
+
+write-files *FLAGS:
   cd filigree-cli && cargo lbuild
-  cd test-app && ../target/debug/filigree write {{FLAGS}} && cargo lcheck
+  cd test-app && ../target/debug/filigree write {{FLAGS}}
 
 build-and-test *FLAGS:
   @just build-test-app

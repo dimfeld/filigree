@@ -321,10 +321,19 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
                 }
             }
 
-            let merge_files = files
+            let mut merge_files = files
                 .into_par_iter()
                 .map(|f| merge_tracker.from_rendered_file(f))
                 .collect::<Vec<_>>();
+
+            let always_keep = if base_dir == &api_dir {
+                vec!["src/models/mod.rs"]
+            } else {
+                vec![]
+            };
+
+            let empty_files = merge_tracker.generate_empty_files(&merge_files, &always_keep);
+            merge_files.extend(empty_files);
 
             Ok::<_, Report<Error>>(merge_files)
         })
