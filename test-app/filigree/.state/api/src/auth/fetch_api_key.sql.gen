@@ -64,7 +64,8 @@ SELECT
     SELECT
       ARRAY_AGG(role_id) FILTER (WHERE role_id IS NOT NULL)
 FROM role_lookup), ARRAY[]::uuid[]) AS "roles!: Vec<RoleId>",
-  permissions AS "permissions!: Vec<String>"
+  permissions AS "permissions!: Vec<String>",
+  FALSE AS "anonymous!"
 FROM
   base_lookup bl
   LEFT JOIN permissions ON TRUE

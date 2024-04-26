@@ -96,6 +96,7 @@ pub async fn start_app_with_options(
             path: None,
             vite_manifest: None,
             watch_vite_manifest: false,
+            livereload: false,
         },
         insecure: true,
         request_timeout: std::time::Duration::from_secs(30),

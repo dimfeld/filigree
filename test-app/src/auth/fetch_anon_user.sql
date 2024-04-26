@@ -1,17 +1,14 @@
 WITH base_lookup AS (
   SELECT
-    sess.user_id,
+    users.id AS user_id,
     users.organization_id,
     om.active
   FROM
-    user_sessions sess
-    JOIN users ON sess.user_id = users.id
+    users
     JOIN organization_members om ON users.id = om.user_id
       AND users.organization_id = om.organization_id
   WHERE
-    sess.id = $1
-    AND sess.hash = $2
-    AND expires_at > now()
+    users.id = $1
   LIMIT 1
 ),
 role_lookup AS (
@@ -50,7 +47,7 @@ SELECT
       ARRAY_AGG(role_id) FILTER (WHERE role_id IS NOT NULL)
 FROM role_lookup), ARRAY[]::uuid[]) AS "roles!: Vec<RoleId>",
   permissions AS "permissions!: Vec<String>",
-  FALSE AS "anonymous!"
+  TRUE AS "anonymous!"
 FROM
   base_lookup bl
   LEFT JOIN permissions ON TRUE

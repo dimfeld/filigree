@@ -20,11 +20,18 @@ pub type Authed = filigree::auth::Authed<AuthInfo>;
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct AuthInfo {
+    /// The user id of this user
     pub user_id: UserId,
+    /// The organization id of this user
     pub organization_id: OrganizationId,
+    /// If this user is enabled.
     pub active: bool,
+    /// The user's roles
     pub roles: Vec<RoleId>,
+    /// The permission for the user and all their roles.
     pub permissions: Vec<String>,
+    /// True if this user was authenticated as an anonymous fallback.
+    pub anonymous: bool,
 }
 
 impl AuthInfo {
@@ -44,6 +51,10 @@ impl filigree::auth::AuthInfo for AuthInfo {
         } else {
             Ok(())
         }
+    }
+
+    fn is_anonymous(&self) -> bool {
+        self.anonymous
     }
 
     fn has_permission(&self, permission: &str) -> bool {
@@ -107,6 +118,12 @@ impl filigree::auth::AuthQueries for AuthQueries {
             }
         }
     }
+
+    async fn anonymous_user(&self, user_id: UserId) -> Result<Option<AuthInfo>, sqlx::Error> {
+        query_file_as!(AuthInfo, "src/auth/fetch_anon_user.sql", user_id.as_uuid())
+            .fetch_optional(&self.db)
+            .await
+    }
 }
 
 pub fn has_permission(
@@ -125,6 +142,11 @@ pub fn has_all_permissions(
     permissions: Vec<impl Into<Cow<'static, str>>>,
 ) -> filigree::auth::HasPermissionLayer<AuthInfo, impl PermissionChecker<AuthInfo>> {
     filigree::auth::has_all_permissions(permissions)
+}
+
+/// Disallow anonymous users
+pub fn not_anonymous() -> filigree::auth::NotAnonymousLayer<AuthInfo> {
+    filigree::auth::not_anonymous()
 }
 
 pub fn has_auth_predicate<F>(

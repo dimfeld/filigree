@@ -1,17 +1,18 @@
 #![allow(unused_imports)]
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing,
 };
+use axum_extra::extract::{Form, Query};
 use filigree::extract::ValidatedForm;
 use maud::{html, Markup};
 use schemars::JsonSchema;
 
 use crate::{
     auth::{has_any_permission, Authed},
-    pages::{error::HtmlError, layout::root_layout_page},
+    pages::{auth::WebAuthed, error::HtmlError, layout::root_layout_page},
     server::ServerState,
     Error,
 };
@@ -24,7 +25,7 @@ pub mod views;
 
 async fn reports_page(
     State(state): State<ServerState>,
-    auth: Option<Authed>,
+    auth: Option<WebAuthed>,
     Path(id): Path<crate::models::report::ReportId>,
 ) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};

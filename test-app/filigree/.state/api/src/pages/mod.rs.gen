@@ -5,13 +5,14 @@ use axum::{
     response::IntoResponse,
     routing,
 };
+use axum_extra::extract::{Form, Query};
 use filigree::extract::ValidatedForm;
 use maud::{html, Markup};
 use schemars::JsonSchema;
 
 use crate::{
     auth::{has_any_permission, Authed},
-    pages::error::HtmlError,
+    pages::{auth::WebAuthed, error::HtmlError},
     server::ServerState,
     Error,
 };
@@ -46,7 +47,7 @@ async fn count_action(
 
 async fn home_page(
     State(state): State<ServerState>,
-    auth: Option<Authed>,
+    auth: Option<WebAuthed>,
 ) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};
 

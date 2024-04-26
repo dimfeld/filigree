@@ -1,24 +1,25 @@
 #![allow(unused_imports)]
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing,
 };
+use axum_extra::extract::{Form, Query};
 use filigree::extract::ValidatedForm;
 use maud::{html, Markup};
 use schemars::JsonSchema;
 
 use crate::{
     auth::{has_any_permission, Authed},
-    pages::{error::HtmlError, layout::root_layout_page},
+    pages::{auth::WebAuthed, error::HtmlError, layout::root_layout_page},
     server::ServerState,
     Error,
 };
 
 async fn stats_page(
     State(state): State<ServerState>,
-    auth: Authed,
+    auth: WebAuthed,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};

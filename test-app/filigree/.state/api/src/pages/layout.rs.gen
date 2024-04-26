@@ -3,7 +3,7 @@ use std::path::Path;
 use filigree::vite_manifest::{watch::ManifestWatcher, Manifest, ManifestError};
 use maud::{html, Markup, DOCTYPE};
 
-use crate::auth::Authed;
+use super::auth::WebAuthed;
 
 pub static MANIFEST: Manifest = Manifest::new();
 
@@ -43,7 +43,10 @@ pub fn page_wrapper(title: &str, slot: Markup) -> Markup {
                 (client_tags)
                 title { (title) }
             }
-            body {
+            body
+                hx-boost="true"
+                hx-ext="alpine-morph,head-support"
+            {
                 (slot)
             }
         }
@@ -51,13 +54,13 @@ pub fn page_wrapper(title: &str, slot: Markup) -> Markup {
 }
 
 /// The root layout of the application
-pub fn root_layout(auth: Option<&Authed>, slot: Markup) -> Markup {
+pub fn root_layout(auth: Option<&WebAuthed>, slot: Markup) -> Markup {
     html! {
         (slot)
     }
 }
 
 /// The root layout of the application, as a full HTML page
-pub fn root_layout_page(auth: Option<&Authed>, title: &str, slot: Markup) -> Markup {
+pub fn root_layout_page(auth: Option<&WebAuthed>, title: &str, slot: Markup) -> Markup {
     page_wrapper(title, root_layout(auth, slot))
 }

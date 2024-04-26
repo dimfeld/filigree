@@ -1,17 +1,18 @@
 #![allow(unused_imports)]
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing,
 };
+use axum_extra::extract::{Form, Query};
 use filigree::extract::ValidatedForm;
 use maud::{html, Markup};
 use schemars::JsonSchema;
 
 use crate::{
     auth::{has_any_permission, Authed},
-    pages::{error::HtmlError, layout::root_layout_page},
+    pages::{auth::WebAuthed, error::HtmlError, layout::root_layout_page},
     server::ServerState,
     Error,
 };
@@ -31,7 +32,7 @@ async fn favorite_action(
     State(state): State<ServerState>,
     auth: Authed,
     Path(id): Path<String>,
-    form: ValidatedForm<FavoriteActionPayload>,
+    form: Form<FavoriteActionPayload>,
 ) -> Result<impl IntoResponse, Error> {
     let body = favorite_action_fragment();
 
@@ -60,7 +61,7 @@ async fn reports_form(
 
 async fn reports_page(
     State(state): State<ServerState>,
-    auth: Option<Authed>,
+    auth: Option<WebAuthed>,
 ) -> Result<impl IntoResponse, HtmlError> {
     let body = html! {};
 
