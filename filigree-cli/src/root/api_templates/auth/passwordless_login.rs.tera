@@ -234,8 +234,8 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(response["email"], user.email);
-        assert_eq!(response["name"], "User");
+        assert_eq!(response["user"]["email"], user.email);
+        assert_eq!(response["user"]["name"], "User");
 
         // Using the token again should fail.
         let reuse_response = client.get(&url).send().await.unwrap();
@@ -376,7 +376,7 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(response["email"], new_user_email);
+        assert_eq!(response["user"]["email"], new_user_email);
 
         let user_org = sqlx::query!(
             "SELECT organization_id FROM users WHERE email = $1",
