@@ -21,6 +21,7 @@ const DEPS: &[DepVersion<'static>] = &[
     ("bytes", "1.5.0", &[]),
     ("chrono", "0.4.33", &[]),
     ("clap", "4.4.11", &["env", "derive"]),
+    ("dialoguer", "0.11.0", &[]),
     ("dotenvy", "0.15.7", &[]),
     ("error-stack", "0.4.1", &["spantrace"]),
     ("eyre", "0.6.11", &[]),

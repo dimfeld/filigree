@@ -205,6 +205,11 @@ impl MergeFile {
             println!("Writing file {}", self.output_relative_path.display());
             std::fs::write(&self.output_path, self.merged.output.as_bytes())
                 .attach_printable_lazy(|| self.output_path.display().to_string())?;
+        } else if self.empty && self.gen_exists {
+            println!(
+                "Not removing empty file {} because it has been modified",
+                self.output_relative_path.display()
+            );
         }
 
         Ok(())

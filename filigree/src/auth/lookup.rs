@@ -18,8 +18,8 @@ use super::{
 /// meaningful way, if desired.
 ///
 /// To define an anonymous user, insert this structure into the request extensions. The easiest way
-/// to do this is through a middleware, such as by adding
-/// `.layer(Extension(AnonymousUser { user_id, organization_id }))` around the routes that you
+/// to do this is through the [Extension] middleware, such as by adding
+/// `.layer(Extension(FallbackAnonymousUser(user_id))` around the routes that you
 /// want.
 #[derive(Debug, Copy, Clone)]
 pub struct FallbackAnonymousUser(pub UserId);

@@ -160,7 +160,8 @@ pub struct Server {
     {%- endif %}
     {% if web.has_api_pages -%}
     /// Vite manifest watcher for replacing web builds at runtime
-    manifest_watcher: Option<filigree::vite_manifest::watch::ManifestWatcher>,
+    /// We don't do anything with this here, but need to keep a reference to it.
+    _manifest_watcher: Option<filigree::vite_manifest::watch::ManifestWatcher>,
     {% endif -%}
 }
 
@@ -529,7 +530,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         app,
         state,
         listener,
-        {% if web.has_api_pages -%}manifest_watcher,{%- endif -%}
+        {% if web.has_api_pages -%}_manifest_watcher: manifest_watcher,{%- endif -%}
         {% if queue %}queue_workers,{% endif %}
     })
 }
