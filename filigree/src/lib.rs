@@ -27,6 +27,8 @@ pub mod inspect_response;
 pub mod maud;
 /// A UUIDv7-based type for handling object IDs with a more compact representation.
 pub mod object_id;
+#[cfg(feature = "tracing")]
+pub mod propagate_http_span;
 /// Common query string structures for use with Axum's [Query](axum::extract::Query) extractor
 pub mod query_string;
 pub mod requests;
