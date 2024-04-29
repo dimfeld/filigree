@@ -18,9 +18,10 @@ use tracing::subscriber::set_global_default;
 use tracing_error::ErrorLayer;
 use tracing_log::LogTracer;
 use tracing_subscriber::{
+    filter::LevelFilter,
     fmt::{format::FmtSpan, time::FormatTime, MakeWriter},
     layer::SubscriberExt,
-    EnvFilter, Registry,
+    EnvFilter, Layer, Registry,
 };
 
 use crate::config::prefixed_env_var;
@@ -185,14 +186,24 @@ where
 
     let env_filter = EnvFilter::try_from_env(&env_name).unwrap_or_else(|_| EnvFilter::new("info"));
 
+    let name_filter = tracing_subscriber::filter::Targets::new()
+        // These emit debug traces when exporting trace over GRPC, which causes an infinite loop of more and more H2 traces.
+        .with_target("hyper", LevelFilter::WARN)
+        .with_target("h2", LevelFilter::WARN)
+        .with_target("rustls", LevelFilter::WARN)
+        .with_target("tower::buffer::worker", LevelFilter::INFO)
+        .with_target("tokio", LevelFilter::INFO)
+        .with_default(LevelFilter::TRACE);
+
     let formatter = tracing_subscriber::fmt::layer()
         .with_span_events(FmtSpan::NEW)
         .with_timer(timer)
         .with_target(true)
-        .with_writer(writer);
+        .with_writer(writer)
+        .with_filter(env_filter);
 
     let subscriber = Registry::default()
-        .with(env_filter)
+        .with(name_filter)
         .with(formatter)
         .with(ErrorLayer::default());
 
@@ -202,7 +213,7 @@ where
             let endpoint = honeycomb_config
                 .endpoint
                 .as_deref()
-                .unwrap_or("api.honeycomb.io:443");
+                .unwrap_or("https://api.honeycomb.io:443");
 
             tracing::info!("Exporting traces to Honeycomb at {}", endpoint);
 
@@ -218,6 +229,7 @@ where
 
             let exporter = opentelemetry_otlp::new_exporter()
                 .tonic()
+                .with_protocol(opentelemetry_otlp::Protocol::Grpc)
                 .with_endpoint(endpoint)
                 .with_metadata(otlp_meta);
 
@@ -243,14 +255,14 @@ where
             let tracer =
                 opentelemetry_otlp::new_pipeline()
                     .tracing()
+                    .with_trace_config(opentelemetry_sdk::trace::config().with_resource(
+                        Resource::new(vec![KeyValue::new("service.name", config.service_name)]),
+                    ))
                     .with_exporter(
                         opentelemetry_otlp::new_exporter()
                             .tonic()
                             .with_endpoint(config.endpoint.as_str()),
                     )
-                    .with_trace_config(opentelemetry_sdk::trace::config().with_resource(
-                        Resource::new(vec![KeyValue::new("service.name", config.service_name)]),
-                    ))
                     .install_batch(runtime::Tokio)
                     .change_context(TraceConfigureError)?;
 
