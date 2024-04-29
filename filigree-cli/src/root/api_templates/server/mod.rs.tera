@@ -473,13 +473,31 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                                 .and_then(|s| s.to_str().ok())
                                 .unwrap_or("");
 
-                            tracing::info_span!("request", ?request_id, %method, %uri, route)
+                            let span = tracing::info_span!("request",
+                                request_id,
+                                http.host=host,
+                                http.method=%method,
+                                http.uri=%uri,
+                                http.route=route,
+                                http.status_code = tracing::field::Empty,
+                                error = tracing::field::Empty
+                            );
+
+                            span
                         })
-                        .on_response(
-                            DefaultOnResponse::new()
-                                .level(Level::INFO)
-                                .latency_unit(tower_http::LatencyUnit::Millis),
-                        )
+                        .on_response(|res: &http::Response<_>, latency: Duration, span: &Span| {
+                            let status = res.status();
+                            span.record("http.status_code", status.as_u16());
+                            if status.is_client_error() || status.is_server_error() {
+                                span.record("error", "true");
+                            }
+
+                            tracing::info!(
+                                latency = format!("{} ms", latency.as_millis()),
+                                http.status_code = status.as_u16(),
+                                "finished processing request"
+                            );
+                        })
                         .on_request(DefaultOnRequest::new().level(Level::INFO))
                         .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
                 )
