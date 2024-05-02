@@ -42,7 +42,7 @@ pub trait HttpError: ToString + std::fmt::Debug {
     /// need to override the default implementation.
     fn to_response(&self) -> Response {
         let (code, err) = self.response_tuple();
-        event!(Level::ERROR, code=%code, kind=%err.error.kind, message=%err.error.message, details=?err.error.details);
+        event!(Level::ERROR, error.code=%code, error.kind=%err.error.kind, error=%err.error.message, error.details=?err.error.details);
 
         let form = err.form.clone();
         let mut response = (code, Json(err)).into_response();
