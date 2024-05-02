@@ -70,7 +70,7 @@ impl S3StoreConfig {
     #[cfg(feature = "filigree-cli")]
     /// Recreate the structure in Rust code.
     pub fn template_text(&self) -> String {
-        use crate::templates::{OptionAsStorageUrl, OptionAsString};
+        use crate::filigree_cli_templates::{OptionAsStorageUrl, OptionAsString};
 
         format!(
             "StorageConfig::S3(filigree::storage::s3::S3StoreConfig {{

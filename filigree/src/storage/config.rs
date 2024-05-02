@@ -68,7 +68,7 @@ impl StoragePreset {
     #[cfg(feature = "filigree-cli")]
     /// Recreate the structure in Rust code.
     pub fn template_text(&self) -> String {
-        use crate::templates::OptionAsString;
+        use crate::filigree_cli_templates::OptionAsString;
 
         match self {
             StoragePreset::S3 { region } => {

@@ -19,7 +19,7 @@ use schemars::{
 use serde::Serialize;
 use serde_json::Number;
 
-#[cfg(feature = "maud")]
+#[cfg(feature = "htmx")]
 use crate::html::HtmlList;
 
 thread_local! {
@@ -279,10 +279,10 @@ impl ValidationErrorResponse {
 }
 
 // Something to send to HtmlList when there are no items.
-#[cfg(feature = "maud")]
+#[cfg(feature = "htmx")]
 const EMPTY: [String; 0] = [];
 
-#[cfg(feature = "maud")]
+#[cfg(feature = "htmx")]
 impl ValidationErrorResponse {
     /// Get the errors for a field, formatted with `<li>` elements.
     pub fn field_li<'a>(&'a self, field: &str) -> HtmlList<'a, 'static, String> {

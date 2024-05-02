@@ -32,12 +32,15 @@ hyper-util = { version = "0.1.3", features = ["client-legacy"] }
 itertools = "0.12.1"
 jsonschema = { version = "0.17.1", default-features = false }
 log = { version = "0.4.21", optional = true }
+minijinja = { version = "2.0.1", default-features = false, optional = true }
+minijinja-autoreload = { version = "2.0.1", optional = true }
 notify-debouncer-mini = { version = "0.4.1", optional = true }
 oauth2 = { version = "4.4.2", features = ["reqwest"] }
 object_store = { version = "0.9.1" }
 opentelemetry = { version = "0.21.0", optional = true }
 opentelemetry-otlp = { version = "0.14.0", optional = true }
 opentelemetry_sdk = { version = "0.21.2", features = ["rt-tokio"], optional = true }
+parking_lot = "0.12.2"
 reqwest = { version = "0.11.24", features = ["json", "cookies"] }
 rust-embed = "8.3.0"
 schemars = { version = "0.8.16", features = ["chrono", "uuid1"] }
@@ -48,6 +51,7 @@ serde_path_to_error = "0.1.15"
 sha3 = "0.10.8"
 smallvec = { version = "1.13.2", features = ["const_generics", "union"] }
 sqlx = { version = "0.7.3", features = ["chrono", "postgres", "runtime-tokio", "uuid"] }
+template-fragments = { version = "0.2.0", optional = true }
 tera = "1.19.1"
 thiserror = "1.0.57"
 tokio = { version = "1.36.0", features = ["full"] }
@@ -63,19 +67,18 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"], optional =
 typed-builder = "0.18.1"
 url = "2.5.0"
 uuid = { version = "1.7.0", features = ["serde", "v7"] }
-maud = { version = "0.26.0", optional = true, features = ["axum"] }
 
 [dev-dependencies]
 indoc = "2.0.4"
 
 [features]
-default = ["tracing", "tracing_export", "storage_aws"]
+default = ["tracing", "tracing_export",  "resend", "storage_aws", "sentry", "htmx", "template_reload", "watch-manifest"]
 opentelemetry = ["tracing", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
 tracing = ["dep:log", "dep:tracing-subscriber", "dep:tracing-error", "dep:tracing-log", "opentelemetry"]
 tracing_export = ["tracing", "opentelemetry", "dep:tonic", "dep:opentelemetry-otlp"]
-htmx = []
-maud = ["dep:maud"]
-# Code only needed when running the Filigree CLI, plus additional features
+htmx = ["dep:minijinja", "dep:template-fragments"]
+template_reload = ["dep:minijinja-autoreload", "minijinja/loader"]
+# Code needed to run the Filigree CLI, but that doesn't apply to regular applications.
 filigree-cli = ["storage_aws", "tracing"]
 # Enable support for AWS S3 and compatible APIs
 storage_aws = ["object_store/aws"]

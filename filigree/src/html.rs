@@ -1,8 +1,8 @@
 //! Utilities for generating HTML
 
-use std::fmt::{Display, Write};
+use std::fmt::Display;
 
-use maud::{Escaper, Render};
+use minijinja::HtmlEscape;
 
 /// Render a list of strings as HTML
 #[derive(Default)]
@@ -48,22 +48,22 @@ impl<'item, 'class, T: Display> HtmlList<'item, 'class, T> {
     }
 }
 
-impl Render for HtmlList<'_, '_, String> {
-    fn render_to(&self, buf: &mut String) {
+impl Display for HtmlList<'_, '_, String> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.items.is_empty() {
-            return;
+            return Ok(());
         }
 
-        opening_element_with_class(buf, "ul", self.ul_class);
+        opening_element_with_class(f, "ul", self.ul_class)?;
         for item in self.items {
-            opening_element_with_class(buf, "li", self.li_class);
-            Escaper::new(buf).write_str(item).unwrap();
-            buf.push_str("</li>");
+            opening_element_with_class(f, "li", self.li_class)?;
+            write!(f, "{}</li>", minijinja::HtmlEscape(item))?;
         }
 
         if self.render_ul {
-            buf.push_str("</ul>");
+            write!(f, "</ul>")?;
         }
+        Ok(())
     }
 }
 
@@ -89,28 +89,29 @@ impl<'svg, 'class> Svg<'svg, 'class> {
     }
 }
 
-impl<'svg, 'class> Render for Svg<'svg, 'class> {
-    fn render_to(&self, buf: &mut String) {
-        buf.push_str("<svg");
+impl<'svg, 'class> Display for Svg<'svg, 'class> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<svg")?;
 
         if !self.class.is_empty() {
-            buf.push_str(" class=\"");
-            Escaper::new(buf).write_str(self.class).unwrap();
-            buf.push('"');
+            write!(f, r##" class="{}""##, HtmlEscape(self.class))?;
         }
 
         let icon_rest = &self.svg[4..];
-        buf.push_str(icon_rest);
+        write!(f, "{icon_rest}")?;
+        Ok(())
     }
 }
 
-fn opening_element_with_class(buf: &mut String, el: &str, class: &str) {
-    buf.push('<');
-    buf.push_str(el);
+fn opening_element_with_class(
+    fmt: &mut std::fmt::Formatter<'_>,
+    el: &str,
+    class: &str,
+) -> std::fmt::Result {
+    write!(fmt, "<{el}")?;
     if !class.is_empty() {
-        buf.push_str(" class=\"");
-        Escaper::new(buf).write_str(class).unwrap();
-        buf.push('"');
+        write!(fmt, r##" class="{}""##, HtmlEscape(class))?;
     }
-    buf.push('>');
+    write!(fmt, ">")?;
+    Ok(())
 }
