@@ -1317,7 +1317,7 @@ dependencies = [
  "itertools 0.12.1",
  "jsonschema",
  "log",
- "maud",
+ "minijinja",
  "notify-debouncer-mini",
  "oauth2",
  "object_store",
@@ -2458,6 +2458,15 @@ checksum = "4192263c238a5f0d0c6bfd21f336a313a4ce1c450542449ca191bb657b4642ef"
 dependencies = [
  "mime",
  "unicase",
+]
+
+[[package]]
+name = "minijinja"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7165d0e94806d52ad5295e4b54a95176d831814840bc067298ca647e1c956338"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

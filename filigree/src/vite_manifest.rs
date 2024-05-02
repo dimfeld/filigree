@@ -7,15 +7,14 @@ use std::{
 };
 
 use error_stack::{Report, ResultExt};
-use maud::PreEscaped;
 use serde::Deserialize;
 use thiserror::Error;
 
 struct ManifestData {
     /// The data for the index page
-    index: PreEscaped<String>,
+    index: minijinja::Value,
     /// All the entry points
-    entries: HashMap<String, PreEscaped<String>>,
+    entries: HashMap<String, minijinja::Value>,
 }
 
 /// A parsed Vite manifest
@@ -131,9 +130,11 @@ impl Manifest {
                     )
                 }
 
-                Ok::<_, Report<ManifestError>>((key.to_string(), PreEscaped(output)))
+                let output = minijinja::Value::from_safe_string(output);
+
+                Ok::<_, Report<ManifestError>>((key.to_string(), output))
             })
-            .collect::<Result<HashMap<String, PreEscaped<String>>, _>>()?;
+            .collect::<Result<HashMap<String, minijinja::Value>, _>>()?;
 
         let index_data = entries
             .get("index.js")
@@ -156,7 +157,7 @@ impl Manifest {
     }
 
     /// Get the HTML to include the JS and CSS for the index page
-    pub fn index(&self) -> PreEscaped<String> {
+    pub fn index(&self) -> minijinja::Value {
         self.0
             .read()
             .unwrap()
@@ -167,7 +168,7 @@ impl Manifest {
     }
 
     /// Get the HTML to include the JS and CSS for an entrypoint
-    pub fn get(&self, name: &str) -> Option<PreEscaped<String>> {
+    pub fn get(&self, name: &str) -> Option<minijinja::Value> {
         self.0
             .read()
             .unwrap()
