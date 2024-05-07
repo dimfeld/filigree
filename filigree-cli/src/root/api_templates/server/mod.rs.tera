@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use axum::{extract::FromRef, handler::Handler, routing::get, Router};
+use axum::{extract::FromRef, routing::get, Router};
 use error_stack::{Report, ResultExt};
 use filigree::{
     auth::{
@@ -23,10 +23,10 @@ use tower_http::{
     compression::CompressionLayer,
     cors::CorsLayer,
     timeout::TimeoutLayer,
-    trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+    trace::{DefaultOnFailure, DefaultOnRequest, TraceLayer},
     ServiceBuilderExt,
 };
-use tracing::{event, Level};
+use tracing::{event, Level, Span};
 
 use crate::{error::Error, {% if storage %}storage{% endif %}};
 
@@ -460,6 +460,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                         .make_span_with(|req: &axum::extract::Request| {
                             let method = req.method();
                             let uri = req.uri();
+                            let host = req.headers().get("host").and_then(|s| s.to_str().ok());
 
                             // Add the matched route to the span
                             let route = req

@@ -87,12 +87,12 @@ impl Renderer {
 }
 
 #[derive(RustEmbed)]
-#[prefix = "root/"]
+#[prefix = "root_svelte/"]
 #[folder = "$CARGO_MANIFEST_DIR/src/root/svelte_templates"]
 pub struct RootSvelteTemplates;
 
 #[derive(RustEmbed)]
-#[prefix = "root/"]
+#[prefix = "root_htmx/"]
 #[folder = "$CARGO_MANIFEST_DIR/src/root/htmx_templates"]
 pub struct RootHtmxTemplates;
 

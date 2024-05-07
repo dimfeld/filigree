@@ -23,12 +23,25 @@ pub struct Command {
     /// instead of merging them together.
     #[clap(long)]
     overwrite: bool,
+    /// Print extra information about the process
+    #[clap(long)]
+    verbose: bool,
 }
 
 pub enum RenderedFileLocation {
     Rust,
     Svelte,
     Htmx,
+}
+
+impl RenderedFileLocation {
+    pub fn root_prefix(&self) -> &'static str {
+        match self {
+            Self::Rust => "root/",
+            Self::Svelte => "root_svelte/",
+            Self::Htmx => "root_htmx/",
+        }
+    }
 }
 
 pub struct RenderedFile {
@@ -131,10 +144,18 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         web_base_dir: web_dir.clone(),
     };
 
-    let api_merge_tracker =
-        MergeTracker::new(state_dir.join("api"), api_dir.clone(), args.overwrite);
-    let web_merge_tracker =
-        MergeTracker::new(state_dir.join("web"), web_dir.clone(), args.overwrite);
+    let api_merge_tracker = MergeTracker::new(
+        state_dir.join("api"),
+        api_dir.clone(),
+        args.overwrite,
+        args.verbose,
+    );
+    let web_merge_tracker = MergeTracker::new(
+        state_dir.join("web"),
+        web_dir.clone(),
+        args.overwrite,
+        args.verbose,
+    );
 
     let renderer = crate::templates::Renderer::new(formatter.clone());
 

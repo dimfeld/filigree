@@ -69,9 +69,9 @@ maud = { version = "0.26.0", optional = true, features = ["axum"] }
 indoc = "2.0.4"
 
 [features]
-default = ["tracing", "tracing_export",  "resend", "storage_aws", "sentry", "maud", "htmx", "watch-manifest"]
-tracing = ["dep:log", "dep:tracing-subscriber", "dep:tracing-error", "dep:tracing-log"]
+default = ["tracing", "tracing_export", "storage_aws", "watch-manifest"]
 opentelemetry = ["tracing", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
+tracing = ["dep:log", "dep:tracing-subscriber", "dep:tracing-error", "dep:tracing-log", "opentelemetry"]
 tracing_export = ["tracing", "opentelemetry", "dep:tonic", "dep:opentelemetry-otlp"]
 htmx = []
 maud = ["dep:maud"]

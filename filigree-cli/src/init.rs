@@ -286,7 +286,7 @@ pub fn run(cmd: Command) -> Result<(), Report<Error>> {
             if create_web {
                 let run = std::process::Command::new("npm")
                     .arg("create")
-                    .arg("@svelte/kit@latest")
+                    .arg("svelte@latest")
                     .arg(&web_dir)
                     .status()
                     .change_context(Error::Npm)?;

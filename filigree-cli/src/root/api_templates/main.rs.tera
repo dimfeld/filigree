@@ -212,12 +212,14 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
 
     let frontend_asset_dir =
             cmd.frontend_asset_dir{% if web.files %}.or_else(|| Some("{{web.files}}".to_string())){% endif %};
+    {% if web.has_api_pages %}
     let vite_manifest = cmd.vite_manifest
         .or_else(|| {
             frontend_asset_dir
                 .as_ref()
                 .map(|base| format!("{base}/.vite/manifest.json"))
         });
+    {% endif %}
 
     let server = server::create_server(server::Config {
         env: cmd.env,
@@ -225,9 +227,11 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         serve_frontend: server::ServeFrontend {
             port: cmd.frontend_port{% if web.port %}.or(Some({{web.port}})){% endif %},
             path: frontend_asset_dir,
+            {% if web.has_api_pages %}
             vite_manifest,
             watch_vite_manifest: cmd.dev,
             livereload: cmd.dev,
+            {% endif %}
         },
         insecure: cmd.insecure,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),

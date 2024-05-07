@@ -12,14 +12,21 @@ pub struct MergeTracker {
     pub base_generated_path: PathBuf,
     output_path: PathBuf,
     overwrite: bool,
+    verbose: bool,
 }
 
 impl MergeTracker {
-    pub fn new(base_generated_path: PathBuf, output_path: PathBuf, overwrite: bool) -> Self {
+    pub fn new(
+        base_generated_path: PathBuf,
+        output_path: PathBuf,
+        overwrite: bool,
+        verbose: bool,
+    ) -> Self {
         Self {
             base_generated_path,
             output_path,
             overwrite,
+            verbose,
         }
     }
 
@@ -122,6 +129,7 @@ impl MergeTracker {
             empty,
             remove_user_file,
             merged,
+            verbose: self.verbose,
         }
     }
 }
@@ -184,6 +192,7 @@ pub struct MergeFile {
     /// If true, the generated file is empty, and the user's file has not been customized at all,
     /// so it's safe to remove it.
     pub remove_user_file: bool,
+    pub verbose: bool,
 }
 
 impl MergeFile {
@@ -210,6 +219,8 @@ impl MergeFile {
                 "Not removing empty file {} because it has been modified",
                 self.output_relative_path.display()
             );
+        } else if self.verbose {
+            println!("File {} is unchanged", self.output_relative_path.display());
         }
 
         Ok(())

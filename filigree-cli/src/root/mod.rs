@@ -175,7 +175,7 @@ pub fn render_files(
             true
         })
         .map(|(location, file)| {
-            let filename = file.strip_prefix("root/").unwrap();
+            let filename = file.strip_prefix(location.root_prefix()).unwrap();
             let filename = filename.strip_suffix(".tera").unwrap_or(filename);
 
             let path = if non_base_files.contains(&filename)
