@@ -1,4 +1,4 @@
-//! Utilities for genrating HTML
+//! Utilities for generating HTML
 
 use std::fmt::{Display, Write};
 

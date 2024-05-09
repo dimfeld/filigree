@@ -1,4 +1,4 @@
-//! Helpers to propagate HTTP spans to another server
+//! Helpers to propagate tracing spans through an HTTP call
 
 use opentelemetry::{
     propagation::{Extractor, Injector, TextMapPropagator},
