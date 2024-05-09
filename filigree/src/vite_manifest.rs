@@ -186,14 +186,14 @@ pub mod watch {
 
     use notify_debouncer_mini::{
         new_debouncer,
-        notify::{FsEventWatcher, RecursiveMode},
+        notify::{RecommendedWatcher, RecursiveMode},
         DebounceEventResult, Debouncer,
     };
 
     use super::{Manifest, ManifestError};
 
     /// A file watcher for the Manifest
-    pub type ManifestWatcher = Debouncer<FsEventWatcher>;
+    pub type ManifestWatcher = Debouncer<RecommendedWatcher>;
 
     /// Watch the manifest and reload when it changes
     #[must_use = "Dropping the watcher will cause watching to stop"]
