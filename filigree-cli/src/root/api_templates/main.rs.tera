@@ -145,6 +145,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
 
     let tracing_config = filigree::tracing_config::create_tracing_config(
         "{{env_prefix}}",
+        "{{env_prefix}}",
         {% if tracing.provider == "none" -%}
         TracingProvider::None,
         {%- elif tracing.provider == "otlp_tonic" -%}

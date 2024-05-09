@@ -107,12 +107,13 @@ pub struct TraceConfigureError;
 
 /// Create a tracing configuration from the environment and some optional defaults
 pub fn create_tracing_config(
-    env_prefix: &str,
+    export_config_env_prefix: &str,
+    service_name_env_prefix: &str,
     default_type: TracingProvider,
     service_name: Option<String>,
     endpoint: Option<String>,
 ) -> Result<TracingExportConfig, Report<TraceConfigureError>> {
-    let tracing_type = prefixed_env_var(env_prefix, "TRACING_TYPE")
+    let tracing_type = prefixed_env_var(export_config_env_prefix, "TRACING_TYPE")
         .ok()
         .map(|v| TracingProvider::from_str(&v))
         .transpose()?
@@ -125,28 +126,28 @@ pub fn create_tracing_config(
             .attach_printable("OTLP Tonic tracing requires the `tracing_export` feature")?,
         #[cfg(feature = "tracing_export")]
         TracingProvider::OtlpTonic => TracingExportConfig::OtlpTonic(OtlpTonicConfig {
-            service_name: prefixed_env_var(env_prefix, "OTEL_SERVICE_NAME")
+            endpoint: prefixed_env_var(export_config_env_prefix, "OTEL_EXPORTER_OTLP_ENDPOINT")
+                .change_context(TraceConfigureError)
+                .attach_printable_lazy(|| {
+                    format!("{export_config_env_prefix}OTEL_EXPORTER_OTLP_ENDPOINT must be set for OTLP tracing")
+                })?,
+            service_name: prefixed_env_var(service_name_env_prefix, "OTEL_SERVICE_NAME")
                 .ok()
                 .or(service_name)
                 .unwrap_or_else(|| "api".to_string()),
-            endpoint: prefixed_env_var(env_prefix, "OTEL_EXPORTER_OTLP_ENDPOINT")
-                .change_context(TraceConfigureError)
-                .attach_printable_lazy(|| {
-                    format!("{env_prefix}OTEL_EXPORTER_OTLP_ENDPOINT must be set for OTLP tracing")
-                })?,
         }),
         #[cfg(not(feature = "tracing_export"))]
         TracingProvider::Honeycomb => Err(Report::new(TraceConfigureError))
             .attach_printable("Honeycomb tracing requires the `honeycomb` feature")?,
         #[cfg(feature = "tracing_export")]
         TracingProvider::Honeycomb => TracingExportConfig::Honeycomb(HoneycombConfig {
-            api_key: prefixed_env_var(env_prefix, "HONEYCOMB_API_KEY")
+            api_key: prefixed_env_var(export_config_env_prefix, "HONEYCOMB_API_KEY")
                 .change_context(TraceConfigureError)
                 .attach_printable_lazy(|| {
-                    format!("{env_prefix}HONEYCOMB_API_KEY must be set for Honeycomb tracing")
+                    format!("{export_config_env_prefix}HONEYCOMB_API_KEY must be set for Honeycomb tracing")
                 })?,
-            endpoint: endpoint.or_else(|| prefixed_env_var(env_prefix, "HONEYCOMB_ENDPOINT").ok()),
-            service_name: prefixed_env_var(env_prefix, "OTEL_SERVICE_NAME")
+            endpoint: endpoint.or_else(|| prefixed_env_var(export_config_env_prefix, "HONEYCOMB_ENDPOINT").ok()),
+            service_name: prefixed_env_var(service_name_env_prefix, "OTEL_SERVICE_NAME")
                 .ok()
                 .or(service_name)
                 .unwrap_or_else(|| "api".to_string()),
