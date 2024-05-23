@@ -6,6 +6,7 @@ use axum::{
     routing::Router,
 };
 use axum_jsonschema::Json;
+use error_stack::ResultExt;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tower_cookies::Cookies;
@@ -57,9 +58,9 @@ pub struct UpdatePasswordRequest {
 async fn update_password(
     State(state): State<Arc<FiligreeState>>,
     FormOrJson(request): FormOrJson<UpdatePasswordRequest>,
-) -> Result<(), AuthError> {
+) -> Result<(), WrapReport<AuthError>> {
     if request.password != request.confirm {
-        return Err(AuthError::PasswordConfirmMismatch);
+        return Err(WrapReport::from(AuthError::PasswordConfirmMismatch));
     }
 
     let hashed = super::password::new_hash(request.password).await?;
@@ -85,10 +86,11 @@ async fn update_password(
         hashed.0,
     )
     .execute(&state.db)
-    .await?;
+    .await
+    .change_context(AuthError::Db)?;
 
     if result.rows_affected() == 0 {
-        return Err(AuthError::InvalidToken);
+        return Err(WrapReport::from(AuthError::InvalidToken));
     }
 
     Ok(())

@@ -1,3 +1,4 @@
+use error_stack::{Report, ResultExt};
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
@@ -11,7 +12,7 @@ pub async fn lookup_api_key_for_auth(
     pool: impl PgExecutor<'_>,
     api_key_id: &Uuid,
     hash: &[u8],
-) -> Result<ApiKey, AuthError> {
+) -> Result<ApiKey, Report<AuthError>> {
     sqlx::query_as!(
         ApiKey,
         r##"SELECT api_key_id,
@@ -31,8 +32,9 @@ pub async fn lookup_api_key_for_auth(
         hash
     )
     .fetch_optional(pool)
-    .await?
-    .ok_or(AuthError::InvalidApiKey)
+    .await
+    .change_context(AuthError::Db)?
+    .ok_or_else(|| Report::new(AuthError::InvalidApiKey))
 }
 
 /// List the API keys for a user

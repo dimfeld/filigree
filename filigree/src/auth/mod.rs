@@ -16,13 +16,15 @@ pub mod password;
 pub mod passwordless_email_login;
 mod sessions;
 
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use async_trait::async_trait;
 use axum::{http::StatusCode, response::IntoResponse};
 pub use check_middleware::*;
 use clap::ValueEnum;
+use error_stack::Report;
 pub use extractors::*;
+use http::request::Parts;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 pub use sessions::*;
@@ -60,10 +62,9 @@ pub enum AuthError {
     /// The user or organization is inactive
     #[error("User or org is disabled")]
     Disabled,
-    // Wrapped in an ARC because sqlx::Error isn't Clone
     /// The database returned an error
-    #[error("Database error {0}")]
-    Db(Arc<sqlx::Error>),
+    #[error("Database error")]
+    Db,
     /// Internal error hashing a password
     #[error("Error hashing password")]
     PasswordHasherError(String),
@@ -119,7 +120,7 @@ impl HttpError for AuthError {
             | Self::MissingPermission(_)
             | Self::FailedPredicate(_) => StatusCode::FORBIDDEN,
             Self::ApiKeyFormat | Self::PasswordConfirmMismatch => StatusCode::BAD_REQUEST,
-            Self::Db(_)
+            Self::Db
             | Self::EmailSendFailure
             | Self::PasswordHasherError(_)
             | Self::SessionBackend => StatusCode::INTERNAL_SERVER_ERROR,
@@ -148,7 +149,7 @@ impl HttpError for AuthError {
             Self::PasswordConfirmMismatch => ErrorKind::PasswordConfirmMismatch,
             Self::MissingPermission(_) => ErrorKind::MissingPermission,
             Self::FailedPredicate(_) => ErrorKind::FailedPredicate,
-            Self::Db(_) => ErrorKind::Database,
+            Self::Db => ErrorKind::Database,
             Self::EmailSendFailure => ErrorKind::EmailSendFailure,
             Self::PasswordHasherError(_) => ErrorKind::PasswordHasherError,
             Self::SessionBackend => ErrorKind::SessionBackend,
@@ -163,9 +164,25 @@ impl IntoResponse for AuthError {
     }
 }
 
-impl From<sqlx::Error> for AuthError {
-    fn from(value: sqlx::Error) -> Self {
-        Self::Db(Arc::new(value))
+/// The result of an [AuthQueries] function
+pub enum UserFromRequestPartsValue<T: AuthInfo> {
+    /// Found information for the credentials
+    Found(T),
+    /// Did not find any information for the provided credentials
+    NotFound,
+    /// This auth method is not implemented, and so the auth system should ignore it.
+    /// This is often the same as `NotFound`, except for `get_user_from_request_parts`,
+    /// in which it indicates that the auth system should try all the other authentication
+    /// methods.
+    NotImplemented,
+}
+
+impl<T: AuthInfo> UserFromRequestPartsValue<T> {
+    pub fn into_option(self) -> Option<T> {
+        match self {
+            Self::Found(t) => Some(t),
+            Self::NotFound | Self::NotImplemented => None,
+        }
     }
 }
 
@@ -181,16 +198,30 @@ pub trait AuthQueries: Send + Sync {
         &self,
         api_key: Uuid,
         key_hash: Vec<u8>,
-    ) -> Result<Option<Self::AuthInfo>, sqlx::Error>;
+    ) -> Result<Option<Self::AuthInfo>, Report<AuthError>>;
     /// Fetch the AuthInfo from a session key. If you used the filigree CLI scaffolding,
     /// this should run `include_str!("src/auth/fetch_session.sql")`
     async fn get_user_by_session_id(
         &self,
         session_key: &SessionKey,
-    ) -> Result<Option<Self::AuthInfo>, sqlx::Error>;
+    ) -> Result<Option<Self::AuthInfo>, Report<AuthError>>;
 
     /// Create an [AuthInfo] object for an anonymous user.
-    async fn anonymous_user(&self, user: UserId) -> Result<Option<Self::AuthInfo>, sqlx::Error>;
+    async fn anonymous_user(
+        &self,
+        user: UserId,
+    ) -> Result<Option<Self::AuthInfo>, Report<AuthError>> {
+        Ok(None)
+    }
+
+    /// Custom processing of the request to extract the user. This can be used to implement some
+    /// other authentication scheme. If you implement this, the other methods will not be called.
+    async fn get_user_from_request_parts(
+        &self,
+        parts: &Parts,
+    ) -> Result<UserFromRequestPartsValue<Self::AuthInfo>, Report<AuthError>> {
+        Ok(UserFromRequestPartsValue::NotImplemented)
+    }
 }
 
 /// An object containing information about the current user.

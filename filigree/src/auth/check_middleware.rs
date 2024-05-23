@@ -5,6 +5,7 @@ use futures::future::BoxFuture;
 use tower::{Layer, Service};
 
 use super::{get_auth_info, AuthError, AuthInfo};
+use crate::errors::WrapReport;
 
 /// Check if the user has a particular set of permissions. This mostly exists to allow
 /// [has_permission], [has_any_permission], and [has_all_permissions] to share the same
@@ -215,7 +216,7 @@ where
         Box::pin(async move {
             let (request, info) = match get_auth_info::<INFO>(request).await {
                 Ok(x) => x,
-                Err(e) => return Ok(e.into_response()),
+                Err(e) => return Ok(WrapReport::from(e).into_response()),
             };
 
             if let Err(perm) = checker.check(&info) {
@@ -341,7 +342,7 @@ where
         Box::pin(async move {
             let (request, info) = match get_auth_info::<INFO>(request).await {
                 Ok(x) => x,
-                Err(e) => return Ok(e.into_response()),
+                Err(e) => return Ok(WrapReport::from(e).into_response()),
             };
 
             if !f(&info) {
@@ -443,7 +444,7 @@ where
         Box::pin(async move {
             let (request, info) = match get_auth_info::<INFO>(request).await {
                 Ok(x) => x,
-                Err(e) => return Ok(e.into_response()),
+                Err(e) => return Ok(WrapReport::from(e).into_response()),
             };
 
             if info.is_anonymous() {

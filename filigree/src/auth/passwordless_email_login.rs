@@ -33,7 +33,7 @@ pub async fn setup_passwordless_login(
         )
         .execute(&state.db)
         .await
-        .map_err(AuthError::from)?;
+        .change_context(AuthError::Db)?;
 
         result.rows_affected() > 0
     };
@@ -56,7 +56,7 @@ pub async fn setup_passwordless_login(
         )
         .execute(&state.db)
         .await
-        .map_err(AuthError::from)?;
+        .change_context(AuthError::Db)?;
 
         Ok(PasswordlessLoginRequestAnswer {
             token,
@@ -95,7 +95,7 @@ pub async fn perform_passwordless_login(
     )
     .fetch_optional(&state.db)
     .await
-    .map_err(AuthError::from)?;
+    .change_context(AuthError::Db)?;
 
     let user = result
         .as_ref()
@@ -130,7 +130,7 @@ pub async fn check_signup_request(
     )
     .fetch_optional(&state.db)
     .await
-    .map_err(AuthError::from)?
+    .change_context(AuthError::Db)?
     .ok_or(AuthError::InvalidToken)?;
 
     if result.token != token || result.token_expires_at < chrono::Utc::now() {
