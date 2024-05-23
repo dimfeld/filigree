@@ -24,16 +24,16 @@ blake3 = { version = "1.5.1", features = ["traits-preview"] }
 bytes = "1.5.0"
 chrono = "0.4.34"
 clap = { version = "4.5.1", features = ["derive", "env"] }
+dialoguer = "0.11.0"
 digest = "0.10.7"
 dotenvy = "0.15.7"
 effectum = "0.6.0"
 error-stack = { version = "0.4.1", features = ["spantrace"] }
 eyre = "0.6.12"
-filigree = { version = "0.2.0", path = "../filigree" }
+filigree = { version = "0.2.0", path = "../filigree", features = ["resend", "sentry", "tracing_export"] }
 futures = "0.3.30"
 http = "1.0.0"
 hyper = { version = "1.2.0", features = ["server", "http1", "http2"] }
-maud = { version = "0.26.0", features = ["axum"] }
 percent-encoding = "2.3.1"
 reqwest = { version = "0.11.24", features = ["cookies", "json"] }
 rust-embed = "8.3.0"

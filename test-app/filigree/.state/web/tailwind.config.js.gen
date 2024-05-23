@@ -1,15 +1,16 @@
-import daisyui from "daisyui";
+import colors from "tailwindcss/colors";
 import { fontFamily } from "tailwindcss/defaultTheme";
+import svelteUx from "svelte-ux/plugins/tailwind.cjs";
 
 /** @type {import('tailwindcss').Config} */
 const config = {
 	darkMode: ["class"],
 	content: [
-		"./**/src/*.{html,js,svelte,ts}",
-		"../src/pages/**/*.{rs,js,html,ts}",
+		"./src/**/*.{html,js,svelte,ts}",
+		"./node_modules/svelte-ux/**/*.{svelte,js}",
 	],
-	plugins: [daisyui],
-	safelist: ["dark", "fill-current"],
+	plugins: [svelteUx],
+	safelist: ["dark"],
 	theme: {
 		extend: {
 			fontFamily: {
@@ -17,9 +18,7 @@ const config = {
 			},
 		},
 	},
-	daisyui: {
-		logs: false,
-	},
+	ux: {},
 };
 
 export default config;

@@ -1,15 +1,4 @@
 @tailwind base;
 @tailwind components;
-
-@layer components {
-  /* Disable button pop since it pops on every htmx swap. */
-  .btn {
-    animation: none;
-  }
-}
-
 @tailwind utilities;
-
-/* x-cloak for Alpine */
-[x-cloak] { display: none !important; }
 

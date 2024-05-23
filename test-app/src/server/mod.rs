@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use axum::{extract::FromRef, handler::Handler, routing::get, Router};
+use axum::{extract::FromRef, routing::get, Router};
 use error_stack::{Report, ResultExt};
 use filigree::{
     auth::{
@@ -23,10 +23,10 @@ use tower_http::{
     compression::CompressionLayer,
     cors::CorsLayer,
     timeout::TimeoutLayer,
-    trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+    trace::{DefaultOnFailure, DefaultOnRequest, TraceLayer},
     ServiceBuilderExt,
 };
-use tracing::{event, Level};
+use tracing::{event, Level, Span};
 
 use crate::{error::Error, storage};
 
@@ -151,8 +151,6 @@ pub struct Server {
     /// The server's TCP listener
     pub listener: tokio::net::TcpListener,
     pub queue_workers: crate::jobs::QueueWorkers,
-    /// Vite manifest watcher for replacing web builds at runtime
-    manifest_watcher: Option<filigree::vite_manifest::watch::ManifestWatcher>,
 }
 
 impl Server {
@@ -215,9 +213,6 @@ pub enum ServerBind {
 pub struct ServeFrontend {
     pub port: Option<u16>,
     pub path: Option<String>,
-    pub vite_manifest: Option<String>,
-    pub watch_vite_manifest: bool,
-    pub livereload: bool,
 }
 
 /// Configuration for the server
@@ -353,22 +348,12 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         // Return not found here so we don't run the other non-API fallbacks
         .fallback(|| async { Error::NotFound("Route") });
 
-    let web_routes = crate::pages::create_routes();
-
-    let app = Router::new().nest("/api", api_routes).merge(web_routes);
+    let app = Router::new().nest("/api", api_routes);
 
     let ServeFrontend {
         port: mut web_port,
         path: mut web_dir,
-        vite_manifest,
-        watch_vite_manifest,
-        livereload,
     } = config.serve_frontend;
-
-    let manifest_path = vite_manifest.as_ref().map(std::path::Path::new);
-    let manifest_watcher =
-        crate::pages::layout::init_page_layout(manifest_path, watch_vite_manifest)
-            .change_context(Error::ServerStart)?;
 
     web_port = web_port.filter(|p| *p != 0);
     web_dir = web_dir.filter(|p| !p.is_empty());
@@ -401,8 +386,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             let serve_fs = tower_http::services::ServeDir::new(&web_dir)
                 .precompressed_gzip()
                 .precompressed_br()
-                .append_index_html_on_directories(true)
-                .fallback(crate::pages::not_found::not_found_fallback.with_state(state.clone()));
+                .append_index_html_on_directories(true);
 
             app.merge(filigree::route_services::serve_immutable_files(&web_dir))
                 .fallback_service(serve_fs)
@@ -425,6 +409,7 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                     .make_span_with(|req: &axum::extract::Request| {
                         let method = req.method();
                         let uri = req.uri();
+                        let host = req.headers().get("host").and_then(|s| s.to_str().ok());
 
                         // Add the matched route to the span
                         let route = req
@@ -438,13 +423,31 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
                             .and_then(|s| s.to_str().ok())
                             .unwrap_or("");
 
-                        tracing::info_span!("request", ?request_id, %method, %uri, route)
+                        let span = tracing::info_span!("request",
+                            request_id,
+                            http.host=host,
+                            http.method=%method,
+                            http.uri=%uri,
+                            http.route=route,
+                            http.status_code = tracing::field::Empty,
+                            error = tracing::field::Empty
+                        );
+
+                        span
                     })
-                    .on_response(
-                        DefaultOnResponse::new()
-                            .level(Level::INFO)
-                            .latency_unit(tower_http::LatencyUnit::Millis),
-                    )
+                    .on_response(|res: &http::Response<_>, latency: Duration, span: &Span| {
+                        let status = res.status();
+                        span.record("http.status_code", status.as_u16());
+                        if status.is_client_error() || status.is_server_error() {
+                            span.record("error", "true");
+                        }
+
+                        tracing::info!(
+                            latency = %format!("{} ms", latency.as_millis()),
+                            http.status_code = status.as_u16(),
+                            "finished processing request"
+                        );
+                    })
                     .on_request(DefaultOnRequest::new().level(Level::INFO))
                     .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
             )
@@ -456,26 +459,6 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             .layer(filigree::auth::middleware::AuthLayer::new(auth_queries))
             .into_inner(),
     );
-
-    let app = if livereload {
-        // Attach the livereload status route outside all the middleware so it doesn't generate
-        // traces and logs.
-        use tokio_stream::StreamExt;
-        app.route(
-            "/__livereload_status",
-            axum::routing::get(|| async {
-                let stream = futures::stream::repeat_with(|| {
-                    Ok::<_, std::convert::Infallible>(
-                        axum::response::sse::Event::default().data("live"),
-                    )
-                })
-                .throttle(std::time::Duration::from_secs(30));
-                axum::response::sse::Sse::new(stream)
-            }),
-        )
-    } else {
-        app
-    };
 
     let listener = match config.bind {
         ServerBind::Listener(l) => l,
@@ -493,7 +476,6 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         app,
         state,
         listener,
-        manifest_watcher,
         queue_workers,
     })
 }

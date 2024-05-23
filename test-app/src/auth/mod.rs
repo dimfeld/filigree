@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use async_trait::async_trait;
 use axum::routing::{self, Router};
+use error_stack::{Report, ResultExt};
 use filigree::auth::{
     AuthError, ExpiryStyle, OrganizationId, PermissionChecker, RoleId, SessionKey, UserId,
 };
@@ -84,42 +85,41 @@ impl filigree::auth::AuthQueries for AuthQueries {
         &self,
         api_key: Uuid,
         hash: Vec<u8>,
-    ) -> Result<Option<AuthInfo>, sqlx::Error> {
+    ) -> Result<Option<AuthInfo>, Report<AuthError>> {
         query_file_as!(AuthInfo, "src/auth/fetch_api_key.sql", api_key, hash)
             .fetch_optional(&self.db)
             .await
+            .change_context(AuthError::Db)
     }
 
     async fn get_user_by_session_id(
         &self,
         session_key: &SessionKey,
-    ) -> Result<Option<AuthInfo>, sqlx::Error> {
+    ) -> Result<Option<AuthInfo>, Report<AuthError>> {
         match self.session_expiry_style {
-            ExpiryStyle::FromCreation(_) => {
-                query_file_as!(
-                    AuthInfo,
-                    "src/auth/fetch_session.sql",
-                    session_key.session_id.as_uuid(),
-                    &session_key.hash
-                )
-                .fetch_optional(&self.db)
-                .await
-            }
-            ExpiryStyle::AfterIdle(duration) => {
-                query_file_as!(
-                    AuthInfo,
-                    "src/auth/fetch_and_touch_session.sql",
-                    session_key.session_id.as_uuid(),
-                    &session_key.hash,
-                    duration.as_secs() as i32
-                )
-                .fetch_optional(&self.db)
-                .await
-            }
+            ExpiryStyle::FromCreation(_) => query_file_as!(
+                AuthInfo,
+                "src/auth/fetch_session.sql",
+                session_key.session_id.as_uuid(),
+                &session_key.hash
+            )
+            .fetch_optional(&self.db)
+            .await
+            .change_context(AuthError::Db),
+            ExpiryStyle::AfterIdle(duration) => query_file_as!(
+                AuthInfo,
+                "src/auth/fetch_and_touch_session.sql",
+                session_key.session_id.as_uuid(),
+                &session_key.hash,
+                duration.as_secs() as i32
+            )
+            .fetch_optional(&self.db)
+            .await
+            .change_context(AuthError::Db),
         }
     }
 
-    async fn anonymous_user(&self, user_id: UserId) -> Result<Option<AuthInfo>, sqlx::Error> {
+    async fn anonymous_user(&self, user_id: UserId) -> Result<Option<AuthInfo>, Report<AuthError>> {
         query_file_as!(AuthInfo, "src/auth/fetch_anon_user.sql", user_id.as_uuid())
             .fetch_optional(&self.db)
             .await

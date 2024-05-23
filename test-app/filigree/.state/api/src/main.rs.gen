@@ -43,15 +43,6 @@ struct ServeCommand {
     #[clap(long, env = "WEB_ASSET_DIR")]
     frontend_asset_dir: Option<String>,
 
-    /// Path to the frontend manifest file. Defaults to "<frontend_asset_dir>/.vite/manifest.json"
-    /// if frontend_asset_dir is set.
-    #[clap(long, env = "VITE_MANIFEST")]
-    vite_manifest: Option<String>,
-
-    /// Watch the filesystem for changes and enable live reload
-    #[clap(long, env = "DEV")]
-    dev: bool,
-
     /// The environment in which this server is running
     #[clap(long = "env", env = "ENV", default_value_t = String::from("development"))]
     env: String,
@@ -137,6 +128,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
 
     let tracing_config = filigree::tracing_config::create_tracing_config(
         "",
+        "",
         TracingProvider::None,
         Some("".to_string()),
         None,
@@ -189,22 +181,14 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
 
     let frontend_asset_dir = cmd
         .frontend_asset_dir
-        .or_else(|| Some("web/build".to_string()));
-    let vite_manifest = cmd.vite_manifest.or_else(|| {
-        frontend_asset_dir
-            .as_ref()
-            .map(|base| format!("{base}/.vite/manifest.json"))
-    });
+        .or_else(|| Some("web/build/client".to_string()));
 
     let server = server::create_server(server::Config {
         env: cmd.env,
         bind: server::ServerBind::HostPort(cmd.host, cmd.port),
         serve_frontend: server::ServeFrontend {
-            port: cmd.frontend_port,
+            port: cmd.frontend_port.or(Some(5173)),
             path: frontend_asset_dir,
-            vite_manifest,
-            watch_vite_manifest: cmd.dev,
-            livereload: cmd.dev,
         },
         insecure: cmd.insecure,
         request_timeout: std::time::Duration::from_secs(cmd.request_timeout),
