@@ -1,6 +1,7 @@
 /// Functions for working with API keys
 pub mod api_key;
 mod check_middleware;
+#[cfg(feature = "local_auth")]
 /// HTTP endpoints for authentication
 pub mod endpoints;
 mod extractors;
@@ -8,10 +9,13 @@ mod extractors;
 pub mod lookup;
 /// Authentication middleware
 pub mod middleware;
+#[cfg(feature = "local_auth")]
 /// OAuth Functionality
 pub mod oauth;
+#[cfg(feature = "local_auth")]
 /// Functions for generating and verifying password hashes
 pub mod password;
+#[cfg(feature = "local_auth")]
 /// Functionalty for passwordless email-based login.
 pub mod passwordless_email_login;
 mod sessions;
@@ -164,7 +168,7 @@ impl IntoResponse for AuthError {
     }
 }
 
-/// The result of an [AuthQueries] function
+/// The result of an optional [AuthQueries] trait function.
 pub enum UserFromRequestPartsValue<T: AuthInfo> {
     /// Found information for the credentials
     Found(T),

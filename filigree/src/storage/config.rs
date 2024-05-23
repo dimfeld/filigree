@@ -71,6 +71,7 @@ impl StoragePreset {
         use crate::templates::OptionAsString;
 
         match self {
+            #[cfg(feature = "storage_aws")]
             StoragePreset::S3 { region } => {
                 format!(
                     "filigree::storage::StoragePreset::S3 {{
@@ -108,12 +109,15 @@ impl StoragePreset {
     /// Merge environment variables into this provider
     pub fn merge_env(&mut self, prefix: &str) -> Result<(), StorageError> {
         match self {
+            #[cfg(feature = "storage_aws")]
             StoragePreset::S3 { region } => {
                 merge_option_if_set(region, prefixed_env_var(prefix, "S3_REGION").ok());
             }
+            #[cfg(feature = "storage_aws")]
             StoragePreset::DigitalOceanSpaces { region } => {
                 merge_option_if_set(region, prefixed_env_var(prefix, "S3_REGION").ok());
             }
+            #[cfg(feature = "storage_aws")]
             StoragePreset::BackblazeB2 { region } => {
                 merge_option_if_set(region, prefixed_env_var(prefix, "S3_REGION").ok());
             }
@@ -135,10 +139,12 @@ impl StoragePreset {
     /// Generate a [StorageConfig] for this provider
     pub fn into_config(self) -> Result<StorageConfig, StorageError> {
         let config = match self {
+            #[cfg(feature = "storage_aws")]
             Self::S3 { region } => StorageConfig::S3(s3::S3StoreConfig {
                 region,
                 ..Default::default()
             }),
+            #[cfg(feature = "storage_aws")]
             Self::DigitalOceanSpaces { region } => {
                 let region = region.ok_or(StorageError::Configuration(
                     "Missing region in DigitalOcean Spaces config",
@@ -153,6 +159,7 @@ impl StoragePreset {
                     ..Default::default()
                 })
             }
+            #[cfg(feature = "storage_aws")]
             Self::BackblazeB2 { region } => {
                 let region = region.ok_or(StorageError::Configuration(
                     "Missing region in Backblaze B2 config",
@@ -167,6 +174,7 @@ impl StoragePreset {
                     ..Default::default()
                 })
             }
+            #[cfg(feature = "storage_aws")]
             Self::CloudflareR2 {
                 account_id,
                 jurisdiction,

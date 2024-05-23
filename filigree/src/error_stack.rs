@@ -4,6 +4,7 @@ use std::backtrace::{Backtrace, BacktraceStatus};
 
 use error_stack::{AttachmentKind, Context, Frame, FrameKind, Report};
 use smallvec::SmallVec;
+#[cfg(feature = "tracing")]
 use tracing_error::SpanTraceStatus;
 
 /// An [error_stack::Context] with its associated attachments
@@ -68,6 +69,7 @@ pub struct ErrorStackInformation<'a> {
     /// The backtrace, if present
     pub backtrace: Option<&'a Backtrace>,
     /// The spantrace, if present
+    #[cfg(feature = "tracing")]
     pub spantrace: Option<&'a tracing_error::SpanTrace>,
 }
 
@@ -77,12 +79,14 @@ impl<'a> ErrorStackInformation<'a> {
         let backtrace = err
             .downcast_ref::<Backtrace>()
             .filter(|b| b.status() == BacktraceStatus::Captured);
+        #[cfg(feature = "tracing")]
         let spantrace = err
             .downcast_ref::<tracing_error::SpanTrace>()
             .filter(|s| s.status() == SpanTraceStatus::CAPTURED);
 
         Self {
             backtrace,
+            #[cfg(feature = "tracing")]
             spantrace,
         }
     }

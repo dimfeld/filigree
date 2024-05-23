@@ -38,6 +38,7 @@ pub mod route_services;
 pub mod server;
 /// Utilities for working with SQL queries
 pub mod sql;
+#[cfg(feature = "storage")]
 /// Cloud object storage
 pub mod storage;
 #[cfg(feature = "filigree-cli")]
@@ -48,7 +49,9 @@ pub mod testing;
 /// Tracing configuration
 #[cfg(feature = "tracing")]
 pub mod tracing_config;
+#[cfg(feature = "storage")]
 pub mod uploads;
+#[cfg(feature = "local_auth")]
 /// Manage users, roles, and related data
 pub mod users;
 #[cfg(feature = "maud")]
