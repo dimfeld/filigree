@@ -109,7 +109,7 @@ impl<T: AuthInfo> AuthLookup<T> {
         };
 
         let info = self.queries.anonymous_user(anon.0).await?;
-        Ok(info.into_option().map(Arc::new))
+        Ok(info.map(Arc::new))
     }
 
     /// Return the authorization info, fetching it if it hasn't yet been fetched for this request.

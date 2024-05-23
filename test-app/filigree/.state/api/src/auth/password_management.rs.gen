@@ -22,12 +22,12 @@ pub async fn start_password_reset(
     let token = match token {
         Ok(token) => token,
         Err(e) => {
-            if e.is_unauthenticated() {
+            if e.current_context().is_unauthenticated() {
                 // Don't do anything if the email was not found, but also don't tell the user that
                 // the email doesn't exist.
                 return Ok(());
             } else {
-                return Err(Report::new(e).change_context(Error::AuthSubsystem).into());
+                return Err(e.change_context(Error::AuthSubsystem).into());
             }
         }
     };

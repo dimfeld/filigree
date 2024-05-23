@@ -178,6 +178,7 @@ pub enum UserFromRequestPartsValue<T: AuthInfo> {
 }
 
 impl<T: AuthInfo> UserFromRequestPartsValue<T> {
+    /// Convert `Self::Found(T)` into `Some(T)` and other values to `None`
     pub fn into_option(self) -> Option<T> {
         match self {
             Self::Found(t) => Some(t),
