@@ -71,6 +71,9 @@ pub struct Config {
     pub shared_types: Vec<String>,
 
     #[serde(default)]
+    pub auth_provider: AuthProvider,
+
+    #[serde(default)]
     pub formatter: FormatterConfig,
     // Maybe support SQLite some day
     // /// The SQL dialect to use. Defaults to postgresql
@@ -137,6 +140,16 @@ impl Config {
     pub const fn default_sql_dialect() -> SqlDialect {
         SqlDialect::Postgresql
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthProvider {
+    /// Generate built-in auth, storing the users/orgs/etc. in the database.
+    #[default]
+    BuiltIn,
+    /// Use a custom auth provider which you will configure and integrate
+    Custom,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
