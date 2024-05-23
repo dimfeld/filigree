@@ -100,7 +100,7 @@ pub async fn lookup_user_from_email_and_password(
     )
     .fetch_optional(db)
     .await
-    .map_err(AuthError::from)?
+    .change_context(AuthError::Db)?
     .ok_or(AuthError::UserNotFound)?;
 
     let password_hash = HashedPassword(user_info.password_hash.unwrap_or_default());
@@ -137,7 +137,7 @@ pub async fn login_with_password(
 }
 
 /// Create a password reset token
-pub async fn create_reset_token(db: &sqlx::PgPool, email: &str) -> Result<Uuid, AuthError> {
+pub async fn create_reset_token(db: &sqlx::PgPool, email: &str) -> Result<Uuid, Report<AuthError>> {
     let token = Uuid::new_v4();
 
     let result = sqlx::query!(
@@ -149,10 +149,11 @@ pub async fn create_reset_token(db: &sqlx::PgPool, email: &str) -> Result<Uuid, 
         &token
     )
     .execute(db)
-    .await?;
+    .await
+    .change_context(AuthError::Db)?;
 
     if result.rows_affected() == 0 {
-        return Err(AuthError::Unauthenticated);
+        return Err(Report::new(AuthError::Unauthenticated));
     }
 
     Ok(token)

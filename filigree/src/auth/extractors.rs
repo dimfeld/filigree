@@ -5,8 +5,10 @@ use axum::{
     extract::{FromRequestParts, Request},
     http::request::Parts,
 };
+use error_stack::Report;
 
 use super::{lookup::AuthLookup, AuthError, AuthInfo};
+use crate::errors::WrapReport;
 
 /// Extract authentication info from the Request, or return an error if the user is not valid.
 pub struct Authed<T: AuthInfo>(Arc<T>);
@@ -34,7 +36,7 @@ impl<S, T: AuthInfo + 'static> FromRequestParts<S> for Authed<T>
 where
     S: Send + Sync,
 {
-    type Rejection = AuthError;
+    type Rejection = WrapReport<AuthError>;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let auth_info = get_auth_info_from_parts(parts).await?;
@@ -43,7 +45,9 @@ where
 }
 
 /// Extract the AuthInfo from Request [Parts]
-pub async fn get_auth_info_from_parts<T: AuthInfo>(parts: &mut Parts) -> Result<Arc<T>, AuthError> {
+pub async fn get_auth_info_from_parts<T: AuthInfo>(
+    parts: &mut Parts,
+) -> Result<Arc<T>, Report<AuthError>> {
     let auth_lookup = parts
         .extensions
         .get::<Arc<AuthLookup<T>>>()
@@ -55,7 +59,9 @@ pub async fn get_auth_info_from_parts<T: AuthInfo>(parts: &mut Parts) -> Result<
 }
 
 /// Extract the AuthInfo from a [Request]
-pub async fn get_auth_info<T: AuthInfo>(request: Request) -> Result<(Request, Arc<T>), AuthError> {
+pub async fn get_auth_info<T: AuthInfo>(
+    request: Request,
+) -> Result<(Request, Arc<T>), Report<AuthError>> {
     let (mut parts, body) = request.into_parts();
     let auth_info = get_auth_info_from_parts(&mut parts).await?;
 

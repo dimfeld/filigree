@@ -123,6 +123,7 @@ impl filigree::auth::AuthQueries for AuthQueries {
         query_file_as!(AuthInfo, "src/auth/fetch_anon_user.sql", user_id.as_uuid())
             .fetch_optional(&self.db)
             .await
+            .change_context(AuthError::Db)
     }
 }
 

@@ -9,6 +9,7 @@ mod queries;
 
 use base64::{display::Base64Display, engine::GeneralPurpose, Engine};
 use chrono::{DateTime, Utc};
+use error_stack::Report;
 pub use queries::*;
 use serde::Deserialize;
 use sha3::Digest;
@@ -103,7 +104,7 @@ pub fn decode_key(key: &str) -> Result<(Uuid, Vec<u8>), AuthError> {
 pub async fn lookup_api_key_from_bearer_token(
     pool: &sqlx::PgPool,
     key: &str,
-) -> Result<ApiKey, AuthError> {
+) -> Result<ApiKey, Report<AuthError>> {
     let (api_key_id, hash) = decode_key(key)?;
     queries::lookup_api_key_for_auth(pool, &api_key_id, &hash).await
 }
