@@ -47,7 +47,7 @@ where
                     Err(redirect_body(login_url))
                 }
                 _ => {
-                    let e = Error::from(e);
+                    let e = Error::WrapReport(e.change_context(Error::AuthSubsystem));
                     Err(super::generic_error::generic_error_page(&e))
                 }
             },
@@ -126,7 +126,7 @@ where
         Box::pin(async move {
             let (request, info) = match filigree::auth::get_auth_info::<AuthInfo>(request).await {
                 Ok(x) => x,
-                Err(e) => return Ok(e.into_response()),
+                Err(e) => return Ok(e.to_response()),
             };
 
             if info.is_anonymous() {

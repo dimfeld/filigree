@@ -6,6 +6,9 @@ use std::{
 };
 
 use axum::{extract::FromRef, routing::get, Router};
+{% if web.has_api_pages -%}
+use axum::handler::Handler;
+{%- endif %}
 use error_stack::{Report, ResultExt};
 use filigree::{
     auth::{

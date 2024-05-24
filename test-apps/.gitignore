@@ -4,6 +4,8 @@ storage
 .state
 */migrations
 */src
+
+# SvelteKit
 */web/src/lib/models
 */web/src/lib/components
 */web/src/lib/server
@@ -16,11 +18,17 @@ storage
 */web/src/routes/+page.server.ts
 */web/src/routes/+page.ts
 
-pnpm-lock.yaml
 app.d.ts
 app.postcss
+postcss.config.js
 hooks.client.ts
 hooks.server.ts
 model_types.ts
 tailwind.config.js
 
+
+# HTMX
+*/web/src/*.js
+*/web/src/*.ts
+
+pnpm-lock.yaml

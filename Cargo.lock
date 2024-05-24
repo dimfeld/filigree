@@ -1386,7 +1386,59 @@ dependencies = [
 ]
 
 [[package]]
-name = "filigree-test-app"
+name = "filigree-htmx-test-app"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "axum 0.7.4",
+ "axum-extra",
+ "axum-htmx",
+ "axum-jsonschema",
+ "axum-sqlx-tx",
+ "blake3",
+ "bytes",
+ "chrono",
+ "clap",
+ "dialoguer",
+ "digest",
+ "dotenvy",
+ "effectum",
+ "error-stack",
+ "eyre",
+ "filigree",
+ "futures",
+ "http 1.1.0",
+ "hyper 1.2.0",
+ "maud",
+ "percent-encoding",
+ "reqwest",
+ "rust-embed",
+ "schemars",
+ "schemars-zod",
+ "sentry",
+ "sentry-tower",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sqlx",
+ "sqlx-transparent-json-decode",
+ "temp-dir",
+ "tera",
+ "thiserror",
+ "time",
+ "tokio",
+ "tokio-stream",
+ "tower",
+ "tower-cookies",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "filigree-sveltekit-test-app"
 version = "0.0.1"
 dependencies = [
  "async-trait",

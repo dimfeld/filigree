@@ -9,6 +9,7 @@ build-with-backup:
 build-test-apps *FLAGS:
   cd filigree-cli && cargo lbuild
   just build-test-app sveltekit
+  just build-test-app htmx
 
 build-test-app DIR *FLAGS:
   @just write-files {{DIR}} {{FLAGS}}

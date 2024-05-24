@@ -138,6 +138,18 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         ..
     } = config;
 
+    // Make sure the base directories exist since we run the formatters from there
+    std::fs::create_dir_all(&api_dir)
+        .change_context(Error::WriteFile)
+        .attach_printable_lazy(|| {
+            format!("Unable to create API directory {}", api_dir.display())
+        })?;
+    std::fs::create_dir_all(&web_dir)
+        .change_context(Error::WriteFile)
+        .attach_printable_lazy(|| {
+            format!("Unable to create Web directory {}", web_dir.display())
+        })?;
+
     let formatter = Formatters {
         config: config.formatter.clone(),
         api_base_dir: api_dir.clone(),
