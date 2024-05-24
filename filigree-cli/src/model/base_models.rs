@@ -14,6 +14,7 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
         zod_type: None,
         nullable: false,
         unique: false,
+        globally_unique: false,
         filterable: super::field::FilterableType::None,
         sortable: super::field::SortableType::None,
         user_access: Access::Read,
@@ -89,7 +90,7 @@ impl Model {
                         ..simple_model_field("password_hash", SqlType::Text)
                     },
                     ModelField {
-                        unique: true,
+                        globally_unique: true,
                         nullable: true,
                         ..simple_model_field("email", SqlType::Text)
                     },

@@ -1,8 +1,8 @@
 CREATE TABLE {{table}} (
   {% for field in fields -%}
     {{ field.sql_name }} {{ field.sql_type }}
-    {%- if field.unique %} UNIQUE {% endif -%}
     {%- if not field.nullable %} NOT NULL {% endif -%}
+    {%- if field.globally_unique %} UNIQUE {% endif -%}
     {%- if field.default_sql %} DEFAULT {{ field.default_sql }} {% endif -%}
     {%- if field.extra_sql_modifiers %} {{ field.extra_sql_modifiers }} {% endif -%}
     {%- if field.foreign_key_sql %} {{ field.foreign_key_sql }} {% endif %}
@@ -13,7 +13,7 @@ CREATE TABLE {{table}} (
 );
 
 {% for field in fields | filter(attribute="indexed", value=true) %}
-CREATE INDEX {{table}}_{{field.sql_name}} ON {{table}} ({% if not global and field.sql_name != 'organization_id' %}organization_id, {% endif%}{{field.sql_name}});
+CREATE {% if field.unique %}UNIQUE {% endif -%} INDEX {{table}}_{{field.sql_name}} ON {{table}} ({% if not global and field.sql_name != 'organization_id' %}organization_id, {% endif%}{{field.sql_name}});
 {% endfor %}
 
 {% if index_updated_at %}

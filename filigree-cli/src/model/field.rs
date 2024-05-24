@@ -36,11 +36,20 @@ pub struct ModelField {
     /// type.
     pub zod_type: Option<String>,
 
+    /// This field is optional. In Rust this translates to `Option<T>`. In SQL this controls
+    /// the presence or absence of the NOT NULL qualification.
     #[serde(default)]
     pub nullable: bool,
+
+    /// This field's value should be unique within the organization.
     #[serde(default)]
     pub unique: bool,
 
+    /// This field's value should be unique within the entire table. Use with care.
+    #[serde(default)]
+    pub globally_unique: bool,
+
+    /// Additional SQL to apply to this column.
     #[serde(default)]
     pub extra_sql_modifiers: String,
 
@@ -201,8 +210,9 @@ impl ModelField {
             "nullable": self.nullable,
             "filterable": self.filterable,
             "sortable": self.sortable,
+            "indexed": self.indexed || self.unique,
             "unique": self.unique,
-            "indexed": self.indexed,
+            "globally_unique": self.globally_unique,
             "omit_in_list": self.omit_in_list,
             "foreign_key_sql": self.references.as_ref().map(|r| r.to_string()),
             "extra_sql_modifiers": self.extra_sql_modifiers,
