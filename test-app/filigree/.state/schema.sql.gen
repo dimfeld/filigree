@@ -150,12 +150,12 @@ CREATE TABLE post_images (
   file_original_name text,
   file_size bigint,
   file_hash bytea,
-  post_id uuid UNIQUE NOT NULL REFERENCES posts (id) ON DELETE CASCADE
+  post_id uuid NOT NULL REFERENCES posts (id) ON DELETE CASCADE
 );
 
 CREATE INDEX post_images_organization_id ON post_images (organization_id);
 
-CREATE INDEX post_images_post_id ON post_images (organization_id, post_id);
+CREATE UNIQUE INDEX post_images_post_id ON post_images (organization_id, post_id);
 
 CREATE INDEX post_images_updated_at ON post_images (organization_id, updated_at DESC);
 
@@ -169,12 +169,12 @@ CREATE TABLE polls (
   created_at timestamptz NOT NULL DEFAULT now(),
   question text NOT NULL,
   answers jsonb NOT NULL,
-  post_id uuid UNIQUE NOT NULL REFERENCES posts (id) ON DELETE CASCADE
+  post_id uuid NOT NULL REFERENCES posts (id) ON DELETE CASCADE
 );
 
 CREATE INDEX polls_organization_id ON polls (organization_id);
 
-CREATE INDEX polls_post_id ON polls (organization_id, post_id);
+CREATE UNIQUE INDEX polls_post_id ON polls (organization_id, post_id);
 
 CREATE INDEX polls_updated_at ON polls (organization_id, updated_at DESC);
 
