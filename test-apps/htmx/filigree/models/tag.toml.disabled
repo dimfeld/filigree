@@ -1,0 +1,11 @@
+name = "Tag"
+id_prefix = "tag"
+standard_endpoints = true
+
+[[fields]]
+name = "name"
+type = "text"
+
+[[fields]]
+name = "color"
+type = "text"
