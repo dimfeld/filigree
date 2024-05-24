@@ -1,5 +1,0 @@
-import { z } from "zod";
-
-export const ObjectPermission = z.enum(["owner", "write", "read"]);
-
-export type ObjectPermission = z.infer<typeof ObjectPermission>;

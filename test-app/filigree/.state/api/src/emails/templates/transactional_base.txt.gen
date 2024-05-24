@@ -1,6 +1,0 @@
-
-{% block content %}{% endblock content %}
-
-
------
-Filigree Test App by Daniel Imfeld
