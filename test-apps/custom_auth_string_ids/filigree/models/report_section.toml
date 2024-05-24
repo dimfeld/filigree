@@ -1,0 +1,16 @@
+name = "ReportSection"
+id_prefix = "repsec"
+standard_endpoints = true
+belongs_to = "Report"
+
+[[fields]]
+name = "name"
+type = "text"
+
+[[fields]]
+name = "viz"
+type = "text"
+
+[[fields]]
+name = "options"
+type = "json"

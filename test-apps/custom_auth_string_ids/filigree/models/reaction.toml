@@ -1,0 +1,10 @@
+name = "Reaction"
+id_prefix = "reac"
+standard_endpoints = true
+belongs_to = "Post"
+
+[[fields]]
+name = "type"
+type = "text"
+
+
