@@ -73,7 +73,7 @@ default = ["tracing", "tracing_export", "storage", "storage_aws", "local_auth"]
 # Endpoints and functions to manage users, org, and roles locally
 local_auth = ["dep:argon2", "dep:oauth2"]
 # Use strings for object IDs instead of UUIDs. This only works right now if the `local_auth` feature is disabled.
-string_object_ids = []
+string_user_ids = []
 opentelemetry = ["tracing", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
 tracing = ["dep:log", "dep:tracing-subscriber", "dep:tracing-error", "dep:tracing-log", "opentelemetry"]
 tracing_export = ["tracing", "opentelemetry", "dep:tonic", "dep:opentelemetry-otlp"]
@@ -82,11 +82,11 @@ maud = ["dep:maud"]
 # Code only needed when running the Filigree CLI, plus additional features
 filigree-cli = ["storage_aws", "tracing"]
 # Enable support for AWS S3 and compatible APIs
-storage_aws = ["object_store/aws"]
+storage_aws = ["storage", "object_store/aws"]
 # Enable support for Google Cloud Storage
-storage_gcp = ["object_store/gcp"]
+storage_gcp = ["storage", "object_store/gcp"]
 # Enable support for Azure Blob Storage
-storage_azure = ["object_store/azure"]
+storage_azure = ["storage", "object_store/azure"]
 # Right now only AWS storage is implemented
 storage = ["storage_aws"]
 email_provider = []
@@ -99,4 +99,16 @@ watch-manifest = ["dep:notify-debouncer-mini"]
 
 
 [package.metadata.docs.rs]
-all-features = true
+features = [
+  "local_auth",
+  "opentelemetry",
+  "tracing",
+  "storage_aws",
+  "storage_gcp",
+  "storage_azure",
+  "storage",
+  "email_provider",
+  "resend",
+  "sentry",
+  "watch-manifest"
+]

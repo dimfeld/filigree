@@ -22,7 +22,8 @@ use super::{
 /// to do this is through the [Extension] middleware, such as by adding
 /// `.layer(Extension(FallbackAnonymousUser(user_id))` around the routes that you
 /// want.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
+#[cfg_attr(not(feature = "string_user_ids"), derive(Copy))]
 pub struct FallbackAnonymousUser(pub UserId);
 
 /// Functionality to fetch authorization info from the database given session cookies and Bearer tokens
@@ -108,7 +109,7 @@ impl<T: AuthInfo> AuthLookup<T> {
             return Ok(None);
         };
 
-        let info = self.queries.anonymous_user(anon.0).await?;
+        let info = self.queries.anonymous_user(anon.0.clone()).await?;
         Ok(info.map(Arc::new))
     }
 

@@ -5,11 +5,13 @@
 //! Keys have the option to inherit the permissions of the user who created them, or to have their
 //! own subset of permissions.
 
+#[cfg(feature = "local_auth")]
 mod queries;
 
 use base64::{display::Base64Display, engine::GeneralPurpose, Engine};
 use chrono::{DateTime, Utc};
 use error_stack::Report;
+#[cfg(feature = "local_auth")]
 pub use queries::*;
 use serde::Deserialize;
 use sha3::Digest;
@@ -100,6 +102,7 @@ pub fn decode_key(key: &str) -> Result<(Uuid, Vec<u8>), AuthError> {
     Ok((api_key_id, hash))
 }
 
+#[cfg(feature = "local_auth")]
 /// Lookup an API token given the bearer token form that the user provides.
 pub async fn lookup_api_key_from_bearer_token(
     pool: &sqlx::PgPool,

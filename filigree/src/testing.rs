@@ -1,9 +1,6 @@
 use async_trait::async_trait;
 use reqwest::header::HeaderMap;
 use tracing::{event, Level};
-use uuid::Uuid;
-
-use crate::auth::UserId;
 
 /// A password to use by default for users in unit tests.
 pub const TEST_PASSWORD: &str = "the-password";
@@ -11,8 +8,12 @@ pub const TEST_PASSWORD: &str = "the-password";
 pub const TEST_PASSWORD_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$7Pdxrl3fSrSIelBARWvE5g$0D8uG+7ezAU7CWbIZZ+IbrL3QrEXNZOAI4oYM5mWijk";
 
 /// The ID of the admin user always created
-pub const ADMIN_USER_ID: UserId =
-    UserId::from_uuid(Uuid::from_u128(0xE6EF5CB2C3614C219419318FADAC0FA4));
+#[cfg(feature = "string_user_ids")]
+pub const ADMIN_USER_ID: &str = "e6ef5cb2-c361-4c21-9419-318fadac0fa4";
+
+#[cfg(not(feature = "string_user_ids"))]
+pub const ADMIN_USER_ID: crate::auth::UserId =
+    crate::auth::UserId::from_uuid(uuid::Uuid::from_u128(0xE6EF5CB2C3614C219419318FADAC0FA4));
 
 /// An HTTP client set up for ease of use in tests. It takes a base URL when constructed and
 /// makes all requests relative to that base.

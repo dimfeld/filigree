@@ -36,14 +36,29 @@ use thiserror::Error;
 use uuid::Uuid;
 
 pub use self::lookup::FallbackAnonymousUser;
-use crate::{
-    errors::{ErrorKind, ForceObfuscate, HttpError},
-    make_object_id,
-};
+use crate::errors::{ErrorKind, ForceObfuscate, HttpError};
 
-make_object_id!(UserId, usr);
-make_object_id!(OrganizationId, org);
-make_object_id!(RoleId, rol);
+#[cfg(feature = "string_user_ids")]
+mod object_ids {
+    #[cfg(feature = "local_auth")]
+    compile_error!(
+        "The local_auth and string_user_ids features can not be enabled at the same time"
+    );
+
+    pub type UserId = String;
+    pub type OrganizationId = String;
+    pub type RoleId = String;
+}
+
+#[cfg(not(feature = "string_user_ids"))]
+mod object_ids {
+    use crate::make_object_id;
+    make_object_id!(UserId, usr);
+    make_object_id!(OrganizationId, org);
+    make_object_id!(RoleId, rol);
+}
+
+pub use object_ids::*;
 
 /// An error related to authentication
 #[derive(Clone, Debug, Error)]
