@@ -1,2 +1,2 @@
 pub mod db;
-pub mod util;
+{% if auth.builtin or web.generate_js_types_code %}pub mod util;{% endif %}

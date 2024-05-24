@@ -5,7 +5,10 @@ use axum::{
     routing,
 };
 use filigree::{
-    auth::password::{login_with_password, EmailAndPassword},
+    auth::{
+        {% if auth.builtin %}password::login_with_password,{% endif %}
+        EmailAndPassword
+    },
     extract::FormOrJson,
 };
 use maud::html;
@@ -27,6 +30,9 @@ async fn login_form(
     Query(query): Query<RedirectTo>,
     FormOrJson(payload): FormOrJson<EmailAndPassword>,
 ) -> impl IntoResponse {
+    {% if auth.provider == "custom" %}
+    // CUSTOM-AUTH Add your login logic here
+    {% endif %}
     html! {}
 }
 

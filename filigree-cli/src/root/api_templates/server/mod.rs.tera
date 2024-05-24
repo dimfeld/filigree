@@ -12,7 +12,11 @@ use axum::handler::Handler;
 use error_stack::{Report, ResultExt};
 use filigree::{
     auth::{
-        oauth::providers::OAuthProvider, CorsSetting, ExpiryStyle, SessionBackend,
+        {% if auth.builtin %}
+        oauth::providers::OAuthProvider,
+        SessionBackend,
+        {% endif %}
+        CorsSetting, ExpiryStyle, 
         SessionCookieBuilder,
     },
     errors::{panic_handler, ObfuscateErrorLayer, ObfuscateErrorLayerSettings},
@@ -110,11 +114,13 @@ impl FromRef<ServerState> for PgPool {
     }
 }
 
+{% if auth.builtin %}
 impl FromRef<ServerState> for SessionBackend {
     fn from_ref(inner: &ServerState) -> Self {
         inner.0.session_backend.clone()
     }
 }
+{% endif %}
 
 pub struct Secrets {
     {% for secret, _env_var in secrets -%}
@@ -248,8 +254,6 @@ pub struct Config {
     pub cookie_configuration: SessionCookieBuilder,
     /// When user sessions should expire.
     pub session_expiry: ExpiryStyle,
-    /// Flags controlling how new users are able to sign up or be invited.
-    pub new_user_flags: filigree::server::NewUserFlags,
     /// The email sending service to use.
     pub email_sender: filigree::email::services::EmailSender,
 
@@ -260,6 +264,9 @@ pub struct Config {
     pub hosts: Vec<String>,
     pub api_cors: filigree::auth::CorsSetting,
 
+    {% if auth.builtin %}
+    /// Flags controlling how new users are able to sign up or be invited.
+    pub new_user_flags: filigree::server::NewUserFlags,
     /// The base URL for OAuth redirect URLs.
     pub oauth_redirect_url_base: String,
     /// Set the OAuth providers. If this is None, OAuth providers will be configured based on the
@@ -268,6 +275,7 @@ pub struct Config {
     ///
     /// OAuth can be disabled, regardless of environment variable settings, but passing `Some(Vec::new())`.
     pub oauth_providers: Option<Vec<Box<dyn OAuthProvider>>>,
+    {% endif %}
 
     /// Secrets for the server. Most often this should be initialized using [Secrets::from_env].
     pub secrets: Secrets,
@@ -316,20 +324,22 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             http_client,
             db: config.pg_pool.clone(),
             email: config.email_sender,
-            new_user_flags: config.new_user_flags,
             hosts: config.hosts,
             user_creator: Box::new(crate::users::users::UserCreator),
+            {% if auth.builtin -%}
             oauth_providers: config.oauth_providers.unwrap_or_else(|| {
                 filigree::auth::oauth::providers::create_supported_providers(
                     "{{env_prefix}}",
                     &oauth_redirect_base,
                 )
             }),
+            new_user_flags: config.new_user_flags,
             session_backend: SessionBackend::new(
                 config.pg_pool.clone(),
                 config.cookie_configuration,
                 config.session_expiry,
             ),
+            {%- endif %}
             {% if error_reporting.provider == "sentry" -%}
             error_reporter: ErrorReporter::Sentry,
             {%- else -%}

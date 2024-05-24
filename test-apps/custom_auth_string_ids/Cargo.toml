@@ -30,7 +30,7 @@ dotenvy = "0.15.7"
 effectum = "0.6.0"
 error-stack = { version = "0.4.1", features = ["spantrace"] }
 eyre = "0.6.12"
-filigree = { version = "0.2.0", path = "../../filigree", default-features = false, features = ["resend", "sentry", "tracing_export", "string_user_ids"] }
+filigree = { version = "0.2.0", path = "../../filigree", default-features = false, features = ["resend", "sentry", "tracing_export", "string_user_ids", "storage_aws", "watch-manifest", "maud", "htmx"] }
 futures = "0.3.30"
 http = "1.0.0"
 hyper = { version = "1.2.0", features = ["server", "http1", "http2"] }

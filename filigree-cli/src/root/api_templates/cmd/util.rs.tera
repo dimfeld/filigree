@@ -12,18 +12,21 @@ pub struct UtilCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum UtilSubcommand {
-    HashPassword(HashPasswordCommand),
+    {% if auth.builtin %}HashPassword(HashPasswordCommand),{% endif %}
     {% if web.generate_js_types_code %}SyncTypes,{% endif %}
 }
 
+{% if auth.builtin %}
 #[derive(Args, Debug)]
 pub struct HashPasswordCommand {
     password: String,
 }
+{% endif %}
 
 impl UtilCommand {
     pub async fn handle(self) -> Result<(), Report<Error>> {
         match self.command {
+            {% if auth.builtin %}
             UtilSubcommand::HashPassword(password) => {
                 let hash = filigree::auth::password::new_hash(password.password)
                     .await
@@ -31,6 +34,7 @@ impl UtilCommand {
                     .0;
                 println!("{hash}");
             },
+            {% endif %}
             {% if web.generate_js_types_code %}UtilSubcommand::SyncTypes => sync_types()?,{% endif %}
         }
 

@@ -1,4 +1,7 @@
 use error_stack::{Report, ResultExt};
+use sqlx::PgPool;
+use crate::Error;
+{% if auth.builtin %}
 use filigree::{
     auth::password::HashedPassword,
     users::{
@@ -6,7 +9,7 @@ use filigree::{
         users::add_user_email_login,
     },
 };
-use sqlx::{PgConnection, PgPool};
+use sqlx::PgConnection;
 
 use crate::{
     models::{
@@ -17,14 +20,15 @@ use crate::{
     users::{
         organization::create_new_organization, users::create_new_user_with_prehashed_password,
     },
-    Error,
 };
+{% endif %}
 
 /// Run the database migrations, if needed
 pub async fn run_migrations(db: &PgPool) -> Result<(), Report<Error>> {
     sqlx::migrate!().run(db).await.change_context(Error::Db)
 }
 
+{% if auth.builtin %}
 /// Arguments to the [boostrap] function.
 #[derive(Debug, Default)]
 pub struct BootstrapData {
@@ -129,3 +133,4 @@ async fn create_superuser_role(
 
     Ok(superuser_role_id)
 }
+{% endif %}

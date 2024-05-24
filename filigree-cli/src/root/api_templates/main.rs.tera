@@ -18,7 +18,9 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    {% if auth.builtin or web.generate_js_types_code %}
     Util(cmd::util::UtilCommand),
+    {% endif %}
     Db(cmd::db::DbCommand),
     Serve(ServeCommand),
 }
@@ -244,6 +246,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
         hosts,
         api_cors: cmd.api_cors,
         obfuscate_errors: cmd.obfuscate_errors,
+        {% if auth.builtin %}
         // This will build OAuth providers based on the environment variables present.
         oauth_providers: None,
         oauth_redirect_url_base: oauth_redirect_host,
@@ -253,6 +256,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
             allow_invite_to_new_org: cmd.allow_invite_to_new_org,
             same_org_invites_require_email_verification: cmd.same_org_invites_require_email_verification,
         },
+        {% endif %}
         pg_pool,
         secrets: server::Secrets::from_env()?,
         {% if queue -%}
@@ -317,7 +321,9 @@ pub async fn actual_main() -> Result<(), Report<Error>> {
     match cli.command {
         Command::Db(cmd) => cmd.handle().await?,
         Command::Serve(cmd) => serve(cmd).await?,
+        {% if auth.builtin or web.generate_js_types_code %}
         Command::Util(cmd) => cmd.handle().await?,
+        {% endif %}
     }
 
     Ok(())

@@ -148,7 +148,8 @@ pub enum AuthProvider {
     /// Generate built-in auth, storing the users/orgs/etc. in the database.
     #[default]
     BuiltIn,
-    /// Use a custom auth provider which you will configure and integrate
+    /// Use a custom auth provider which you will configure and integrate. The template
+    /// will add `CUSTOM-AUTH` comments in the codebase where you should add your code.
     Custom,
 }
 

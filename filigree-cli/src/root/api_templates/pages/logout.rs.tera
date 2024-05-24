@@ -9,7 +9,11 @@ use tower_cookies::Cookies;
 use crate::{pages::layout::root_layout_page, server::ServerState};
 
 async fn logout_page(State(state): State<ServerState>, cookies: Cookies) -> Response {
+    {% if auth.provider =="built_in" %}
     state.session_backend.delete_session(&cookies).await.ok();
+    {% elif auth.provider == "custom" %}
+    // CUSTOM-AUTH Add your session cleanup logic here
+    {% endif %}
     let body = root_layout_page(None, "Logout", html! { p { "You have logged out" } });
     body.into_response()
 }

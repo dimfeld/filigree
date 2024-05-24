@@ -1,3 +1,4 @@
+{% if auth.builtin %}
 use std::io::IsTerminal;
 
 use clap::Args;
@@ -129,3 +130,4 @@ impl BootstrapCommand {
         Ok(())
     }
 }
+{% endif %}

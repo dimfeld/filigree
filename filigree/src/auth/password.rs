@@ -5,15 +5,13 @@ use argon2::{
     Argon2,
 };
 use error_stack::{Report, ResultExt};
-use schemars::JsonSchema;
-use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
 use tower_cookies::Cookies;
 use tracing::instrument;
 use uuid::Uuid;
 
-use super::{sessions::SessionBackend, AuthError, UserId};
+use super::{sessions::SessionBackend, AuthError, EmailAndPassword, UserId};
 use crate::errors::FormDataResponse;
 
 /// A wrapper around a hashed password, to help avoid passing a plaintext password where a hashed
@@ -67,17 +65,6 @@ pub async fn verify_password(password: String, hash_str: HashedPassword) -> Resu
     .map_err(|e| AuthError::PasswordHasherError(e.to_string()))??;
 
     Ok(())
-}
-
-/// An email and password to attempt login
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
-pub struct EmailAndPassword {
-    #[validate(email)]
-    /// The user's email
-    pub email: String,
-    #[validate(length(min = 1))]
-    /// The user's password
-    pub password: String,
 }
 
 /// Look up a user and verify the password, and check that the user is verified.

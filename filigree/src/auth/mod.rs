@@ -304,6 +304,17 @@ impl ObjectPermission {
     }
 }
 
+/// An email and password to attempt login
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct EmailAndPassword {
+    #[validate(email)]
+    /// The user's email
+    pub email: String,
+    #[validate(length(min = 1))]
+    /// The user's password
+    pub password: String,
+}
+
 /// The result of a login, with an optional place to redirect to
 #[derive(Debug, Serialize)]
 pub struct LoginResult {
