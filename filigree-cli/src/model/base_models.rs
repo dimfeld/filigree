@@ -83,6 +83,8 @@ impl Model {
                 belongs_to: None,
                 has: vec![],
                 file_for: None,
+                is_auth_model: true,
+                schema: config.database.auth_schema().clone(),
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
@@ -131,6 +133,8 @@ impl Model {
                 belongs_to: None,
                 has: vec![],
                 file_for: None,
+                is_auth_model: true,
+                schema: config.database.auth_schema().clone(),
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
@@ -190,6 +194,8 @@ impl Model {
                 belongs_to: None,
                 has: vec![],
                 file_for: None,
+                is_auth_model: true,
+                schema: config.database.auth_schema().clone(),
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,

@@ -73,7 +73,7 @@ pub fn render_files(
         config.server.env_prefix.as_deref().unwrap_or_default(),
     );
     context.insert("users", &config.users);
-    context.insert("db", &config.database);
+    context.insert("db", &config.database.template_context());
 
     let user_model = models
         .iter()

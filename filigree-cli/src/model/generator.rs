@@ -101,6 +101,7 @@ impl<'a> ModelGenerator<'a> {
             },
         ];
 
+        // TODO need to run these through the templating
         let after_up = vec![
             SingleMigration {
                 name: "user_info".to_string(),
@@ -542,6 +543,10 @@ impl<'a> ModelGenerator<'a> {
 
         let mut context = tera::Context::from_value(json_value).unwrap();
         context.insert("auth", &self.config.auth.template_context());
+        context.insert(
+            "auth_schema",
+            &self.config.database.auth_schema().unwrap_or("public"),
+        );
         self.add_rust_structs_to_context(&mut context)?;
 
         Ok(context)
@@ -646,7 +651,8 @@ impl<'a> ModelGenerator<'a> {
                     owner_access: Access::Read,
                     omit_in_list: false,
                     references: Some(ModelFieldReference {
-                        table: model.table(),
+                        table: Some(model.table()),
+                        model: None,
                         field: "id".to_string(),
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: None,
@@ -763,7 +769,8 @@ impl<'a> ModelGenerator<'a> {
                     owner_access: Access::ReadWrite,
                     omit_in_list: false,
                     references: Some(ModelFieldReference {
-                        table: model.table(),
+                        table: Some(model.table()),
+                        model: None,
                         field: "id".to_string(),
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: None,

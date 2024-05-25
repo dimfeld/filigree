@@ -278,6 +278,33 @@ pub struct DatabaseConfig {
     /// Defaults to 100
     #[serde(default = "default_max_connections")]
     pub max_connections: u16,
+
+    /// Place database tables in this PostgreSQL schema. Defaults to "public" if omitted.
+    model_schema: Option<String>,
+
+    /// Place auth-related tables in this PostgreSQL schema. This includes
+    /// the users, roles, organizations, permissions, and other related tables.
+    /// If omitted this uses the same value as `model_schema`.
+    auth_schema: Option<String>,
+}
+
+impl DatabaseConfig {
+    pub fn model_schema(&self) -> Option<&str> {
+        self.schema.as_deref()
+    }
+
+    pub fn auth_schema(&self) -> Option<&str> {
+        self.auth_schema.as_deref().or_else(|| self.model_schema())
+    }
+
+    pub fn template_context(&self) -> serde_json::Value {
+        json!({
+            "min_connections": self.min_connections,
+            "max_connections": self.max_connections,
+            "model_schema": self.model_schema(),
+            "auth_schema": self.auth_schema(),
+        })
+    }
 }
 
 const fn default_min_connections() -> u16 {

@@ -1,11 +1,11 @@
-CREATE TABLE user_roles (
+CREATE TABLE {{auth_schema}}.user_roles (
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   role_id uuid NOT NULL REFERENCES roles (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   PRIMARY KEY (organization_id, user_id, role_id)
 );
 
-CREATE TABLE user_sessions (
+{% if auth.builtin %} CREATE TABLE {{auth_schema}}.user_sessions (
   id uuid PRIMARY KEY,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   hash uuid NOT NULL,
@@ -13,16 +13,16 @@ CREATE TABLE user_sessions (
 );
 
 -- A list of users and what organizations they belong to. Users can potentially be in more than one organization.
-CREATE TABLE organization_members (
+CREATE TABLE {{auth_schema}}.organization_members (
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   active boolean NOT NULL DEFAULT TRUE,
   PRIMARY KEY (organization_id, user_id)
 );
 
-CREATE INDEX user_sessions_user_id ON user_sessions (user_id);
+CREATE INDEX user_sessions_user_id ON {{auth_schema}}.user_sessions (user_id);
 
-CREATE TABLE api_keys (
+CREATE TABLE {{auth_schema}}.api_keys (
   api_key_id uuid PRIMARY KEY,
   hash bytea NOT NULL,
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
@@ -34,7 +34,7 @@ CREATE TABLE api_keys (
 );
 
 -- Methods for a user to log in.
-CREATE TABLE email_logins (
+CREATE TABLE {{auth_schema}}.email_logins (
   email text PRIMARY KEY,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   verified bool NOT NULL,
@@ -44,18 +44,18 @@ CREATE TABLE email_logins (
   passwordless_login_expires_at timestamptz
 );
 
-CREATE INDEX email_logins_user_id ON email_logins (user_id);
+CREATE INDEX email_logins_user_id ON {{auth_schema}}.email_logins (user_id);
 
-CREATE TABLE oauth_logins (
+CREATE TABLE {{auth_schema}}.oauth_logins (
   oauth_provider text NOT NULL,
   oauth_account_id text NOT NULL,
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
   PRIMARY KEY (oauth_provider, oauth_account_id)
 );
 
-CREATE INDEX oauth_logins_user_id ON oauth_logins (user_id);
+CREATE INDEX oauth_logins_user_id ON {{auth_schema}}.oauth_logins (user_id);
 
-CREATE TABLE oauth_authorization_sessions (
+CREATE TABLE {{auth_schema}}.oauth_authorization_sessions (
   key text PRIMARY KEY,
   provider text NOT NULL,
   pkce_verifier text,
@@ -64,7 +64,7 @@ CREATE TABLE oauth_authorization_sessions (
   expires_at timestamptz NOT NULL
 );
 
-CREATE TABLE user_invites (
+CREATE TABLE {{auth_schema}}.user_invites (
   email text NOT NULL,
   token uuid NOT NULL,
   token_expires_at timestamptz NOT NULL,
@@ -80,4 +80,7 @@ CREATE TABLE user_invites (
   invite_sent_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX user_invites_email_org ON user_invites (email, organization_id) NULLS NOT DISTINCT;
+CREATE UNIQUE INDEX user_invites_email_org ON {{auth_schema}}.user_invites (email,
+  organization_id) NULLS NOT DISTINCT;
+
+{% endif %}

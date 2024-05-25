@@ -1,4 +1,4 @@
-CREATE TABLE delete_log (
+CREATE TABLE IF NOT EXISTS delete_log (
   organization_id uuid NOT NULL,
   object_id uuid NOT NULL,
   object_type text NOT NULL,

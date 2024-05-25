@@ -1,4 +1,4 @@
-CREATE TABLE object_permissions (
+CREATE TABLE {{auth_schema}}.object_permissions (
   organization_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
   actor_id uuid NOT NULL,
   object_id uuid NOT NULL,

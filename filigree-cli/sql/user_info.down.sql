@@ -1,4 +1,4 @@
-DROP TABLE user_invites;
+{% if auth.builtin %} DROP TABLE user_invites;
 
 DROP TABLE oauth_authorization_sessions;
 
@@ -12,4 +12,4 @@ DROP TABLE organization_members;
 
 DROP TABLE user_sessions;
 
-DROP TABLE user_roles;
+{% endif %} DROP TABLE user_roles;

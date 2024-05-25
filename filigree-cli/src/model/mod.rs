@@ -115,6 +115,15 @@ pub struct Model {
     /// If set, this model is a file submodel and `file_for` is its parent.
     #[serde(skip, default)]
     pub(crate) file_for: Option<(String, FileModelOptions)>,
+
+    #[serde(skip, default)]
+    /// Set to true if this model is an "auth" model. This only affects which schema
+    /// it takes.
+    is_auth_model: bool,
+
+    /// The schema to use for this model. If not set, it will use the schema settings
+    /// from the main configuration.
+    pub schema: Option<String>,
 }
 
 impl Model {
@@ -127,7 +136,7 @@ impl Model {
     }
 
     pub fn table(&self) -> String {
-        self.plural().to_case(Case::Snake)
+        format!("{}.{}", self.schema, self.plural().to_case(Case::Snake))
     }
 
     pub fn id_prefix(&self) -> Cow<str> {
@@ -247,7 +256,10 @@ impl Model {
                 return false;
             };
 
-            r.table == other.table()
+            r.table
+                .as_deref()
+                .expect("reference table was not filled in")
+                == other.table()
         }) {
             return true;
         }
@@ -265,6 +277,16 @@ impl Model {
             std::cmp::Ordering::Greater
         } else {
             self.name.cmp(&other.name)
+        }
+    }
+
+    pub fn apply_config(&mut self, config: &Config) {
+        if self.schema.is_none() {
+            self.schema = if self.is_auth_model {
+                Some(config.auth_schema().clone())
+            } else {
+                Some(config.model_schema().clone())
+            };
         }
     }
 }

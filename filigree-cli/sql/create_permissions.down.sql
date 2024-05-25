@@ -1,1 +1,1 @@
-DROP TABLE permissions;
+DROP TABLE {{auth_schema}}.permissions;

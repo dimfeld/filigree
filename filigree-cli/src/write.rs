@@ -121,6 +121,10 @@ fn build_models(config: &Config, mut config_models: Vec<Model>) -> Vec<Model> {
 
     models.extend(config_models.into_iter());
 
+    for model in &mut models {
+        model.apply_config(config)?;
+    }
+
     models
 }
 

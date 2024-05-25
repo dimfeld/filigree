@@ -6,6 +6,12 @@ pub fn validate_model_configuration(config: &Config, models: &ModelMap) -> Resul
             file.validate(&model.name, config)?;
         }
 
+        for field in &model.fields {
+            if let Some(reference) = &field.references {
+                reference.validate(&model.name, &field.name)?;
+            }
+        }
+
         for has in &model.has {
             let child = models.get(&has.model, &model.name, "has")?;
 
