@@ -31,6 +31,7 @@ sql = ["pg_format"]
 
 [database]
 migrate_on_start = true
+model_schema = "myapp"
 
 [email]
 provider = "resend"

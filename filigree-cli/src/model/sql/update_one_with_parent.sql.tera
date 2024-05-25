@@ -1,7 +1,7 @@
 {% import "model/sql_macros.tera" as macros %}
 {% if belongs_to_field %}
 WITH permissions AS (
-  {{ macros::permissions_lookup(actor_ids="$4", organization="$3", owner_perm=owner_permission, user_perm=write_permission) }}
+  {{ macros::permissions_lookup(auth_schema=auth_schema, actor_ids="$4", organization="$3", owner_perm=owner_permission, user_perm=write_permission) }}
 )
 UPDATE
   {{schema}}.{{table}}

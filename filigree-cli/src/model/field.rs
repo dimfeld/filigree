@@ -1,11 +1,11 @@
-use std::{borrow::Cow, fmt::Display};
+use std::{borrow::Cow, collections::HashMap, fmt::Display};
 
 use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::SqlDialect;
-use crate::write::GeneratorMap;
+use crate::Error;
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct ModelField {
@@ -257,7 +257,7 @@ impl ModelFieldReference {
         on_delete: Option<ReferentialAction>,
     ) -> Self {
         Self {
-            model: Some(table.into()),
+            model: Some(model.into()),
             table: None,
             field: field.into(),
             on_delete,
@@ -280,22 +280,32 @@ impl ModelFieldReference {
                 field_name.to_string(),
                 "can not specify both model and table",
             ))
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 
-    pub fn fill_table(&mut self, this_model: &str, models: &GeneratorMap) -> Result<(), Error> {
+    pub fn fill_table(
+        &mut self,
+        this_model: &str,
+        this_field: &str,
+        model_tables: &HashMap<String, String>,
+    ) -> Result<(), Error> {
         if self.table.is_some() {
             return Ok(());
         }
 
-        let model = models.get(
-            self.model.as_deref().unwrap(),
-            this_model,
-            "field reference",
-        )?;
-        self.table = Some(model.table());
+        let table = model_tables
+            .get(self.model.as_deref().unwrap())
+            .ok_or_else(|| {
+                Error::MissingModel(
+                    self.model.clone().unwrap(),
+                    this_model.to_string(),
+                    this_field.to_string(),
+                )
+            })?;
+        self.table = Some(table.clone());
+        self.model = None;
         Ok(())
     }
 

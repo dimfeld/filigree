@@ -234,6 +234,8 @@ impl FileModelOptions {
             index_updated_at: true,
             joins: None,
             has: vec![],
+            is_auth_model: false,
+            schema: parent.schema.clone(),
         }
     }
 

@@ -26,7 +26,10 @@ use self::{
 };
 use crate::{
     format::FormatterConfig,
-    model::{field::ModelField, Model, ModelAuthScope, SqlDialect},
+    model::{
+        field::{ModelField, SqlType},
+        Model, ModelAuthScope, SqlDialect,
+    },
     state::State,
     Error,
 };
@@ -171,6 +174,10 @@ impl AuthConfig {
         })
     }
 
+    pub fn builtin(&self) -> bool {
+        matches!(self.provider, AuthProvider::BuiltIn)
+    }
+
     pub fn has_default_models(&self) -> bool {
         !self.suppress_default_models || matches!(self.provider, AuthProvider::BuiltIn)
     }
@@ -289,17 +296,17 @@ pub struct DatabaseConfig {
     pub max_connections: u16,
 
     /// Place database tables in this PostgreSQL schema. Defaults to "public" if omitted.
-    model_schema: Option<String>,
+    pub model_schema: Option<String>,
 
     /// Place auth-related tables in this PostgreSQL schema. This includes
     /// the users, roles, organizations, permissions, and other related tables.
     /// If omitted this uses the same value as `model_schema`.
-    auth_schema: Option<String>,
+    pub auth_schema: Option<String>,
 }
 
 impl DatabaseConfig {
     pub fn model_schema(&self) -> Option<&str> {
-        self.schema.as_deref()
+        self.model_schema.as_deref()
     }
 
     pub fn auth_schema(&self) -> Option<&str> {

@@ -84,7 +84,7 @@ impl Model {
                 has: vec![],
                 file_for: None,
                 is_auth_model: true,
-                schema: config.database.auth_schema().clone(),
+                schema: config.database.auth_schema().map(|s| s.to_string()),
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
@@ -134,7 +134,7 @@ impl Model {
                 has: vec![],
                 file_for: None,
                 is_auth_model: true,
-                schema: config.database.auth_schema().clone(),
+                schema: config.database.auth_schema().map(|s| s.to_string()),
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
@@ -144,14 +144,12 @@ impl Model {
                         rust_type: Some("crate::models::user::UserId".to_string()),
                         user_access: Access::None,
                         nullable: true,
-                        references: Some(
-                            ModelFieldReference::new(
-                                "users",
-                                "id",
-                                Some(ReferentialAction::SetNull),
-                            )
-                            .with_deferrable(crate::model::field::Deferrable::InitiallyImmediate),
-                        ),
+                        references: config.auth.builtin().then(|| {
+                            ModelFieldReference::new("User", "id", Some(ReferentialAction::SetNull))
+                                .with_deferrable(
+                                    crate::model::field::Deferrable::InitiallyImmediate,
+                                )
+                        }),
                         ..simple_model_field("owner", auth_id_type)
                     },
                     ModelField {
@@ -195,7 +193,7 @@ impl Model {
                 has: vec![],
                 file_for: None,
                 is_auth_model: true,
-                schema: config.database.auth_schema().clone(),
+                schema: config.database.auth_schema().map(|s| s.to_string()),
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,

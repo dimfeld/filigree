@@ -99,7 +99,7 @@ impl<'a> GeneratorMap<'a> {
     }
 }
 
-fn build_models(config: &Config, mut config_models: Vec<Model>) -> Vec<Model> {
+fn build_models(config: &Config, mut config_models: Vec<Model>) -> Result<Vec<Model>, Error> {
     let mut models = Model::create_default_models(config);
     // See if any of the built-in models have been customized
     for model in models.iter_mut() {
@@ -122,10 +122,22 @@ fn build_models(config: &Config, mut config_models: Vec<Model>) -> Vec<Model> {
     models.extend(config_models.into_iter());
 
     for model in &mut models {
-        model.apply_config(config)?;
+        model.apply_config(config);
     }
 
-    models
+    let model_tables = models
+        .iter()
+        .map(|model| (model.name.clone(), model.full_table()))
+        .collect::<HashMap<_, _>>();
+    for model in &mut models {
+        for f in &mut model.fields {
+            if let Some(r) = f.references.as_mut() {
+                r.fill_table(&model.name, &f.name, &model_tables)?;
+            }
+        }
+    }
+
+    Ok(models)
 }
 
 pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
@@ -175,7 +187,7 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
 
     let renderer = crate::templates::Renderer::new(formatter.clone());
 
-    let models = build_models(&config, config_models);
+    let models = build_models(&config, config_models)?;
     let model_map = ModelMap::new(&models);
 
     crate::model::validate::validate_model_configuration(&config, &model_map)?;
@@ -267,7 +279,7 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         m1.order_by_dependency(m2).reverse()
     });
 
-    let (first_fixed_migrations, last_fixed_migrations) = ModelGenerator::fixed_migrations();
+    let (first_fixed_migrations, last_fixed_migrations) = ModelGenerator::fixed_migrations(&config);
 
     let migrations = first_fixed_migrations
         .into_iter()

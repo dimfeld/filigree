@@ -16,7 +16,10 @@ use self::{
     field::{Access, ModelField, ModelFieldReference, SqlType},
     file::FileModelOptions,
 };
-use crate::{config::custom_endpoint::CustomEndpoint, Error};
+use crate::{
+    config::{custom_endpoint::CustomEndpoint, Config},
+    Error,
+};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Model {
@@ -139,8 +142,13 @@ impl Model {
         self.plural().to_case(Case::Snake)
     }
 
-    pub fn schema() -> &str {
+    pub fn schema(&self) -> &str {
         self.schema.as_deref().unwrap_or("public")
+    }
+
+    /// The table including schema and table name
+    pub fn full_table(&self) -> String {
+        format!("{}.{}", self.schema(), self.table())
     }
 
     pub fn id_prefix(&self) -> Cow<str> {
@@ -287,9 +295,9 @@ impl Model {
     pub fn apply_config(&mut self, config: &Config) {
         if self.schema.is_none() {
             self.schema = if self.is_auth_model {
-                Some(config.auth_schema().clone())
+                config.database.auth_schema().map(|s| s.to_string())
             } else {
-                Some(config.model_schema().clone())
+                config.database.model_schema().map(|s| s.to_string())
             };
         }
     }
