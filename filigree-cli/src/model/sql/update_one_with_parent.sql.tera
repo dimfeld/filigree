@@ -4,7 +4,7 @@ WITH permissions AS (
   {{ macros::permissions_lookup(actor_ids="$4", organization="$3", owner_perm=owner_permission, user_perm=write_permission) }}
 )
 UPDATE
-  {{table}}
+  {{schema}}.{{table}}
 SET
   {% for field in fields | filter(attribute='owner_write_non_parent', value=true) %}
     {% if field.user_write %}

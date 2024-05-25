@@ -136,7 +136,11 @@ impl Model {
     }
 
     pub fn table(&self) -> String {
-        format!("{}.{}", self.schema, self.plural().to_case(Case::Snake))
+        self.plural().to_case(Case::Snake)
+    }
+
+    pub fn schema() -> &str {
+        self.schema.as_deref().unwrap_or("public")
     }
 
     pub fn id_prefix(&self) -> Cow<str> {

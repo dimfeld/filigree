@@ -6,7 +6,7 @@
 {% set p = 2 %}
 {% endif %}
 
-INSERT INTO {{table}}
+INSERT INTO {{schema}}.{{table}}
 (
   id,
   {% if not global %}

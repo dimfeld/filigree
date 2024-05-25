@@ -164,6 +164,7 @@ impl AuthConfig {
         json!({
             "provider": &self.provider,
             "string_ids": self.string_ids(),
+            "id_sql_type": self.id_type().to_sql_type(SqlDialect::Postgresql),
             // This comes up a lot so we add a special flag for it.
             "builtin": matches!(self.provider, AuthProvider::BuiltIn),
             "has_default_models": self.has_default_models(),
@@ -176,6 +177,14 @@ impl AuthConfig {
 
     pub fn string_ids(&self) -> bool {
         self.string_ids || !matches!(self.provider, AuthProvider::BuiltIn)
+    }
+
+    pub fn id_type(&self) -> SqlType {
+        if self.string_ids() {
+            SqlType::Text
+        } else {
+            SqlType::Uuid
+        }
     }
 }
 

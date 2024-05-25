@@ -1,4 +1,4 @@
-CREATE TABLE {{table}} (
+CREATE TABLE {{schema}}.{{table}} (
   {% for field in fields -%}
     {{ field.sql_name }} {{ field.sql_type }}
     {%- if not field.nullable %} NOT NULL {% endif -%}
@@ -13,14 +13,14 @@ CREATE TABLE {{table}} (
 );
 
 {% for field in fields | filter(attribute="indexed", value=true) %}
-CREATE {% if field.unique %}UNIQUE {% endif -%} INDEX {{table}}_{{field.sql_name}} ON {{table}} ({% if not global and field.sql_name != 'organization_id' %}organization_id, {% endif%}{{field.sql_name}});
+CREATE {% if field.unique %}UNIQUE {% endif -%} INDEX {{table}}_{{field.sql_name}} ON {{schema}}.{{table}} ({% if not global and field.sql_name != 'organization_id' %}organization_id, {% endif%}{{field.sql_name}});
 {% endfor %}
 
 {% if index_updated_at %}
-CREATE INDEX {{table}}_updated_at ON {{table}} (organization_id, updated_at DESC);
+CREATE INDEX {{table}}_updated_at ON {{schema}}.{{table}} (organization_id, updated_at DESC);
 {% endif %}
 {% if index_created_at %}
-CREATE INDEX {{table}}_created_at ON {{table}} (organization_id, created_at DESC);
+CREATE INDEX {{table}}_created_at ON {{schema}}.{{table}} (organization_id, created_at DESC);
 {% endif %}
 
 {% for i in indexes %}

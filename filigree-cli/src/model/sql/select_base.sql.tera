@@ -57,6 +57,7 @@ FROM
   {% endfor %}
 {% endif %}
 JOIN LATERAL ({{ macros::permissions_value(
+      auth_schema=auth_schema,
       auth_scope=auth_scope,
       object_id="$1",
       organization="$2",

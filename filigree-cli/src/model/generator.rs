@@ -11,7 +11,7 @@ use super::{
         Access, FilterableType, ModelField, ModelFieldReference, ReferencePopulation,
         ReferentialAction, SqlType,
     },
-    Endpoints, HasModel, Model,
+    Endpoints, HasModel, Model, SqlDialect,
 };
 use crate::{
     config::{web::WebFramework, AuthProvider, Config},
@@ -88,6 +88,17 @@ impl<'a> ModelGenerator<'a> {
     pub fn fixed_migrations(
         config: &'a Config,
     ) -> (Vec<SingleMigration<'static>>, Vec<SingleMigration<'static>>) {
+        let mut ctx = tera::Context::new();
+        ctx.insert(
+            "model_schema",
+            config.database.model_schema().unwrap_or("public"),
+        );
+        ctx.insert(
+            "auth_schema",
+            config.database.auth_schema().unwrap_or("public"),
+        );
+        ctx.insert("auth", &config.auth.template_context());
+
         let mut before_up = vec![
             SingleMigration {
                 name: "object_id_functions".to_string(),
@@ -123,8 +134,7 @@ impl<'a> ModelGenerator<'a> {
             });
         }
 
-        // TODO need to run these through the templating
-        let after_up = vec![
+        let mut after_up = vec![
             SingleMigration {
                 name: "user_info".to_string(),
                 model: None,
@@ -144,6 +154,15 @@ impl<'a> ModelGenerator<'a> {
                 down: Cow::from(include_str!("../../sql/create_object_permissions.down.sql")),
             },
         ];
+
+        for m in &mut before_up {
+            m.up = Cow::from(tera::Tera::one_off(&m.up, &ctx, false));
+            m.down = Cow::from(tera::Tera::one_off(&m.down, &ctx, false));
+        }
+        for m in &mut after_up {
+            m.up = Cow::from(tera::Tera::one_off(&m.up, &ctx, false));
+            m.down = Cow::from(tera::Tera::one_off(&m.down, &ctx, false));
+        }
 
         (before_up, after_up)
     }
@@ -526,6 +545,7 @@ impl<'a> ModelGenerator<'a> {
             "sql_dialect": sql_dialect,
             "name": self.name,
             "plural": self.plural(),
+            "schema": self.model.schema(),
             "table": self.table(),
             "indexes": self.indexes,
             "global": self.global,

@@ -3,7 +3,7 @@ WITH permissions AS (
   {{ macros::permissions_lookup(actor_ids="$3", organization="$2", owner_perm=owner_permission, user_perm=write_permission) }}
 )
 UPDATE
-  {{table}}
+  {{schema}}.{{table}}
 SET
   {% for field in fields | filter(attribute='owner_write', value=true) %}
     {% if field.user_write %}
