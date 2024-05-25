@@ -85,8 +85,10 @@ impl<'a> ModelGenerator<'a> {
         self.context = Some(context);
     }
 
-    pub fn fixed_migrations() -> (Vec<SingleMigration<'static>>, Vec<SingleMigration<'static>>) {
-        let before_up = vec![
+    pub fn fixed_migrations(
+        config: &'a Config,
+    ) -> (Vec<SingleMigration<'static>>, Vec<SingleMigration<'static>>) {
+        let mut before_up = vec![
             SingleMigration {
                 name: "object_id_functions".to_string(),
                 model: None,
@@ -100,6 +102,26 @@ impl<'a> ModelGenerator<'a> {
                 down: Cow::from(include_str!("../../sql/delete_log.down.sql")),
             },
         ];
+
+        let mut schema_up = String::new();
+        let model_schema = config.database.model_schema().unwrap_or_default();
+        let auth_schema = config.database.auth_schema().unwrap_or_default();
+        if !model_schema.is_empty() {
+            schema_up.push_str(&format!("CREATE SCHEMA IF NOT EXISTS {model_schema};\n"));
+        }
+
+        if !auth_schema.is_empty() && auth_schema != model_schema {
+            schema_up.push_str(&format!("CREATE SCHEMA IF NOT EXISTS {auth_schema};\n"));
+        }
+
+        if !schema_up.is_empty() {
+            before_up.push(SingleMigration {
+                name: "schema".to_string(),
+                model: None,
+                up: Cow::from(schema_up),
+                down: Cow::from(""),
+            });
+        }
 
         // TODO need to run these through the templating
         let after_up = vec![
