@@ -14,7 +14,7 @@ use super::{
     Endpoints, HasModel, Model,
 };
 use crate::{
-    config::{web::WebFramework, Config},
+    config::{web::WebFramework, AuthProvider, Config},
     migrations::SingleMigration,
     model::{field::SortableType, ReferenceFetchType},
     templates::{ModelRustTemplates, ModelSqlTemplates, ModelSvelteTemplates, Renderer},
@@ -65,6 +65,14 @@ impl<'a> ModelGenerator<'a> {
             children,
             context: None,
         })
+    }
+
+    fn auth_id_type(&self) -> SqlType {
+        if self.config.auth.string_ids() {
+            SqlType::Text
+        } else {
+            SqlType::Uuid
+        }
     }
 
     pub fn template_context(&self) -> &tera::Context {
@@ -540,11 +548,17 @@ impl<'a> ModelGenerator<'a> {
     }
 
     fn id_field(&self) -> ModelField {
+        let typ = if self.model.name == "User" || self.model.name == "Organization" {
+            self.auth_id_type()
+        } else {
+            SqlType::Uuid
+        };
+
         ModelField {
             name: "id".to_string(),
             label: None,
             description: None,
-            typ: SqlType::Uuid,
+            typ,
             rust_type: Some(self.object_id_type()),
             zod_type: Some("z.string()".to_string()),
             nullable: false,
@@ -575,7 +589,7 @@ impl<'a> ModelGenerator<'a> {
 
             Some(ModelField {
                 name: "organization_id".to_string(),
-                typ: SqlType::Uuid,
+                typ: self.auth_id_type(),
                 label: None,
                 description: None,
                 rust_type: Some("crate::models::organization::OrganizationId".to_string()),

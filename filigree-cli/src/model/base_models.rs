@@ -48,6 +48,12 @@ impl Model {
             .map(|m| m.fields.clone())
             .unwrap_or_default();
 
+        let auth_id_type = if config.auth.string_ids() {
+            SqlType::Text
+        } else {
+            SqlType::Uuid
+        };
+
         vec![
             Model {
                 name: "User".to_string(),
@@ -142,14 +148,14 @@ impl Model {
                             )
                             .with_deferrable(crate::model::field::Deferrable::InitiallyImmediate),
                         ),
-                        ..simple_model_field("owner", SqlType::Uuid)
+                        ..simple_model_field("owner", auth_id_type)
                     },
                     ModelField {
                         rust_type: Some("crate::models::role::RoleId".to_string()),
                         user_access: Access::None,
                         nullable: true,
                         references: None,
-                        ..simple_model_field("default_role", SqlType::Uuid)
+                        ..simple_model_field("default_role", auth_id_type)
                     },
                     ModelField {
                         user_access: Access::None,

@@ -221,6 +221,12 @@ impl Model {
 
     /// Return true if this table depends on the `other` table in some way.
     fn depends_on(&self, other: &Model) -> bool {
+        if other.name == "Organization" {
+            // Everything except User depends on organization. This is hardcoded here because
+            // this function doesn't look at the "standard" fields.
+            return self.name != "User";
+        }
+
         if self
             .joins
             .as_ref()
@@ -236,12 +242,12 @@ impl Model {
             }
         }
 
-        if other.fields.iter().any(|f| {
+        if self.fields.iter().any(|f| {
             let Some(r) = &f.references else {
                 return false;
             };
 
-            r.table == self.table()
+            r.table == other.table()
         }) {
             return true;
         }
