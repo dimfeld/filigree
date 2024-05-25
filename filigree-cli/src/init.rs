@@ -11,7 +11,7 @@ use rand::Rng;
 use crate::{
     config::{
         web::{WebConfig, WebFramework},
-        Config, DatabaseConfig, EmailConfig, ErrorReportingConfig, ServerConfig,
+        AuthConfig, Config, DatabaseConfig, EmailConfig, ErrorReportingConfig, ServerConfig,
     },
     print_env::{EnvVarOverrides, PrintConfig},
     Error,
@@ -231,7 +231,7 @@ pub fn run(cmd: Command) -> Result<(), Report<Error>> {
             provider: crate::config::EmailProvider::None,
             from: "support@example.com".to_string(),
         },
-        auth_provider: crate::config::AuthProvider::BuiltIn,
+        auth: AuthConfig::default(),
         secrets: Default::default(),
         shared_types: Default::default(),
         default_auth_scope: crate::model::ModelAuthScope::Model,

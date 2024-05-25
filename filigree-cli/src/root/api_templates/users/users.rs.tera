@@ -3,13 +3,15 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, routing};
 use axum_jsonschema::Json;
 use error_stack::{Report, ResultExt};
 use filigree::{
-    auth::password::{new_hash, HashedPassword},
     extract::FormOrJson,
+    {% if auth.builtin %}
+    auth::password::{new_hash, HashedPassword},
     users::{
         organization::add_user_to_organization,
         roles::add_default_role_to_user,
         users::{add_user_email_login, CreateUserDetails, UserCreatorError},
     },
+    {% endif %}
 };
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -25,6 +27,7 @@ use crate::{
     Error,
 };
 
+{% if auth.builtin %}
 /// Create a new user, with the given password. This only creates the user object, and
 /// does not add any entries to other related tables such as email_logins or organization_members.
 pub async fn create_new_user_with_plaintext_password(
@@ -86,7 +89,7 @@ impl UserCreator {
         user_id: Option<UserId>,
         details: CreateUserDetails,
     ) -> Result<(UserId, OrganizationId), Report<UserCreatorError>> {
-        let user_id = UserId::new();
+        let user_id = user_id.unwrap_or_else(|| UserId::new());
         let organization_fut = async {
             match add_to_organization {
                 Some(organization_id) => {
@@ -175,10 +178,12 @@ impl filigree::users::users::UserCreator for UserCreator {
     }
 }
 
+{% endif %} {# if auth.builtin #}
+
 /// The current user and other information to return to the client.
 #[derive(Serialize, Debug, JsonSchema)]
 pub struct SelfUser {
-    user: crate::models::user::User,
+    {% if auth.has_default_models %}user: crate::models::user::User,{% endif %}
     roles: Vec<crate::models::role::RoleId>,
     permissions: Vec<String>,
 }
@@ -187,12 +192,16 @@ async fn get_current_user_endpoint(
     State(state): State<ServerState>,
     authed: Authed,
 ) -> Result<impl IntoResponse, Error> {
+    {% if auth.has_default_models %}
     // TODO This should be a more custom query, include organization info and permissions
     // and such, and work even if the user doesn't have the User:read permission.
     let user = crate::models::user::queries::get(&state.db, &authed, authed.user_id).await?;
+    {% elif auth.provider == "custom" %}
+    // CUSTOM-AUTH Potentially add additional user information here
+    {% endif %}
 
     let user = SelfUser {
-        user,
+        {% if auth.has_default_models %}user,{% endif %}
         roles: authed.roles.clone(),
         permissions: authed.permissions.clone(),
     };
@@ -200,6 +209,7 @@ async fn get_current_user_endpoint(
     Ok(Json(user))
 }
 
+{% if auth.builtin %}
 async fn update_current_user_endpoint(
     State(state): State<ServerState>,
     authed: Authed,
@@ -218,11 +228,14 @@ async fn update_current_user_endpoint(
     };
     Ok(status)
 }
+{% endif %}
 
 pub fn create_routes() -> axum::Router<ServerState> {
     axum::Router::new()
         .route("/self", routing::get(get_current_user_endpoint))
+        {% if auth.builtin -%}
         .route("/self", routing::put(update_current_user_endpoint))
+        {%- endif %}
 }
 
 #[cfg(test)]
@@ -245,9 +258,12 @@ mod test {
             .await
             .unwrap();
 
+        {% if auth.builtin -%}
         assert_eq!(user_info["user"]["name"], "Admin");
+        {%- endif %}
     }
 
+    {% if auth.builtin %}
     #[sqlx::test]
     async fn update_current_user(db: sqlx::PgPool) {
         let (app, BootstrappedData { admin_user, .. }) = start_app(db).await;
@@ -283,4 +299,5 @@ mod test {
         assert_eq!(user_info["user"]["name"], "Not Admin");
         assert_eq!(user_info["user"]["email"], "another-email@example.com");
     }
+    {% endif %}
 }

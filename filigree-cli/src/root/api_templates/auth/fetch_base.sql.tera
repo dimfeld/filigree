@@ -1,3 +1,4 @@
+{% if auth.builtin %}
 WITH base_lookup AS (
   {% block base_lookup %}{% endblock base_lookup %}
 ),
@@ -34,3 +35,4 @@ SELECT
   {% block anonymous %}false{% endblock anonymous %} as "anonymous!"
 FROM base_lookup bl
 LEFT JOIN permissions ON TRUE
+{% endif %}

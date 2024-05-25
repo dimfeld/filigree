@@ -21,6 +21,16 @@ use crate::auth::AuthInfo;
 use crate::Error;
 {{rust_imports}}
 
+
+{% macro db_org_id(base="auth.organization_id") -%}
+{{base}}
+{%- if auth.string_ids -%}
+.as_str()
+{%- else -%}
+.as_uuid()
+{%- endif -%}
+{% endmacro input %}
+
 type QueryAs<'q, T> = sqlx::query::QueryAs<'q, sqlx::Postgres, T, <sqlx::Postgres as sqlx::database::HasArguments<'q>>::Arguments>;
 
 {% if belongs_to_field %}
@@ -42,7 +52,7 @@ pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -> R
     let actor_ids = auth.actor_ids();
     let object = query_file_as!({{struct_base}}, "{{dir}}/select_one.sql",
         id.as_uuid(),
-        auth.organization_id.as_uuid(),
+        {{self::db_org_id()}},
         &actor_ids
         )
         .fetch_optional(db)
@@ -60,7 +70,7 @@ pub async fn get_populated(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_ty
     let actor_ids = auth.actor_ids();
     let object = query_file_as!({{struct_base}}PopulatedGetResult, "{{dir}}/select_one_populated.sql",
         id.as_uuid(),
-        auth.organization_id.as_uuid(),
+        {{self::db_org_id()}},
         &actor_ids
         )
         .fetch_optional(db)
@@ -304,7 +314,7 @@ pub async fn create(db: &mut PgConnection, auth: &AuthInfo, payload: {{struct_ba
     {% else %}
     let id = {{id_type}}::new();
     {% endif %}
-    create_raw(&mut *db, id, auth.organization_id, payload).await
+    create_raw(&mut *db, id, auth.organization_id.clone(), payload).await
 }
 
 /// Create a new {{struct_base}} in the database, allowing the ID to be explicitly specified
@@ -320,7 +330,7 @@ pub async fn create_raw(
     let result = query_file_as!({{struct_base}}, "{{dir}}/insert.sql",
         id.as_uuid(),
         {% if not global -%}
-        organization_id.as_uuid(),
+        {{self::db_org_id(base="organization_id")}},
         {%- endif %}
         {% for field in fields | filter(attribute="owner_write", value=true) %}
             {%- if field.nullable -%}
@@ -436,7 +446,7 @@ pub async fn update(
     let actor_ids = auth.actor_ids();
     let result = query_file_scalar!("{{dir}}/update.sql",
         id.as_uuid(),
-        auth.organization_id.as_uuid(),
+        {{self::db_org_id()}},
         &actor_ids,
         {% for field in fields | filter(attribute="owner_write", value=true) %}
             {%- if field.nullable -%}
@@ -506,7 +516,7 @@ pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_type}}) -
     let actor_ids = auth.actor_ids();
     let result = query_file!("{{dir}}/delete.sql",
         id.as_uuid(),
-        auth.organization_id.as_uuid(),
+        {{self::db_org_id()}},
         &actor_ids
         )
         .execute(db)
@@ -525,7 +535,7 @@ pub async fn lookup_object_permissions(
     let actor_ids = auth.actor_ids();
     let result = query_file_scalar!(
         "{{dir}}/lookup_object_permissions.sql",
-        auth.organization_id.as_uuid(),
+        {{self::db_org_id()}},
         &actor_ids,
         {% if auth_scope == "object" %}
         id.as_uuid(),
@@ -562,7 +572,7 @@ pub async fn upsert_with_parent(
         {% endif %}
         id.as_uuid(),
         {% if not global -%}
-        organization_id.as_uuid(),
+        {{self::db_org_id(base="organization_id")}},
         {%- endif %}
         {% for field in fields | filter(attribute="owner_write", value=true) %}
             {%- if field.nullable -%}
@@ -595,7 +605,7 @@ pub async fn update_one_with_parent(
     let result = query_file!("{{dir}}/update_one_with_parent.sql",
         id.as_uuid(),
         parent_id.as_uuid(),
-        auth.organization_id.as_uuid(),
+        {{self::db_org_id(base="organization_id")}},
         &actor_ids,
         {% for field in fields | filter(attribute="owner_write_non_parent", value=true) %}
             {%- if field.nullable -%}
@@ -642,7 +652,7 @@ pub async fn update_all_with_parent(
         query = query
             .bind(is_owner)
             {%if not global %}
-            .bind(organization_id.as_uuid())
+            .bind(&organization_id)
             {%endif %}
             .bind(parent_id.as_uuid());
 
@@ -671,7 +681,7 @@ pub async fn update_all_with_parent(
         let ids = results.iter().map(|o| o.id.as_uuid().clone()).collect::<Vec<_>>();
         query_file!("{{dir}}/delete_removed_children.sql",
             {%if not global %}
-            organization_id.as_uuid(),
+            {{self::db_org_id(base="organization_id")}},
             {% endif %}
             parent_id.as_uuid(),
             &ids
@@ -696,7 +706,7 @@ pub async fn delete_with_parent(
 
     let result = query_file!("{{dir}}/delete_with_parent.sql",
         {%if not global %}
-        auth.organization_id.as_uuid(),
+        {{self::db_org_id()}},
         {% endif %}
         parent_id.as_uuid(),
         child_id.as_uuid(),
@@ -717,7 +727,7 @@ pub async fn delete_all_children_of_parent(
 
     let result = query_file!("{{dir}}/delete_all_children.sql",
         {%if not global %}
-        organization_id.as_uuid(),
+        {{self::db_org_id(base="organization_id")}},
         {% endif %}
         parent_id.as_uuid()
         )

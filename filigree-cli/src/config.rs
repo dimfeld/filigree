@@ -14,6 +14,7 @@ use std::{
 use error_stack::{Report, ResultExt};
 use glob::glob;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_json::json;
 
 use self::{
     generators::EndpointPath,
@@ -50,6 +51,9 @@ pub struct Config {
     pub server: ServerConfig,
 
     #[serde(default)]
+    pub auth: AuthConfig,
+
+    #[serde(default)]
     pub web: WebConfig,
 
     #[serde(default)]
@@ -69,9 +73,6 @@ pub struct Config {
     /// Typescript. These types must derive or otherwise implement the [schemars::JsonSchema] trait.
     #[serde(default)]
     pub shared_types: Vec<String>,
-
-    #[serde(default)]
-    pub auth_provider: AuthProvider,
 
     #[serde(default)]
     pub formatter: FormatterConfig,
@@ -139,6 +140,34 @@ impl Config {
 
     pub const fn default_sql_dialect() -> SqlDialect {
         SqlDialect::Postgresql
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct AuthConfig {
+    #[serde(default)]
+    pub provider: AuthProvider,
+
+    /// When using the "custom" AuthProvider, set this to true to make the User and Organization
+    /// IDs strings instead of UUIDs.
+    #[serde(default)]
+    pub string_ids: bool,
+
+    /// Don't generate the default User, Organization, and Role models or other tables around them.
+    /// This is ignored when using the built-in auth provider.
+    #[serde(default)]
+    pub suppress_default_models: bool,
+}
+
+impl AuthConfig {
+    pub fn template_context(&self) -> serde_json::Value {
+        json!({
+            "provider": &self.provider,
+            "string_ids": &self.string_ids,
+            // This comes up a lot so we add a special flag for it.
+            "builtin": matches!(self.provider, AuthProvider::BuiltIn),
+            "has_default_models": !self.suppress_default_models || matches!(self.provider, AuthProvider::BuiltIn),
+        })
     }
 }
 

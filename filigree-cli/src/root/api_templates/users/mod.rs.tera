@@ -1,4 +1,6 @@
-pub mod organization;
+{% if auth.builtin %}pub mod organization;{% endif %}
 pub mod users;
 
+{% if auth.builtin %}
 pub use filigree::users::roles;
+{% endif %}

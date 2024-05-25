@@ -2,7 +2,13 @@ product_name = "Filigree Custom Auth Test App"
 company_name = "Daniel Imfeld"
 
 default_auth_scope = "model"
-auth_provider = "custom"
+
+[auth]
+provider = "custom"
+# The user and org IDs are strings in this system
+string_ids = true
+# Don't generate the default user/org/role tables and related things.
+suppress_default_models = true
 
 [error_reporting]
 provider = "sentry"

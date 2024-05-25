@@ -533,6 +533,7 @@ impl<'a> ModelGenerator<'a> {
         });
 
         let mut context = tera::Context::from_value(json_value).unwrap();
+        context.insert("auth", &self.config.auth.template_context());
         self.add_rust_structs_to_context(&mut context)?;
 
         Ok(context)

@@ -325,8 +325,8 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
             db: config.pg_pool.clone(),
             email: config.email_sender,
             hosts: config.hosts,
-            user_creator: Box::new(crate::users::users::UserCreator),
             {% if auth.builtin -%}
+            user_creator: Box::new(crate::users::users::UserCreator),
             oauth_providers: config.oauth_providers.unwrap_or_else(|| {
                 filigree::auth::oauth::providers::create_supported_providers(
                     "{{env_prefix}}",
@@ -379,8 +379,10 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
     let api_routes: Router<ServerState> = Router::new()
         .route("/healthz", get(health::healthz))
         .nest("/meta", meta::create_routes())
+        {% if auth.builtin -%}
         .merge(filigree::auth::endpoints::create_routes())
         .merge(filigree::auth::oauth::create_routes())
+        {%- endif %}
         .merge(crate::models::create_routes())
         .merge(crate::users::users::create_routes())
         .merge(crate::auth::create_routes())
