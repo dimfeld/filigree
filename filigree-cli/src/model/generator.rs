@@ -99,40 +99,48 @@ impl<'a> ModelGenerator<'a> {
         );
         ctx.insert("auth", &config.auth.template_context());
 
+        let schema_up = {
+            let mut schema_up = String::new();
+            let model_schema = config.database.model_schema().unwrap_or_default();
+            let auth_schema = config.database.auth_schema().unwrap_or_default();
+            if !model_schema.is_empty() {
+                schema_up.push_str(&format!("CREATE SCHEMA IF NOT EXISTS {model_schema};\n"));
+            }
+
+            if !auth_schema.is_empty() && auth_schema != model_schema {
+                schema_up.push_str(&format!("CREATE SCHEMA IF NOT EXISTS {auth_schema};\n"));
+            }
+
+            if !schema_up.is_empty() {
+                Some(SingleMigration {
+                    name: "schema".to_string(),
+                    model: None,
+                    up: Cow::from(schema_up),
+                    down: Cow::from(""),
+                })
+            } else {
+                None
+            }
+        };
+
         let mut before_up = vec![
-            SingleMigration {
+            schema_up,
+            Some(SingleMigration {
                 name: "object_id_functions".to_string(),
                 model: None,
                 up: Cow::from(include_str!("../../sql/object_id_functions.up.sql")),
                 down: Cow::from(include_str!("../../sql/object_id_functions.down.sql")),
-            },
-            SingleMigration {
+            }),
+            Some(SingleMigration {
                 name: "delete_log".to_string(),
                 model: None,
                 up: Cow::from(include_str!("../../sql/delete_log.up.sql")),
                 down: Cow::from(include_str!("../../sql/delete_log.down.sql")),
-            },
-        ];
-
-        let mut schema_up = String::new();
-        let model_schema = config.database.model_schema().unwrap_or_default();
-        let auth_schema = config.database.auth_schema().unwrap_or_default();
-        if !model_schema.is_empty() {
-            schema_up.push_str(&format!("CREATE SCHEMA IF NOT EXISTS {model_schema};\n"));
-        }
-
-        if !auth_schema.is_empty() && auth_schema != model_schema {
-            schema_up.push_str(&format!("CREATE SCHEMA IF NOT EXISTS {auth_schema};\n"));
-        }
-
-        if !schema_up.is_empty() {
-            before_up.push(SingleMigration {
-                name: "schema".to_string(),
-                model: None,
-                up: Cow::from(schema_up),
-                down: Cow::from(""),
-            });
-        }
+            }),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
         let mut after_up = vec![
             SingleMigration {
@@ -433,6 +441,7 @@ impl<'a> ModelGenerator<'a> {
                     "object_id": child_model.object_id_type(),
                     "fields": child_generator.all_fields()?.map(|f| f.template_context()).collect::<Vec<_>>(),
                     "table": child_model.table(),
+                    "schema": child_model.schema(),
                     "url_path": url_path,
                     "parent_field": self.model.foreign_key_id_field_name(),
                     "file_upload": child_model.file_for.as_ref().map(|f| f.1.template_context()),

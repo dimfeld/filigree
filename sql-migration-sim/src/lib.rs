@@ -134,6 +134,15 @@ impl Table {
     pub fn name(&self) -> String {
         self.name.to_string()
     }
+
+    /// The PostgreSQL schema of the table, if set.
+    pub fn schema(&self) -> Option<&str> {
+        if self.name.0.len() == 1 {
+            None
+        } else {
+            Some(self.name.0[0].value.as_str())
+        }
+    }
 }
 
 /// A view in the database

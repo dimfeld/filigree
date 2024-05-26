@@ -106,6 +106,18 @@ pub fn resolve_migration(
 
     let (new_schema, migrations) = parse_new_migrations(new_migrations)?;
 
+    let existing_pg_schemas = existing_schema
+        .tables
+        .iter()
+        .filter_map(|t| t.1.schema())
+        .collect::<HashSet<_>>();
+    let schemas_to_create = new_schema
+        .tables
+        .iter()
+        .filter_map(|t| t.1.schema())
+        .filter(|s| !existing_pg_schemas.contains(s))
+        .collect::<HashSet<_>>();
+
     let tables_to_create = new_schema
         .tables
         .iter()
@@ -155,6 +167,9 @@ pub fn resolve_migration(
         m.statements
             .iter()
             .filter(|s| match s {
+                Statement::CreateSchema { schema_name, .. } => {
+                    schemas_to_create.contains(schema_name.to_string().as_str())
+                }
                 Statement::CreateTable { name, .. } => tables_to_create.contains(&name.to_string()),
                 Statement::CreateIndex { name, .. } => {
                     let Some(name) = name.as_ref() else {
