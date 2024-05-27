@@ -42,6 +42,7 @@
 
 #![warn(missing_docs)]
 use std::{
+    borrow::Cow,
     collections::HashMap,
     ops::{Deref, DerefMut},
     path::Path,
@@ -276,10 +277,24 @@ impl Schema {
         }
     }
 
-    fn create_table(&mut self, name: ObjectName, columns: Vec<ColumnDef>) -> Result<(), Error> {
-        let name_str = name.to_string();
+    fn create_table(&mut self, name: ObjectName, mut columns: Vec<ColumnDef>) -> Result<(), Error> {
+        let name_str = normalized_name(&name).to_string();
         if self.tables.contains_key(&name_str) {
             return Err(Error::TableAlreadyExists(name_str));
+        }
+
+        for c in &mut columns {
+            for option in &mut c.options {
+                match &mut option.option {
+                    ColumnOption::ForeignKey { foreign_table, .. } => {
+                        let table = normalized_name(&foreign_table);
+                        if table.as_ref() != foreign_table {
+                            *foreign_table = table.into_owned();
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
 
         self.tables.insert(
@@ -305,7 +320,7 @@ impl Schema {
         or_replace: bool,
         columns: Vec<String>,
     ) -> Result<(), Error> {
-        let name_str = name.to_string();
+        let name_str = normalized_name(&name).to_string();
         if !or_replace && self.views.contains_key(&name_str) {
             return Err(Error::TableAlreadyExists(name_str));
         }
@@ -328,7 +343,7 @@ impl Schema {
         return_type: Option<DataType>,
         params: CreateFunctionBody,
     ) -> Result<(), Error> {
-        let name_str = name.to_string();
+        let name_str = normalized_name(&name).to_string();
         if !or_replace && self.functions.contains_key(&name_str) {
             return Err(Error::TableAlreadyExists(name_str));
         }
@@ -496,11 +511,21 @@ impl Schema {
                 }
             }
 
-            AlterTableOperation::AddConstraint(c) => {
+            AlterTableOperation::AddConstraint(mut c) => {
                 let table = self
                     .tables
                     .get_mut(name)
                     .ok_or_else(|| Error::AlteredMissingTable(name.to_string()))?;
+
+                match &mut c {
+                    TableConstraint::ForeignKey { foreign_table, .. } => {
+                        let table = normalized_name(&foreign_table);
+                        if table.as_ref() != foreign_table {
+                            *foreign_table = table.into_owned();
+                        }
+                    }
+                    _ => {}
+                }
 
                 table.constraints.push(c);
             }
@@ -537,7 +562,7 @@ impl Schema {
                 operations,
                 ..
             } => {
-                let name = name_ident.to_string();
+                let name = normalized_name(&name_ident).to_string();
                 for operation in operations {
                     self.handle_alter_table(&name, &name_ident, operation)?;
                 }
@@ -681,9 +706,18 @@ pub fn name_with_schema(schema: Option<Ident>, name: Ident) -> ObjectName {
 /// Extract a name into the name and an optional schema.
 pub fn object_schema_and_name(name: &ObjectName) -> (Option<&Ident>, &Ident) {
     if name.0.len() == 2 {
-        (Some(&name.0[0]), &name.0[1])
+        (Some(&name.0[0]).filter(|s| s.value != "public"), &name.0[1])
     } else {
         (None, &name.0[0])
+    }
+}
+
+/// Name, buf if the schema is "public" then remove it.
+pub fn normalized_name(name: &ObjectName) -> Cow<'_, ObjectName> {
+    if name.0.len() == 2 && name.0[0].value == "public" {
+        Cow::Owned(ObjectName(vec![name.0[1].clone()]))
+    } else {
+        Cow::Borrowed(name)
     }
 }
 

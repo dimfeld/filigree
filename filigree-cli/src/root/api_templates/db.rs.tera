@@ -129,7 +129,7 @@ async fn create_superuser_role(
     .await
     .change_context(Error::Db)?;
 
-    role::queries::create_raw(tx, superuser_role_id, org_id, superuser_role).await?;
+    role::queries::create_raw(tx, &superuser_role_id, &org_id, superuser_role).await?;
 
     Ok(superuser_role_id)
 }
