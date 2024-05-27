@@ -669,7 +669,8 @@ impl Schema {
     }
 }
 
-fn name_with_schema(schema: Option<Ident>, name: Ident) -> ObjectName {
+/// Apply a schema to a name
+pub fn name_with_schema(schema: Option<Ident>, name: Ident) -> ObjectName {
     if let Some(schema) = schema {
         ObjectName(vec![schema, name])
     } else {
@@ -677,12 +678,23 @@ fn name_with_schema(schema: Option<Ident>, name: Ident) -> ObjectName {
     }
 }
 
-fn object_schema_and_name(name: &ObjectName) -> (Option<&Ident>, &Ident) {
+/// Extract a name into the name and an optional schema.
+pub fn object_schema_and_name(name: &ObjectName) -> (Option<&Ident>, &Ident) {
     if name.0.len() == 2 {
         (Some(&name.0[0]), &name.0[1])
     } else {
         (None, &name.0[0])
     }
+}
+
+/// Given an index name and the table it's on calculate the name with schema.
+pub fn index_full_name(index_name: &ObjectName, table_name: &ObjectName) -> ObjectName {
+    if index_name.0.len() > 1 {
+        return index_name.clone();
+    }
+
+    let (schema, _) = object_schema_and_name(&table_name);
+    return name_with_schema(schema.cloned(), index_name.0[0].clone());
 }
 
 /// Get the name of a table constraint
