@@ -101,9 +101,9 @@ where
 
     let result = super::queries::upsert_with_parent(
         tx,
-        auth.organization_id,
+        &auth.organization_id,
         true,
-        parent_id,
+        &parent_id,
         &db_payload
     )
         .await?;
@@ -181,9 +181,9 @@ pub async fn upload(
 
     let result = super::queries::upsert_with_parent(
         tx,
-        auth.organization_id,
+        &auth.organization_id,
         true,
-        parent_id,
+        &parent_id,
         &db_payload
     ).await?;
 
@@ -213,7 +213,7 @@ pub async fn delete_by_id(
 ) -> Result<bool, error_stack::Report<Error>> {
 
     let storage_key = get_storage_key_by_id(state, auth, &mut *tx, id).await?;
-    let deleted = super::queries::delete_with_parent(&mut *tx, auth, parent_id, id).await?;
+    let deleted = super::queries::delete_with_parent(&mut *tx, auth, &parent_id, &id).await?;
 
     if deleted {
         delete_by_key(state, &storage_key).await?;
@@ -231,7 +231,7 @@ pub async fn delete_by_parent_id(
 ) -> Result<bool, error_stack::Report<Error>> {
 
     let storage_keys = get_storage_keys_by_parent_id(state, auth, &mut *tx, parent_id).await?;
-    let deleted = super::queries::delete_all_children_of_parent(&mut *tx, auth.organization_id, parent_id).await?;
+    let deleted = super::queries::delete_all_children_of_parent(&mut *tx, &auth.organization_id, &parent_id).await?;
 
     if deleted {
         for key in storage_keys {
@@ -268,7 +268,7 @@ pub async fn get_storage_key_by_id(
     let storage_key = super::queries::get(
         &mut *tx,
         auth,
-        id
+        &id
     )
         .await?
         .file_storage_key;

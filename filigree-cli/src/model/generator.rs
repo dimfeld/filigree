@@ -610,13 +610,17 @@ impl<'a> ModelGenerator<'a> {
             "auth_schema",
             &self.config.database.auth_schema().unwrap_or("public"),
         );
+        context.insert(
+            "id_is_string",
+            &(self.model.is_auth_model && self.config.auth.string_ids()),
+        );
         self.add_rust_structs_to_context(&mut context)?;
 
         Ok(context)
     }
 
     fn id_field(&self) -> ModelField {
-        let typ = if self.model.name == "User" || self.model.name == "Organization" {
+        let typ = if self.model.is_auth_model {
             self.auth_id_type()
         } else {
             SqlType::Uuid
@@ -820,7 +824,7 @@ impl<'a> ModelGenerator<'a> {
                         .model
                         .file_for
                         .as_ref()
-                        .map(|(parent_model, f)| parent_model == &model.name && f.many)
+                        .map(|(parent_model, f)| parent_model == &model.name && !f.many)
                         .unwrap_or(false));
 
                 Ok::<_, Error>(ModelField {
@@ -831,8 +835,8 @@ impl<'a> ModelGenerator<'a> {
                     rust_type: Some(model.object_id_type()),
                     zod_type: None,
                     nullable: belongs_to.optional(),
-                    globally_unique: false,
-                    unique: single_child,
+                    globally_unique: single_child,
+                    unique: false,
                     indexed: belongs_to.indexed(),
                     filterable: FilterableType::Exact,
                     sortable: super::field::SortableType::None,

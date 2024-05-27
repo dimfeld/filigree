@@ -306,7 +306,9 @@ pub async fn create_server(config: Config) -> Result<Server, Report<Error>> {
         .change_context(Error::ServerStart)
         .attach_printable("Unable to parse hosts list")?;
 
+    {% if auth.builtin %}
     let oauth_redirect_base = format!("{}/auth/oauth/login", config.oauth_redirect_url_base);
+    {% endif %}
     let http_client = reqwest::Client::builder()
         .user_agent("{{user_agent}}")
         .build()

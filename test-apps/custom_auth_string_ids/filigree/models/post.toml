@@ -7,6 +7,7 @@ allow_id_in_create = true
 name = "subject"
 type = "text"
 description = "A summary of the post"
+indexed = true
 
 [[fields]]
 name = "body"

@@ -3,7 +3,11 @@ members = [
   "filigree",
   "filigree-cli",
   "sql-migration-sim",
-  "test-apps/*"
+]
+exclude = [
+  "test-apps/custom_auth_string_ids",
+  "test-apps/htmx",
+  "test-apps/sveltekit"
 ]
 resolver = "2"
 

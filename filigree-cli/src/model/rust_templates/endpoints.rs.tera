@@ -21,9 +21,9 @@ async fn get(
     Path(id): Path<{{ id_type }}>,
     ) -> Result<impl IntoResponse, Error> {
     {% if can_populate_get %}
-    let object = queries::get_populated(&state.db, &auth, id).await?;
+    let object = queries::get_populated(&state.db, &auth, &id).await?;
     {% else %}
-    let object = queries::get(&state.db, &auth, id).await?;
+    let object = queries::get(&state.db, &auth, &id).await?;
     {% endif %}
     Ok(Json(object))
 }
@@ -62,7 +62,7 @@ async fn update(
 
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
 
-    let result = queries::update(&mut *tx, &auth, id, payload).await?;
+    let result = queries::update(&mut *tx, &auth, &id, payload).await?;
 
     tx.commit().await.change_context(Error::Db)?;
 
@@ -89,7 +89,7 @@ async fn delete(
     ).await?;
     {%- endfor %}
 
-    let deleted = queries::delete(&mut *tx, &auth, id).await?;
+    let deleted = queries::delete(&mut *tx, &auth, &id).await?;
 
     if !deleted {
         return Ok(StatusCode::NOT_FOUND);
@@ -142,7 +142,7 @@ async fn get_child_{{c.module}}(
     auth: Authed,
     Path((parent_id, child_id)): Path<({{id_type}}, {{c.object_id}})>,
 ) -> Result<impl IntoResponse, Error> {
-    let object = crate::models::{{c.module}}::queries::get(&state.db, &auth, child_id).await?;
+    let object = crate::models::{{c.module}}::queries::get(&state.db, &auth, &child_id).await?;
     if object.{{c.parent_field}} != parent_id {
         return Err(Error::NotFound("Parent {{name}}"));
     }
@@ -204,7 +204,7 @@ async fn update_child_{{c.module}}(
     let object_perm = queries::lookup_object_permissions(
         &state.db,
         &auth,
-        parent_id,
+        &parent_id,
     ).await?
     .unwrap_or(ObjectPermission::Read);
 
@@ -222,8 +222,8 @@ async fn update_child_{{c.module}}(
         &state.db,
         &auth,
         is_owner,
-        parent_id,
-        child_id,
+        &parent_id,
+        &child_id,
         payload).await?;
 
     Ok(Json(result))
@@ -254,8 +254,8 @@ async fn delete_child_{{c.module}}(
     let deleted = crate::models::{{c.module}}::queries::delete_with_parent(
         &state.db,
         &auth,
-        parent_id,
-        child_id,
+        &parent_id,
+        &child_id,
     ).await?;
     {% endif %}
 
@@ -283,7 +283,7 @@ async fn upsert_child_{{c.module}}(
     let object_perm = queries::lookup_object_permissions(
         &state.db,
         &auth,
-        parent_id,
+        &parent_id,
     ).await?
     .unwrap_or(ObjectPermission::Read);
 
@@ -330,9 +330,9 @@ async fn upsert_child_{{c.module}}(
     {% else %}
     let result = crate::models::{{c.module}}::queries::upsert_with_parent(
         &state.db,
-        auth.organization_id,
+        &auth.organization_id,
         object_perm == ObjectPermission::Owner,
-        parent_id,
+        &parent_id,
         &payload).await?;
     {% endif %}
     Ok(Json(result))
@@ -346,7 +346,7 @@ async fn delete_child_{{c.module}}(
     let object_perm = queries::lookup_object_permissions(
         &state.db,
         &auth,
-        parent_id,
+        &parent_id,
     ).await?
     .unwrap_or(ObjectPermission::Read);
 
@@ -371,8 +371,8 @@ async fn delete_child_{{c.module}}(
     {% else %}
     let deleted = crate::models::{{c.module}}::queries::delete_all_children_of_parent(
         &state.db,
-        auth.organization_id,
-        parent_id).await?;
+        &auth.organization_id,
+        &parent_id).await?;
     {% endif %}
 
     if deleted {
@@ -520,8 +520,8 @@ mod test {
             let payload = make_create_payload(i);
             let result = super::queries::create_raw(
                 &mut *tx,
-                id,
-                organization_id,
+                &id,
+                &organization_id,
                 payload.clone(),
             )
             .await

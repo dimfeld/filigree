@@ -38,12 +38,20 @@ pub struct AuthInfo {
 }
 
 impl AuthInfo {
-    pub fn actor_ids(&self) -> Vec<Uuid> {
+    pub fn actor_ids(&self) -> Vec<{% if auth.string_ids %}String{% else %}Uuid{% endif %}> {
+        {% if auth.string_ids %}
+        self.roles
+            .iter()
+            .cloned()
+            .chain(std::iter::once(self.user_id.clone()))
+            .collect::<Vec<_>>()
+        {% else %}
         self.roles
             .iter()
             .map(|id| *id.as_uuid())
             .chain(std::iter::once(*self.user_id.as_uuid()))
             .collect::<Vec<_>>()
+        {% endif %}
     }
 }
 
