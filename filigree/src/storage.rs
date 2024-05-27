@@ -321,6 +321,7 @@ impl Storage {
 /// [object_store::ObjectStore] and [object_store::Signer] trait methods, for providers that support them.
 enum ObjectStore {
     Local(object_store::local::LocalFileSystem),
+    #[cfg(feature = "storage_aws")]
     S3(object_store::aws::AmazonS3),
     Memory(InMemoryStore),
 }
@@ -329,6 +330,7 @@ impl std::fmt::Debug for ObjectStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Local(_) => f.debug_tuple("Local").finish(),
+            #[cfg(feature = "storage_aws")]
             Self::S3(_) => f.debug_tuple("S3").finish(),
             Self::Memory(_) => f.debug_tuple("Memory").finish(),
         }
@@ -339,6 +341,7 @@ impl ObjectStore {
     pub async fn get(&self, location: &Path) -> object_store::Result<GetResult> {
         match self {
             ObjectStore::Local(local) => local.get(location).await,
+            #[cfg(feature = "storage_aws")]
             ObjectStore::S3(s3) => s3.get(location).await,
             ObjectStore::Memory(mem) => mem.get(location).await,
         }
@@ -347,6 +350,7 @@ impl ObjectStore {
     pub async fn put(&self, location: &Path, data: Bytes) -> object_store::Result<PutResult> {
         match self {
             ObjectStore::Local(local) => local.put(location, data).await,
+            #[cfg(feature = "storage_aws")]
             ObjectStore::S3(s3) => s3.put(location, data).await,
             ObjectStore::Memory(mem) => mem.put(location, data).await,
         }
@@ -358,6 +362,7 @@ impl ObjectStore {
     ) -> object_store::Result<(MultipartId, Box<dyn AsyncWrite + Unpin + Send>)> {
         match self {
             ObjectStore::Local(local) => local.put_multipart(location).await,
+            #[cfg(feature = "storage_aws")]
             ObjectStore::S3(s3) => s3.put_multipart(location).await,
             ObjectStore::Memory(mem) => mem.put_multipart(location).await,
         }
@@ -370,6 +375,7 @@ impl ObjectStore {
     ) -> object_store::Result<()> {
         match self {
             ObjectStore::Local(local) => local.abort_multipart(location, id).await,
+            #[cfg(feature = "storage_aws")]
             ObjectStore::S3(s3) => s3.abort_multipart(location, id).await,
             ObjectStore::Memory(_) => Ok(()),
         }
@@ -378,12 +384,16 @@ impl ObjectStore {
     pub async fn delete(&self, location: &Path) -> object_store::Result<()> {
         match self {
             ObjectStore::Local(local) => local.delete(location).await,
+            #[cfg(feature = "storage_aws")]
             ObjectStore::S3(s3) => s3.delete(location).await,
             ObjectStore::Memory(mem) => mem.delete(location).await,
         }
     }
 
     pub fn supports_presigned_urls(&self) -> bool {
-        matches!(&self, ObjectStore::S3(_))
+        #[cfg(feature = "storage_aws")]
+        return matches!(&self, ObjectStore::S3(_));
+        #[cfg(not(feature = "storage_aws"))]
+        return false;
     }
 }

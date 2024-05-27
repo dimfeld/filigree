@@ -1,5 +1,5 @@
 {% if belongs_to_field %}
-DELETE FROM {{table}}
+DELETE FROM {{schema}}.{{table}}
 WHERE
 {% set p = 1 %}
 {% if not global %}

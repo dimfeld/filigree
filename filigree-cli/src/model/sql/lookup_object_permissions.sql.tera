@@ -1,5 +1,6 @@
 {% import "model/sql_macros.tera" as macros %}
 {{ macros::permissions_value(
+  auth_schema=auth_schema,
   auth_scope=auth_scope,
   organization="$1",
   actor_ids="$2",

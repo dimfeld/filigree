@@ -79,6 +79,8 @@ pub enum Error {
     BadJoin(String, String, String, String),
     #[error("Model {0}'s files configuration referenced nonexistent bucket {1}")]
     InvalidStorageBucket(String, String),
+    #[error("Model {0} field {1} reference {2}")]
+    FieldReferenceConfig(String, String, &'static str),
 }
 
 pub fn main() -> Result<(), Report<Error>> {

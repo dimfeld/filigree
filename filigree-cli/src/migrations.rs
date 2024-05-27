@@ -13,7 +13,7 @@ use sql_migration_sim::{
         AlterColumnOperation, AlterTableOperation, ColumnOption, ColumnOptionDef, Ident,
         ObjectName, Statement, TableConstraint,
     },
-    table_constraint_name, Column, Schema, SchemaObjectType, Table,
+    index_full_name, table_constraint_name, Column, Schema, SchemaObjectType, Table,
 };
 
 use crate::{model::Model, Error};
@@ -106,6 +106,18 @@ pub fn resolve_migration(
 
     let (new_schema, migrations) = parse_new_migrations(new_migrations)?;
 
+    let existing_pg_schemas = existing_schema
+        .tables
+        .iter()
+        .filter_map(|t| t.1.schema())
+        .collect::<HashSet<_>>();
+    let schemas_to_create = new_schema
+        .tables
+        .iter()
+        .filter_map(|t| t.1.schema())
+        .filter(|s| !existing_pg_schemas.contains(s))
+        .collect::<HashSet<_>>();
+
     let tables_to_create = new_schema
         .tables
         .iter()
@@ -155,13 +167,19 @@ pub fn resolve_migration(
         m.statements
             .iter()
             .filter(|s| match s {
+                Statement::CreateSchema { schema_name, .. } => {
+                    schemas_to_create.contains(schema_name.to_string().as_str())
+                }
                 Statement::CreateTable { name, .. } => tables_to_create.contains(&name.to_string()),
-                Statement::CreateIndex { name, .. } => {
+                Statement::CreateIndex {
+                    name, table_name, ..
+                } => {
                     let Some(name) = name.as_ref() else {
                         return true;
                     };
 
-                    indices_to_create.contains(&name.to_string())
+                    let full_name = index_full_name(name, table_name);
+                    indices_to_create.contains(&full_name.to_string())
                 }
                 Statement::CreateFunction { name, .. } => {
                     functions_to_create.contains(&name.to_string())

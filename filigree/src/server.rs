@@ -3,19 +3,22 @@ use futures::FutureExt;
 use tokio::signal;
 use tracing::{event, Level};
 
+#[cfg(feature = "local_auth")]
 use crate::{
     auth::{oauth::providers::OAuthProvider, SessionBackend},
-    email::services::EmailSender,
-    error_reporting::ErrorReporter,
     users::users::UserCreator,
 };
+use crate::{email::services::EmailSender, error_reporting::ErrorReporter};
 
 /// Internal state used by the server
 pub struct FiligreeState {
     /// The database connection pool
     pub db: sqlx::PgPool,
+
+    #[cfg(feature = "local_auth")]
     /// User session backend
     pub session_backend: SessionBackend,
+
     /// Functionality for sending emails
     pub email: EmailSender,
     /// A list of hosts that the server is listening on
@@ -27,11 +30,14 @@ pub struct FiligreeState {
     pub http_client: reqwest::Client,
 
     /// Control behavior around adding new users
+    #[cfg(feature = "local_auth")]
     pub new_user_flags: NewUserFlags,
 
+    #[cfg(feature = "local_auth")]
     /// Functionality for creating users in the app using Filigree
     pub user_creator: Box<dyn UserCreator>,
 
+    #[cfg(feature = "local_auth")]
     /// The enabled OAuth Providers. This can be populated using [create_supported_providers].
     pub oauth_providers: Vec<Box<dyn OAuthProvider>>,
 
@@ -87,6 +93,7 @@ impl FiligreeState {
     }
 }
 
+#[cfg(feature = "local_auth")]
 /// Flags controlling new user behavior
 pub struct NewUserFlags {
     /// Allow anyone to sign up

@@ -14,7 +14,7 @@ SELECT
             {% if c.relationship.many -%}COALESCE(ARRAY_AGG({%- endif -%}
               {{c.table}}.id
             {%- if c.relationship.many -%}), ARRAY[]::uuid[]){%- endif -%}
-          FROM {{c.table}}
+          FROM {{c.schema}}.{{c.table}}
           WHERE {{c.parent_field}} = $1 AND organization_id=$2
           {% if not c.relationship.many %}LIMIT 1{% endif %}
         ) AS "{{c.full_get_sql_field_name}}",
@@ -29,7 +29,7 @@ SELECT
                 '_permission', _permission
               )
             {%- if c.relationship.many -%}), ARRAY[]::jsonb[]){%- endif -%}
-          FROM {{c.table}}
+          FROM {{c.schema}}.{{c.table}}
           WHERE {{c.parent_field}} = $1 AND organization_id=$2
           {% if not c.relationship.many %}LIMIT 1{% endif %}
         ) AS "{{c.full_get_sql_field_name}}",
@@ -50,13 +50,14 @@ SELECT
   {% endif %}
   _permission AS "_permission!: filigree::auth::ObjectPermission"
 FROM
-  {{ table }} tb
+  {{schema}}.{{ table }} tb
 {% if populate_children %}
   {% for r in reference_populations | filter(attribute="on_get", value=true) %}
     LEFT JOIN {{r.table}} ref_{{r.name}} ON {{r.table}}.id = tb.{{r.id_field}}
   {% endfor %}
 {% endif %}
 JOIN LATERAL ({{ macros::permissions_value(
+      auth_schema=auth_schema,
       auth_scope=auth_scope,
       object_id="$1",
       organization="$2",

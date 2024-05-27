@@ -1,15 +1,15 @@
-DROP TABLE user_invites;
+{% if auth.builtin %} DROP TABLE {{auth_schema}}.user_invites;
 
-DROP TABLE oauth_authorization_sessions;
+DROP TABLE {{auth_schema}}.oauth_authorization_sessions;
 
-DROP TABLE oauth_logins;
+DROP TABLE {{auth_schema}}.oauth_logins;
 
-DROP TABLE email_logins;
+DROP TABLE {{auth_schema}}.email_logins;
 
-DROP TABLE api_keys;
+DROP TABLE {{auth_schema}}.api_keys;
 
-DROP TABLE organization_members;
+DROP TABLE {{auth_schema}}.organization_members;
 
-DROP TABLE user_sessions;
+DROP TABLE {{auth_schema}}.user_sessions;
 
-DROP TABLE user_roles;
+{% endif %} DROP TABLE {{auth_schema}}.user_roles;

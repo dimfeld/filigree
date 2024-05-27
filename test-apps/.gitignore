@@ -2,6 +2,7 @@ queue.db
 target
 storage
 .state
+Cargo.lock
 */migrations
 */src
 

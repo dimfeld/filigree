@@ -3,7 +3,7 @@ use error_stack::{Report, ResultExt};
 
 use crate::Error;
 
-mod bootstrap;
+{% if auth.builtin %}mod bootstrap;{% endif %}
 
 #[derive(Args, Debug)]
 pub struct DbCommand {
@@ -17,8 +17,10 @@ pub struct DbCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum DbSubcommand {
+    {% if auth.builtin -%}
     /// Create the initial set of data in the database.
     Bootstrap(bootstrap::BootstrapCommand),
+    {%- endif -%}
     /// Update the database with the latest migrations
     Migrate,
 }
@@ -30,7 +32,9 @@ impl DbCommand {
             .change_context(Error::Db)?;
 
         match self.command {
+            {% if auth.builtin -%}
             DbSubcommand::Bootstrap(cmd) => cmd.handle(pg_pool).await,
+            {%- endif %}
             DbSubcommand::Migrate => crate::db::run_migrations(&pg_pool).await,
         }
     }

@@ -1,9 +1,9 @@
 {% import "model/sql_macros.tera" as macros %}
-DELETE FROM {{table}}
+DELETE FROM {{schema}}.{{table}}
 WHERE
   id = $1
   {% if not global %}
     AND organization_id = $2
   {% endif %}
-  AND {{ macros::permissions_check(actor_ids="$3", organization="$2", permissions=owner_permission) }}
+  AND {{ macros::permissions_check(auth_schema=auth_schema, actor_ids="$3", organization="$2", permissions=owner_permission) }}
 

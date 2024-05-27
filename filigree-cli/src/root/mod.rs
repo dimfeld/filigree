@@ -6,10 +6,11 @@ use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
 use itertools::Itertools;
 use rayon::prelude::*;
+use serde_json::json;
 
 use self::pages::{NON_PAGE_NODE_PATH, PAGE_PATH};
 use crate::{
-    config::{web::WebFramework, Config},
+    config::{web::WebFramework, AuthProvider, Config},
     model::generator::ModelGenerator,
     templates::{Renderer, RootApiTemplates, RootHtmxTemplates, RootSvelteTemplates},
     write::{RenderedFile, RenderedFileLocation},
@@ -38,6 +39,7 @@ pub fn render_files(
             .unwrap_or(&config.product_name),
     );
     context.insert("crate_name", &crate_name.to_case(Case::Snake));
+    context.insert("auth", &config.auth.template_context());
     context.insert("email", &config.email);
     context.insert("error_reporting", &config.error_reporting);
     context.insert("server", &config.server);
@@ -71,7 +73,7 @@ pub fn render_files(
         config.server.env_prefix.as_deref().unwrap_or_default(),
     );
     context.insert("users", &config.users);
-    context.insert("db", &config.database);
+    context.insert("db", &config.database.template_context());
 
     let user_model = models
         .iter()

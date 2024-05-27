@@ -1,10 +1,11 @@
-use std::{borrow::Cow, fmt::Display};
+use std::{borrow::Cow, collections::HashMap, fmt::Display};
 
 use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::SqlDialect;
+use crate::Error;
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct ModelField {
@@ -227,7 +228,10 @@ impl ModelField {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelFieldReference {
-    pub table: String,
+    /// The name of the model to reference
+    pub model: Option<String>,
+    /// A table to reference, if you want to reference a table not in a model.
+    pub table: Option<String>,
     pub field: String,
     pub on_delete: Option<ReferentialAction>,
     pub on_update: Option<ReferentialAction>,
@@ -248,18 +252,61 @@ pub struct ReferencePopulation {
 
 impl ModelFieldReference {
     pub fn new(
-        table: impl Into<String>,
+        model: impl Into<String>,
         field: impl Into<String>,
         on_delete: Option<ReferentialAction>,
     ) -> Self {
         Self {
-            table: table.into(),
+            model: Some(model.into()),
+            table: None,
             field: field.into(),
             on_delete,
             on_update: None,
             deferrable: None,
             populate: None,
         }
+    }
+
+    pub fn validate(&self, model_name: &str, field_name: &str) -> Result<(), Error> {
+        if self.model.is_none() && self.table.is_none() {
+            Err(Error::FieldReferenceConfig(
+                model_name.to_string(),
+                field_name.to_string(),
+                "must specify either model or table",
+            ))
+        } else if self.model.is_some() && self.table.is_some() {
+            Err(Error::FieldReferenceConfig(
+                model_name.to_string(),
+                field_name.to_string(),
+                "can not specify both model and table",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn fill_table(
+        &mut self,
+        this_model: &str,
+        this_field: &str,
+        model_tables: &HashMap<String, String>,
+    ) -> Result<(), Error> {
+        if self.table.is_some() {
+            return Ok(());
+        }
+
+        let table = model_tables
+            .get(self.model.as_deref().unwrap())
+            .ok_or_else(|| {
+                Error::MissingModel(
+                    self.model.clone().unwrap(),
+                    this_model.to_string(),
+                    this_field.to_string(),
+                )
+            })?;
+        self.table = Some(table.clone());
+        self.model = None;
+        Ok(())
     }
 
     pub fn with_deferrable(mut self, deferrable: Deferrable) -> Self {
@@ -270,7 +317,14 @@ impl ModelFieldReference {
 
 impl Display for ModelFieldReference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "REFERENCES {} ({})", self.table, self.field)?;
+        write!(
+            f,
+            "REFERENCES {} ({})",
+            self.table
+                .as_deref()
+                .expect("Reference displayed before fill_table was called"),
+            self.field
+        )?;
 
         if let Some(delete_behavior) = self.on_delete {
             write!(f, "ON DELETE {}", delete_behavior)?;

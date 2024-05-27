@@ -48,6 +48,12 @@ impl Model {
             .map(|m| m.fields.clone())
             .unwrap_or_default();
 
+        let auth_id_type = if config.auth.string_ids() {
+            SqlType::Text
+        } else {
+            SqlType::Uuid
+        };
+
         vec![
             Model {
                 name: "User".to_string(),
@@ -77,6 +83,8 @@ impl Model {
                 belongs_to: None,
                 has: vec![],
                 file_for: None,
+                is_auth_model: true,
+                schema: config.database.auth_schema().map(|s| s.to_string()),
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
@@ -125,6 +133,8 @@ impl Model {
                 belongs_to: None,
                 has: vec![],
                 file_for: None,
+                is_auth_model: true,
+                schema: config.database.auth_schema().map(|s| s.to_string()),
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,
@@ -134,22 +144,20 @@ impl Model {
                         rust_type: Some("crate::models::user::UserId".to_string()),
                         user_access: Access::None,
                         nullable: true,
-                        references: Some(
-                            ModelFieldReference::new(
-                                "users",
-                                "id",
-                                Some(ReferentialAction::SetNull),
-                            )
-                            .with_deferrable(crate::model::field::Deferrable::InitiallyImmediate),
-                        ),
-                        ..simple_model_field("owner", SqlType::Uuid)
+                        references: config.auth.builtin().then(|| {
+                            ModelFieldReference::new("User", "id", Some(ReferentialAction::SetNull))
+                                .with_deferrable(
+                                    crate::model::field::Deferrable::InitiallyImmediate,
+                                )
+                        }),
+                        ..simple_model_field("owner", auth_id_type)
                     },
                     ModelField {
                         rust_type: Some("crate::models::role::RoleId".to_string()),
                         user_access: Access::None,
                         nullable: true,
                         references: None,
-                        ..simple_model_field("default_role", SqlType::Uuid)
+                        ..simple_model_field("default_role", auth_id_type)
                     },
                     ModelField {
                         user_access: Access::None,
@@ -184,6 +192,8 @@ impl Model {
                 belongs_to: None,
                 has: vec![],
                 file_for: None,
+                is_auth_model: true,
+                schema: config.database.auth_schema().map(|s| s.to_string()),
                 fields: [
                     ModelField {
                         sortable: super::field::SortableType::DefaultAscending,

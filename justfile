@@ -10,6 +10,7 @@ build-test-apps *FLAGS:
   cd filigree-cli && cargo lbuild
   just build-test-app sveltekit
   just build-test-app htmx
+  just build-test-app custom_auth_string_ids
 
 build-test-app DIR *FLAGS:
   @just write-files {{DIR}} {{FLAGS}}

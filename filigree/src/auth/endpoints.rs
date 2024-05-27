@@ -12,10 +12,7 @@ use serde::{Deserialize, Serialize};
 use tower_cookies::Cookies;
 use uuid::Uuid;
 
-use super::{
-    password::{login_with_password, EmailAndPassword},
-    AuthError, SessionError,
-};
+use super::{password::login_with_password, AuthError, EmailAndPassword, SessionError};
 use crate::{errors::WrapReport, extract::FormOrJson, server::FiligreeState, Message};
 
 /// Try to log in with a username and password, and create a session if successful.

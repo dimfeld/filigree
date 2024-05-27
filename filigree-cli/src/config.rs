@@ -14,6 +14,7 @@ use std::{
 use error_stack::{Report, ResultExt};
 use glob::glob;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_json::json;
 
 use self::{
     generators::EndpointPath,
@@ -25,7 +26,10 @@ use self::{
 };
 use crate::{
     format::FormatterConfig,
-    model::{field::ModelField, Model, ModelAuthScope, SqlDialect},
+    model::{
+        field::{ModelField, SqlType},
+        Model, ModelAuthScope, SqlDialect,
+    },
     state::State,
     Error,
 };
@@ -48,6 +52,9 @@ pub struct Config {
     pub web_dir: PathBuf,
 
     pub server: ServerConfig,
+
+    #[serde(default)]
+    pub auth: AuthConfig,
 
     #[serde(default)]
     pub web: WebConfig,
@@ -140,6 +147,66 @@ impl Config {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct AuthConfig {
+    #[serde(default)]
+    pub provider: AuthProvider,
+
+    /// When using the "custom" AuthProvider, set this to true to make the User and Organization
+    /// IDs strings instead of UUIDs.
+    #[serde(default)]
+    string_ids: bool,
+
+    /// Don't generate the default User, Organization, and Role models or other tables around them.
+    /// This is ignored when using the built-in auth provider.
+    #[serde(default)]
+    pub suppress_default_models: bool,
+}
+
+impl AuthConfig {
+    pub fn template_context(&self) -> serde_json::Value {
+        json!({
+            "provider": &self.provider,
+            "string_ids": self.string_ids(),
+            "id_sql_type": self.id_type().to_sql_type(SqlDialect::Postgresql),
+            // This comes up a lot so we add a special flag for it.
+            "builtin": matches!(self.provider, AuthProvider::BuiltIn),
+            "has_default_models": self.has_default_models(),
+        })
+    }
+
+    pub fn builtin(&self) -> bool {
+        matches!(self.provider, AuthProvider::BuiltIn)
+    }
+
+    pub fn has_default_models(&self) -> bool {
+        !self.suppress_default_models || matches!(self.provider, AuthProvider::BuiltIn)
+    }
+
+    pub fn string_ids(&self) -> bool {
+        self.string_ids || !matches!(self.provider, AuthProvider::BuiltIn)
+    }
+
+    pub fn id_type(&self) -> SqlType {
+        if self.string_ids() {
+            SqlType::Text
+        } else {
+            SqlType::Uuid
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthProvider {
+    /// Generate built-in auth, storing the users/orgs/etc. in the database.
+    #[default]
+    BuiltIn,
+    /// Use a custom auth provider which you will configure and integrate. The template
+    /// will add `CUSTOM-AUTH` comments in the codebase where you should add your code.
+    Custom,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct ErrorReportingConfig {
     pub provider: ErrorReportingProvider,
 }
@@ -227,6 +294,34 @@ pub struct DatabaseConfig {
     /// Defaults to 100
     #[serde(default = "default_max_connections")]
     pub max_connections: u16,
+
+    /// Place database tables in this PostgreSQL schema. Defaults to "public" if omitted.
+    pub model_schema: Option<String>,
+
+    /// Place auth-related tables in this PostgreSQL schema. This includes
+    /// the users, roles, organizations, permissions, and other related tables.
+    /// If omitted this uses the same value as `model_schema`.
+    pub auth_schema: Option<String>,
+}
+
+impl DatabaseConfig {
+    pub fn model_schema(&self) -> Option<&str> {
+        self.model_schema.as_deref()
+    }
+
+    pub fn auth_schema(&self) -> Option<&str> {
+        self.auth_schema.as_deref().or_else(|| self.model_schema())
+    }
+
+    pub fn template_context(&self) -> serde_json::Value {
+        json!({
+            "migrate_on_start": self.migrate_on_start,
+            "min_connections": self.min_connections,
+            "max_connections": self.max_connections,
+            "model_schema": self.model_schema(),
+            "auth_schema": self.auth_schema(),
+        })
+    }
 }
 
 const fn default_min_connections() -> u16 {

@@ -1,1 +1,1 @@
-DROP TABLE {{table}};
+DROP TABLE {{schema}}.{{table}};

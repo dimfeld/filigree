@@ -2,7 +2,7 @@
 -- $1 = has owner permission on the model
 -- $2 = organization_id
 -- $3 = parent_id
-INSERT INTO {{table}}
+INSERT INTO {{schema}}.{{table}}
 (
   id,
   {% if not global %}

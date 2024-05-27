@@ -4,7 +4,10 @@ use cargo_toml::{Dependency, DependencyDetail, Manifest};
 use error_stack::{Report, ResultExt};
 use semver::{Version, VersionReq};
 
-use crate::{config::Config, Error};
+use crate::{
+    config::{AuthProvider, Config},
+    Error,
+};
 
 pub type DepVersion<'a> = (&'a str, &'a str, &'a [&'a str]);
 
@@ -56,7 +59,7 @@ pub fn add_fixed_deps(
     config: &Config,
     manifest: &mut Manifest,
 ) -> Result<(), Report<Error>> {
-    let mut filigree_features = vec![];
+    let mut filigree_features = vec!["tracing", "tracing_export"];
 
     match config.error_reporting.provider {
         crate::config::ErrorReportingProvider::Sentry => {
@@ -87,9 +90,25 @@ pub fn add_fixed_deps(
         crate::config::ErrorReportingProvider::None => {}
     };
 
+    match config.auth.provider {
+        AuthProvider::BuiltIn => filigree_features.push("local_auth"),
+        AuthProvider::Custom => {}
+    }
+
+    if !config.storage.bucket.is_empty() || !config.storage.provider.is_empty() {
+        filigree_features.push("storage");
+        filigree_features.push("storage_aws");
+    }
     filigree_features.extend(config.web.filigree_features());
 
-    add_dep(cwd, manifest, "filigree", "0.2.0", &filigree_features)?;
+    add_dep_with_default_features(
+        cwd,
+        manifest,
+        "filigree",
+        "0.2.0",
+        &filigree_features,
+        false,
+    )?;
 
     for (name, version, features) in DEPS {
         add_dep(cwd, manifest, name, version, features)?;
@@ -113,8 +132,25 @@ pub fn add_dep(
     version: &str,
     features: &[&str],
 ) -> Result<(), Report<Error>> {
+    add_dep_with_default_features(cwd, manifest, name, version, features, true)
+}
+
+pub fn add_dep_with_default_features(
+    cwd: &Path,
+    manifest: &mut Manifest,
+    name: &str,
+    version: &str,
+    features: &[&str],
+    default_features: bool,
+) -> Result<(), Report<Error>> {
     let existing = manifest.dependencies.get(name);
-    let added = add_dep_internal(cwd, existing, name, version, features, "")?;
+    let def = if default_features {
+        ""
+    } else {
+        "--no-default-features"
+    };
+
+    let added = add_dep_internal(cwd, existing, name, version, features, def)?;
 
     if added {
         manifest.dependencies.insert(
@@ -122,6 +158,7 @@ pub fn add_dep(
             cargo_toml::Dependency::Detailed(DependencyDetail {
                 version: Some(version.to_string()),
                 features: features.iter().map(|s| s.to_string()).collect(),
+                default_features,
                 ..Default::default()
             }),
         );

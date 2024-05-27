@@ -1,0 +1,14 @@
+name = "Poll"
+id_prefix = "pol"
+standard_endpoints = true
+belongs_to = "Post"
+
+[[fields]]
+name = "question"
+type = "text"
+
+[[fields]]
+name = "answers"
+type = "json"
+
+

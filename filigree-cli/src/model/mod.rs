@@ -16,7 +16,10 @@ use self::{
     field::{Access, ModelField, ModelFieldReference, SqlType},
     file::FileModelOptions,
 };
-use crate::{config::custom_endpoint::CustomEndpoint, Error};
+use crate::{
+    config::{custom_endpoint::CustomEndpoint, Config},
+    Error,
+};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Model {
@@ -115,6 +118,15 @@ pub struct Model {
     /// If set, this model is a file submodel and `file_for` is its parent.
     #[serde(skip, default)]
     pub(crate) file_for: Option<(String, FileModelOptions)>,
+
+    #[serde(skip, default)]
+    /// Set to true if this model is an "auth" model. This only affects which schema
+    /// it takes.
+    is_auth_model: bool,
+
+    /// The schema to use for this model. If not set, it will use the schema settings
+    /// from the main configuration.
+    pub schema: Option<String>,
 }
 
 impl Model {
@@ -128,6 +140,15 @@ impl Model {
 
     pub fn table(&self) -> String {
         self.plural().to_case(Case::Snake)
+    }
+
+    pub fn schema(&self) -> &str {
+        self.schema.as_deref().unwrap_or("public")
+    }
+
+    /// The table including schema and table name
+    pub fn full_table(&self) -> String {
+        format!("{}.{}", self.schema(), self.table())
     }
 
     pub fn id_prefix(&self) -> Cow<str> {
@@ -221,6 +242,12 @@ impl Model {
 
     /// Return true if this table depends on the `other` table in some way.
     fn depends_on(&self, other: &Model) -> bool {
+        if other.name == "Organization" {
+            // Everything except User depends on organization. This is hardcoded here because
+            // this function doesn't look at the "standard" fields.
+            return self.name != "User";
+        }
+
         if self
             .joins
             .as_ref()
@@ -236,12 +263,15 @@ impl Model {
             }
         }
 
-        if other.fields.iter().any(|f| {
+        if self.fields.iter().any(|f| {
             let Some(r) = &f.references else {
                 return false;
             };
 
-            r.table == self.table()
+            r.table
+                .as_deref()
+                .expect("reference table was not filled in")
+                == other.table()
         }) {
             return true;
         }
@@ -259,6 +289,16 @@ impl Model {
             std::cmp::Ordering::Greater
         } else {
             self.name.cmp(&other.name)
+        }
+    }
+
+    pub fn apply_config(&mut self, config: &Config) {
+        if self.schema.is_none() {
+            self.schema = if self.is_auth_model {
+                config.database.auth_schema().map(|s| s.to_string())
+            } else {
+                config.database.model_schema().map(|s| s.to_string())
+            };
         }
     }
 }

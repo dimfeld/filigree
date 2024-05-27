@@ -1,8 +1,8 @@
-{% macro permissions_check(actor_ids, organization, permissions) %}
+{% macro permissions_check(auth_schema, actor_ids, organization, permissions) %}
  {% set perms = ['org_admin'] | concat(with=permissions) %}
   EXISTS (
     SELECT 1
-    FROM permissions
+    FROM {{auth_schema}}.permissions
     WHERE
     organization_id = {{organization}}
     AND actor_id = ANY({{actor_ids}})
@@ -10,18 +10,18 @@
   )
 {% endmacro permissions_check %}
 
-{% macro permissions_lookup(actor_ids, organization, owner_perm, user_perm) %}
+{% macro permissions_lookup(auth_schema, actor_ids, organization, owner_perm, user_perm) %}
 SELECT
   COALESCE(bool_or(permission in ('org_admin', {{owner_perm | to_sql}}) ), false) as is_owner,
   COALESCE(bool_or(permission in ('org_admin', {{owner_perm | to_sql}}, {{user_perm | to_sql}}) ), false) as is_user
-FROM permissions
+FROM {{auth_schema}}.permissions
 WHERE
     organization_id = {{organization}}
     AND actor_id = ANY({{actor_ids}})
     AND permission in ('org_admin', {{owner_perm | to_sql}}, {{user_perm | to_sql}} )
 {% endmacro permissions_lookup %}
 
-{% macro global_permissions_value(actor_ids, organization, owner_perm, write_perm, read_perm) %}
+{% macro global_permissions_value(auth_schema, actor_ids, organization, owner_perm, write_perm, read_perm) %}
 {# Look up global permissions #}
 
 SELECT
@@ -31,14 +31,14 @@ SELECT
     WHEN bool_or(permission = {{read_perm | to_sql}}) THEN 'read'
     ELSE NULL
   END _permission
-FROM permissions
+FROM {{auth_schema}}.permissions
 WHERE
     organization_id = {{organization}}
     AND actor_id = ANY({{actor_ids}})
     AND permission in ('org_admin', {{owner_perm | to_sql}}, {{write_perm | to_sql}}, {{read_perm | to_sql}} )
 {% endmacro permissions_value %}
 
-{% macro object_permissions_value(actor_ids, organization, object_id, owner_perm, write_perm, read_perm, extra_fields="") %}
+{% macro object_permissions_value(auth_schema, actor_ids, organization, object_id, owner_perm, write_perm, read_perm, extra_fields="") %}
 {# Look up object permissions #}
 SELECT
   CASE
@@ -47,7 +47,7 @@ SELECT
     WHEN bool_or(permission = {{read_perm | to_sql}}) THEN 'read'
     ELSE NULL
   END _permission
-FROM object_permissions
+FROM {{auth_schema}}.object_permissions
 WHERE
     organization_id = {{organization}}
     AND actor_id = ANY({{actor_ids}})
@@ -55,9 +55,10 @@ WHERE
     AND permission in ('org_admin', {{owner_perm | to_sql}}, {{write_perm | to_sql}}, {{read_perm | to_sql}} )
 {% endmacro object_permissions_clause %}
 
-{% macro permissions_value(auth_scope, organization, actor_ids, object_id, owner_perm, write_perm, read_perm) %}
+{% macro permissions_value(auth_schema, auth_scope, organization, actor_ids, object_id, owner_perm, write_perm, read_perm) %}
 {% if auth_scope == "model" %}
   {{ self::global_permissions_value(
+    auth_schema=auth_schema,
     actor_ids=actor_ids,
     organization=organization,
     owner_perm=owner_perm,
@@ -66,6 +67,7 @@ WHERE
   }}
 {% else %}
   {{ self::object_permissions_value(
+    auth_schema=auth_schema,
     actor_ids=actor_ids,
     organization=organization,
     object_id=object_id,

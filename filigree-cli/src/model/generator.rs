@@ -11,10 +11,10 @@ use super::{
         Access, FilterableType, ModelField, ModelFieldReference, ReferencePopulation,
         ReferentialAction, SqlType,
     },
-    Endpoints, HasModel, Model,
+    Endpoints, HasModel, Model, SqlDialect,
 };
 use crate::{
-    config::{web::WebFramework, Config},
+    config::{web::WebFramework, AuthProvider, Config},
     migrations::SingleMigration,
     model::{field::SortableType, ReferenceFetchType},
     templates::{ModelRustTemplates, ModelSqlTemplates, ModelSvelteTemplates, Renderer},
@@ -67,6 +67,14 @@ impl<'a> ModelGenerator<'a> {
         })
     }
 
+    fn auth_id_type(&self) -> SqlType {
+        if self.config.auth.string_ids() {
+            SqlType::Text
+        } else {
+            SqlType::Uuid
+        }
+    }
+
     pub fn template_context(&self) -> &tera::Context {
         self.context
             .as_ref()
@@ -77,23 +85,64 @@ impl<'a> ModelGenerator<'a> {
         self.context = Some(context);
     }
 
-    pub fn fixed_migrations() -> (Vec<SingleMigration<'static>>, Vec<SingleMigration<'static>>) {
-        let before_up = vec![
-            SingleMigration {
+    pub fn fixed_migrations(
+        config: &'a Config,
+    ) -> (Vec<SingleMigration<'static>>, Vec<SingleMigration<'static>>) {
+        let mut ctx = tera::Context::new();
+        ctx.insert(
+            "model_schema",
+            config.database.model_schema().unwrap_or("public"),
+        );
+        ctx.insert(
+            "auth_schema",
+            config.database.auth_schema().unwrap_or("public"),
+        );
+        ctx.insert("auth", &config.auth.template_context());
+
+        let schema_up = {
+            let mut schema_up = String::new();
+            let model_schema = config.database.model_schema().unwrap_or_default();
+            let auth_schema = config.database.auth_schema().unwrap_or_default();
+            if !model_schema.is_empty() {
+                schema_up.push_str(&format!("CREATE SCHEMA IF NOT EXISTS {model_schema};\n"));
+            }
+
+            if !auth_schema.is_empty() && auth_schema != model_schema {
+                schema_up.push_str(&format!("CREATE SCHEMA IF NOT EXISTS {auth_schema};\n"));
+            }
+
+            if !schema_up.is_empty() {
+                Some(SingleMigration {
+                    name: "schema".to_string(),
+                    model: None,
+                    up: Cow::from(schema_up),
+                    down: Cow::from(""),
+                })
+            } else {
+                None
+            }
+        };
+
+        let mut before_up = vec![
+            schema_up,
+            Some(SingleMigration {
                 name: "object_id_functions".to_string(),
                 model: None,
                 up: Cow::from(include_str!("../../sql/object_id_functions.up.sql")),
                 down: Cow::from(include_str!("../../sql/object_id_functions.down.sql")),
-            },
-            SingleMigration {
+            }),
+            Some(SingleMigration {
                 name: "delete_log".to_string(),
                 model: None,
                 up: Cow::from(include_str!("../../sql/delete_log.up.sql")),
                 down: Cow::from(include_str!("../../sql/delete_log.down.sql")),
-            },
-        ];
+            }),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
-        let after_up = vec![
+        let mut after_up = vec![
             SingleMigration {
                 name: "user_info".to_string(),
                 model: None,
@@ -113,6 +162,15 @@ impl<'a> ModelGenerator<'a> {
                 down: Cow::from(include_str!("../../sql/create_object_permissions.down.sql")),
             },
         ];
+
+        for m in &mut before_up {
+            m.up = Cow::from(tera::Tera::one_off(&m.up, &ctx, false).expect(&m.name));
+            m.down = Cow::from(tera::Tera::one_off(&m.down, &ctx, false).expect(&m.name));
+        }
+        for m in &mut after_up {
+            m.up = Cow::from(tera::Tera::one_off(&m.up, &ctx, false).expect(&m.name));
+            m.down = Cow::from(tera::Tera::one_off(&m.down, &ctx, false).expect(&m.name));
+        }
 
         (before_up, after_up)
     }
@@ -383,6 +441,7 @@ impl<'a> ModelGenerator<'a> {
                     "object_id": child_model.object_id_type(),
                     "fields": child_generator.all_fields()?.map(|f| f.template_context()).collect::<Vec<_>>(),
                     "table": child_model.table(),
+                    "schema": child_model.schema(),
                     "url_path": url_path,
                     "parent_field": self.model.foreign_key_id_field_name(),
                     "file_upload": child_model.file_for.as_ref().map(|f| f.1.template_context()),
@@ -487,63 +546,91 @@ impl<'a> ModelGenerator<'a> {
             &Endpoints::All(false)
         };
 
+        let mut context = tera::Context::new();
         let id_type = self.object_id_type();
-        let json_value = json!({
-            "dir": base_dir,
-            "module_name": &self.model.module_name(),
-            "model_name": self.model.name,
-            "sql_dialect": sql_dialect,
-            "name": self.name,
-            "plural": self.plural(),
-            "table": self.table(),
-            "indexes": self.indexes,
-            "global": self.global,
-            "fields": fields,
-            "create_payload_fields": create_payload_fields,
-            "update_payload_fields": update_payload_fields,
-            "rust_imports": rust_imports,
-            "ts_imports": ts_imports,
-            "allow_id_in_create": self.allow_id_in_create,
-            "belongs_to_field": belongs_to_field,
-            "can_populate_get": can_populate_get,
-            "can_populate_list": can_populate_list,
-            "children": children,
-            "reference_populations": references,
-            "owner_permission": format!("{}::owner", self.name),
-            "read_permission": format!("{}::read", self.name),
-            "write_permission": format!("{}::write", self.name),
-            "extra_sql": self.extra_sql,
-            "extra_create_table_sql": extra_create_table_sql,
-            "index_created_at": self.index_created_at,
-            "index_updated_at": self.index_updated_at,
-            "pagination": self.pagination,
-            "full_default_sort_field": full_default_sort_field,
-            "default_sort_field": default_sort_field,
-            "id_type": &id_type,
-            "id_prefix": self.id_prefix(),
-            "predefined_object_id": predefined_object_id,
-            "url_path": self.plural().as_ref().to_case(Case::Snake),
-            "has_any_endpoints": endpoints.any_enabled(),
-            "endpoints": endpoints.per_endpoint(),
-            "custom_endpoints": self.model.endpoints.iter().map(|e| e.template_context(&id_type)).collect::<Vec<_>>(),
-            "auth_scope": self.auth_scope.unwrap_or(self.config.default_auth_scope),
-            "parent_model_name": parent_model_name,
-            "file_for": self.file_for.as_ref().map(|f| f.0.as_str()),
-            "file_upload": self.file_for.as_ref().map(|f| f.1.template_context()),
-        });
+        context.insert("dir", &base_dir);
+        context.insert("module_name", &self.model.module_name());
+        context.insert("model_name", &self.model.name);
+        context.insert("sql_dialect", &sql_dialect);
+        context.insert("name", &self.name);
+        context.insert("plural", &self.plural());
+        context.insert("schema", &self.model.schema());
+        context.insert("table", &self.table());
+        context.insert("indexes", &self.indexes);
+        context.insert("global", &self.global);
+        context.insert("fields", &fields);
+        context.insert("create_payload_fields", &create_payload_fields);
+        context.insert("update_payload_fields", &update_payload_fields);
+        context.insert("rust_imports", &rust_imports);
+        context.insert("ts_imports", &ts_imports);
+        context.insert("allow_id_in_create", &self.allow_id_in_create);
+        context.insert("belongs_to_field", &belongs_to_field);
+        context.insert("can_populate_get", &can_populate_get);
+        context.insert("can_populate_list", &can_populate_list);
+        context.insert("children", &children);
+        context.insert("reference_populations", &references);
+        context.insert("owner_permission", &format!("{}::owner", self.name));
+        context.insert("read_permission", &format!("{}::read", self.name));
+        context.insert("write_permission", &format!("{}::write", self.name));
+        context.insert("extra_sql", &self.extra_sql);
+        context.insert("extra_create_table_sql", &extra_create_table_sql);
+        context.insert("index_created_at", &self.index_created_at);
+        context.insert("index_updated_at", &self.index_updated_at);
+        context.insert("pagination", &self.pagination);
+        context.insert("full_default_sort_field", full_default_sort_field);
+        context.insert("default_sort_field", default_sort_field);
+        context.insert("id_type", &id_type);
+        context.insert("id_prefix", &self.id_prefix());
+        context.insert("predefined_object_id", predefined_object_id);
+        context.insert("url_path", &self.plural().as_ref().to_case(Case::Snake));
+        context.insert("has_any_endpoints", &endpoints.any_enabled());
+        context.insert("endpoints", &endpoints.per_endpoint());
+        context.insert(
+            "custom_endpoints",
+            &self
+                .model
+                .endpoints
+                .iter()
+                .map(|e| e.template_context(&id_type))
+                .collect::<Vec<_>>(),
+        );
+        context.insert(
+            "auth_scope",
+            &self.auth_scope.unwrap_or(self.config.default_auth_scope),
+        );
+        context.insert("parent_model_name", &parent_model_name);
+        context.insert("file_for", &self.file_for.as_ref().map(|f| f.0.as_str()));
 
-        let mut context = tera::Context::from_value(json_value).unwrap();
+        context.insert(
+            "file_upload",
+            &self.file_for.as_ref().map(|f| f.1.template_context()),
+        );
+        context.insert("auth", &self.config.auth.template_context());
+        context.insert(
+            "auth_schema",
+            &self.config.database.auth_schema().unwrap_or("public"),
+        );
+        context.insert(
+            "id_is_string",
+            &(self.model.is_auth_model && self.config.auth.string_ids()),
+        );
         self.add_rust_structs_to_context(&mut context)?;
 
         Ok(context)
     }
 
     fn id_field(&self) -> ModelField {
+        let typ = if self.model.is_auth_model {
+            self.auth_id_type()
+        } else {
+            SqlType::Uuid
+        };
+
         ModelField {
             name: "id".to_string(),
             label: None,
             description: None,
-            typ: SqlType::Uuid,
+            typ,
             rust_type: Some(self.object_id_type()),
             zod_type: Some("z.string()".to_string()),
             nullable: false,
@@ -574,7 +661,7 @@ impl<'a> ModelGenerator<'a> {
 
             Some(ModelField {
                 name: "organization_id".to_string(),
-                typ: SqlType::Uuid,
+                typ: self.auth_id_type(),
                 label: None,
                 description: None,
                 rust_type: Some("crate::models::organization::OrganizationId".to_string()),
@@ -594,12 +681,21 @@ impl<'a> ModelGenerator<'a> {
                 never_read: false,
                 fixed: true,
                 previous_name: None,
-                references: locked_to_single_org.then(|| {
-                    ModelFieldReference::new(
-                        "organizations",
-                        "id",
-                        Some(ReferentialAction::Cascade),
-                    )
+                references: (locked_to_single_org && self.config.auth.builtin()).then(|| {
+                    ModelFieldReference {
+                        model: None,
+                        table: Some(
+                            self.model_map
+                                .get("Organization", &self.name, "organization_id")
+                                .unwrap()
+                                .full_table(),
+                        ),
+                        field: "id".to_string(),
+                        on_delete: Some(ReferentialAction::Cascade),
+                        on_update: None,
+                        deferrable: None,
+                        populate: None,
+                    }
                 }),
             })
         };
@@ -631,7 +727,8 @@ impl<'a> ModelGenerator<'a> {
                     owner_access: Access::Read,
                     omit_in_list: false,
                     references: Some(ModelFieldReference {
-                        table: model.table(),
+                        table: Some(model.full_table()),
+                        model: None,
                         field: "id".to_string(),
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: None,
@@ -727,7 +824,7 @@ impl<'a> ModelGenerator<'a> {
                         .model
                         .file_for
                         .as_ref()
-                        .map(|(parent_model, f)| parent_model == &model.name && f.many)
+                        .map(|(parent_model, f)| parent_model == &model.name && !f.many)
                         .unwrap_or(false));
 
                 Ok::<_, Error>(ModelField {
@@ -738,8 +835,8 @@ impl<'a> ModelGenerator<'a> {
                     rust_type: Some(model.object_id_type()),
                     zod_type: None,
                     nullable: belongs_to.optional(),
-                    globally_unique: false,
-                    unique: single_child,
+                    globally_unique: single_child,
+                    unique: false,
                     indexed: belongs_to.indexed(),
                     filterable: FilterableType::Exact,
                     sortable: super::field::SortableType::None,
@@ -748,7 +845,8 @@ impl<'a> ModelGenerator<'a> {
                     owner_access: Access::ReadWrite,
                     omit_in_list: false,
                     references: Some(ModelFieldReference {
-                        table: model.table(),
+                        table: Some(model.full_table()),
+                        model: None,
                         field: "id".to_string(),
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: None,
