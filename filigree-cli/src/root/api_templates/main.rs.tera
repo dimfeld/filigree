@@ -6,7 +6,7 @@ use filigree::{
 };
 use tracing::{event, Level};
 
-use {{crate_name}}::{Error, cmd, db, emails, server};
+use {{crate_name}}::{Error, cmd, emails, server};
 
 
 #[derive(Parser)]
@@ -181,7 +181,7 @@ async fn serve(cmd: ServeCommand) -> Result<(), Report<Error>> {
     let pg_pool = pg_pool.change_context(Error::Db)?;
 
     {% if db.migrate_on_start %}
-    db::run_migrations(&pg_pool).await?;
+    {{crate_name}}::db::run_migrations(&pg_pool).await?;
     {% endif %}
 
     let secure_cookies = !cmd.insecure;

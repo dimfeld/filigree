@@ -315,6 +315,7 @@ impl DatabaseConfig {
 
     pub fn template_context(&self) -> serde_json::Value {
         json!({
+            "migrate_on_start": self.migrate_on_start,
             "min_connections": self.min_connections,
             "max_connections": self.max_connections,
             "model_schema": self.model_schema(),
