@@ -10,6 +10,6 @@ DROP TABLE {{auth_schema}}.api_keys;
 
 DROP TABLE {{auth_schema}}.organization_members;
 
-DROP TABLE {{auth_schema}}.user_sessions;
+{% endif %} DROP TABLE {{auth_schema}}.user_sessions;
 
-{% endif %} DROP TABLE {{auth_schema}}.user_roles;
+DROP TABLE {{auth_schema}}.user_roles;

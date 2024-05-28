@@ -11,7 +11,7 @@ CREATE TABLE {{auth_schema}}.user_roles (
   PRIMARY KEY (organization_id, user_id, role_id)
 );
 
-{% if auth.builtin %} CREATE TABLE {{auth_schema}}.user_sessions (
+CREATE TABLE {{auth_schema}}.user_sessions (
   id {{auth.id_sql_type}} PRIMARY KEY,
   user_id {{auth.id_sql_type}} NOT NULL {% if auth.builtin %}REFERENCES
     {{auth_schema}}.users (id) ON DELETE CASCADE,
@@ -19,6 +19,7 @@ CREATE TABLE {{auth_schema}}.user_roles (
   expires_at timestamptz NOT NULL
 );
 
+{% if auth.builtin %}
 -- A list of users and what organizations they belong to. Users can potentially be in more than one organization.
 CREATE TABLE {{auth_schema}}.organization_members (
   organization_id {{auth.id_sql_type}} NOT NULL {% if auth.builtin %}REFERENCES
