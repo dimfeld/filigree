@@ -5,7 +5,7 @@ use error_stack::{Report, ResultExt};
 use semver::{Version, VersionReq};
 
 use crate::{
-    config::{AuthProvider, Config},
+    config::{AuthProvider, Config, EmailProvider},
     Error,
 };
 
@@ -59,7 +59,7 @@ pub fn add_fixed_deps(
     config: &Config,
     manifest: &mut Manifest,
 ) -> Result<(), Report<Error>> {
-    let mut filigree_features = vec!["tracing", "tracing_export"];
+    let mut filigree_features = vec!["tracing", "tracing_export", "email_provider"];
 
     match config.error_reporting.provider {
         crate::config::ErrorReportingProvider::Sentry => {
@@ -99,6 +99,14 @@ pub fn add_fixed_deps(
         filigree_features.push("storage");
         filigree_features.push("storage_aws");
     }
+
+    match &config.email.provider {
+        EmailProvider::None => {}
+        EmailProvider::Resend => {
+            filigree_features.push("resend");
+        }
+    }
+
     filigree_features.extend(config.web.filigree_features());
 
     add_dep_with_default_features(
