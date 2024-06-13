@@ -20,6 +20,7 @@ mod templates;
 mod write;
 
 #[derive(Parser)]
+#[clap(about, version)]
 pub struct Cli {
     /// Override the path to the configuration directory. By default this looks for ./filigree
     #[clap(short, long, value_name = "FILE")]
