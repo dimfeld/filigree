@@ -15,7 +15,6 @@ struct StructContents {
 
 struct GeneratedStruct {
     fields: Vec<ModelField>,
-    add_permissions_field: bool,
     rust_contents: String,
     zod_contents: String,
 }
@@ -24,6 +23,7 @@ struct GeneratedStruct {
 struct ImplFlags {
     json_decode: bool,
     serialize: bool,
+    into_active_model: bool,
 }
 
 impl ImplFlags {
@@ -31,6 +31,7 @@ impl ImplFlags {
         Self {
             json_decode: self.json_decode || other.json_decode,
             serialize: self.serialize || other.serialize,
+            into_active_model: self.into_active_model || other.into_active_model,
         }
     }
 }
@@ -46,14 +47,38 @@ impl<'a> ModelGenerator<'a> {
             StructContents {
                 suffix: "AllFields",
                 similar_to: None,
+                fields: Self::struct_contents(self.all_fields()?.filter(|f| !f.never_read), |_| {
+                    false
+                }),
+                flags: ImplFlags {
+                    serialize: true,
+                    json_decode: true,
+                    into_active_model: true,
+                },
+            },
+            StructContents {
+                suffix: "UserView",
+                similar_to: None,
+                fields: Self::struct_contents(self.all_fields()?.filter(|f| f.user_read()), |_| {
+                    false
+                }),
+                flags: ImplFlags {
+                    serialize: true,
+                    json_decode: true,
+                    into_active_model: true,
+                },
+            },
+            StructContents {
+                suffix: "OwnerView",
+                similar_to: None,
                 fields: Self::struct_contents(
-                    self.all_fields()?.filter(|f| !f.never_read),
+                    self.all_fields()?.filter(|f| f.owner_read()),
                     |_| false,
-                    true,
                 ),
                 flags: ImplFlags {
                     serialize: true,
                     json_decode: true,
+                    into_active_model: true,
                 },
             },
             StructContents {
@@ -63,11 +88,11 @@ impl<'a> ModelGenerator<'a> {
                     self.all_fields()?
                         .filter(|f| !f.never_read && !f.omit_in_list),
                     |_| false,
-                    true,
                 ),
                 flags: ImplFlags {
                     serialize: true,
                     json_decode: true,
+                    into_active_model: false,
                 },
             },
             StructContents {
@@ -79,11 +104,11 @@ impl<'a> ModelGenerator<'a> {
                             .map(Cow::Owned),
                     ),
                     |_| false,
-                    true,
                 ),
                 flags: ImplFlags {
                     serialize: true,
                     json_decode: true,
+                    into_active_model: false,
                 },
             },
             StructContents {
@@ -97,22 +122,21 @@ impl<'a> ModelGenerator<'a> {
                                 .map(Cow::Owned),
                         ),
                     |_| false,
-                    true,
                 ),
                 flags: ImplFlags {
                     serialize: true,
                     json_decode: true,
+                    into_active_model: false,
                 },
             },
             StructContents {
                 suffix: "CreatePayload",
                 similar_to: None,
-                fields: Self::struct_contents(
-                    self.write_payload_struct_fields(false)?,
-                    |_| false,
-                    false,
-                ),
-                flags: ImplFlags::default(),
+                fields: Self::struct_contents(self.write_payload_struct_fields(false)?, |_| false),
+                flags: ImplFlags {
+                    into_active_model: true,
+                    ..Default::default()
+                },
             },
             StructContents {
                 suffix: "CreateResult",
@@ -132,7 +156,6 @@ impl<'a> ModelGenerator<'a> {
                         }),
                     ),
                     |_| false,
-                    true,
                 ),
                 flags: ImplFlags {
                     serialize: true,
@@ -142,26 +165,24 @@ impl<'a> ModelGenerator<'a> {
             StructContents {
                 suffix: "UpdatePayload",
                 similar_to: None,
-                fields: Self::struct_contents(
-                    self.write_payload_struct_fields(true)?,
-                    |f| {
-                        // Allow optional fields for those that the owner can write,
-                        // but the user can not, so that we can accept either form of
-                        // the field.
-                        user_can_write_anything
-                            && !f.user_access.can_write()
-                            && f.owner_access.can_write()
-                    },
-                    false,
-                ),
-                flags: ImplFlags::default(),
+                fields: Self::struct_contents(self.write_payload_struct_fields(true)?, |f| {
+                    // Allow optional fields for those that the owner can write,
+                    // but the user can not, so that we can accept either form of
+                    // the field.
+                    user_can_write_anything
+                        && !f.user_access.can_write()
+                        && f.owner_access.can_write()
+                }),
+                flags: ImplFlags {
+                    into_active_model: true,
+                    ..Default::default()
+                },
             },
         ];
 
         struct GroupedStruct {
             fields: Vec<ModelField>,
             ts_contents: String,
-            has_permissions_field: bool,
             flags: ImplFlags,
             suffixes: Vec<(&'static str, Option<&'static str>)>,
         }
@@ -178,7 +199,6 @@ impl<'a> ModelGenerator<'a> {
                 .entry(fields.rust_contents)
                 .or_insert_with(|| GroupedStruct {
                     fields: fields.fields,
-                    has_permissions_field: fields.add_permissions_field,
                     flags,
                     ts_contents: fields.zod_contents,
                     suffixes: Vec::new(),
@@ -202,7 +222,6 @@ impl<'a> ModelGenerator<'a> {
                     GroupedStruct {
                         fields,
                         ts_contents: zod_contents,
-                        has_permissions_field,
                         flags,
                         suffixes,
                     },
@@ -245,13 +264,14 @@ impl<'a> ModelGenerator<'a> {
 
                     json!({
                         "name": name,
+                        "is_primary_model": suffix.is_empty(),
                         "rust_fields_content": rust_fields_content,
                         "zod_fields_content": zod_contents,
                         "fields": field_info,
                         "aliases": aliases,
                         "impl_json_decode": flags.json_decode,
                         "impl_serialize": flags.serialize,
-                        "has_permission_field": has_permissions_field,
+                        "impl_into_active_model": flags.into_active_model,
                     })
                 },
             )
@@ -266,7 +286,6 @@ impl<'a> ModelGenerator<'a> {
     fn struct_contents<'b>(
         fields: impl Iterator<Item = Cow<'b, ModelField>>,
         force_optional: impl Fn(&ModelField) -> bool,
-        add_permissions_field: bool,
     ) -> GeneratedStruct {
         let fields = fields
             .map(|f| {
@@ -289,7 +308,10 @@ impl<'a> ModelGenerator<'a> {
                 let mut serde_attrs = Vec::new();
                 if rust_field_name != f.name {
                     serde_attrs.push(Cow::Owned(format!("rename = \"{name}\"", name = f.name)));
-                    sqlx_rename = format!("#[sqlx(rename = \"{name}\")]\n", name = f.name);
+                    sqlx_rename = format!(
+                        "#[sqlx(rename = \"{name}\")]\n#[sea_orm(column_name = \"{name}\")]",
+                        name = f.name
+                    );
                 };
 
                 // Double option is used in some places to distinguish between `null` and missing
@@ -322,18 +344,8 @@ impl<'a> ModelGenerator<'a> {
             })
             .join("\n");
 
-        let (zod_contents, rust_contents) = if add_permissions_field {
-            (
-                format!("{zod_contents}\n_permission: ObjectPermission,"),
-                format!("{rust_contents}\npub _permission: ObjectPermission,"),
-            )
-        } else {
-            (zod_contents, rust_contents)
-        };
-
         GeneratedStruct {
             fields,
-            add_permissions_field,
             zod_contents,
             rust_contents,
         }
