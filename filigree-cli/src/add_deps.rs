@@ -35,6 +35,17 @@ const DEPS: &[DepVersion<'static>] = &[
     ("reqwest", "0.11.23", &["cookies", "json"]),
     ("rust-embed", "8.1.0", &[]),
     ("schemars", "0.8.16", &["chrono", "url", "uuid1"]),
+    (
+        "sea-orm",
+        "0.12",
+        &[
+            "sqlx-postgres",
+            "runtime-tokio-rustls",
+            "macros",
+            "with-chrono",
+            "with-uuid",
+        ],
+    ),
     ("serde", "1.0.193", &["derive"]),
     ("serde_json", "1.0.113", &[]),
     ("serde_with", "3.6.1", &["json", "schemars_0_8"]),
