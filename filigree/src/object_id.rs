@@ -273,6 +273,40 @@ impl<'r, PREFIX: ObjectIdPrefix> sqlx::Decode<'r, sqlx::Postgres> for ObjectId<P
     }
 }
 
+// SeaORM traits
+impl<PREFIX: ObjectIdPrefix> From<ObjectId<PREFIX>> for sea_orm::Value {
+    fn from(value: ObjectId<PREFIX>) -> Self {
+        value.0.into()
+    }
+}
+
+impl<PREFIX: ObjectIdPrefix> sea_orm::TryGetable for ObjectId<PREFIX> {
+    fn try_get_by<I: sea_orm::ColIdx>(
+        res: &sea_orm::QueryResult,
+        idx: I,
+    ) -> Result<Self, sea_orm::TryGetError> {
+        <Uuid as sea_orm::TryGetable>::try_get_by(res, idx).map(ObjectId::from)
+    }
+}
+
+impl<PREFIX: ObjectIdPrefix> sea_orm::sea_query::ValueType for ObjectId<PREFIX> {
+    fn try_from(v: sea_orm::Value) -> Result<Self, sea_orm::sea_query::ValueTypeErr> {
+        <Uuid as sea_orm::sea_query::ValueType>::try_from(v).map(ObjectId::from)
+    }
+
+    fn type_name() -> String {
+        stringify!(ObjectId).to_owned()
+    }
+
+    fn array_type() -> sea_orm::sea_query::ArrayType {
+        sea_orm::sea_query::ArrayType::Uuid
+    }
+
+    fn column_type() -> sea_orm::sea_query::ColumnType {
+        sea_orm::sea_query::ColumnType::Uuid
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use axum::{extract::Path, response::IntoResponse, Router};
