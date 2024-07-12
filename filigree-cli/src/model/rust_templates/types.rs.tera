@@ -5,6 +5,7 @@ use crate::models::organization::OrganizationId;
 {% endif -%}
 {{rust_imports}}
 use filigree::auth::ObjectPermission;
+use sea_orm::prelude::*;
 use serde::{
     ser::{Serializer, SerializeStruct},
     Serialize, Deserialize
@@ -69,7 +70,7 @@ impl Default for {{struct.name}} {
 
 {% endfor %}
 
-#[derive(Copy, Clone, Debug, sea_orm::strum::EnumIter, sea_orm::DeriveRelation)]
+#[derive(Copy, Clone, Debug, sea_orm::EnumIter, sea_orm::DeriveRelation)]
 pub enum Relation {
     {# TODO add relations here #}
 }

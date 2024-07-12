@@ -37,7 +37,7 @@ const DEPS: &[DepVersion<'static>] = &[
     ("schemars", "0.8.16", &["chrono", "url", "uuid1"]),
     (
         "sea-orm",
-        "0.12",
+        "0.12.15",
         &[
             "sqlx-postgres",
             "runtime-tokio-rustls",
