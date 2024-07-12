@@ -13,7 +13,7 @@ use sqlx_transparent_json_decode::sqlx_json_decode;
 
 {% for struct in structs %}
 
-#[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow, sea_orm::FromQueryResult)]
+#[derive(Serialize, Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow, sea_orm::FromQueryResult)]
 {% if struct.name != struct_base and not struct.impl_serialize -%}
 #[cfg_attr(test, derive(Serialize))]
 {%- endif %}
@@ -23,6 +23,7 @@ use sqlx_transparent_json_decode::sqlx_json_decode;
 #[sea_orm(table_name = "{{table}}" {% if schema %}, schema_name = "{{schema}}" {% endif %})]
 {%- endif %}
 pub struct {{ struct.name }} {
+    {%- if struct.is_primary_model -%}#[sea_orm(primary_key)]{% endif %}
     {{ struct.rust_fields_content }}
 }
 
@@ -66,36 +67,11 @@ impl Default for {{struct.name}} {
     }
 }
 
-{% if struct.impl_serialize %}
-impl Serialize for {{struct.name}} {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        {% if owner_and_user_different_access %}
-        if self._permission == ObjectPermission::Owner {
-        {% endif %}
-            {% set view_fields = struct.fields | filter(attribute="owner_read", value=true) %}
-            let mut state = serializer.serialize_struct("{{struct.name}}", {{ view_fields | length + 1 }})?;
-            {% for field in view_fields -%}
-            state.serialize_field("{{field.name}}", &self.{{field.rust_name}})?;
-            {%- endfor %}
-            state.serialize_field("_permission", &self._permission)?;
-            state.end()
-        {% if owner_and_user_different_access %}
-        } else {
-            {% set view_fields = struct.fields | filter(attribute="user_read", value=true) %}
-            let mut state = serializer.serialize_struct("{{struct.name}}", {{ view_fields | length + 1 }})?;
-            {% for field in view_fields -%}
-            state.serialize_field("{{field.name}}", &self.{{field.rust_name}})?;
-            {%- endfor %}
-            state.serialize_field("_permission", &self._permission)?;
-            state.end()
-        }
-        {% endif %}
-    }
-}
-{% endif %}
-
 {% endfor %}
 
+#[derive(Copy, Clone, Debug, sea_orm::strum::EnumIter, sea_orm::DeriveRelation)]
+pub enum Relation {
+    {# TODO add relations here #}
+}
+
+impl sea_orm::ActiveModelBehavior for ActiveModel {}

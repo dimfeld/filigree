@@ -95,6 +95,7 @@ impl<'a> ModelGenerator<'a> {
                     into_active_model: false,
                 },
             },
+            // TODO make populated results into wrapper structs instead
             StructContents {
                 suffix: "PopulatedGetResult",
                 similar_to: Some("AllFields"),
@@ -245,9 +246,15 @@ impl<'a> ModelGenerator<'a> {
                         Cow::Owned(suffix)
                     };
 
-                    let name = format!("{struct_base}{suffix}");
+                    let is_primary = suffix.is_empty();
 
-                    let aliases = (suffixes.len() > 1)
+                    let name = if is_primary {
+                        "Model".to_owned()
+                    } else {
+                        format!("{struct_base}{suffix}")
+                    };
+
+                    let mut aliases = (suffixes.len() > 1)
                         .then(|| {
                             suffixes
                                 .iter()
@@ -257,6 +264,10 @@ impl<'a> ModelGenerator<'a> {
                         })
                         .unwrap_or_default();
 
+                    if is_primary {
+                        aliases.push(struct_base.to_owned());
+                    }
+
                     let field_info = fields
                         .into_iter()
                         .map(|field| field.template_context())
@@ -264,7 +275,7 @@ impl<'a> ModelGenerator<'a> {
 
                     json!({
                         "name": name,
-                        "is_primary_model": suffix.is_empty(),
+                        "is_primary_model": is_primary,
                         "rust_fields_content": rust_fields_content,
                         "zod_fields_content": zod_contents,
                         "fields": field_info,
