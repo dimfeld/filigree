@@ -3,30 +3,20 @@ _list:
 
 # Stage all the current files in git, then run Filigree
 build-with-backup:
-  git add .
-  @just build-test-apps
+  cd ../filigree-test-apps && just build-with-backup
 
 build-test-apps *FLAGS:
-  cd filigree-cli && cargo lbuild
-  just build-test-app sveltekit
-  just build-test-app htmx
-  just build-test-app custom_auth_string_ids
+  cd ../filigree-test-apps && just build-test-app {{FLAGS}}
 
 build-test-app DIR *FLAGS:
-  @just write-files {{DIR}} {{FLAGS}}
-  cd test-apps/{{DIR}} && cargo lcheck
+  cd ../filigree-test-apps && just build-test-app {{DIR}} {{FLAGS}}
 
 write-files DIR *FLAGS:
-  cd filigree-cli && cargo lbuild
-  cd test-apps/{{DIR}} && ../../target/debug/filigree write {{FLAGS}}
+  cd ../filigree-test-apps && just write-files {{DIR}} {{FLAGS}}
 
 build-and-test DIR *FLAGS:
-  @just build-test-app {{DIR}}
-  cd test-apps/{{DIR}} && cargo ltest {{FLAGS}}
+  cd ../filigree-test-apps && just build-and-test {{DIR}}
 
 build-test-app-and-db DIR *FLAGS:
-  cd filigree-cli && cargo lbuild
-  cd test-apps/{{DIR}} && ../../target/debug/filigree write --overwrite && (yes | sqlx database reset) && cargo ltest {{FLAGS}}
+  cd ../filigree-test-apps && just build-test-app-and-db {{DIR}} {{FLAGS}}
 
-build-web-types:
-  true

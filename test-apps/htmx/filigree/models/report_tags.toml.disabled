@@ -1,6 +1,0 @@
-name = "ReportTag"
-id_prefix = "reptag"
-standard_endpoints = true
-
-joins = ["Report", "Tag"]
-
