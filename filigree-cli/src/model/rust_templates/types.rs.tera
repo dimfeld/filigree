@@ -15,26 +15,23 @@ use sqlx_transparent_json_decode::sqlx_json_decode;
 {% for struct in structs %}
 
 #[derive(Serialize, Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
-{% if struct.name != struct_base and not struct.impl_serialize -%}
-#[cfg_attr(test, derive(Serialize))]
-{%- endif %}
 {%- if struct.is_primary_model -%}
 #[derive(sea_orm::DeriveEntityModel)]
 #[sea_orm(table_name = "{{table}}" {% if schema %}, schema_name = "{{schema}}" {% endif %})]
-{% else %}
+{%- else %}
 {%- if struct.impl_into_active_model %}#[derive(sea_orm::DeriveIntoActiveModel)]{% endif %}
 #[derive(sea_orm::FromQueryResult)]
 {%- endif %}
-pub struct {{ struct.name }} {
+pub struct {{ struct.rust_name }} {
     {%- if struct.is_primary_model -%}#[sea_orm(primary_key)]{% endif %}
     {{ struct.rust_fields_content }}
 }
 
 {% for alias in struct.aliases %}
-    pub type {{ alias }} = {{ struct.name }};
+    pub type {{ alias }} = {{ struct.rust_name }};
 {% endfor %}
 
-impl {{struct.name}} {
+impl {{struct.rust_name}} {
     // The <T as Default> syntax here is weird but lets us generate from the template without needing to
     // detect whether to add the extra :: in cases like DateTime::<Utc>::default
     {% for field in struct.fields %}
@@ -57,10 +54,10 @@ impl {{struct.name}} {
 }
 
 {% if struct.impl_json_decode %}
-sqlx_json_decode!({{struct.name}});
+sqlx_json_decode!({{struct.rust_name}});
 {% endif %}
 
-impl Default for {{struct.name}} {
+impl Default for {{struct.rust_name}} {
     fn default() -> Self {
         Self {
             {% for field in struct.fields -%}
@@ -74,7 +71,36 @@ impl Default for {{struct.name}} {
 
 #[derive(Copy, Clone, Debug, sea_orm::EnumIter, sea_orm::DeriveRelation)]
 pub enum Relation {
-    {# TODO add relations here #}
+    {% if belongs_to_field -%}
+    #[sea_orm(
+        belongs_to = "crate::models::{{belongs_to_field.module}}::Entity",
+        from = "Column::{{belongs_to_field.camel_case_name}}",
+        to = "crate::models::{{belongs_to_field.module}}::Column::Id",
+    )]
+    {{belongs_to_field.model}},
+    {%- endif -%}
+    {% for child in children %}
+    #[sea_orm(
+        {% if child.relationship.many %}has_many{% else %}has_one{% endif %} = "crate::models::{{child.module}}::Entity",
+    )]
+    {{child.relationship.model}},
+    {% endfor %}
 }
+
+{% if belongs_to_field %}
+impl Related<crate::models::{{belongs_to_field.module}}::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::{{belongs_to_field.model}}.def()
+    }
+}
+{% endif %}
+
+{% for child in children %}
+impl Related<crate::models::{{child.module}}::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::{{child.relationship.model}}.def()
+    }
+}
+{% endfor %}
 
 impl sea_orm::ActiveModelBehavior for ActiveModel {}

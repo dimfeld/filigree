@@ -199,6 +199,7 @@ impl ModelField {
             "sql_name": self.sql_field_name(),
             "sql_full_name": self.qualified_sql_field_name(),
             "sql_type": self.typ.to_sql_type(SqlDialect::Postgresql),
+            "camel_case_name": self.name.to_case(Case::Camel),
             "snake_case_name": self.name.to_case(Case::Snake),
             "pascal_case_name": self.name.to_case(Case::Pascal),
             "rust_name": self.rust_field_name(),

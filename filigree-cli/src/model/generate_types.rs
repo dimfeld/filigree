@@ -248,11 +248,8 @@ impl<'a> ModelGenerator<'a> {
 
                     let is_primary = suffix.is_empty();
 
-                    let name = if is_primary {
-                        "Model".to_owned()
-                    } else {
-                        format!("{struct_base}{suffix}")
-                    };
+                    let name = format!("{struct_base}{suffix}");
+                    let rust_name = if is_primary { "Model" } else { name.as_str() };
 
                     let mut aliases = (suffixes.len() > 1)
                         .then(|| {
@@ -275,6 +272,7 @@ impl<'a> ModelGenerator<'a> {
 
                     json!({
                         "name": name,
+                        "rust_name": rust_name,
                         "is_primary_model": is_primary,
                         "rust_fields_content": rust_fields_content,
                         "zod_fields_content": zod_contents,

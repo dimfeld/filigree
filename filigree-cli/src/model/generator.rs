@@ -11,10 +11,10 @@ use super::{
         Access, FilterableType, ModelField, ModelFieldReference, ReferencePopulation,
         ReferentialAction, SqlType,
     },
-    Endpoints, HasModel, Model, SqlDialect,
+    Endpoints, HasModel, Model,
 };
 use crate::{
-    config::{web::WebFramework, AuthProvider, Config},
+    config::{web::WebFramework, Config},
     migrations::SingleMigration,
     model::{field::SortableType, ReferenceFetchType},
     templates::{ModelRustTemplates, ModelSqlTemplates, ModelSvelteTemplates, Renderer},
@@ -488,7 +488,19 @@ impl<'a> ModelGenerator<'a> {
         let belongs_to_field = self
             .belongs_to_field()?
             .next()
-            .map(|f| f.template_context());
+            .map(|f| {
+                let mut ctx = f.template_context();
+
+                let bt = self.belongs_to.as_ref().unwrap();
+                let child_model = self
+                    .model_map
+                    .get(bt.model(), &self.model.name, "belongs_to")?;
+                ctx["model"] = bt.model().into();
+                ctx["module"] = child_model.module_name().into();
+
+                Ok::<_, Error>(ctx)
+            })
+            .transpose()?;
 
         let can_populate_get = self.virtual_fields(ReadOperation::Get)?.next().is_some();
         let can_populate_list = self.virtual_fields(ReadOperation::List)?.next().is_some();
