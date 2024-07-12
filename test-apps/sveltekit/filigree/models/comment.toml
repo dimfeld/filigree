@@ -1,9 +1,0 @@
-name = "Comment"
-id_prefix = "cmt"
-standard_endpoints = true
-belongs_to = "Post"
-
-[[fields]]
-name = "body"
-type = "text"
-

@@ -1,7 +1,0 @@
-name = "PostTag"
-id_prefix = "psttag"
-standard_endpoints = true
-
-joins = ["Post", "Tag"]
-
-
