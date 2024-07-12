@@ -1,0 +1,150 @@
+#![allow(unused_imports, dead_code)]
+use super::{{id_type}};
+{%- if id_type != "OrganizationId" %}
+use crate::models::organization::OrganizationId;
+{% endif -%}
+{{rust_imports}}
+use filigree::auth::ObjectPermission;
+use sea_orm::prelude::*;
+use serde::{
+    ser::{Serializer, SerializeStruct},
+    Serialize, Deserialize
+};
+use sqlx_transparent_json_decode::sqlx_json_decode;
+
+{% for struct in structs | filter(attribute="is_primary_model", value = true) %}
+#[derive(Serialize, Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow, DeriveEntityModel)]
+#[sea_orm(table_name = "{{table}}" {% if schema %}, schema_name = "{{schema}}" {% endif %})]
+pub struct {{ struct.rust_name }} {
+    {%- if struct.is_primary_model -%}#[sea_orm(primary_key)]{% endif %}
+    {{ struct.rust_fields_content }}
+}
+{% endfor %}
+
+pub struct AuthClause;
+
+impl filigree::AuthClause for AuthClause {
+    // TODO
+}
+
+/// An Entity class that automatically checks for authorization on any query
+pub type AuthedEntity = filigree::entity::AuthedEntity<Entity, AuthClause>;
+
+#[derive(Copy, Clone, Debug, sea_orm::EnumIter, sea_orm::DeriveRelation)]
+pub enum Relation {
+    {% if belongs_to_field -%}
+    #[sea_orm(
+        belongs_to = "crate::models::{{belongs_to_field.module}}::Entity",
+        from = "Column::{{belongs_to_field.camel_case_name}}",
+        to = "crate::models::{{belongs_to_field.module}}::Column::Id",
+    )]
+    {{belongs_to_field.model}},
+    {%- endif -%}
+    {% for child in children %}
+    #[sea_orm(
+        {% if child.relationship.many %}has_many{% else %}has_one{% endif %} = "crate::models::{{child.module}}::Entity",
+    )]
+    {{child.relationship.model}},
+    {% endfor %}
+}
+
+{% if belongs_to_field %}
+impl Related<crate::models::{{belongs_to_field.module}}::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::{{belongs_to_field.model}}.def()
+    }
+}
+{% endif %}
+
+{% for child in children %}
+impl Related<crate::models::{{child.module}}::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::{{child.relationship.model}}.def()
+    }
+}
+{% endfor %}
+
+impl sea_orm::ActiveModelBehavior for ActiveModel {}
+
+/// An Entity class that automatically checks for authorization on any query. This does
+/// not implement EntityTrait
+pub struct AuthedEntity {}
+
+impl AuthedEntity {
+    fn belongs_to<R>(related: R) -> sea_orm::RelationBuilder<Entity, R>
+    where
+        R: EntityTrait,
+    {
+        Entity::belongs_to(related)
+    }
+
+    fn has_one<R>(related: R) -> sea_orm::RelationBuilder<Entity, R>
+    where
+        R: EntityTrait + Related<Entity>,
+    {
+        Entity::has_one(related)
+    }
+
+    fn has_many<R>(related: R) -> sea_orm::RelationBuilder<Entity, R>
+    where
+        R: EntityTrait + Related<Entity>,
+    {
+        Entity::has_many(related)
+    }
+
+    fn find() -> Select<Entity> {
+        Entity::find()
+    }
+
+    fn find_by_id<T>(values: T) -> Select<Entity>
+    where
+        T: Into<<Entity::PrimaryKey as PrimaryKeyTrait>::ValueType>,
+    {
+        Entity::find_by_id(values)
+    }
+
+    fn insert<A>(model: A) -> sea_orm::Insert<A>
+    where
+        A: ActiveModelTrait<Entity = Entity>,
+    {
+        Entity::insert(model)
+    }
+
+    fn insert_many<A, I>(models: I) -> sea_orm::Insert<A>
+    where
+        A: ActiveModelTrait<Entity = Entity>,
+        I: IntoIterator<Item = A>,
+    {
+        Entity::insert_many(models)
+    }
+
+    fn update<A>(model: A) -> sea_orm::UpdateOne<A>
+    where
+        A: ActiveModelTrait<Entity = Entity>,
+    {
+        Entity::update(model)
+    }
+
+    fn update_many() -> sea_orm::UpdateMany<Entity> {
+        Entity::update_many()
+    }
+
+    fn delete<A>(model: A) -> sea_orm::DeleteOne<A>
+    where
+        A: ActiveModelTrait<Entity = Entity>,
+    {
+        Entity::delete(model)
+    }
+
+    fn delete_many() -> sea_orm::DeleteMany<Entity> {
+        Entity::delete_many()
+    }
+
+    fn delete_by_id<T>(values: T) -> sea_orm::DeleteMany<Entity>
+    where
+        T: Into<<Entity::PrimaryKey as PrimaryKeyTrait>::ValueType>,
+    {
+        Entity::delete_by_id(values)
+    }
+}
+

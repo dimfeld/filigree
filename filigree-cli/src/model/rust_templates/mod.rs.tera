@@ -1,6 +1,7 @@
 {% if has_any_endpoints -%}
 pub mod endpoints;
 {%- endif -%}
+mod entity;
 pub mod queries;
 {% if file_upload -%}
 pub mod storage;
@@ -9,6 +10,12 @@ pub mod storage;
 pub mod testing;
 pub mod types;
 
+pub use entity::{ActiveModel, Column, Model, PrimaryKey, Relation};
+/// The base entity allows executing any query but does not automatically attach auth checks. You
+/// should often use Entity instead, which is a wrapper that automatically checks for authorization on
+/// any query.
+pub use entity::Entity as BaseEntity;
+pub use entity::AuthedEntity as Entity;
 pub use types::*;
 
 pub const READ_PERMISSION: &str = "{{read_permission}}";
