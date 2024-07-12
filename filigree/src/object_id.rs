@@ -307,6 +307,18 @@ impl<PREFIX: ObjectIdPrefix> sea_orm::sea_query::ValueType for ObjectId<PREFIX> 
     }
 }
 
+impl<PREFIX: ObjectIdPrefix> sea_orm::sea_query::Nullable for ObjectId<PREFIX> {
+    fn null() -> sea_orm::Value {
+        sea_orm::Value::Uuid(None)
+    }
+}
+
+impl<PREFIX: ObjectIdPrefix> sea_orm::TryFromU64 for ObjectId<PREFIX> {
+    fn try_from_u64(_v: u64) -> Result<Self, sea_orm::DbErr> {
+        Err(sea_orm::DbErr::ConvertFromU64("uuid"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use axum::{extract::Path, response::IntoResponse, Router};

@@ -14,14 +14,16 @@ use sqlx_transparent_json_decode::sqlx_json_decode;
 
 {% for struct in structs %}
 
-#[derive(Serialize, Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow, sea_orm::FromQueryResult)]
+#[derive(Serialize, Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
 {% if struct.name != struct_base and not struct.impl_serialize -%}
 #[cfg_attr(test, derive(Serialize))]
 {%- endif %}
-{%- if struct.impl_into_active_model %}#[derive(sea_orm::DeriveIntoActiveModel)]{% endif %}
 {%- if struct.is_primary_model -%}
 #[derive(sea_orm::DeriveEntityModel)]
 #[sea_orm(table_name = "{{table}}" {% if schema %}, schema_name = "{{schema}}" {% endif %})]
+{% else %}
+{%- if struct.impl_into_active_model %}#[derive(sea_orm::DeriveIntoActiveModel)]{% endif %}
+#[derive(sea_orm::FromQueryResult)]
 {%- endif %}
 pub struct {{ struct.name }} {
     {%- if struct.is_primary_model -%}#[sea_orm(primary_key)]{% endif %}
