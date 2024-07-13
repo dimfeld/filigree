@@ -5,6 +5,7 @@ use filigree::{
     errors::OrderByError,
     sql::{BindingOperator, FilterBuilder, ValuesBuilder}
 };
+use sea_orm::prelude::*;
 use serde::Deserialize;
 use sqlx::{PgConnection, PgExecutor, postgres::PgRow, query_file, query_file_as, query_file_scalar};
 use tracing::{event, instrument, Level};
