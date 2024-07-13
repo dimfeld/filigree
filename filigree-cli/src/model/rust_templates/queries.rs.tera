@@ -66,8 +66,8 @@ pub async fn get(db: impl ConnectionTrait, auth: &AuthInfo, id: {{id_type}}) -> 
 
     Ok(object)
 }
-
 /*
+
 {% if can_populate_get %}
 /// Get a populated {{model_name}} from the database
 #[instrument(skip(db))]

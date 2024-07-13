@@ -105,6 +105,12 @@ impl<'a> AuthedEntity<'a> {
         Entity::has_many(related)
     }
 
+    {# Disabled for now since these need special queries when interacting with auth
+        Organization needs to only apply to the current organization, or to be able to
+            find a list of memberships for the current user.
+        User needs to apply to all users that have memberships in the current organization.
+        Eventually both of these cases should be handled and these functions should be reenabled, where it makes sense.
+    #}
     {% if name != "Organization" and name != "User" %}
 
     /// Performs an authenticated find operation on {{name}}
@@ -237,6 +243,8 @@ impl<'a> AuthedEntity<'a> {
         Entity::delete_by_id(values)
     }
 
+    {% if name != "Organization" and name != "User" %}
+    {# See above for why these are disabled for User and Organization #}
     /// Adds a clause that filters a list-style query based on the user's permissions and organization.
     pub fn check_list(&self, select: Select<Entity>) -> Result<Select<Entity>, error_stack::Report<Error>> {
         if self.auth_info.has_permission(READ_PERMISSION) {
@@ -311,5 +319,6 @@ impl<'a> AuthedEntity<'a> {
             Err(error_stack::Report::new(crate::Error::MissingPermission(CREATE_PERMISSION)))
         }
     }
+    {% endif %}
 }
 
