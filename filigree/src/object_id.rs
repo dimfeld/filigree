@@ -6,6 +6,7 @@ use base64::{
     Engine,
 };
 use schemars::JsonSchema;
+use sea_orm::IntoActiveValue;
 use sqlx::{postgres::PgTypeInfo, Database};
 use thiserror::Error;
 use uuid::Uuid;
@@ -277,6 +278,12 @@ impl<'r, PREFIX: ObjectIdPrefix> sqlx::Decode<'r, sqlx::Postgres> for ObjectId<P
 impl<PREFIX: ObjectIdPrefix> From<ObjectId<PREFIX>> for sea_orm::Value {
     fn from(value: ObjectId<PREFIX>) -> Self {
         value.0.into()
+    }
+}
+
+impl<PREFIX: ObjectIdPrefix> IntoActiveValue<ObjectId<PREFIX>> for ObjectId<PREFIX> {
+    fn into_active_value(self) -> sea_orm::ActiveValue<ObjectId<PREFIX>> {
+        sea_orm::ActiveValue::Set(self)
     }
 }
 

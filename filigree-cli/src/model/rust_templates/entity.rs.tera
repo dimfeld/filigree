@@ -2,7 +2,7 @@
 use super::{
     {{id_type}}, CREATE_PERMISSION, READ_PERMISSION, WRITE_PERMISSION,
 };
-use crate::{auth::AuthInfo, error::Error}; 
+use crate::{auth::AuthInfo, error::Error};
 {%- if id_type != "OrganizationId" %}
 use crate::models::organization::OrganizationId;
 {% endif -%}
@@ -20,7 +20,7 @@ use sqlx_transparent_json_decode::sqlx_json_decode;
 
 {% for struct in structs | filter(attribute="is_primary_model", value = true) %}
 #[derive(Serialize, Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow, DeriveEntityModel)]
-#[sea_orm(table_name = "{{table}}" {% if schema %}, schema_name = "{{schema}}" {% endif %})]
+#[sea_orm(table_name = "{{table}}" {% if schema and schema != "public" %}, schema_name = "{{schema}}" {% endif %})]
 pub struct {{ struct.rust_name }} {
     {%- if struct.is_primary_model -%}#[sea_orm(primary_key)]{% endif %}
     {{ struct.rust_fields_content }}
@@ -70,7 +70,7 @@ impl sea_orm::ActiveModelBehavior for ActiveModel {}
 ///
 /// The original `Entity` methods are also present with `_unauthed` appended to their names, for
 /// the occasional cases where you are sure it's ok to skip the auth check.
-/// 
+///
 pub struct AuthedEntity<'a> {
     auth_info: &'a AuthInfo,
 }
@@ -105,13 +105,15 @@ impl<'a> AuthedEntity<'a> {
         Entity::has_many(related)
     }
 
+    {% if name != "Organization" and name != "User" %}
+
     /// Performs an authenticated find operation on {{name}}
     pub fn find(&self) -> Result<Select<Entity>, error_stack::Report<Error>> {
         self.check_list(Entity::find())
     }
 
     /// Performs an authenticated find operation by ID on {{name}}
-    pub fn find_by_id<T>(&self, values: T) -> Result<Select<Entity>, error_stack::Report<Error>> 
+    pub fn find_by_id<T>(&self, values: T) -> Result<Select<Entity>, error_stack::Report<Error>>
     where
         T: Into<<<Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType>,
     {
@@ -119,7 +121,7 @@ impl<'a> AuthedEntity<'a> {
     }
 
     /// Performs an authenticated insert operation for a single {{name}}.
-    pub fn insert<A>(&self, model: A) -> Result<sea_orm::Insert<A>, error_stack::Report<Error>> 
+    pub fn insert<A>(&self, model: A) -> Result<sea_orm::Insert<A>, error_stack::Report<Error>>
     where
         A: ActiveModelTrait<Entity = Entity>,
     {
@@ -127,7 +129,7 @@ impl<'a> AuthedEntity<'a> {
     }
 
     /// Performs an authenticated insert operation for multiple {{plural}}.
-    pub fn insert_many<A, I>(&self, models: I) -> Result<sea_orm::Insert<A>, error_stack::Report<Error>> 
+    pub fn insert_many<A, I>(&self, models: I) -> Result<sea_orm::Insert<A>, error_stack::Report<Error>>
     where
         A: ActiveModelTrait<Entity = Entity>,
         I: IntoIterator<Item = A>,
@@ -136,7 +138,7 @@ impl<'a> AuthedEntity<'a> {
     }
 
     /// Performs an authenticated update operation for a single {{name}}.
-    pub fn update<A>(&self, model: A) -> Result<sea_orm::UpdateOne<A>, error_stack::Report<Error>> 
+    pub fn update<A>(&self, model: A) -> Result<sea_orm::UpdateOne<A>, error_stack::Report<Error>>
     where
         A: ActiveModelTrait<Entity = Entity>,
     {
@@ -149,7 +151,7 @@ impl<'a> AuthedEntity<'a> {
     }
 
     /// Performs an authenticated delete operation for a single {{name}}.
-    pub fn delete<A>(&self, model: A) -> Result<sea_orm::DeleteOne<A>, error_stack::Report<Error>> 
+    pub fn delete<A>(&self, model: A) -> Result<sea_orm::DeleteOne<A>, error_stack::Report<Error>>
     where
         A: ActiveModelTrait<Entity = Entity>,
     {
@@ -162,12 +164,14 @@ impl<'a> AuthedEntity<'a> {
     }
 
     /// Performs an authenticated delete operation by ID.
-    pub fn delete_by_id<T>(&self, values: T) -> Result<sea_orm::DeleteMany<Entity>, error_stack::Report<Error>> 
+    pub fn delete_by_id<T>(&self, values: T) -> Result<sea_orm::DeleteMany<Entity>, error_stack::Report<Error>>
     where
         T: Into<<<Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType>,
     {
         self.check_delete_many(Entity::delete_by_id(values))
     }
+
+    {% endif %}
 
     /// Performs an unauthenticated find operation on {{plural}}.
     pub fn find_unauthed() -> Select<Entity> {

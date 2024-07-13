@@ -13,11 +13,10 @@ use tracing::{event, instrument, Level};
 use std::str::FromStr;
 
 use super::{{id_type}};
+use super::types::*;
 {% if model_name != "Organization" %}
 use crate::models::organization::OrganizationId;
 {% endif %}
-use super::types::*;
-
 use crate::auth::AuthInfo;
 use crate::Error;
 {{rust_imports}}

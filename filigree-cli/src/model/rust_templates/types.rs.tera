@@ -1,5 +1,6 @@
 #![allow(unused_imports, dead_code)]
 use super::{{id_type}};
+use super::entity::ActiveModel;
 {%- if id_type != "OrganizationId" %}
 use crate::models::organization::OrganizationId;
 {% endif -%}
