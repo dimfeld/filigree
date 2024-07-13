@@ -113,6 +113,8 @@ async fn create_superuser_role(
     tx: &mut PgConnection,
     org_id: OrganizationId,
 ) -> Result<RoleId, Error> {
+    todo!("TEMP")
+    /*
     let superuser_role_id = RoleId::new();
     let superuser_role = role::RoleCreatePayload {
         id: None,
@@ -132,5 +134,6 @@ async fn create_superuser_role(
     role::queries::create_raw(tx, &superuser_role_id, &org_id, superuser_role).await?;
 
     Ok(superuser_role_id)
+*/
 }
 {% endif %}
