@@ -1,4 +1,5 @@
 use error_stack::{Report, ResultExt};
+use sea_orm::IntoActiveValue;
 use sqlx::PgPool;
 use crate::Error;
 {% if auth.builtin %}
@@ -15,7 +16,7 @@ use crate::{
     models::{
         organization::OrganizationId,
         role::{self, RoleId},
-        user::{UserCreatePayload, UserId},
+        user::{self, UserId},
     },
     users::{
         organization::create_new_organization, users::create_new_user_with_prehashed_password,
@@ -74,9 +75,9 @@ pub async fn bootstrap(db: PgPool, data: BootstrapData) -> Result<bool, Report<E
     )
     .await?;
 
-    let user_details = UserCreatePayload {
-        name: data.admin_name.unwrap_or_else(|| "Admin".to_string()),
-        email: Some(data.admin_email.clone()),
+    let user_details = user::ActiveModel {
+        name: data.admin_name.unwrap_or_else(|| "Admin".to_string()).into_active_value(),
+        email: Some(data.admin_email.clone()).into_active_value(),
         ..Default::default()
     };
 

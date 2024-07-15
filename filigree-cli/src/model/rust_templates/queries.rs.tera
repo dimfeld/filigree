@@ -5,15 +5,24 @@ use filigree::{
     errors::OrderByError,
     sql::{BindingOperator, FilterBuilder, ValuesBuilder}
 };
-use sea_orm::prelude::*;
+use sea_orm::{
+    entity::ActiveValue,
+    prelude::*,
+    sea_query::{
+        self,
+        expr::Expr,
+    },
+    query::*,
+};
 use serde::Deserialize;
 use sqlx::{PgConnection, PgExecutor, postgres::PgRow, query_file, query_file_as, query_file_scalar};
 use tracing::{event, instrument, Level};
 
 use std::str::FromStr;
 
-use super::{{id_type}};
-use super::types::*;
+use super::{
+    {{id_type}}, ActiveModel, BaseEntity, Column, Entity, types::*,
+};
 {% if model_name != "Organization" %}
 use crate::models::organization::OrganizationId;
 {% endif %}
@@ -42,9 +51,9 @@ use crate::Error;
 type QueryAs<'q, T> = sqlx::query::QueryAs<'q, sqlx::Postgres, T, <sqlx::Postgres as sqlx::database::HasArguments<'q>>::Arguments>;
 
 {% if belongs_to_field %}
-fn check_missing_parent_error<T>(result: Result<T, sqlx::Error>) -> Result<T, error_stack::Report<Error>> {
+fn check_missing_parent_error<T>(result: Result<T, DbErr>) -> Result<T, error_stack::Report<Error>> {
     match result {
-        Err(sqlx::Error::Database(e))
+        Err(DbErr::Exec(sea_orm::error::RuntimeErr::SqlxError(sqlx::Error::Database(e))))
             if e.constraint() == Some("{{table}}_{{belongs_to_field.sql_name}}_fkey") =>
         {
             Err(e).change_context(Error::NotFound("Parent {{parent_model_name}}"))
@@ -54,6 +63,7 @@ fn check_missing_parent_error<T>(result: Result<T, sqlx::Error>) -> Result<T, er
 }
 {% endif %}
 
+/*
 /// Get a {{model_name}} from the database or return a `NotFound` error.
 #[instrument(skip(db))]
 pub async fn get(db: impl ConnectionTrait, auth: &AuthInfo, id: {{id_type}}) -> Result<Model, error_stack::Report<Error>> {
@@ -66,7 +76,6 @@ pub async fn get(db: impl ConnectionTrait, auth: &AuthInfo, id: {{id_type}}) -> 
 
     Ok(object)
 }
-/*
 
 {% if can_populate_get %}
 /// Get a populated {{model_name}} from the database
@@ -86,73 +95,60 @@ pub async fn get_populated(db: impl ConnectionTrait, auth: &AuthInfo, id: &{{id_
     Ok(object)
 }
 {% endif %}
-
-#[derive(Debug, Default)]
-enum OrderByField {
-    {%- for field in fields  %}
-    {%- if field.sortable != "none" -%}
-        {% if field.snake_case_name == default_sort_field -%}
-        #[default]
-        {%- endif %}
-    {{field.pascal_case_name}},
-    {%- endif -%}
-    {%- endfor -%}
+*/
+#[derive(Debug)]
+struct OrderBy {
+    column: Column,
+    descending: bool,
 }
 
-impl OrderByField {
-    fn as_str(&self) -> &str {
-        match self {
-            {% for field in fields -%}
-            {%- if field.sortable != "none" -%}
-            Self::{{field.pascal_case_name}} => "{{field.snake_case_name}}",
-            {%- endif -%}
-            {%- endfor %}
-        }
-    }
-
-    fn allowed_direction(&self, descending: bool) -> bool {
-        match self {
-            {% for field in fields | filter(attribute="sortable", value="ascending_only") -%}
-            Self::{{field.pascal_case_name}} => descending == false,
-            {%- endfor %}
-            {% for field in fields | filter(attribute="sortable", value="descending_only") -%}
-            Self::{{field.pascal_case_name}} => descending == true,
-            {%- endfor %}
-            _ => true
+impl OrderBy {
+    fn as_order(&self) -> sea_orm::query::Order {
+        if self.descending {
+            sea_orm::query::Order::Desc
+        } else {
+            sea_orm::query::Order::Asc
         }
     }
 }
 
-impl std::str::FromStr for OrderByField {
+impl std::str::FromStr for OrderBy {
     type Err = OrderByError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = match s {
+    fn from_str(field: &str) -> Result<Self, Self::Err> {
+        let descending = field.starts_with('-');
+        let field = if descending {
+            &field[1..]
+        } else {
+            field
+        };
+
+        let column = match field {
             {% for field in fields -%}
             {%- if field.sortable != "none" -%}
-            "{{field.sql_name}}" => OrderByField::{{field.pascal_case_name}},
+            "{{field.sql_name}}" => {
+                {% if field.sortable == "ascending_only" -%}
+                    if descending {
+                        return Err(OrderByError::InvalidDirection);
+                    }
+                {% elif field.sortable == "descending_only" %}
+                    if !descending {
+                        return Err(OrderByError::InvalidDirection);
+                    }
+                {% endif %}
+
+                Column::{{field.iden}}
+            }
             {%- endif -%}
             {%- endfor %}
             _ => return Err(OrderByError::InvalidField),
         };
 
-        Ok(value)
+        Ok(Self {
+            column,
+            descending,
+        })
     }
-}
-
-fn parse_order_by(field: &str) -> Result<(bool, OrderByField), OrderByError> {
-    let descending = field.starts_with('-');
-    let field = if descending {
-        &field[1..]
-    } else {
-        field
-    };
-
-    let value = OrderByField::from_str(field)?;
-    if !value.allowed_direction(descending) {
-        return Err(OrderByError::InvalidDirection);
-    }
-    Ok((descending, value))
 }
 
 {% set_global has_filterable = false %}
@@ -178,84 +174,52 @@ pub struct ListQueryFilters {
 }
 
 impl ListQueryFilters {
-    fn build_where_clause(&self) -> String {
-        {% set start_binding = 3 %}
-        {% if not pagination.disable %}
-          {% set start_binding = start_binding + 2 %}
-        {% endif %}
-        let mut bindings = FilterBuilder::new({{ start_binding }});
-
-
+    pub fn apply(self, mut query: Select<BaseEntity>)
+                    -> Result<Select<BaseEntity>, error_stack::Report<Error>> {
         {% for field in fields | filter(attribute="filterable", value="exact") %}
             {% if field.base_rust_type == "bool" -%}
-            if self.{{field.rust_name}}.is_some() {
-                bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}, BindingOperator::Eq);
+            if let Some(value) = self.{{field.rust_name}} {
+                query = query.filter(Column::{{field.iden}}.eq(value));
             }
             {%- else -%}
             if !self.{{field.rust_name}}.is_empty() {
-                bindings.add_vec("{{field.sql_name}}", &self.{{field.rust_name}});
+                query = query.filter(Column::{{field.iden}}.is_in(self.{{field.rust_name}}));
             }
             {%- endif %}
         {% endfor %}
         {% for field in fields | filter(attribute="filterable", value="range") %}
-            if self.{{field.rust_name}}_lte.is_some() {
-                bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}_lte, BindingOperator::Lte);
+            if let Some(value) = self.{{field.rust_name}}_lte {
+                query = query.filter(Column::{{field.iden}}.lt(value));
             }
 
-            if self.{{field.rust_name}}_gte.is_some() {
-                bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}_gte, BindingOperator::Gte);
+            if let Some(value) = self.{{field.rust_name}}_gte {
+                query = query.filter(Column::{{field.iden}}.gt(value));
             }
         {% endfor %}
 
-        let query = bindings.to_string();
-        event!(Level::DEBUG, %query);
-        query
-    }
+        let order_by = OrderBy::from_str(self.order_by.as_deref().unwrap_or("{{full_default_sort_field}}"))
+            .change_context(Error::Filter)?;
+        query = query.order_by(order_by.column, order_by.as_order());
 
-    fn bind_to_query<'a, T>(&'a self, mut query: QueryAs<'a, T>) -> QueryAs<'a, T> {
         {% if not pagination.disable %}
             const MAX_PER_PAGE: u32 = {{ pagination.max_per_page }};
             const DEFAULT_PER_PAGE: u32 = {{ pagination.default_per_page }};
             let per_page = self.per_page.unwrap_or(DEFAULT_PER_PAGE).min(MAX_PER_PAGE).max(1);
-            let offset = self.page.unwrap_or(0) * per_page;
+            let offset = self.page.map(|p| (p * per_page) as u64);
+            query = query.limit(per_page as u64).offset(offset);
             event!(Level::DEBUG, per_page, offset);
-            query = query.bind(per_page as i32).bind(offset as i32);
         {% endif %}
 
-
-
-        {% for field in fields | filter(attribute="filterable", value="exact") %}
-            {% if field.base_rust_type == "bool" -%}
-            if self.{{field.rust_name}}.is_some() {
-            {% else %}
-            if !self.{{field.rust_name}}.is_empty() {
-                {% endif %}
-                event!(Level::DEBUG, {{field.rust_name}} = ?self.{{field.rust_name}});
-                query = query.bind(&self.{{field.rust_name}});
-            }
-        {% endfor %}
-        {% for field in fields | filter(attribute="filterable", value="range") %}
-            {% set_global has_filterable = true %}
-            if self.{{field.rust_name}}_lte.is_some() {
-                event!(Level::DEBUG, {{field.rust_name}}_lte = ?self.{{field.rust_name}}_lte);
-                query = query.bind(&self.{{field.rust_name}}_lte);
-            }
-
-            if self.{{field.rust_name}}_gte.is_some() {
-                event!(Level::DEBUG, {{field.rust_name}}_gte = ?self.{{field.rust_name}}_gte);
-                query = query.bind(&self.{{field.rust_name}}_gte);
-            }
-        {% endfor %}
-
-        query
+        Ok(query)
     }
 }
 
+/*
 #[instrument(skip(db))]
 pub async fn list(
     db: impl ConnectionTrait,
     auth: &AuthInfo,
-    filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}ListResult>, error_stack::Report<Error>> {
+    filters: ListQueryFilters) -> Result<Vec<{{ struct_base }}ListResult>, error_stack::Report<Error>> {
 
     let q = include_str!("list.sql");
     list_internal(q, db, auth, filters).await
@@ -266,7 +230,7 @@ pub async fn list(
 pub async fn list_populated(
     db: impl ConnectionTrait,
     auth: &AuthInfo,
-    filters: &ListQueryFilters) -> Result<Vec<{{ struct_base }}PopulatedListResult>, error_stack::Report<Error>> {
+    filters: ListQueryFilters) -> Result<Vec<{{ struct_base }}PopulatedListResult>, error_stack::Report<Error>> {
 
     let q = include_str!("list_populated.sql");
     list_internal(q, db, auth, filters).await
@@ -283,8 +247,6 @@ where
     T: for<'r> sqlx::FromRow<'r, PgRow> + Send + Unpin,
 {
 
-    let (descending, order_by_field) = parse_order_by(filters.order_by.as_deref().unwrap_or("{{full_default_sort_field}}"))
-        .change_context(Error::Filter)?;
     let order_direction = if descending { "DESC" } else { "ASC" };
 
     let q = query_template.replace("__insertion_point_order_by", &format!("{} {}", order_by_field.as_str(), order_direction));
@@ -553,6 +515,7 @@ pub async fn lookup_object_permissions(
     let perm = result.and_then(|r| ObjectPermission::from_str_infallible(&r));
     Ok(perm)
 }
+*/
 
 {% if belongs_to_field %}
 {% if belongs_to_field.unique %}
@@ -564,12 +527,13 @@ pub async fn lookup_object_permissions(
 #[instrument(skip(db))]
 pub async fn upsert_with_parent(
     db: impl ConnectionTrait,
-    organization_id: &OrganizationId,
+    auth: &AuthInfo,
     is_owner: bool,
     parent_id: &{{belongs_to_field.rust_type}},
-    payload: &{{ struct_base }}UpdatePayload)
-    -> Result<{{struct_base}}, error_stack::Report<Error>> {
-
+    payload: ActiveModel
+) -> Result<{{struct_base}}, error_stack::Report<Error>> {
+    todo!();
+/*
     let id = payload.id.clone().unwrap_or_else({{id_type}}::new);
     let result = query_file_as!({{struct_base}}, "{{dir}}/upsert_single_child.sql",
         {% if owner_and_user_different_access %}
@@ -590,9 +554,11 @@ pub async fn upsert_with_parent(
         .fetch_one(db)
         .await;
     check_missing_parent_error(result)
+*/
 }
 
 {% if not belongs_to_field.unique %}
+/*
 /// Update a single child of the given parent. This does nothing if the child doesn't exist.
 #[instrument(skip(db))]
 pub async fn update_one_with_parent(
@@ -604,6 +570,7 @@ pub async fn update_one_with_parent(
     mut payload: {{ struct_base }}UpdatePayload
     ) -> Result<bool, error_stack::Report<Error>> {
 
+    todo!();
     payload.{{belongs_to_field.name}} = parent_id.clone();
 
     let actor_ids = auth.actor_ids();
@@ -626,72 +593,89 @@ pub async fn update_one_with_parent(
 
     Ok(result.rows_affected() > 0)
 }
+*/
 
 /// Update the children of the given parent.
 /// Insert new values that are not yet in the database and
 /// delete existing values that are not in the payload.
 #[instrument(skip(db))]
 pub async fn update_all_with_parent(
-    db: &mut PgConnection,
-    organization_id: &OrganizationId,
-    is_owner: bool,
-    parent_id: &{{belongs_to_field.rust_type}},
-    payload: &[{{ struct_base }}UpdatePayload])
+    db: impl ConnectionTrait,
+    auth: &AuthInfo,
+    parent_id: {{belongs_to_field.rust_type}},
+    mut payload: Vec<ActiveModel>)
     -> Result<Vec<{{struct_base}}>, error_stack::Report<Error>> {
 
     if payload.is_empty() {
-        delete_all_children_of_parent(db, organization_id, parent_id).await?;
+        Entity::new(auth)
+            .delete_many()?
+            .filter(Column::{{belongs_to_field.iden}}.eq(parent_id))
+            .exec(&db)
+            .await
+            .change_context(Error::Db)?;
+
         Ok(Vec::new())
     } else {
-        // First, we upsert the existing children.
-        let q = include_str!("upsert_children.sql");
-        let bindings = ValuesBuilder{
-            first_parameter: 4,
-            num_values: payload.len(),
-            num_columns: 2 + {{ fields | filter(attribute="owner_write", value=true) | length }},
-        };
-        let q = q.replace("__insertion_point_insert_values", &bindings.to_string());
-
-        let mut query = sqlx::query_as::<_, {{struct_base}}>(q.as_str());
-
-        query = query
-            .bind(is_owner)
-            {%if not global %}
-            .bind(organization_id)
-            {%endif %}
-            .bind(parent_id.as_uuid());
-
-        for p in payload {
-            let id = p.id.unwrap_or_else(|| {{id_type}}::new());
-            query = query
-                .bind(id)
-                .bind(organization_id)
+        let parent_entity = crate::models::{{belongs_to_field.module}}::Entity::new(auth);
+        {% if owner_and_user_different_access %}
+            let update_columns = if parent_entity.get_access(&parent_id) == ObjectPermission::Owner {
+                &[
+                    {% for field in fields | filter(attribute="owner_write", value=true) %}
+                    {% if belongs_to_field.sql_name != field.sql_name -%}
+                    Column::{{field.iden}},
+                    {%- endif %}
+                    {% endfor %}
+                ]
+            } else {
+                &[
+                    {% for field in fields | filter(attribute="user_write", value=true) %}
+                    {% if belongs_to_field.sql_name != field.sql_name -%}
+                    Column::{{field.iden}},
+                    {%- endif %}
+                    {% endfor %}
+                ]
+            };
+        {% else %}
+            let update_columns = &[
                 {% for field in fields | filter(attribute="owner_write", value=true) %}
-                .bind(
-                {%- if field.nullable -%}
-                    p.{{field.rust_name}}.as_ref(),
-                {%- else -%}
-                    &p.{{field.rust_name}},
-                {%- endif -%}
-                )
+                {% if belongs_to_field.sql_name != field.sql_name -%}
+                Column::{{field.iden}},
+                {%- endif %}
                 {% endfor %}
+            ];
+        {% endif %}
+
+        for model in payload.iter_mut() {
+            if model.{{belongs_to_field.rust_name}}.is_set() {
+                model.{{belongs_to_field.rust_name}} = ActiveValue::Unchanged(parent_id.clone());
+            }
+
+            if model.id.is_not_set() {
+                model.id = ActiveValue::set({{id_type}}::new());
+            }
         }
 
-        let results = query
-            .fetch_all(&mut *db)
+        // Upsert existing children
+        let results = Entity::new(auth)
+            .insert_many(payload)?
+            .on_conflict(
+                sea_query::OnConflict::column(Column::Id)
+                    .update_columns(update_columns.to_owned())
+                    .value(Column::UpdatedAt, Expr::cust("now()"))
+                    .action_and_where(Column::{{belongs_to_field.iden}}.eq(parent_id))
+                    .to_owned()
+            )
+            .exec_with_returning(&db)
             .await;
         let results = check_missing_parent_error(results)?;
 
         // Delete any of the children that were not sent in.
-        let ids = results.iter().map(|o| o.{{self::id_ref()}}.clone()).collect::<Vec<_>>();
-        query_file!("{{dir}}/delete_removed_children.sql",
-            {%if not global %}
-            {{self::db_org_id(base="organization_id")}},
-            {% endif %}
-            parent_id.as_uuid(),
-            &ids
-            )
-            .execute(db)
+        let ids = results.iter().map(|o| o.id.clone()).collect::<Vec<_>>();
+        Entity::new(auth)
+            .delete_many()?
+            .filter(Column::{{belongs_to_field.iden}}.eq(parent_id))
+            .filter(Column::Id.is_not_in(ids))
+            .exec(&db)
             .await
             .change_context(Error::Db)?;
 
@@ -700,6 +684,7 @@ pub async fn update_all_with_parent(
 }
 {% endif %}
 
+/*
 /// Delete a child object, making sure that its parent ID matches.
 #[instrument(skip(db))]
 pub async fn delete_with_parent(
@@ -741,6 +726,6 @@ pub async fn delete_all_children_of_parent(
         .change_context(Error::Db)?;
     Ok(result.rows_affected() > 0)
 }
+*/
 
 {% endif %}
-*/

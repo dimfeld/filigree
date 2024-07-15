@@ -23,7 +23,7 @@ pub const READ_PERMISSION: &str = "{{read_permission}}";
 pub const WRITE_PERMISSION: &str = "{{write_permission}}";
 pub const OWNER_PERMISSION: &str = "{{owner_permission}}";
 {# Eventually this will be configurable as either owner or write, and will need to be something else for object-based permissions too #}
-pub const CREATE_PERMISSION: &str = "{{owner_permission}}";
+pub const CREATE_PERMISSION: &str = OWNER_PERMISSION;
 
 {% if predefined_object_id  %}
 pub type {{id_type}} = filigree::auth::{{id_type}};

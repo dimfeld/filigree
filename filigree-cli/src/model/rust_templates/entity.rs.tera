@@ -1,6 +1,6 @@
 #![allow(unused_imports, dead_code)]
 use super::{
-    {{id_type}}, CREATE_PERMISSION, READ_PERMISSION, WRITE_PERMISSION,
+    {{id_type}}, CREATE_PERMISSION, OWNER_PERMISSION, READ_PERMISSION, WRITE_PERMISSION,
 };
 use crate::{auth::AuthInfo, error::Error};
 {%- if id_type != "OrganizationId" %}
@@ -26,6 +26,8 @@ pub struct {{ struct.rust_name }} {
     {{ struct.rust_fields_content }}
 }
 {% endfor %}
+
+impl sea_orm::ActiveModelBehavior for ActiveModel {}
 
 #[derive(Copy, Clone, Debug, sea_orm::EnumIter, sea_orm::DeriveRelation)]
 pub enum Relation {
@@ -60,8 +62,6 @@ impl Related<crate::models::{{child.module}}::entity::Entity> for Entity {
     }
 }
 {% endfor %}
-
-impl sea_orm::ActiveModelBehavior for ActiveModel {}
 
 /// An Entity class that automatically checks for authorization on any query. This structure
 /// follows the function names defined by the `sea_orm::EntityTrait` trait, which allows similar
@@ -148,6 +148,7 @@ impl<'a> AuthedEntity<'a> {
     where
         A: ActiveModelTrait<Entity = Entity>,
     {
+        // TODO clear fields that are owner-only if this the user only had normal access
         self.check_update_one(Entity::update(model))
     }
 
@@ -241,6 +242,19 @@ impl<'a> AuthedEntity<'a> {
         T: Into<<<Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType>,
     {
         Entity::delete_by_id(values)
+    }
+
+    /// Return the amount of access that the user has to this entity.
+    pub fn get_access(&self, id: &{{id_type}}) -> ObjectPermission {
+        if self.auth_info.has_permission(OWNER_PERMISSION) {
+            ObjectPermission::Owner
+        } else if self.auth_info.has_permission(WRITE_PERMISSION) {
+            ObjectPermission::Write
+        } else if self.auth_info.has_permission(READ_PERMISSION) {
+            ObjectPermission::Read
+        } else {
+            ObjectPermission::None
+        }
     }
 
     {% if name != "Organization" and name != "User" %}

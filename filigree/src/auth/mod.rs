@@ -269,6 +269,8 @@ pub trait AuthInfo: 'static + Send + Sync {
 #[sqlx(rename_all = "snake_case", type_name = "text")]
 #[serde(rename_all = "snake_case")]
 pub enum ObjectPermission {
+    /// The user has no access to the object.
+    None,
     /// The object is read-only
     Read,
     /// The object can be written
@@ -284,8 +286,17 @@ impl ObjectPermission {
             "owner" => Some(ObjectPermission::Owner),
             "read" => Some(ObjectPermission::Read),
             "write" => Some(ObjectPermission::Write),
+            "none" => Some(ObjectPermission::None),
             _ => None,
         }
+    }
+
+    /// Return true if the permission is Read or Owner
+    pub fn can_read(&self) -> bool {
+        matches!(
+            self,
+            ObjectPermission::Read | ObjectPermission::Write | ObjectPermission::Owner
+        )
     }
 
     /// Return true if the permission is Write or Owner

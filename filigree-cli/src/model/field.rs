@@ -203,6 +203,8 @@ impl ModelField {
             "snake_case_name": self.name.to_case(Case::Snake),
             "pascal_case_name": self.name.to_case(Case::Pascal),
             "rust_name": self.rust_field_name(),
+            // The SeaORM Column Iden
+            "iden": self.name.to_case(Case::Pascal),
             "base_rust_type": self.base_rust_type(),
             "rust_type": self.rust_type(),
             "is_custom_rust_type": self.rust_type.is_some(),

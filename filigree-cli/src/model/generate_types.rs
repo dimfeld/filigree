@@ -42,7 +42,6 @@ impl<'a> ModelGenerator<'a> {
         context: &mut tera::Context,
     ) -> Result<(), Error> {
         let struct_base = self.model.struct_name();
-        let user_can_write_anything = self.all_fields()?.any(|f| f.user_access.can_write());
         let struct_list = [
             StructContents {
                 suffix: "AllFields",
@@ -95,50 +94,6 @@ impl<'a> ModelGenerator<'a> {
                     into_active_model: false,
                 },
             },
-            // TODO make populated results into wrapper structs instead
-            StructContents {
-                suffix: "PopulatedGetResult",
-                similar_to: Some("AllFields"),
-                fields: Self::struct_contents(
-                    self.all_fields()?.filter(|f| !f.never_read).chain(
-                        self.virtual_fields(super::generator::ReadOperation::Get)?
-                            .map(Cow::Owned),
-                    ),
-                    |_| false,
-                ),
-                flags: ImplFlags {
-                    serialize: true,
-                    json_decode: true,
-                    into_active_model: false,
-                },
-            },
-            StructContents {
-                suffix: "PopulatedListResult",
-                similar_to: Some("ListResult"),
-                fields: Self::struct_contents(
-                    self.all_fields()?
-                        .filter(|f| !f.never_read && !f.omit_in_list)
-                        .chain(
-                            self.virtual_fields(super::generator::ReadOperation::List)?
-                                .map(Cow::Owned),
-                        ),
-                    |_| false,
-                ),
-                flags: ImplFlags {
-                    serialize: true,
-                    json_decode: true,
-                    into_active_model: false,
-                },
-            },
-            StructContents {
-                suffix: "CreatePayload",
-                similar_to: None,
-                fields: Self::struct_contents(self.write_payload_struct_fields(false)?, |_| false),
-                flags: ImplFlags {
-                    into_active_model: true,
-                    ..Default::default()
-                },
-            },
             StructContents {
                 suffix: "CreateResult",
                 similar_to: None,
@@ -160,22 +115,6 @@ impl<'a> ModelGenerator<'a> {
                 ),
                 flags: ImplFlags {
                     serialize: true,
-                    ..Default::default()
-                },
-            },
-            StructContents {
-                suffix: "UpdatePayload",
-                similar_to: None,
-                fields: Self::struct_contents(self.write_payload_struct_fields(true)?, |f| {
-                    // Allow optional fields for those that the owner can write,
-                    // but the user can not, so that we can accept either form of
-                    // the field.
-                    user_can_write_anything
-                        && !f.user_access.can_write()
-                        && f.owner_access.can_write()
-                }),
-                flags: ImplFlags {
-                    into_active_model: true,
                     ..Default::default()
                 },
             },
