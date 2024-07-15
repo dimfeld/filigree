@@ -13,12 +13,12 @@ SELECT
     | filter(attribute='never_read', value=false)
     | filter(attribute='omit_in_list', value=false)
     | map(attribute='sql_name')
-    | join(sep=',') }},
+    | join(sep=',') }}
 
   {% if populate_children %}
     {% for c in children %}
       {% if c.relationship.populate_on_list == 'id' %}
-        (
+        , (
           SELECT
             {% if c.relationship.many %}COALESCE(ARRAY_AGG({%- endif -%}
               {{c.table}}.id
@@ -26,44 +26,41 @@ SELECT
           FROM {{c.schema}}.{{c.table}}
           WHERE {{c.parent_field}} = tb.id {% if not global %}AND organization_id=$1{% endif %}
           {% if not c.relationship.many %}LIMIT 1{% endif %}
-        ) AS "{{c.list_sql_field_name}}",
+        ) AS "{{c.list_sql_field_name}}"
       {% elif c.relationship.populate_on_list == 'data' %}
-        (
+        , (
           SELECT
             {% if c.relationship.many -%}COALESCE(ARRAY_AGG({%- endif -%}
               JSONB_BUILD_OBJECT(
                 {% for field in c.fields %}
-                  '{{field.rust_name}}', {{field.sql_name}},
+                  '{{field.rust_name}}', {{field.sql_name}}{% if not loop.last %},{% endif %}
                 {% endfor %}
-                '_permission', _permission
               )
             {%- if c.relationship.many -%}), ARRAY[]::jsonb[]){%- endif %}
           FROM {{c.schema}}.{c.table}}
           WHERE {{c.parent_field}} = tb.id {% if not global %} AND organization_id=$1{% endif %}
           {% if not c.relationship.many %}LIMIT 1{% endif %}
-        ) AS "{{c.list_sql_field_name}}",
+        ) AS "{{c.list_sql_field_name}}"
       {% endif %}
     {% endfor %}
 
     {% for r in reference_populations | filter(attribute="on_list", value=true) %}
-    (SELECT
+    , (SELECT
       JSONB_BUILD_OBJECT(
         {% for field in r.fields %}
-          '{{field.rust_name}}', ref_{{r.name}}.{{field.sql_name}},
+        '{{field.rust_name}}', ref_{{r.name}}.{{field.sql_name}}{% if not loop.last %},{% endif %}
         {% endfor %}
-        '_permission', _permission
       )
       FROM {{ r.table}} ref_{{r.name}}
       WHERE tb.{{r_id_field}} IS NOT NULL
         AND ref_{{r.name}}.id = tb.{{r.id_field}}
         AND ref_{{r.name}}.organization_id = tb.organization_id
-    ) AS "{{r.full_name}}",
+    ) AS "{{r.full_name}}"
     {% endfor %}
   {% endif %}
-
-  perm._permission
 FROM
   {{schema}}.{{ table }} tb
+{% if auth_scope != "model" %}
 JOIN LATERAL (
   {{ macros::permissions_value(
       auth_schema=auth_schema,
@@ -76,7 +73,7 @@ JOIN LATERAL (
       write_perm=write_permission
   )}}
 ) perm ON perm._permission IS NOT NULL
-
+{% endif %}
 WHERE
 {% if not global %}
    organization_id = $1

@@ -15,7 +15,6 @@ struct StructContents {
 
 struct GeneratedStruct {
     fields: Vec<ModelField>,
-    add_permissions_field: bool,
     rust_contents: String,
     zod_contents: String,
 }
@@ -46,11 +45,9 @@ impl<'a> ModelGenerator<'a> {
             StructContents {
                 suffix: "AllFields",
                 similar_to: None,
-                fields: Self::struct_contents(
-                    self.all_fields()?.filter(|f| !f.never_read),
-                    |_| false,
-                    true,
-                ),
+                fields: Self::struct_contents(self.all_fields()?.filter(|f| !f.never_read), |_| {
+                    false
+                }),
                 flags: ImplFlags {
                     serialize: true,
                     json_decode: true,
@@ -63,7 +60,6 @@ impl<'a> ModelGenerator<'a> {
                     self.all_fields()?
                         .filter(|f| !f.never_read && !f.omit_in_list),
                     |_| false,
-                    true,
                 ),
                 flags: ImplFlags {
                     serialize: true,
@@ -79,7 +75,6 @@ impl<'a> ModelGenerator<'a> {
                             .map(Cow::Owned),
                     ),
                     |_| false,
-                    true,
                 ),
                 flags: ImplFlags {
                     serialize: true,
@@ -97,7 +92,6 @@ impl<'a> ModelGenerator<'a> {
                                 .map(Cow::Owned),
                         ),
                     |_| false,
-                    true,
                 ),
                 flags: ImplFlags {
                     serialize: true,
@@ -107,11 +101,7 @@ impl<'a> ModelGenerator<'a> {
             StructContents {
                 suffix: "CreatePayload",
                 similar_to: None,
-                fields: Self::struct_contents(
-                    self.write_payload_struct_fields(false)?,
-                    |_| false,
-                    false,
-                ),
+                fields: Self::struct_contents(self.write_payload_struct_fields(false)?, |_| false),
                 flags: ImplFlags::default(),
             },
             StructContents {
@@ -132,7 +122,6 @@ impl<'a> ModelGenerator<'a> {
                         }),
                     ),
                     |_| false,
-                    true,
                 ),
                 flags: ImplFlags {
                     serialize: true,
@@ -142,18 +131,14 @@ impl<'a> ModelGenerator<'a> {
             StructContents {
                 suffix: "UpdatePayload",
                 similar_to: None,
-                fields: Self::struct_contents(
-                    self.write_payload_struct_fields(true)?,
-                    |f| {
-                        // Allow optional fields for those that the owner can write,
-                        // but the user can not, so that we can accept either form of
-                        // the field.
-                        user_can_write_anything
-                            && !f.user_access.can_write()
-                            && f.owner_access.can_write()
-                    },
-                    false,
-                ),
+                fields: Self::struct_contents(self.write_payload_struct_fields(true)?, |f| {
+                    // Allow optional fields for those that the owner can write,
+                    // but the user can not, so that we can accept either form of
+                    // the field.
+                    user_can_write_anything
+                        && !f.user_access.can_write()
+                        && f.owner_access.can_write()
+                }),
                 flags: ImplFlags::default(),
             },
         ];
@@ -161,7 +146,6 @@ impl<'a> ModelGenerator<'a> {
         struct GroupedStruct {
             fields: Vec<ModelField>,
             ts_contents: String,
-            has_permissions_field: bool,
             flags: ImplFlags,
             suffixes: Vec<(&'static str, Option<&'static str>)>,
         }
@@ -178,7 +162,6 @@ impl<'a> ModelGenerator<'a> {
                 .entry(fields.rust_contents)
                 .or_insert_with(|| GroupedStruct {
                     fields: fields.fields,
-                    has_permissions_field: fields.add_permissions_field,
                     flags,
                     ts_contents: fields.zod_contents,
                     suffixes: Vec::new(),
@@ -202,7 +185,6 @@ impl<'a> ModelGenerator<'a> {
                     GroupedStruct {
                         fields,
                         ts_contents: zod_contents,
-                        has_permissions_field,
                         flags,
                         suffixes,
                     },
@@ -251,7 +233,6 @@ impl<'a> ModelGenerator<'a> {
                         "aliases": aliases,
                         "impl_json_decode": flags.json_decode,
                         "impl_serialize": flags.serialize,
-                        "has_permission_field": has_permissions_field,
                     })
                 },
             )
@@ -266,7 +247,6 @@ impl<'a> ModelGenerator<'a> {
     fn struct_contents<'b>(
         fields: impl Iterator<Item = Cow<'b, ModelField>>,
         force_optional: impl Fn(&ModelField) -> bool,
-        add_permissions_field: bool,
     ) -> GeneratedStruct {
         let fields = fields
             .map(|f| {
@@ -322,18 +302,8 @@ impl<'a> ModelGenerator<'a> {
             })
             .join("\n");
 
-        let (zod_contents, rust_contents) = if add_permissions_field {
-            (
-                format!("{zod_contents}\n_permission: ObjectPermission,"),
-                format!("{rust_contents}\npub _permission: ObjectPermission,"),
-            )
-        } else {
-            (zod_contents, rust_contents)
-        };
-
         GeneratedStruct {
             fields,
-            add_permissions_field,
             zod_contents,
             rust_contents,
         }
