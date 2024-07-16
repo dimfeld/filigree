@@ -54,11 +54,11 @@ impl QueryBuilder {
     }
 
     /// Return the query and bindings from the builder.
-    pub fn finish(self, filename: &str) -> SqlQueryContext {
+    pub fn finish(self, name: &str) -> SqlQueryContext {
         SqlQueryContext {
             bindings: self.bindings,
             query: self.query,
-            filename: filename.to_string(),
+            name: name.to_string(),
         }
     }
 
@@ -100,7 +100,7 @@ impl<'a, 'b> Separated<'a, 'b> {
     }
 
     /// Define a string to be written just before the first push call.
-    /// For example you could use `sep.on_first("WHERE ")` which would then only
+    /// For example you could use `sep.on_first(" WHERE ")` which would then only
     /// output the WHERE if something else was written.
     pub fn on_first(&mut self, on_first: &'b str) {
         self.on_first = on_first;
@@ -211,7 +211,7 @@ mod tests {
         let result = builder.finish("query.sql");
         assert_eq!(result.query, "SELECT * FROM users WHERE name = $1");
         assert_eq!(result.bindings, vec!["name"]);
-        assert_eq!(result.filename, "query.sql");
+        assert_eq!(result.name, "query.sql");
     }
 
     #[test]
@@ -266,6 +266,6 @@ mod tests {
             "SELECT id, name, age FROM users WHERE active = true AND age > $1 ORDER BY name"
         );
         assert_eq!(result.bindings, vec!["min_age"]);
-        assert_eq!(result.filename, "a-query.sql");
+        assert_eq!(result.name, "a-query.sql");
     }
 }

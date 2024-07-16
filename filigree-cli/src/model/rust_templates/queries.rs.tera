@@ -57,11 +57,13 @@ fn check_missing_parent_error<T>(result: Result<T, sqlx::Error>) -> Result<T, er
 /// Get a {{model_name}} from the database
 #[instrument(skip(db))]
 pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> Result<{{ struct_base }}, error_stack::Report<Error>> {
-    let actor_ids = auth.actor_ids();
     let object = query_file_as!({{struct_base}}, "{{dir}}/select_one.sql",
-        {{self::id_ref()}},
-        {{self::db_org_id()}},
-        &actor_ids
+        {{query_bindings(
+            bindings=sql_queries.select_one,
+            id=self::id_ref(),
+            organization_id=self::db_org_id(),
+            actor_ids="&auth.actor_ids()"
+            ) | join(sep=", ")}}
         )
         .fetch_optional(db)
         .await
@@ -77,9 +79,12 @@ pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> 
 pub async fn get_populated(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> Result<{{ struct_base }}PopulatedGetResult, error_stack::Report<Error>> {
     let actor_ids = auth.actor_ids();
     let object = query_file_as!({{struct_base}}PopulatedGetResult, "{{dir}}/select_one_populated.sql",
-        {{self::id_ref()}},
-        {{self::db_org_id()}},
-        &actor_ids
+        {{query_bindings(
+            bindings=sql_queries.select_one,
+            id=self::id_ref(),
+            organization_id=self::db_org_id(),
+            actor_ids="&auth.actor_ids()"
+            ) | join(sep=", ")}}
         )
         .fetch_optional(db)
         .await
@@ -574,7 +579,7 @@ pub async fn upsert_with_parent(
 
     let id = payload.id.clone().unwrap_or_else({{id_type}}::new);
     let result = query_file_as!({{struct_base}}, "{{dir}}/upsert_single_child.sql",
-        {% if owner_and_user_different_access %}
+        {% if owner_and_user_different_read_access %}
         is_owner,
         {% endif %}
         {{self::id_ref()}},

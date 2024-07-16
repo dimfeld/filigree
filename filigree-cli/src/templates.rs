@@ -18,7 +18,7 @@ use crate::{
 pub struct Renderer {
     tera: Tera,
     passthrough_files: HashMap<String, Cow<'static, str>>,
-    formatters: Formatters,
+    pub formatters: Formatters,
 }
 
 impl Renderer {

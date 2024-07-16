@@ -1,7 +1,7 @@
 {% if belongs_to_field %}
 
 {% set p = 1 %}
-{% if owner_and_user_different_access %}
+{% if owner_and_user_different_read_access %}
 -- $1 = has owner permission on the model
 {% set p = 2 %}
 {% endif %}

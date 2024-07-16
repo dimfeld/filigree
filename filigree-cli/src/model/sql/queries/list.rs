@@ -3,7 +3,11 @@ use std::fmt::Write;
 use super::{bindings, QueryBuilder, SqlBuilder, SqlQueryContext};
 use crate::model::field::FilterableType;
 
-pub fn list(data: &SqlBuilder) -> SqlQueryContext {
+pub fn list(data: &SqlBuilder, populate_children: bool) -> Option<SqlQueryContext> {
+    if populate_children && data.context.children.is_empty() {
+        return None;
+    }
+
     let mut q = QueryBuilder::new();
 
     q.push("SELECT ");
@@ -19,7 +23,7 @@ pub fn list(data: &SqlBuilder) -> SqlQueryContext {
             select_sep.push(&f.sql_name);
         });
 
-    if data.populate_children {
+    if populate_children {
         data.context
             .children
             .iter()
@@ -66,7 +70,7 @@ pub fn list(data: &SqlBuilder) -> SqlQueryContext {
 
     write!(
         q,
-        "FROM {schema}.{table} tb",
+        " FROM {schema}.{table} tb",
         schema = data.context.schema,
         table = data.context.table
     )
@@ -74,7 +78,7 @@ pub fn list(data: &SqlBuilder) -> SqlQueryContext {
 
     {
         let mut where_sep = q.separated(" AND ");
-        where_sep.on_first("WHERE ");
+        where_sep.on_first(" WHERE ");
 
         if !data.context.global {
             where_sep.push("organization_id = ");
@@ -100,5 +104,10 @@ pub fn list(data: &SqlBuilder) -> SqlQueryContext {
         q.push_binding(bindings::OFFSET);
     }
 
-    q.finish("list.sql")
+    let filename = if populate_children {
+        "list_populated"
+    } else {
+        "list"
+    };
+    Some(q.finish(filename))
 }

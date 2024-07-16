@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use super::SqlDialect;
 use crate::Error;
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct ModelFieldTemplateContext {
     pub name: String,
     pub label: String,
@@ -38,6 +38,8 @@ pub struct ModelFieldTemplateContext {
     pub owner_read: bool,
     pub owner_write: bool,
     pub never_read: bool,
+
+    // The fields below are filled in later, from a place with more context.
     /// If this field is writable and is not a "parent ID" field
     pub writable_non_parent: bool,
 }

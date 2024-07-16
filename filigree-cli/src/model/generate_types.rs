@@ -35,11 +35,12 @@ impl ImplFlags {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct StructsContext {
     pub struct_base: String,
     pub structs: Vec<serde_json::Value>,
-    pub owner_and_user_different_access: bool,
+    pub owner_and_user_different_read_access: bool,
+    pub owner_and_user_different_write_access: bool,
 }
 
 impl<'a> ModelGenerator<'a> {
@@ -175,8 +176,11 @@ impl<'a> ModelGenerator<'a> {
             entry.suffixes.push((suffix, similar_to));
         }
 
-        let owner_and_user_different_access =
+        let owner_and_user_different_read_access =
             self.all_fields()?.any(|f| f.owner_read() && !f.user_read());
+        let owner_and_user_different_write_access = self
+            .all_fields()?
+            .any(|f| f.owner_write() && !f.user_write());
 
         let structs = grouped_fields
             .into_iter()
@@ -243,7 +247,8 @@ impl<'a> ModelGenerator<'a> {
         Ok(StructsContext {
             struct_base,
             structs,
-            owner_and_user_different_access,
+            owner_and_user_different_read_access,
+            owner_and_user_different_write_access,
         })
     }
 

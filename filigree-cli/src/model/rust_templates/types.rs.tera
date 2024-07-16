@@ -67,7 +67,7 @@ impl Serialize for {{struct.name}} {
     where
         S: Serializer,
     {
-        {% if owner_and_user_different_access %}
+        {% if owner_and_user_different_read_access %}
         if self._permission == ObjectPermission::Owner {
         {% endif %}
             {% set view_fields = struct.fields | filter(attribute="owner_read", value=true) %}
@@ -77,7 +77,7 @@ impl Serialize for {{struct.name}} {
             {%- endfor %}
             state.serialize_field("_permission", &self._permission)?;
             state.end()
-        {% if owner_and_user_different_access %}
+        {% if owner_and_user_different_read_access %}
         } else {
             {% set view_fields = struct.fields | filter(attribute="user_read", value=true) %}
             let mut state = serializer.serialize_struct("{{struct.name}}", {{ view_fields | length + 1 }})?;

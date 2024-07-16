@@ -2,7 +2,7 @@ use super::{bindings, QueryBuilder, SqlBuilder, SqlQueryContext};
 
 pub fn insert(data: &SqlBuilder) -> SqlQueryContext {
     let mut q = QueryBuilder::new();
-    q.push("INSERT INTO");
+    q.push("INSERT INTO ");
     q.push(&data.context.schema);
     q.push(".");
     q.push(&data.context.table);
@@ -35,8 +35,7 @@ pub fn insert(data: &SqlBuilder) -> SqlQueryContext {
         }
 
         for f in &fields {
-            sep.push(", ");
-            sep.push_binding_unseparated(f);
+            sep.push_binding(f);
         }
     }
 
@@ -52,5 +51,5 @@ pub fn insert(data: &SqlBuilder) -> SqlQueryContext {
         .join(",\n");
     q.push(&returning);
 
-    q.finish("insert.sql")
+    q.finish("insert")
 }

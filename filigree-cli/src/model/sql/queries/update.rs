@@ -4,20 +4,20 @@ use super::{bindings, QueryBuilder, SqlBuilder, SqlQueryContext};
 use crate::model::field::ModelFieldTemplateContext;
 
 pub fn update_user(data: &SqlBuilder) -> SqlQueryContext {
-    let fields = data.context.fields.iter().filter(|f| f.owner_write);
+    let fields = data.context.fields.iter().filter(|f| f.user_write);
     let q = update(data, fields, None);
-    q.finish("update_with_user_permissions.sql")
+    q.finish("update_with_user_permissions")
 }
 
 pub fn update_owner(data: &SqlBuilder) -> Option<SqlQueryContext> {
-    if !data.context.structs.owner_and_user_different_access {
+    if !data.context.structs.owner_and_user_different_write_access {
         // This is the same as the user query above so don't generate it twice.
         return None;
     }
 
     let fields = data.context.fields.iter().filter(|f| f.owner_write);
     let q = update(data, fields, None);
-    Some(q.finish("update_with_owner_permissions.sql"))
+    Some(q.finish("update_with_owner_permissions"))
 }
 
 pub fn update_one_with_parent_user(data: &SqlBuilder) -> Option<SqlQueryContext> {
@@ -26,13 +26,13 @@ pub fn update_one_with_parent_user(data: &SqlBuilder) -> Option<SqlQueryContext>
     };
 
     let fields = data.context.fields.iter().filter(|f| f.user_write);
-    let q = update(data, fields, Some(belongs_to["sql_name"].as_str().unwrap()));
+    let q = update(data, fields, Some(&belongs_to.sql_name));
 
-    Some(q.finish("update_one_with_parent_user_permissions.sql"))
+    Some(q.finish("update_one_with_parent_user_permissions"))
 }
 
 pub fn update_one_with_parent_owner(data: &SqlBuilder) -> Option<SqlQueryContext> {
-    if !data.context.structs.owner_and_user_different_access {
+    if !data.context.structs.owner_and_user_different_write_access {
         // This is the same as the user query above so don't generate it twice.
         return None;
     }
@@ -42,9 +42,9 @@ pub fn update_one_with_parent_owner(data: &SqlBuilder) -> Option<SqlQueryContext
     };
 
     let fields = data.context.fields.iter().filter(|f| f.owner_write);
-    let q = update(data, fields, Some(belongs_to["sql_name"].as_str().unwrap()));
+    let q = update(data, fields, Some(&belongs_to.sql_name));
 
-    Some(q.finish("update_one_with_parent_user_permissions.sql"))
+    Some(q.finish("update_one_with_parent_owner_permissions"))
 }
 
 fn update<'a>(
@@ -59,7 +59,8 @@ fn update<'a>(
         "UPDATE {schema}.{table} SET ",
         schema = data.context.schema,
         table = data.context.table
-    );
+    )
+    .unwrap();
 
     for field in fields {
         query.push(&field.sql_name);
@@ -72,7 +73,8 @@ fn update<'a>(
         query,
         "updated_at = NOW()
         WHERE id = {id}"
-    );
+    )
+    .unwrap();
 
     if let Some(parent_field) = parent_field {
         query.push(" AND ");

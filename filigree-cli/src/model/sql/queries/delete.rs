@@ -24,7 +24,7 @@ pub fn create_delete_query(data: &SqlBuilder) -> SqlQueryContext {
         data.permissions_check_where_clause(&mut q, &[&data.context.owner_permission]);
     }
 
-    q.finish("delete.sql")
+    q.finish("delete")
 }
 
 pub fn create_delete_all_children_query(data: &SqlBuilder) -> Option<SqlQueryContext> {
@@ -34,7 +34,7 @@ pub fn create_delete_all_children_query(data: &SqlBuilder) -> Option<SqlQueryCon
 
     let mut q = QueryBuilder::with_initial(
         format!(
-            r##"DELETE FROM {schema}.{table} WHERE"##,
+            r##"DELETE FROM {schema}.{table} WHERE "##,
             schema = data.context.schema,
             table = data.context.table
         ),
@@ -49,14 +49,12 @@ pub fn create_delete_all_children_query(data: &SqlBuilder) -> Option<SqlQueryCon
             where_sep.push_binding_unseparated(bindings::ORGANIZATION);
         }
 
-        let field = belongs_to_field["sql_name"].as_str().unwrap();
-
-        where_sep.push(field);
+        where_sep.push(&belongs_to_field.sql_name);
         where_sep.push_unseparated(" = ");
         where_sep.push_binding_unseparated(bindings::PARENT_ID);
     }
 
-    Some(q.finish("delete_all_children.sql"))
+    Some(q.finish("delete_all_children"))
 }
 
 pub fn delete_removed_children(data: &SqlBuilder) -> Option<SqlQueryContext> {
@@ -66,7 +64,7 @@ pub fn delete_removed_children(data: &SqlBuilder) -> Option<SqlQueryContext> {
 
     let mut q = QueryBuilder::with_initial(
         format!(
-            r##"DELETE FROM {schema}.{table} WHERE"##,
+            r##"DELETE FROM {schema}.{table} WHERE "##,
             schema = data.context.schema,
             table = data.context.table
         ),
@@ -81,8 +79,7 @@ pub fn delete_removed_children(data: &SqlBuilder) -> Option<SqlQueryContext> {
             where_sep.push_binding_unseparated(bindings::ORGANIZATION);
         }
 
-        let field = belongs_to_field["sql_name"].as_str().unwrap();
-        where_sep.push(field);
+        where_sep.push(&belongs_to_field.sql_name);
         where_sep.push_unseparated(" = ");
         where_sep.push_binding_unseparated(bindings::PARENT_ID);
 
@@ -91,7 +88,7 @@ pub fn delete_removed_children(data: &SqlBuilder) -> Option<SqlQueryContext> {
         where_sep.push_unseparated(")");
     }
 
-    Some(q.finish("delete_removed_children.sql"))
+    Some(q.finish("delete_removed_children"))
 }
 
 pub fn delete_with_parent(data: &SqlBuilder) -> Option<SqlQueryContext> {
@@ -101,7 +98,7 @@ pub fn delete_with_parent(data: &SqlBuilder) -> Option<SqlQueryContext> {
 
     let mut q = QueryBuilder::with_initial(
         format!(
-            r##"DELETE FROM {schema}.{table} WHERE"##,
+            r##"DELETE FROM {schema}.{table} WHERE "##,
             schema = data.context.schema,
             table = data.context.table
         ),
@@ -116,8 +113,7 @@ pub fn delete_with_parent(data: &SqlBuilder) -> Option<SqlQueryContext> {
             where_sep.push_binding_unseparated(bindings::ORGANIZATION);
         }
 
-        let field = belongs_to_field["sql_name"].as_str().unwrap();
-        where_sep.push(field);
+        where_sep.push(&belongs_to_field.sql_name);
         where_sep.push_unseparated(" = ");
         where_sep.push_binding_unseparated(bindings::PARENT_ID);
 
@@ -125,5 +121,5 @@ pub fn delete_with_parent(data: &SqlBuilder) -> Option<SqlQueryContext> {
         where_sep.push_binding_unseparated(bindings::ID);
     }
 
-    Some(q.finish("delete_with_parent.sql"))
+    Some(q.finish("delete_with_parent"))
 }

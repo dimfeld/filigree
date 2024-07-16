@@ -2,23 +2,26 @@ use std::fmt::Write;
 
 use super::{bindings, QueryBuilder, SqlBuilder, SqlQueryContext};
 
-pub fn select_one(data: &SqlBuilder) -> SqlQueryContext {
+pub fn select_one(data: &SqlBuilder, populate_children: bool) -> Option<SqlQueryContext> {
+    if populate_children && data.context.children.is_empty() {
+        return None;
+    }
+
     let mut q = QueryBuilder::new();
     let id = q.create_binding(bindings::ID);
     let organization = q.create_binding(bindings::ORGANIZATION);
 
     q.push("SELECT ");
 
-    let select_sep = q.separated(", ");
+    let mut select_sep = q.separated(", ");
 
-    let fields = data
-        .context
+    data.context
         .fields
         .iter()
         .filter(|f| !f.never_read)
         .for_each(|f| select_sep.push(f.sql_full_name.as_str()));
 
-    if data.populate_children {
+    if populate_children {
         data.context
             .children
             .iter()
@@ -46,18 +49,31 @@ pub fn select_one(data: &SqlBuilder) -> SqlQueryContext {
             let clause = format!(
                 r##"CASE WHEN {r_name}.id IS NOT NULL THEN
                     JSONB_BUILD_OBJECT({object})
-                ELSE NULL END AS "{full_name}""##
-                name=r.name,
-                object=SqlBuilder::jsonb_build_object_contents(&r.fields, &r_name));
+                ELSE NULL END AS "{full_name}""##,
+                full_name = r.full_name,
+                object = SqlBuilder::jsonb_build_object_contents(&r.fields, &r_name)
+            );
             select_sep.push(&clause);
         }
     }
 
     // TODO add auth query once project/object-level permissions are implemented
 
-    write!(q, "WHERE tb.id = {id}").uwrap();
+    write!(
+        q,
+        " FROM {schema}.{table} tb WHERE tb.id = {id}",
+        schema = data.context.schema,
+        table = data.context.table
+    )
+    .unwrap();
     if !data.context.global {
         write!(q, " AND tb.organization_id = {organization}").unwrap();
     }
-    q.finish("select_one.sql")
+
+    let filename = if populate_children {
+        "select_one_populated"
+    } else {
+        "select_one"
+    };
+    Some(q.finish(filename))
 }

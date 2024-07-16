@@ -50,7 +50,7 @@ pub enum Error {
     ReadMigrationFiles,
     #[error("Failed to write file")]
     WriteFile,
-    #[error("{0}{}", .0.source().map(|e| format!("\n{e}")).unwrap_or_default())]
+    #[error("{0}{}", .0.source().map(|e| format!("\n{e:?}")).unwrap_or_default())]
     Render(#[from] tera::Error),
     #[error("Failed to run code formatter")]
     Formatter,

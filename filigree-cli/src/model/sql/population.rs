@@ -36,7 +36,7 @@ impl<'a> SqlBuilder<'a> {
 
                 write!(
                     output,
-                    "FROM {schema}.{table} WHERE {parent_field} = {parent_field_match}",
+                    " FROM {schema}.{table} WHERE {parent_field} = {parent_field_match}",
                     schema = child.schema,
                     table = child.table,
                     parent_field = child.parent_field,
@@ -72,7 +72,7 @@ impl<'a> SqlBuilder<'a> {
 
                 write!(
                     output,
-                    "FROM {schema}.{table} WHERE {parent_field} = {parent_field_match}",
+                    " FROM {schema}.{table} WHERE {parent_field} = {parent_field_match}",
                     schema = child.schema,
                     table = child.table,
                     parent_field = child.parent_field,

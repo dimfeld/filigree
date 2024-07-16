@@ -1,11 +1,15 @@
-use std::{borrow::Cow, collections::HashSet, ops::Deref, path::PathBuf};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    ops::Deref,
+    path::PathBuf,
+};
 
 use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
 use itertools::Itertools;
 use rayon::prelude::*;
 use serde::Serialize;
-use serde_json::json;
 
 use super::{
     field::{
@@ -18,7 +22,7 @@ use super::{
 use crate::{
     config::{web::WebFramework, Config},
     migrations::SingleMigration,
-    model::{field::SortableType, ReferenceFetchType},
+    model::{field::SortableType, sql::SqlBuilder, ReferenceFetchType},
     templates::{ModelRustTemplates, ModelSqlTemplates, ModelSvelteTemplates, Renderer},
     write::{GeneratorMap, ModelMap, RenderedFile, RenderedFileLocation},
     Error,
@@ -36,7 +40,7 @@ pub enum ReadOperation {
     List,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct ReferenceFieldContext {
     pub name: String,
     pub full_name: String,
@@ -47,7 +51,7 @@ pub struct ReferenceFieldContext {
     pub table: String,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct ChildContext {
     pub relationship: HasModel,
     pub get_field_type: String,
@@ -69,7 +73,15 @@ pub struct ChildContext {
     pub file_upload: Option<serde_json::Value>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
+pub struct ChildWritePayloadField {
+    #[serde(flatten)]
+    pub field: ModelFieldTemplateContext,
+    pub many: bool,
+    pub module: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
 pub struct TemplateContext {
     pub dir: PathBuf,
     pub module_name: String,
@@ -82,12 +94,12 @@ pub struct TemplateContext {
     pub indexes: Vec<String>,
     pub global: bool,
     pub fields: Vec<ModelFieldTemplateContext>,
-    pub create_payload_fields: Vec<serde_json::Value>,
-    pub update_payload_fields: Vec<serde_json::Value>,
+    pub create_payload_fields: Vec<ChildWritePayloadField>,
+    pub update_payload_fields: Vec<ChildWritePayloadField>,
     pub rust_imports: String,
     pub ts_imports: String,
     pub allow_id_in_create: bool,
-    pub belongs_to_field: Option<serde_json::Value>,
+    pub belongs_to_field: Option<ModelFieldTemplateContext>,
     pub can_populate_get: bool,
     pub can_populate_list: bool,
     pub children: Vec<ChildContext>,
@@ -337,44 +349,40 @@ impl<'a> ModelGenerator<'a> {
             "model/select_base.sql.tera",
         ];
 
-        let mut populate_context = self.template_context_tera().clone();
-        populate_context.insert("populate_children", &true);
+        let sql_builder = SqlBuilder {
+            context: self.template_context(),
+        };
 
-        let populate_queries = if self.children.is_empty() {
-            vec![]
-        } else {
-            vec![
-                ("model/select_one.sql.tera", "select_one_populated.sql"),
-                ("model/list.sql.tera", "list_populated.sql"),
-            ]
+        let mut sql_queries = sql_builder.create_model_queries();
+
+        for q in &mut sql_queries {
+            let data = std::mem::take(&mut q.query).into_bytes();
+            let formatted = self
+                .renderer
+                .formatters
+                .run_formatter(&format!("{}.sql", q.name), data)
+                .change_context(Error::Formatter)?;
+            q.query = String::from_utf8(formatted).change_context(Error::Formatter)?;
         }
-        .into_iter()
-        .map(|(infile, outfile)| {
-            (
-                Cow::Borrowed(infile),
-                rust_base_path.join(outfile),
-                RenderedFileLocation::Rust,
-                &populate_context,
-            )
-        });
 
-        let api_files = ModelSqlTemplates::iter()
-            .chain(ModelRustTemplates::iter())
+        let mut ctx = self.template_context_tera().clone();
+
+        let queries_context = sql_queries
+            .iter()
+            .map(|q| (q.name.as_str(), &q.bindings))
+            .collect::<HashMap<_, _>>();
+        ctx.insert("sql_queries", &queries_context);
+
+        let api_files = ModelRustTemplates::iter()
             .filter(|f| !skip_files.contains(&f.as_ref()) && !f.ends_with(".macros.tera"))
             .map(|f| {
                 let outfile = rust_base_path.join(strip_path(f.as_ref()));
-                (
-                    f,
-                    outfile,
-                    RenderedFileLocation::Rust,
-                    self.template_context_tera(),
-                )
-            })
-            .chain(populate_queries);
+                (f, outfile, RenderedFileLocation::Rust, &ctx)
+            });
 
         let files = web_files.into_iter().chain(api_files).collect::<Vec<_>>();
 
-        let output = files
+        let mut output = files
             .into_par_iter()
             .map(|(infile, outfile, render_location, ctx)| {
                 self.renderer
@@ -382,6 +390,16 @@ impl<'a> ModelGenerator<'a> {
                     .attach_printable_lazy(|| format!("Model {}", self.model.name))
             })
             .collect::<Result<Vec<_>, _>>()?;
+
+        let sql_output = sql_queries.into_iter().map(|q| {
+            let path = rust_base_path.join(format!("{}.sql", q.name));
+            RenderedFile {
+                path,
+                contents: q.query.into_bytes(),
+                location: RenderedFileLocation::Rust,
+            }
+        });
+        output.extend(sql_output);
 
         Ok(output)
     }
@@ -644,20 +662,18 @@ impl<'a> ModelGenerator<'a> {
 
         let create_payload_fields = self
             .write_payload_child_fields(false)?
-            .map(|f| {
-                let mut context = f.field.template_context();
-                context["many"] = f.many.into();
-                context["module"] = f.model.module_name().into();
-                context
+            .map(|f| ChildWritePayloadField {
+                field: f.field.template_context(),
+                many: f.many,
+                module: f.model.module_name(),
             })
             .collect::<Vec<_>>();
         let update_payload_fields = self
             .write_payload_child_fields(false)?
-            .map(|f| {
-                let mut context = f.field.template_context();
-                context["many"] = f.many.into();
-                context["module"] = f.model.module_name().into();
-                context
+            .map(|f| ChildWritePayloadField {
+                field: f.field.template_context(),
+                many: f.many,
+                module: f.model.module_name(),
             })
             .collect::<Vec<_>>();
 
