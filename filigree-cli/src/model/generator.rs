@@ -4,17 +4,19 @@ use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
 use itertools::Itertools;
 use rayon::prelude::*;
+use serde::Serialize;
 use serde_json::json;
 
 use super::{
     field::{
-        Access, FilterableType, ModelField, ModelFieldReference, ReferencePopulation,
-        ReferentialAction, SqlType,
+        Access, FilterableType, ModelField, ModelFieldReference, ModelFieldTemplateContext,
+        ReferencePopulation, ReferentialAction, SqlType,
     },
-    Endpoints, HasModel, Model, SqlDialect,
+    generate_types::StructsContext,
+    Endpoints, HasModel, Model, ModelAuthScope, Pagination, PerEndpoint, SqlDialect,
 };
 use crate::{
-    config::{web::WebFramework, AuthProvider, Config},
+    config::{web::WebFramework, Config},
     migrations::SingleMigration,
     model::{field::SortableType, ReferenceFetchType},
     templates::{ModelRustTemplates, ModelSqlTemplates, ModelSvelteTemplates, Renderer},
@@ -34,13 +36,100 @@ pub enum ReadOperation {
     List,
 }
 
+#[derive(Serialize, Clone)]
+pub struct ReferenceFieldContext {
+    pub name: String,
+    pub full_name: String,
+    pub id_field: String,
+    pub on_get: bool,
+    pub on_list: bool,
+    pub fields: Vec<ModelFieldTemplateContext>,
+    pub table: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct ChildContext {
+    pub relationship: HasModel,
+    pub get_field_type: String,
+    pub get_sql_field_name: String,
+    pub full_get_sql_field_name: String,
+    pub list_field_type: String,
+    pub list_sql_field_name: String,
+    pub write_payload_field_name: Option<String>,
+    pub struct_base: String,
+    pub insertable: bool,
+    pub module: String,
+    pub possible_child_field_names: Vec<String>,
+    pub object_id: String,
+    pub fields: Vec<ModelFieldTemplateContext>,
+    pub table: String,
+    pub schema: String,
+    pub url_path: String,
+    pub parent_field: String,
+    pub file_upload: Option<serde_json::Value>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct TemplateContext {
+    pub dir: PathBuf,
+    pub module_name: String,
+    pub model_name: String,
+    pub sql_dialect: SqlDialect,
+    pub name: String,
+    pub plural: String,
+    pub schema: String,
+    pub table: String,
+    pub indexes: Vec<String>,
+    pub global: bool,
+    pub fields: Vec<ModelFieldTemplateContext>,
+    pub create_payload_fields: Vec<serde_json::Value>,
+    pub update_payload_fields: Vec<serde_json::Value>,
+    pub rust_imports: String,
+    pub ts_imports: String,
+    pub allow_id_in_create: bool,
+    pub belongs_to_field: Option<serde_json::Value>,
+    pub can_populate_get: bool,
+    pub can_populate_list: bool,
+    pub children: Vec<ChildContext>,
+    pub reference_populations: Vec<ReferenceFieldContext>,
+    pub owner_permission: String,
+    pub read_permission: String,
+    pub write_permission: String,
+    pub extra_sql: String,
+    pub extra_create_table_sql: String,
+    pub index_created_at: bool,
+    pub index_updated_at: bool,
+    pub pagination: Pagination,
+    pub full_default_sort_field: String,
+    pub default_sort_field: String,
+    pub id_type: String,
+    pub id_prefix: String,
+    pub predefined_object_id: bool,
+    pub url_path: String,
+    pub has_any_endpoints: bool,
+    pub endpoints: PerEndpoint,
+    pub custom_endpoints: Vec<serde_json::Value>,
+    pub auth_scope: ModelAuthScope,
+    pub auth_check_in_query: bool,
+    pub parent_model_name: Option<String>,
+    pub file_for: Option<String>,
+    pub file_upload: Option<serde_json::Value>,
+    pub auth: serde_json::Value,
+    pub auth_schema: String,
+    pub id_is_string: bool,
+
+    #[serde(flatten)]
+    pub structs: StructsContext,
+}
+
 pub struct ModelGenerator<'a> {
     pub model: Model,
     pub model_map: &'a ModelMap,
     pub(super) renderer: &'a Renderer,
     pub config: &'a Config,
     children: Vec<HasModel>,
-    context: Option<tera::Context>,
+    context_value: Option<tera::Context>,
+    context: Option<TemplateContext>,
 }
 
 impl<'a> ModelGenerator<'a> {
@@ -64,6 +153,7 @@ impl<'a> ModelGenerator<'a> {
             renderer,
             children,
             context: None,
+            context_value: None,
         })
     }
 
@@ -75,13 +165,20 @@ impl<'a> ModelGenerator<'a> {
         }
     }
 
-    pub fn template_context(&self) -> &tera::Context {
+    pub fn template_context_tera(&self) -> &tera::Context {
+        self.context_value
+            .as_ref()
+            .expect("called template_context_tera before context was initialized")
+    }
+
+    pub fn template_context(&self) -> &TemplateContext {
         self.context
             .as_ref()
             .expect("called template_context before context was initialized")
     }
 
-    pub fn set_template_context(&mut self, context: tera::Context) {
+    pub fn set_template_context(&mut self, context: TemplateContext) {
+        self.context_value = Some(tera::Context::from_serialize(&context).unwrap());
         self.context = Some(context);
     }
 
@@ -181,7 +278,7 @@ impl<'a> ModelGenerator<'a> {
                 &PathBuf::new(),
                 "model/migrate_up.sql.tera",
                 crate::write::RenderedFileLocation::Rust,
-                self.template_context(),
+                self.template_context_tera(),
             )
             .map(|f| f.contents)
     }
@@ -192,7 +289,7 @@ impl<'a> ModelGenerator<'a> {
                 &PathBuf::new(),
                 "model/migrate_down.sql.tera",
                 crate::write::RenderedFileLocation::Rust,
-                self.template_context(),
+                self.template_context_tera(),
             )
             .map(|f| f.contents)
     }
@@ -224,7 +321,7 @@ impl<'a> ModelGenerator<'a> {
                         f,
                         outfile,
                         RenderedFileLocation::Svelte,
-                        self.template_context(),
+                        self.template_context_tera(),
                     )
                 })
                 .collect::<Vec<_>>(),
@@ -240,7 +337,7 @@ impl<'a> ModelGenerator<'a> {
             "model/select_base.sql.tera",
         ];
 
-        let mut populate_context = self.template_context().clone();
+        let mut populate_context = self.template_context_tera().clone();
         populate_context.insert("populate_children", &true);
 
         let populate_queries = if self.children.is_empty() {
@@ -270,7 +367,7 @@ impl<'a> ModelGenerator<'a> {
                     f,
                     outfile,
                     RenderedFileLocation::Rust,
-                    self.template_context(),
+                    self.template_context_tera(),
                 )
             })
             .chain(populate_queries);
@@ -326,7 +423,7 @@ impl<'a> ModelGenerator<'a> {
     pub fn create_template_context(
         &self,
         generators: &GeneratorMap,
-    ) -> Result<tera::Context, Error> {
+    ) -> Result<TemplateContext, Error> {
         let mut rust_imports = HashSet::new();
         let mut ts_imports = HashSet::new();
         let sql_dialect = Config::default_sql_dialect();
@@ -385,17 +482,34 @@ impl<'a> ModelGenerator<'a> {
 
         let base_dir = PathBuf::from("src/models").join(self.module_name());
 
-        let children = self.children.iter()
+        let children = self
+            .children
+            .iter()
             .map(|has| {
                 let child_model = self.model_map.get(&has.model, &self.model.name, "has")?;
                 let child_generator = generators.get(&has.model, &self.model.name, "has")?;
 
-                ts_imports.insert((child_model.module_name(), format!("{}Schema", child_model.struct_name())));
-                ts_imports.insert((child_model.module_name(), format!("{}CreatePayloadSchema", child_model.struct_name())));
-                ts_imports.insert((child_model.module_name(), format!("{}UpdatePayloadSchema", child_model.struct_name())));
+                ts_imports.insert((
+                    child_model.module_name(),
+                    format!("{}Schema", child_model.struct_name()),
+                ));
+                ts_imports.insert((
+                    child_model.module_name(),
+                    format!("{}CreatePayloadSchema", child_model.struct_name()),
+                ));
+                ts_imports.insert((
+                    child_model.module_name(),
+                    format!("{}UpdatePayloadSchema", child_model.struct_name()),
+                ));
                 rust_imports.insert(child_model.qualified_struct_name());
-                rust_imports.insert(format!("{}CreatePayload", child_model.qualified_struct_name()));
-                rust_imports.insert(format!("{}UpdatePayload", child_model.qualified_struct_name()));
+                rust_imports.insert(format!(
+                    "{}CreatePayload",
+                    child_model.qualified_struct_name()
+                ));
+                rust_imports.insert(format!(
+                    "{}UpdatePayload",
+                    child_model.qualified_struct_name()
+                ));
                 rust_imports.insert(child_model.qualified_object_id_type());
 
                 let get_sql_field_name = has.field_name.clone().unwrap_or_else(|| {
@@ -426,26 +540,34 @@ impl<'a> ModelGenerator<'a> {
                     Self::child_model_field_name(&child_model, ReferenceFetchType::Data, true),
                 ];
 
-                let result = json!({
-                    "relationship": has,
-                    "get_field_type": get_field_type,
-                    "get_sql_field_name": get_sql_field_name,
-                    "full_get_sql_field_name": format!("{get_sql_field_name}{exc}: {get_field_type}"),
-                    "list_field_type": list_field_type,
-                    "list_sql_field_name": list_sql_field_name,
-                    "write_payload_field_name": has.update_with_parent.then(|| has.rust_child_field_name(&child_model)),
-                    "struct_base": child_model.struct_name(),
-                    "insertable": has.update_with_parent,
-                    "module": child_model.module_name(),
-                    "possible_child_field_names": possible_child_field_names,
-                    "object_id": child_model.object_id_type(),
-                    "fields": child_generator.all_fields()?.map(|f| f.template_context()).collect::<Vec<_>>(),
-                    "table": child_model.table(),
-                    "schema": child_model.schema(),
-                    "url_path": url_path,
-                    "parent_field": self.model.foreign_key_id_field_name(),
-                    "file_upload": child_model.file_for.as_ref().map(|f| f.1.template_context()),
-                });
+                let result = ChildContext {
+                    relationship: has.clone(),
+                    full_get_sql_field_name: format!("{get_sql_field_name}{exc}: {get_field_type}"),
+                    get_field_type,
+                    get_sql_field_name,
+                    list_field_type,
+                    list_sql_field_name,
+                    write_payload_field_name: has
+                        .update_with_parent
+                        .then(|| has.rust_child_field_name(&child_model)),
+                    struct_base: child_model.struct_name(),
+                    insertable: has.update_with_parent,
+                    module: child_model.module_name(),
+                    possible_child_field_names,
+                    object_id: child_model.object_id_type(),
+                    fields: child_generator
+                        .all_fields()?
+                        .map(|f| f.template_context())
+                        .collect::<Vec<_>>(),
+                    table: child_model.table(),
+                    schema: child_model.schema().to_string(),
+                    url_path,
+                    parent_field: self.model.foreign_key_id_field_name(),
+                    file_upload: child_model
+                        .file_for
+                        .as_ref()
+                        .map(|f| f.1.template_context()),
+                };
 
                 Ok::<_, Error>(result)
             })
@@ -464,15 +586,18 @@ impl<'a> ModelGenerator<'a> {
                 rust_imports.insert(gen.model.qualified_struct_name());
                 rust_imports.insert(gen.model.qualified_object_id_type());
 
-                Ok(json!({
-                    "name": field.name,
-                    "full_name": full_name,
-                    "id_field": id_field,
-                    "on_get": populate.on_get,
-                    "on_list": populate.on_list,
-                    "fields": gen.all_fields()?.map(|f| f.template_context()).collect::<Vec<_>>(),
-                    "table": ref_model.table(),
-                }))
+                Ok(ReferenceFieldContext {
+                    name: field.name.clone(),
+                    full_name,
+                    id_field,
+                    on_get: populate.on_get,
+                    on_list: populate.on_list,
+                    fields: gen
+                        .all_fields()?
+                        .map(|f| f.template_context())
+                        .collect::<Vec<_>>(),
+                    table: ref_model.table(),
+                })
             })
             .collect::<Result<Vec<_>, Error>>()?;
 
@@ -494,11 +619,9 @@ impl<'a> ModelGenerator<'a> {
         let can_populate_list = self.virtual_fields(ReadOperation::List)?.next().is_some();
 
         if let Some(b) = &belongs_to_field {
-            let belongs_to_name = &b["sql_name"];
             for f in fields.iter_mut() {
-                let is_belongs_to = f["name"].as_str().unwrap_or_default() == belongs_to_name;
-                f["owner_write_non_parent"] =
-                    json!(!is_belongs_to && f["owner_write"].as_bool().unwrap_or(false));
+                let is_belongs_to = f.name == b.sql_name;
+                f.writable_non_parent = !is_belongs_to && f.owner_write;
             }
         }
 
@@ -546,75 +669,69 @@ impl<'a> ModelGenerator<'a> {
             &Endpoints::All(false)
         };
 
-        let mut context = tera::Context::new();
         let id_type = self.object_id_type();
-        context.insert("dir", &base_dir);
-        context.insert("module_name", &self.model.module_name());
-        context.insert("model_name", &self.model.name);
-        context.insert("sql_dialect", &sql_dialect);
-        context.insert("name", &self.name);
-        context.insert("plural", &self.plural());
-        context.insert("schema", &self.model.schema());
-        context.insert("table", &self.table());
-        context.insert("indexes", &self.indexes);
-        context.insert("global", &self.global);
-        context.insert("fields", &fields);
-        context.insert("create_payload_fields", &create_payload_fields);
-        context.insert("update_payload_fields", &update_payload_fields);
-        context.insert("rust_imports", &rust_imports);
-        context.insert("ts_imports", &ts_imports);
-        context.insert("allow_id_in_create", &self.allow_id_in_create);
-        context.insert("belongs_to_field", &belongs_to_field);
-        context.insert("can_populate_get", &can_populate_get);
-        context.insert("can_populate_list", &can_populate_list);
-        context.insert("children", &children);
-        context.insert("reference_populations", &references);
-        context.insert("owner_permission", &format!("{}::owner", self.name));
-        context.insert("read_permission", &format!("{}::read", self.name));
-        context.insert("write_permission", &format!("{}::write", self.name));
-        context.insert("extra_sql", &self.extra_sql);
-        context.insert("extra_create_table_sql", &extra_create_table_sql);
-        context.insert("index_created_at", &self.index_created_at);
-        context.insert("index_updated_at", &self.index_updated_at);
-        context.insert("pagination", &self.pagination);
-        context.insert("full_default_sort_field", full_default_sort_field);
-        context.insert("default_sort_field", default_sort_field);
-        context.insert("id_type", &id_type);
-        context.insert("id_prefix", &self.id_prefix());
-        context.insert("predefined_object_id", predefined_object_id);
-        context.insert("url_path", &self.plural().as_ref().to_case(Case::Snake));
-        context.insert("has_any_endpoints", &endpoints.any_enabled());
-        context.insert("endpoints", &endpoints.per_endpoint());
-        context.insert(
-            "custom_endpoints",
-            &self
+        let context = TemplateContext {
+            dir: base_dir,
+            module_name: self.model.module_name(),
+            model_name: self.model.name.clone(),
+            sql_dialect,
+            name: self.name.clone(),
+            plural: self.plural().to_string(),
+            schema: self.model.schema().to_string(),
+            table: self.table(),
+            indexes: self.indexes.clone(),
+            global: self.global,
+            fields,
+            create_payload_fields,
+            update_payload_fields,
+            rust_imports,
+            ts_imports,
+            allow_id_in_create: self.allow_id_in_create,
+            belongs_to_field,
+            can_populate_get,
+            can_populate_list,
+            children,
+            reference_populations: references,
+            owner_permission: format!("{}::owner", self.name),
+            read_permission: format!("{}::read", self.name),
+            write_permission: format!("{}::write", self.name),
+            extra_sql: self.extra_sql.clone(),
+            extra_create_table_sql,
+            index_created_at: self.index_created_at,
+            index_updated_at: self.index_updated_at,
+            pagination: self.pagination.clone(),
+            full_default_sort_field: full_default_sort_field.to_string(),
+            default_sort_field: default_sort_field.to_string(),
+            id_prefix: self.id_prefix().to_string(),
+            predefined_object_id: *predefined_object_id,
+            url_path: self.plural().as_ref().to_case(Case::Snake),
+            has_any_endpoints: endpoints.any_enabled(),
+            endpoints: endpoints.per_endpoint(),
+            custom_endpoints: self
                 .model
                 .endpoints
                 .iter()
                 .map(|e| e.template_context(&id_type))
-                .collect::<Vec<_>>(),
-        );
-        context.insert(
-            "auth_scope",
-            &self.auth_scope.unwrap_or(self.config.default_auth_scope),
-        );
-        context.insert("parent_model_name", &parent_model_name);
-        context.insert("file_for", &self.file_for.as_ref().map(|f| f.0.as_str()));
-
-        context.insert(
-            "file_upload",
-            &self.file_for.as_ref().map(|f| f.1.template_context()),
-        );
-        context.insert("auth", &self.config.auth.template_context());
-        context.insert(
-            "auth_schema",
-            &self.config.database.auth_schema().unwrap_or("public"),
-        );
-        context.insert(
-            "id_is_string",
-            &(self.model.is_auth_model && self.config.auth.string_ids()),
-        );
-        self.add_rust_structs_to_context(&mut context)?;
+                .collect(),
+            auth_scope: self.auth_scope.unwrap_or(self.config.default_auth_scope),
+            auth_check_in_query: self
+                .auth_scope
+                .unwrap_or(self.config.default_auth_scope)
+                .check_in_query(),
+            parent_model_name: parent_model_name.map(|s| s.to_string()),
+            file_for: self.file_for.as_ref().map(|f| f.0.clone()),
+            file_upload: self.file_for.as_ref().map(|f| f.1.template_context()),
+            auth: self.config.auth.template_context(),
+            auth_schema: self
+                .config
+                .database
+                .auth_schema()
+                .unwrap_or("public")
+                .to_string(),
+            id_is_string: self.model.is_auth_model && self.config.auth.string_ids(),
+            id_type,
+            structs: self.create_structs_context()?,
+        };
 
         Ok(context)
     }

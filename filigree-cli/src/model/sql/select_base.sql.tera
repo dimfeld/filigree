@@ -53,7 +53,7 @@ FROM
     LEFT JOIN {{r.table}} ref_{{r.name}} ON {{r.table}}.id = tb.{{r.id_field}}
   {% endfor %}
 {% endif %}
-{% if auth_scope != "model" %}
+{% if auth_check_in_query %}
 JOIN LATERAL ({{ macros::permissions_value(
       auth_schema=auth_schema,
       auth_scope=auth_scope,

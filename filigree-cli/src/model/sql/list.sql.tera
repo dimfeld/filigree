@@ -60,7 +60,7 @@ SELECT
   {% endif %}
 FROM
   {{schema}}.{{ table }} tb
-{% if auth_scope != "model" %}
+{% if auth_check_in_query %}
 JOIN LATERAL (
   {{ macros::permissions_value(
       auth_schema=auth_schema,

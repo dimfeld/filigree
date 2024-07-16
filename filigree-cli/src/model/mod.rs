@@ -3,6 +3,7 @@ pub mod field;
 pub mod file;
 mod generate_types;
 pub mod generator;
+pub mod sql;
 pub mod validate;
 
 use std::{borrow::Cow, path::Path};
@@ -46,7 +47,7 @@ pub struct Model {
     pub id_prefix: Option<String>,
     #[serde(default)]
     pub fields: Vec<ModelField>,
-    /// If true, generate API endpoints for this model.
+    /// If true, generate API endpoints for this mode\l.
     pub standard_endpoints: Endpoints,
 
     #[serde(default)]
@@ -432,6 +433,20 @@ impl std::fmt::Display for ModelAuthScope {
             ModelAuthScope::Model => write!(f, "model"),
             // ModelAuthScope::Project => write!(f, "project"),
             // ModelAuthScope::Object => write!(f, "object"),
+        }
+    }
+}
+
+impl ModelAuthScope {
+    /// If this scope requires adding a check to the SQL query for auth.
+    pub fn check_in_query(&self) -> bool {
+        match self {
+            // For model auth scope, we always know the permissions when doing the call.
+            ModelAuthScope::Model => false,
+            // // For project auth scope we join the project ID against the permissions table.
+            // ModelAuthScope::Project => true,
+            // // For object auth scope we join the object ID against the permissions table.
+            // ModelAuthScope::Object => true,
         }
     }
 }

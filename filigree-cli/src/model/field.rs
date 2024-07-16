@@ -2,10 +2,45 @@ use std::{borrow::Cow, collections::HashMap, fmt::Display};
 
 use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
 use super::SqlDialect;
 use crate::Error;
+
+#[derive(Serialize, Clone)]
+pub struct ModelFieldTemplateContext {
+    pub name: String,
+    pub label: String,
+    pub description: String,
+    pub base_type: SqlType,
+    pub sql_name: String,
+    pub sql_full_name: String,
+    pub sql_type: &'static str,
+    pub snake_case_name: String,
+    pub pascal_case_name: String,
+    pub rust_name: String,
+    pub base_rust_type: String,
+    pub rust_type: String,
+    pub is_custom_rust_type: bool,
+    pub client_type: String,
+    pub default_sql: String,
+    pub default_rust: String,
+    pub nullable: bool,
+    pub filterable: FilterableType,
+    pub sortable: SortableType,
+    pub indexed: bool,
+    pub unique: bool,
+    pub globally_unique: bool,
+    pub omit_in_list: bool,
+    pub foreign_key_sql: Option<String>,
+    pub extra_sql_modifiers: String,
+    pub user_read: bool,
+    pub user_write: bool,
+    pub owner_read: bool,
+    pub owner_write: bool,
+    pub never_read: bool,
+    /// If this field is writable and is not a "parent ID" field
+    pub writable_non_parent: bool,
+}
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct ModelField {
@@ -190,39 +225,44 @@ impl ModelField {
             && (self.owner_access.can_write() || self.user_access.can_write())
     }
 
-    pub fn template_context(&self) -> serde_json::Value {
-        json!({
-            "name": self.name,
-            "label": self.label.clone().unwrap_or_else(|| self.name.to_case(Case::Title)),
-            "description": self.description.as_deref().unwrap_or_default(),
-            "base_type": self.typ,
-            "sql_name": self.sql_field_name(),
-            "sql_full_name": self.qualified_sql_field_name(),
-            "sql_type": self.typ.to_sql_type(SqlDialect::Postgresql),
-            "snake_case_name": self.name.to_case(Case::Snake),
-            "pascal_case_name": self.name.to_case(Case::Pascal),
-            "rust_name": self.rust_field_name(),
-            "base_rust_type": self.base_rust_type(),
-            "rust_type": self.rust_type(),
-            "is_custom_rust_type": self.rust_type.is_some(),
-            "client_type": self.typ.to_client_type(),
-            "default_sql": self.default_sql,
-            "default_rust": self.default_rust,
-            "nullable": self.nullable,
-            "filterable": self.filterable,
-            "sortable": self.sortable,
-            "indexed": self.indexed || self.unique,
-            "unique": self.unique,
-            "globally_unique": self.globally_unique,
-            "omit_in_list": self.omit_in_list,
-            "foreign_key_sql": self.references.as_ref().map(|r| r.to_string()),
-            "extra_sql_modifiers": self.extra_sql_modifiers,
-            "user_read": self.user_read(),
-            "user_write": self.user_write(),
-            "owner_read": self.owner_read(),
-            "owner_write": self.owner_write(),
-            "never_read": self.never_read,
-        })
+    pub fn template_context(&self) -> ModelFieldTemplateContext {
+        ModelFieldTemplateContext {
+            name: self.name.clone(),
+            label: self
+                .label
+                .clone()
+                .unwrap_or_else(|| self.name.to_case(Case::Title)),
+            description: self.description.clone().unwrap_or_default(),
+            base_type: self.typ,
+            sql_name: self.sql_field_name(),
+            sql_full_name: self.qualified_sql_field_name(),
+            sql_type: self.typ.to_sql_type(SqlDialect::Postgresql),
+            snake_case_name: self.name.to_case(Case::Snake),
+            pascal_case_name: self.name.to_case(Case::Pascal),
+            rust_name: self.rust_field_name(),
+            base_rust_type: self.base_rust_type().to_string(),
+            rust_type: self.rust_type().to_string(),
+            is_custom_rust_type: self.rust_type.is_some(),
+            client_type: self.typ.to_client_type().to_string(),
+            default_sql: self.default_sql.clone(),
+            default_rust: self.default_rust.clone(),
+            nullable: self.nullable,
+            filterable: self.filterable,
+            sortable: self.sortable,
+            indexed: self.indexed || self.unique,
+            unique: self.unique,
+            globally_unique: self.globally_unique,
+            omit_in_list: self.omit_in_list,
+            foreign_key_sql: self.references.as_ref().map(|r| r.to_string()),
+            extra_sql_modifiers: self.extra_sql_modifiers.clone(),
+            user_read: self.user_read(),
+            user_write: self.user_write(),
+            owner_read: self.owner_read(),
+            owner_write: self.owner_write(),
+            never_read: self.never_read,
+            // This gets set later, where appropriate
+            writable_non_parent: false,
+        }
     }
 }
 

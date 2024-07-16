@@ -1,6 +1,7 @@
 use std::{borrow::Cow, collections::HashMap};
 
 use itertools::Itertools;
+use serde::Serialize;
 use serde_json::json;
 
 use super::{field::ModelField, generator::ModelGenerator};
@@ -34,11 +35,15 @@ impl ImplFlags {
     }
 }
 
+#[derive(Serialize, Clone)]
+pub struct StructsContext {
+    pub struct_base: String,
+    pub structs: Vec<serde_json::Value>,
+    pub owner_and_user_different_access: bool,
+}
+
 impl<'a> ModelGenerator<'a> {
-    pub(super) fn add_rust_structs_to_context(
-        &self,
-        context: &mut tera::Context,
-    ) -> Result<(), Error> {
+    pub(super) fn create_structs_context(&self) -> Result<StructsContext, Error> {
         let struct_base = self.model.struct_name();
         let user_can_write_anything = self.all_fields()?.any(|f| f.user_access.can_write());
         let struct_list = [
@@ -172,10 +177,6 @@ impl<'a> ModelGenerator<'a> {
 
         let owner_and_user_different_access =
             self.all_fields()?.any(|f| f.owner_read() && !f.user_read());
-        context.insert(
-            "owner_and_user_different_access",
-            &owner_and_user_different_access,
-        );
 
         let structs = grouped_fields
             .into_iter()
@@ -239,9 +240,11 @@ impl<'a> ModelGenerator<'a> {
             .sorted_by(|a, b| a["name"].as_str().unwrap().cmp(b["name"].as_str().unwrap()))
             .collect::<Vec<_>>();
 
-        context.insert("struct_base", &struct_base);
-        context.insert("structs", &structs);
-        Ok(())
+        Ok(StructsContext {
+            struct_base,
+            structs,
+            owner_and_user_different_access,
+        })
     }
 
     fn struct_contents<'b>(

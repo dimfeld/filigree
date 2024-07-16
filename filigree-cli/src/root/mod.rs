@@ -6,11 +6,10 @@ use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
 use itertools::Itertools;
 use rayon::prelude::*;
-use serde_json::json;
 
 use self::pages::{NON_PAGE_NODE_PATH, PAGE_PATH};
 use crate::{
-    config::{web::WebFramework, AuthProvider, Config},
+    config::{web::WebFramework, Config},
     model::generator::ModelGenerator,
     templates::{Renderer, RootApiTemplates, RootHtmxTemplates, RootSvelteTemplates},
     write::{RenderedFile, RenderedFileLocation},
@@ -90,21 +89,21 @@ pub fn render_files(
 
     let all_models = models
         .iter()
-        .map(|gen| gen.template_context().clone().into_json())
+        .map(|gen| gen.template_context_tera().clone().into_json())
         .collect::<Vec<_>>();
 
     context.insert("models", &all_models);
     context.insert(
         "user_model",
-        &user_model.template_context().clone().into_json(),
+        &user_model.template_context_tera().clone().into_json(),
     );
     context.insert(
         "role_model",
-        &role_model.template_context().clone().into_json(),
+        &role_model.template_context_tera().clone().into_json(),
     );
     context.insert(
         "org_model",
-        &org_model.template_context().clone().into_json(),
+        &org_model.template_context_tera().clone().into_json(),
     );
 
     context.insert("web_relative_to_api", &web_relative_to_api);
