@@ -16,32 +16,64 @@ pub mod bindings {
 
 use std::collections::HashMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Context that helps use a SQL query
-#[derive(Serialize)]
+#[derive(Clone)]
 pub struct SqlQueryContext {
     /// Names for each parameter to help with query binding generation
     pub bindings: Vec<String>,
+    /// Clauses for each field that can be bound to a query.
+    /// Replace the `$payload` string with the name of your actual payload variable.
+    pub field_params: HashMap<String, String>,
     pub query: String,
     pub name: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct SqlQueryTemplateContext {
+    pub bindings: Vec<String>,
+    pub num_bindings: usize,
+    pub field_params: HashMap<String, String>,
+}
+
+impl From<SqlQueryContext> for SqlQueryTemplateContext {
+    fn from(value: SqlQueryContext) -> Self {
+        Self {
+            num_bindings: value.bindings.len(),
+            bindings: value.bindings,
+            field_params: value.field_params,
+        }
+    }
+}
+
 /// Generate a list of strings that can be used as bindings for a SQL query
 pub fn generate_query_bindings(args: &HashMap<String, tera::Value>) -> tera::Result<tera::Value> {
-    let bindings = args
-        .get("bindings")
-        .map(|b| tera::from_value::<Vec<String>>(b.clone()))
+    let query = args
+        .get("query")
+        .map(|b| tera::from_value::<SqlQueryTemplateContext>(b.clone()))
         .transpose()?
-        .ok_or_else(|| tera::Error::msg("Missing bindings argument"))?;
+        .ok_or_else(|| tera::Error::msg("Missing query argument"))?;
 
-    let output = bindings
+    let payload_var = args
+        .get("payload_var")
+        .map(|b| b.to_string())
+        .unwrap_or("payload".to_string());
+
+    let output = query
+        .bindings
         .iter()
         .map(|name| {
-            args.get(name)
+            let arg = args
+                .get(name)
                 .map(|b| tera::from_value::<String>(b.clone()))
                 .transpose()?
-                .ok_or_else(|| tera::Error::msg(format!("Missing {name} argument")))
+                .or_else(|| query.field_params.get(name).map(|s| s.to_string()))
+                .ok_or_else(|| tera::Error::msg(format!("Missing {name} argument")))?;
+
+            let output = arg.replace("$payload", &payload_var);
+
+            Ok::<_, tera::Error>(output)
         })
         .collect::<tera::Result<Vec<String>>>()?;
 

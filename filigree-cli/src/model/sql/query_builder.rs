@@ -1,8 +1,13 @@
 //! Query building helpers. This is modeled after [sqlx::QueryBuilder] but the binding tracking
 //! works a bit differently to better support the building queries in the CLI.
-use std::{borrow::Cow, fmt::Write};
+use std::{
+    borrow::{Borrow, Cow},
+    collections::HashMap,
+    fmt::Write,
+};
 
 use super::SqlQueryContext;
+use crate::model::field::ModelFieldTemplateContext;
 
 /// A simple query builder that keeps track of named bindings
 pub struct QueryBuilder {
@@ -53,11 +58,30 @@ impl QueryBuilder {
         write!(&mut self.query, "${}", index).unwrap();
     }
 
-    /// Return the query and bindings from the builder.
     pub fn finish(self, name: &str) -> SqlQueryContext {
         SqlQueryContext {
             bindings: self.bindings,
             query: self.query,
+            field_params: HashMap::new(),
+            name: name.to_string(),
+        }
+    }
+
+    /// Return the query and bindings from the builder.
+    pub fn finish_with_field_bindings(
+        self,
+        name: &str,
+        fields: &[impl Borrow<ModelFieldTemplateContext>],
+    ) -> SqlQueryContext {
+        let field_params = fields
+            .iter()
+            .map(|f| (f.borrow().name.clone(), f.borrow().param_binding()))
+            .collect::<HashMap<_, _>>();
+
+        SqlQueryContext {
+            bindings: self.bindings,
+            query: self.query,
+            field_params,
             name: name.to_string(),
         }
     }

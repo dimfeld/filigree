@@ -17,12 +17,11 @@ pub fn insert(data: &SqlBuilder) -> SqlQueryContext {
         .fields
         .iter()
         .filter(|f| f.owner_write)
-        .map(|f| f.sql_name.as_str())
         .collect::<Vec<_>>();
 
     for f in &fields {
         q.push(", ");
-        q.push(f);
+        q.push(&f.sql_name);
     }
 
     q.push(") VALUES (");
@@ -35,7 +34,7 @@ pub fn insert(data: &SqlBuilder) -> SqlQueryContext {
         }
 
         for f in &fields {
-            sep.push_binding(f);
+            sep.push_binding(&f.sql_name);
         }
     }
 
@@ -51,5 +50,5 @@ pub fn insert(data: &SqlBuilder) -> SqlQueryContext {
         .join(",\n");
     q.push(&returning);
 
-    q.finish("insert")
+    q.finish_with_field_bindings("insert", &fields)
 }

@@ -44,6 +44,30 @@ pub struct ModelFieldTemplateContext {
     pub writable_non_parent: bool,
 }
 
+impl ModelFieldTemplateContext {
+    /// Rust syntax that can be submitted as a query binding for this field. The returned text
+    /// contains the string `$payload` which can be replaced with the appropriate variable name.
+    pub fn param_binding(&self) -> String {
+        let is_custom_type = self.is_custom_rust_type && matches!(self.base_type, SqlType::Json);
+        if self.nullable {
+            if is_custom_type {
+                format!(
+                    "sqlx::types::Json($payload.{}.as_ref()) as _",
+                    self.rust_name
+                )
+            } else {
+                format!("$payload.{}.as_ref() as _", self.rust_name)
+            }
+        } else {
+            if is_custom_type {
+                format!("sqlx::types::Json(&$payload.{}) as _", self.rust_name)
+            } else {
+                format!("&$payload.{} as _", self.rust_name)
+            }
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct ModelField {
     /// The name of the field

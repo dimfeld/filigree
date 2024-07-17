@@ -22,8 +22,12 @@ use super::{
 use crate::{
     config::{web::WebFramework, Config},
     migrations::SingleMigration,
-    model::{field::SortableType, sql::SqlBuilder, ReferenceFetchType},
-    templates::{ModelRustTemplates, ModelSqlTemplates, ModelSvelteTemplates, Renderer},
+    model::{
+        field::SortableType,
+        sql::{SqlBuilder, SqlQueryTemplateContext},
+        ReferenceFetchType,
+    },
+    templates::{ModelRustTemplates, ModelSvelteTemplates, Renderer},
     write::{GeneratorMap, ModelMap, RenderedFile, RenderedFileLocation},
     Error,
 };
@@ -369,7 +373,7 @@ impl<'a> ModelGenerator<'a> {
 
         let queries_context = sql_queries
             .iter()
-            .map(|q| (q.name.as_str(), &q.bindings))
+            .map(|q| (q.name.as_str(), SqlQueryTemplateContext::from(q.clone())))
             .collect::<HashMap<_, _>>();
         ctx.insert("sql_queries", &queries_context);
 

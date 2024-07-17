@@ -1,26 +1,25 @@
+use std::fmt::Write;
+
 use super::{bindings, QueryBuilder, SqlBuilder, SqlQueryContext};
 
 pub fn create_delete_query(data: &SqlBuilder) -> SqlQueryContext {
-    let mut q = QueryBuilder::with_initial(
-        format!(
-            r##"DELETE FROM {schema}.{table}
-                    WHERE id=
-               "##,
-            schema = data.context.schema,
-            table = data.context.table
-        ),
-        vec![],
-    );
-
+    let mut q = QueryBuilder::new();
+    write!(
+        q,
+        "DELETE FROM {schema}.{table} WHERE \nid = ",
+        schema = data.context.schema,
+        table = data.context.table
+    )
+    .unwrap();
     q.push_binding(bindings::ID);
 
     if !data.context.global {
-        q.push("AND organization_id = ");
+        q.push(" AND organization_id = ");
         q.push_binding(bindings::ORGANIZATION);
     }
 
     if data.context.auth_check_in_query {
-        q.push("AND ");
+        q.push(" AND ");
         data.permissions_check_where_clause(&mut q, &[&data.context.owner_permission]);
     }
 
@@ -32,14 +31,14 @@ pub fn create_delete_all_children_query(data: &SqlBuilder) -> Option<SqlQueryCon
         return None;
     };
 
-    let mut q = QueryBuilder::with_initial(
-        format!(
-            r##"DELETE FROM {schema}.{table} WHERE "##,
-            schema = data.context.schema,
-            table = data.context.table
-        ),
-        vec![],
-    );
+    let mut q = QueryBuilder::new();
+    write!(
+        q,
+        r##"DELETE FROM {schema}.{table} WHERE "##,
+        schema = data.context.schema,
+        table = data.context.table
+    )
+    .unwrap();
 
     {
         let mut where_sep = q.separated(" AND ");
@@ -62,14 +61,14 @@ pub fn delete_removed_children(data: &SqlBuilder) -> Option<SqlQueryContext> {
         return None;
     };
 
-    let mut q = QueryBuilder::with_initial(
-        format!(
-            r##"DELETE FROM {schema}.{table} WHERE "##,
-            schema = data.context.schema,
-            table = data.context.table
-        ),
-        vec![],
-    );
+    let mut q = QueryBuilder::new();
+    write!(
+        q,
+        r##"DELETE FROM {schema}.{table} WHERE "##,
+        schema = data.context.schema,
+        table = data.context.table
+    )
+    .unwrap();
 
     {
         let mut where_sep = q.separated(" AND ");
@@ -96,14 +95,14 @@ pub fn delete_with_parent(data: &SqlBuilder) -> Option<SqlQueryContext> {
         return None;
     };
 
-    let mut q = QueryBuilder::with_initial(
-        format!(
-            r##"DELETE FROM {schema}.{table} WHERE "##,
-            schema = data.context.schema,
-            table = data.context.table
-        ),
-        vec![],
-    );
+    let mut q = QueryBuilder::new();
+    write!(
+        q,
+        r##"DELETE FROM {schema}.{table} WHERE "##,
+        schema = data.context.schema,
+        table = data.context.table
+    )
+    .unwrap();
 
     {
         let mut where_sep = q.separated(" AND ");

@@ -4,9 +4,14 @@ use super::{bindings, QueryBuilder, SqlBuilder, SqlQueryContext};
 use crate::model::field::ModelFieldTemplateContext;
 
 pub fn update_user(data: &SqlBuilder) -> SqlQueryContext {
-    let fields = data.context.fields.iter().filter(|f| f.user_write);
-    let q = update(data, fields, None);
-    q.finish("update_with_user_permissions")
+    let fields = data
+        .context
+        .fields
+        .iter()
+        .filter(|f| f.user_write)
+        .collect::<Vec<_>>();
+    let q = update(data, &fields, None);
+    q.finish_with_field_bindings("update_with_user_permissions", &fields)
 }
 
 pub fn update_owner(data: &SqlBuilder) -> Option<SqlQueryContext> {
@@ -15,9 +20,14 @@ pub fn update_owner(data: &SqlBuilder) -> Option<SqlQueryContext> {
         return None;
     }
 
-    let fields = data.context.fields.iter().filter(|f| f.owner_write);
-    let q = update(data, fields, None);
-    Some(q.finish("update_with_owner_permissions"))
+    let fields = data
+        .context
+        .fields
+        .iter()
+        .filter(|f| f.owner_write)
+        .collect::<Vec<_>>();
+    let q = update(data, &fields, None);
+    Some(q.finish_with_field_bindings("update_with_owner_permissions", &fields))
 }
 
 pub fn update_one_with_parent_user(data: &SqlBuilder) -> Option<SqlQueryContext> {
@@ -25,10 +35,15 @@ pub fn update_one_with_parent_user(data: &SqlBuilder) -> Option<SqlQueryContext>
         return None;
     };
 
-    let fields = data.context.fields.iter().filter(|f| f.user_write);
-    let q = update(data, fields, Some(&belongs_to.sql_name));
+    let fields = data
+        .context
+        .fields
+        .iter()
+        .filter(|f| f.user_write)
+        .collect::<Vec<_>>();
+    let q = update(data, &fields, Some(&belongs_to.sql_name));
 
-    Some(q.finish("update_one_with_parent_user_permissions"))
+    Some(q.finish_with_field_bindings("update_one_with_parent_user_permissions", &fields))
 }
 
 pub fn update_one_with_parent_owner(data: &SqlBuilder) -> Option<SqlQueryContext> {
@@ -41,15 +56,20 @@ pub fn update_one_with_parent_owner(data: &SqlBuilder) -> Option<SqlQueryContext
         return None;
     };
 
-    let fields = data.context.fields.iter().filter(|f| f.owner_write);
-    let q = update(data, fields, Some(&belongs_to.sql_name));
+    let fields = data
+        .context
+        .fields
+        .iter()
+        .filter(|f| f.owner_write)
+        .collect::<Vec<_>>();
+    let q = update(data, &fields, Some(&belongs_to.sql_name));
 
-    Some(q.finish("update_one_with_parent_owner_permissions"))
+    Some(q.finish_with_field_bindings("update_one_with_parent_owner_permissions", &fields))
 }
 
 fn update<'a>(
     data: &'a SqlBuilder,
-    fields: impl Iterator<Item = &'a ModelFieldTemplateContext>,
+    fields: &[&ModelFieldTemplateContext],
     parent_field: Option<&str>,
 ) -> QueryBuilder {
     let mut query = QueryBuilder::new();
