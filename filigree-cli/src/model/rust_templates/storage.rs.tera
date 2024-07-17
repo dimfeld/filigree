@@ -102,7 +102,6 @@ where
     let result = super::queries::upsert_with_parent(
         tx,
         &auth.organization_id,
-        true,
         &parent_id,
         &db_payload
     )
@@ -182,7 +181,6 @@ pub async fn upload(
     let result = super::queries::upsert_with_parent(
         tx,
         &auth.organization_id,
-        true,
         &parent_id,
         &db_payload
     ).await?;

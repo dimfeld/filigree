@@ -208,20 +208,11 @@ async fn update_child_{{c.module}}(
     ).await?
     .unwrap_or(ObjectPermission::Read);
 
-    let is_owner = match object_perm {
-        ObjectPermission::Owner => true,
-        ObjectPermission::Write => false,
-        ObjectPermission::Read => {
-            return Err(Error::AuthError(AuthError::MissingPermission(
-                Cow::Borrowed(super::WRITE_PERMISSION),
-            )));
-        }
-    };
+    object_perm.must_be_writable(WRITE_PERMISSION)?;
 
     let result = crate::models::{{c.module}}::queries::update_one_with_parent(
         &state.db,
         &auth,
-        is_owner,
         &parent_id,
         &child_id,
         payload).await?;
@@ -331,7 +322,6 @@ async fn upsert_child_{{c.module}}(
     let result = crate::models::{{c.module}}::queries::upsert_with_parent(
         &state.db,
         &auth.organization_id,
-        object_perm == ObjectPermission::Owner,
         &parent_id,
         &payload).await?;
     {% endif %}

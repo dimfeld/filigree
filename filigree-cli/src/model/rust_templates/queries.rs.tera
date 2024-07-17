@@ -278,8 +278,8 @@ where
     {% if not pagination.disable %}
         const MAX_PER_PAGE: u32 = {{ pagination.max_per_page }};
         const DEFAULT_PER_PAGE: u32 = {{ pagination.default_per_page }};
-        let per_page = filters.per_page.unwrap_or(DEFAULT_PER_PAGE).min(MAX_PER_PAGE).max(1);
-        let offset = filters.page.unwrap_or(0) * per_page;
+        let per_page = filters.per_page.unwrap_or(DEFAULT_PER_PAGE).min(MAX_PER_PAGE).max(1) as i32;
+        let offset = filters.page.unwrap_or(0) as i32 * per_page;
         event!(Level::DEBUG, per_page, offset);
     {% endif %}
 
@@ -401,7 +401,7 @@ async fn create_payload_children(
                     child.{{c.parent_field}} = parent_id.clone();
                 }
 
-                crate::models::{{c.module}}::queries::update_all_with_parent(&mut *db, organization_id, true, parent_id, &children).await?
+                crate::models::{{c.module}}::queries::update_all_with_parent(&mut *db, organization_id, parent_id, &children).await?
             } else {
                 vec![]
             }
@@ -409,7 +409,7 @@ async fn create_payload_children(
             tracing::event!(Level::DEBUG, ?children, "Creating child {{c.module}}");
             children.id = Some({{c.object_id}}::new());
             children.{{c.parent_field}} = parent_id.clone();
-            let result = crate::models::{{c.module}}::queries::upsert_with_parent(&mut *db, organization_id, true, parent_id, &children).await?;
+            let result = crate::models::{{c.module}}::queries::upsert_with_parent(&mut *db, organization_id, parent_id, &children).await?;
             Some(result)
         {% endif %}
         } else {
@@ -447,16 +447,16 @@ pub async fn update(
             actor_ids="&auth.actor_ids()"
         )}}
         )
-        .fetch_optional(&mut *db)
+        .execute(&mut *db)
         .await
         .change_context(Error::Db)?;
 
-    let Some(is_owner) = result else {
+    if result.rows_affected() == 0 {
         return Ok(false);
-    };
+    }
 
     {% if update_payload_fields %}
-    update_payload_children(&mut *db, &auth.organization_id, id, is_owner, payload).await?;
+    update_payload_children(&mut *db, &auth.organization_id, id, payload).await?;
     {% endif %}
 
     Ok(true)
@@ -468,7 +468,6 @@ async fn update_payload_children(
     db: &mut PgConnection,
     organization_id: &OrganizationId,
     parent_id: &{{id_type}},
-    is_owner: bool,
     payload: {{struct_base}}UpdatePayload
 ) -> Result<(), error_stack::Report<Error>> {
     {% for c in children | filter(attribute="write_payload_field_name") %}
@@ -484,7 +483,6 @@ async fn update_payload_children(
         crate::models::{{c.module}}::queries::update_all_with_parent(
             &mut *db,
             organization_id,
-            is_owner,
             parent_id,
             &children).await?;
     }
@@ -508,7 +506,6 @@ pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) 
     Ok(result.rows_affected() > 0)
 }
 
-{% if false %} {# Enable once object and project permissions are implemented #}
 #[instrument(skip(db))]
 pub async fn lookup_object_permissions(
     db: impl PgExecutor<'_>,
@@ -516,6 +513,35 @@ pub async fn lookup_object_permissions(
     #[allow(unused_variables)]
     id: &{{id_type}},
 ) -> Result<Option<ObjectPermission>, error_stack::Report<Error>> {
+
+    {% if auth_scope == "model" %}
+
+    let mut saw_write = false;
+    let mut saw_read = false;
+
+    use super::{OWNER_PERMISSION, READ_PERMISSION, WRITE_PERMISSION};
+
+    for perm in &auth.permissions {
+        if perm == OWNER_PERMISSION {
+            return Ok(Some(ObjectPermission::Owner));
+        } else if perm == WRITE_PERMISSION {
+            saw_write = true;
+        } else if perm == READ_PERMISSION {
+            saw_read = true;
+        }
+    }
+
+    if saw_write {
+        return Ok(Some(ObjectPermission::Write));
+    } else if saw_read {
+        return Ok(Some(ObjectPermission::Read));
+    } else {
+        return Ok(None);
+    }
+
+    {% else %}
+    #[error("object and project auth scope not implemented yet")]
+
     let actor_ids = auth.actor_ids();
     let result = query_file_scalar!(
         "{{dir}}/lookup_object_permissions.sql",
@@ -531,8 +557,8 @@ pub async fn lookup_object_permissions(
 
     let perm = result.and_then(|r| ObjectPermission::from_str_infallible(&r));
     Ok(perm)
+    {% endif %}
 }
-{% endif %}
 
 {% if belongs_to_field %}
 {% if belongs_to_field.unique %}
@@ -570,7 +596,6 @@ pub async fn upsert_with_parent(
 pub async fn update_one_with_parent(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
-    is_owner: bool,
     parent_id: &{{belongs_to_field.rust_type}},
     id: &{{id_type}},
     mut payload: {{ struct_base }}UpdatePayload

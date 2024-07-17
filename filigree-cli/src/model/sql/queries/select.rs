@@ -38,7 +38,7 @@ pub fn select_one(data: &SqlBuilder, populate_children: bool) -> Option<SqlQuery
             .for_each(|(c, clause)| {
                 select_sep.push(&clause);
                 select_sep.push_unseparated(" AS \"");
-                select_sep.push_unseparated(&c.get_sql_field_name);
+                select_sep.push_unseparated(&c.full_get_sql_field_name);
                 select_sep.push_unseparated("\"");
             });
 

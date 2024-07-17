@@ -116,9 +116,9 @@ fn upsert(
     {
         q.push("\nRETURNING ");
         let mut sep = q.separated(", ");
-        for field in fields {
+        for field in &data.context.fields {
             if !field.never_read {
-                sep.push(&field.sql_name);
+                sep.push(&field.sql_full_name);
             }
         }
     }
