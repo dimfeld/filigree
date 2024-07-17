@@ -469,7 +469,7 @@ pub struct HasModel {
     /// The name of the child model
     pub model: String,
 
-    /// If true, this model can be a parent to more than one of the child model.
+    /// If true, this is a one-to-many relationship.
     #[serde(default)]
     pub many: bool,
 
