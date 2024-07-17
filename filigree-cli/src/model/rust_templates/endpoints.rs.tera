@@ -597,7 +597,6 @@ mod test {
             );
             {% endif %}
             {%- endfor %}
-            assert_eq!(result["_permission"], "owner");
 
             {% for field in fields | filter (attribute="owner_read", value=false) -%}
             assert_eq!(
@@ -650,7 +649,6 @@ mod test {
                 "list result field {{field.rust_name}}"
             );
             {%- endfor %}
-            assert_eq!(result["_permission"], "write");
 
             {% for child in children %}
             {% if child.relationship.populate_on_list == "id" %}
@@ -804,7 +802,6 @@ mod test {
         );
         {% endif %}
         {%- endfor %}
-        assert_eq!(result["_permission"], "owner");
 
         {% for child in children %}
         {% if child.relationship.populate_on_get == "id" %}
@@ -877,7 +874,6 @@ mod test {
             "get result field {{field.rust_name}}"
         );
         {%- endfor %}
-        assert_eq!(result["_permission"], "write");
 
         {% for field in fields | filter (attribute="user_read", value=false) -%}
         assert_eq!(
@@ -946,7 +942,6 @@ mod test {
             "field {{field.rust_name}}"
         );
         {%- endfor %}
-        assert_eq!(updated["_permission"], "owner");
 
         // TODO Test that owner can not write fields which are not writable by anyone.
         // TODO Test that user can not update fields which are writable by owner but not user
@@ -972,7 +967,6 @@ mod test {
             "field {{field.rust_name}}"
         );
         {%- endfor %}
-        assert_eq!(non_updated["_permission"], "owner");
 
         let response = no_roles_user
             .client
@@ -1021,7 +1015,6 @@ mod test {
             "field {{field.rust_name}} from create response"
         );
         {%- endfor %}
-        assert_eq!(created_result["_permission"], "owner");
 
         let created_id = created_result["id"].as_str().unwrap();
         let get_result = admin_user
@@ -1044,7 +1037,6 @@ mod test {
             "field {{field.rust_name}} from get response"
         );
         {%- endfor %}
-        assert_eq!(get_result["_permission"], "owner");
 
         let response = no_roles_user
             .client

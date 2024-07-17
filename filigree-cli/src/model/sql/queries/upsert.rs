@@ -118,7 +118,14 @@ fn upsert(
         let mut sep = q.separated(", ");
         for field in &data.context.fields {
             if !field.never_read {
-                sep.push(&field.sql_full_name);
+                // Hack for now since upsert_single_child uses the macro
+                // but upsert_children does not, and the macro requires type annotations
+                // on the RETURNING fields but that breaks when not using the macro.
+                if single {
+                    sep.push(&field.sql_full_name);
+                } else {
+                    sep.push(&field.sql_name);
+                }
             }
         }
     }
