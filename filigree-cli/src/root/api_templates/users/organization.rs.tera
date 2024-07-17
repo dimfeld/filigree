@@ -17,6 +17,7 @@ const USER_DEFAULT_PERMISSIONS: &[&str] = &[
     {% for model in models %}
     "{{model.read_permission}}",
     "{{model.write_permission}}",
+    "{{model.owner_permission}}",
     {% endfor %}
 ];
 

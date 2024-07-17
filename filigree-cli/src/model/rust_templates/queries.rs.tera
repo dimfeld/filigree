@@ -1,7 +1,7 @@
 #![allow(unused_imports, unused_variables, dead_code)]
 use error_stack::ResultExt;
 use filigree::{
-    auth::ObjectPermission,
+    auth::{AuthInfo as _, ObjectPermission},
     errors::OrderByError,
     sql::{BindingOperator, FilterBuilder, ValuesBuilder}
 };
@@ -39,6 +39,155 @@ use crate::Error;
 {%- endif -%}
 {% endmacro input %}
 
+#[derive(Debug, Default)]
+enum OrderByField {
+    {%- for field in fields  %}
+    {%- if field.sortable != "none" -%}
+        {% if field.snake_case_name == default_sort_field -%}
+        #[default]
+        {%- endif %}
+    {{field.pascal_case_name}},
+    {%- endif -%}
+    {%- endfor -%}
+}
+
+impl OrderByField {
+    fn as_str(&self) -> &str {
+        match self {
+            {% for field in fields -%}
+            {%- if field.sortable != "none" -%}
+            Self::{{field.pascal_case_name}} => "{{field.snake_case_name}}",
+            {%- endif -%}
+            {%- endfor %}
+        }
+    }
+
+    fn allowed_direction(&self, descending: bool) -> bool {
+        match self {
+            {% for field in fields | filter(attribute="sortable", value="ascending_only") -%}
+            Self::{{field.pascal_case_name}} => descending == false,
+            {%- endfor %}
+            {% for field in fields | filter(attribute="sortable", value="descending_only") -%}
+            Self::{{field.pascal_case_name}} => descending == true,
+            {%- endfor %}
+            _ => true
+        }
+    }
+}
+
+impl std::str::FromStr for OrderByField {
+    type Err = OrderByError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let value = match s {
+            {% for field in fields -%}
+            {%- if field.sortable != "none" -%}
+            "{{field.sql_name}}" => OrderByField::{{field.pascal_case_name}},
+            {%- endif -%}
+            {%- endfor %}
+            _ => return Err(OrderByError::InvalidField),
+        };
+
+        Ok(value)
+    }
+}
+
+fn parse_order_by(field: &str) -> Result<(bool, OrderByField), OrderByError> {
+    let descending = field.starts_with('-');
+    let field = if descending {
+        &field[1..]
+    } else {
+        field
+    };
+
+    let value = OrderByField::from_str(field)?;
+    if !value.allowed_direction(descending) {
+        return Err(OrderByError::InvalidDirection);
+    }
+    Ok((descending, value))
+}
+
+{% set_global has_filterable = false %}
+
+#[derive(Deserialize, Debug, Default)]
+pub struct ListQueryFilters {
+    {%if not pagination.disable %}
+    pub page: Option<u32>,
+    pub per_page: Option<u32>,
+    {% endif %}
+    pub order_by: Option<String>,
+
+    {%- for field in fields | filter(attribute="filterable", value="exact") -%}
+        {% set_global has_filterable = true %}
+    #[serde(default)]
+    pub {{field.rust_name}}: {% if field.base_rust_type == "bool" %}Option{% else %}Vec{% endif %}<{{field.base_rust_type}}>,
+    {%- endfor -%}
+    {%- for field in fields | filter(attribute="filterable", value="range") -%}
+        {% set_global has_filterable = true %}
+    pub {{field.rust_name}}_lte: Option<{{field.base_rust_type}}>,
+    pub {{field.rust_name}}_gte: Option<{{field.base_rust_type}}>,
+    {%- endfor -%}
+}
+
+impl ListQueryFilters {
+    fn build_where_clause(&self) -> String {
+        {% set start_binding = sql_queries.list.num_bindings + 1 %}
+        let mut bindings = FilterBuilder::new({{ start_binding }});
+
+        {% for field in fields | filter(attribute="filterable", value="exact") %}
+            {% if field.base_rust_type == "bool" -%}
+            if self.{{field.rust_name}}.is_some() {
+                bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}, BindingOperator::Eq);
+            }
+            {%- else -%}
+            if !self.{{field.rust_name}}.is_empty() {
+                bindings.add_vec("{{field.sql_name}}", &self.{{field.rust_name}});
+            }
+            {%- endif %}
+        {% endfor %}
+        {% for field in fields | filter(attribute="filterable", value="range") %}
+            if self.{{field.rust_name}}_lte.is_some() {
+                bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}_lte, BindingOperator::Lte);
+            }
+
+            if self.{{field.rust_name}}_gte.is_some() {
+                bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}_gte, BindingOperator::Gte);
+            }
+        {% endfor %}
+
+        let query = bindings.to_string();
+        event!(Level::DEBUG, %query);
+        query
+    }
+
+    fn bind_to_query<'a, T>(&'a self, mut query: QueryAs<'a, T>) -> QueryAs<'a, T> {
+        {% for field in fields | filter(attribute="filterable", value="exact") %}
+            {% if field.base_rust_type == "bool" -%}
+            if self.{{field.rust_name}}.is_some() {
+            {% else %}
+            if !self.{{field.rust_name}}.is_empty() {
+                {% endif %}
+                event!(Level::DEBUG, {{field.rust_name}} = ?self.{{field.rust_name}});
+                query = query.bind(&self.{{field.rust_name}});
+            }
+        {% endfor %}
+        {% for field in fields | filter(attribute="filterable", value="range") %}
+            {% set_global has_filterable = true %}
+            if self.{{field.rust_name}}_lte.is_some() {
+                event!(Level::DEBUG, {{field.rust_name}}_lte = ?self.{{field.rust_name}}_lte);
+                query = query.bind(&self.{{field.rust_name}}_lte);
+            }
+
+            if self.{{field.rust_name}}_gte.is_some() {
+                event!(Level::DEBUG, {{field.rust_name}}_gte = ?self.{{field.rust_name}}_gte);
+                query = query.bind(&self.{{field.rust_name}}_gte);
+            }
+        {% endfor %}
+
+        query
+    }
+}
+
 type QueryAs<'q, T> = sqlx::query::QueryAs<'q, sqlx::Postgres, T, <sqlx::Postgres as sqlx::database::HasArguments<'q>>::Arguments>;
 
 {% if create_payload_fields %}
@@ -74,6 +223,10 @@ fn check_missing_parent_error<T>(result: Result<T, sqlx::Error>) -> Result<T, er
 /// Get a {{model_name}} from the database
 #[instrument(skip(db))]
 pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> Result<{{ struct_base }}, error_stack::Report<Error>> {
+    {% if auth_scope == "model" %}
+    auth.require_permission(super::READ_PERMISSION)?;
+    {% endif %}
+
     let object = query_file_as!({{struct_base}}, "{{dir}}/select_one.sql",
         {{query_bindings(
             query=sql_queries.select_one,
@@ -94,6 +247,10 @@ pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> 
 /// Get a populated {{model_name}} from the database
 #[instrument(skip(db))]
 pub async fn get_populated(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> Result<{{ struct_base }}PopulatedGetResult, error_stack::Report<Error>> {
+    {% if auth_scope == "model" %}
+    auth.require_permission(super::READ_PERMISSION)?;
+    {% endif %}
+
     let actor_ids = auth.actor_ids();
     let object = query_file_as!({{struct_base}}PopulatedGetResult, "{{dir}}/select_one_populated.sql",
         {{query_bindings(
@@ -144,6 +301,10 @@ async fn list_internal<T>(
 where
     T: for<'r> sqlx::FromRow<'r, PgRow> + Send + Unpin,
 {
+    {% if auth_scope == "model" %}
+    auth.require_permission(super::READ_PERMISSION)?;
+    {% endif %}
+
     {% if not pagination.disable %}
         const MAX_PER_PAGE: u32 = {{ pagination.max_per_page }};
         const DEFAULT_PER_PAGE: u32 = {{ pagination.default_per_page }};
@@ -185,7 +346,8 @@ where
 
 /// Create a new {{struct_base}} in the database.
 pub async fn create(db: &mut PgConnection, auth: &AuthInfo, payload: {{struct_base}}CreatePayload) -> Result<{{struct_base}}CreateResult, error_stack::Report<Error>> {
-    // TODO create permissions auth check
+    auth.require_permission(super::CREATE_PERMISSION)?;
+
     {% if allow_id_in_create %}
     let id = payload.id.unwrap_or_else({{id_type}}::new);
     {% else %}
@@ -296,8 +458,11 @@ pub async fn update(
     id: &{{id_type}},
     payload: {{ struct_base }}UpdatePayload)
 -> Result<bool, error_stack::Report<Error>> {
+    {% if auth_scope == "model" %}
+    auth.require_permission(super::WRITE_PERMISSION)?;
+    {% endif %}
+
     let result = query_file_scalar!("{{dir}}/update.sql",
-        {# TODO Separate functions for user and owner checks #}
         {{query_bindings(
             query=sql_queries.update,
             id=self::id_ref(),
@@ -352,6 +517,10 @@ async fn update_payload_children(
 
 #[instrument(skip(db))]
 pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> Result<bool, error_stack::Report<Error>> {
+    {% if auth_scope == "model" %}
+    auth.require_permission(super::CREATE_PERMISSION)?;
+    {% endif %}
+
     let result = query_file!("{{dir}}/delete.sql",
         {{query_bindings(query=sql_queries.delete,
             id=self::id_ref(),
@@ -597,151 +766,3 @@ pub async fn delete_all_children_of_parent(
 
 }
 
-#[derive(Debug, Default)]
-enum OrderByField {
-    {%- for field in fields  %}
-    {%- if field.sortable != "none" -%}
-        {% if field.snake_case_name == default_sort_field -%}
-        #[default]
-        {%- endif %}
-    {{field.pascal_case_name}},
-    {%- endif -%}
-    {%- endfor -%}
-}
-
-impl OrderByField {
-    fn as_str(&self) -> &str {
-        match self {
-            {% for field in fields -%}
-            {%- if field.sortable != "none" -%}
-            Self::{{field.pascal_case_name}} => "{{field.snake_case_name}}",
-            {%- endif -%}
-            {%- endfor %}
-        }
-    }
-
-    fn allowed_direction(&self, descending: bool) -> bool {
-        match self {
-            {% for field in fields | filter(attribute="sortable", value="ascending_only") -%}
-            Self::{{field.pascal_case_name}} => descending == false,
-            {%- endfor %}
-            {% for field in fields | filter(attribute="sortable", value="descending_only") -%}
-            Self::{{field.pascal_case_name}} => descending == true,
-            {%- endfor %}
-            _ => true
-        }
-    }
-}
-
-impl std::str::FromStr for OrderByField {
-    type Err = OrderByError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = match s {
-            {% for field in fields -%}
-            {%- if field.sortable != "none" -%}
-            "{{field.sql_name}}" => OrderByField::{{field.pascal_case_name}},
-            {%- endif -%}
-            {%- endfor %}
-            _ => return Err(OrderByError::InvalidField),
-        };
-
-        Ok(value)
-    }
-}
-
-fn parse_order_by(field: &str) -> Result<(bool, OrderByField), OrderByError> {
-    let descending = field.starts_with('-');
-    let field = if descending {
-        &field[1..]
-    } else {
-        field
-    };
-
-    let value = OrderByField::from_str(field)?;
-    if !value.allowed_direction(descending) {
-        return Err(OrderByError::InvalidDirection);
-    }
-    Ok((descending, value))
-}
-
-{% set_global has_filterable = false %}
-
-#[derive(Deserialize, Debug, Default)]
-pub struct ListQueryFilters {
-    {%if not pagination.disable %}
-    pub page: Option<u32>,
-    pub per_page: Option<u32>,
-    {% endif %}
-    pub order_by: Option<String>,
-
-    {%- for field in fields | filter(attribute="filterable", value="exact") -%}
-        {% set_global has_filterable = true %}
-    #[serde(default)]
-    pub {{field.rust_name}}: {% if field.base_rust_type == "bool" %}Option{% else %}Vec{% endif %}<{{field.base_rust_type}}>,
-    {%- endfor -%}
-    {%- for field in fields | filter(attribute="filterable", value="range") -%}
-        {% set_global has_filterable = true %}
-    pub {{field.rust_name}}_lte: Option<{{field.base_rust_type}}>,
-    pub {{field.rust_name}}_gte: Option<{{field.base_rust_type}}>,
-    {%- endfor -%}
-}
-
-impl ListQueryFilters {
-    fn build_where_clause(&self) -> String {
-        {% set start_binding = sql_queries.list.num_bindings + 1 %}
-        let mut bindings = FilterBuilder::new({{ start_binding }});
-
-        {% for field in fields | filter(attribute="filterable", value="exact") %}
-            {% if field.base_rust_type == "bool" -%}
-            if self.{{field.rust_name}}.is_some() {
-                bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}, BindingOperator::Eq);
-            }
-            {%- else -%}
-            if !self.{{field.rust_name}}.is_empty() {
-                bindings.add_vec("{{field.sql_name}}", &self.{{field.rust_name}});
-            }
-            {%- endif %}
-        {% endfor %}
-        {% for field in fields | filter(attribute="filterable", value="range") %}
-            if self.{{field.rust_name}}_lte.is_some() {
-                bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}_lte, BindingOperator::Lte);
-            }
-
-            if self.{{field.rust_name}}_gte.is_some() {
-                bindings.add_option("{{field.sql_name}}", &self.{{field.rust_name}}_gte, BindingOperator::Gte);
-            }
-        {% endfor %}
-
-        let query = bindings.to_string();
-        event!(Level::DEBUG, %query);
-        query
-    }
-
-    fn bind_to_query<'a, T>(&'a self, mut query: QueryAs<'a, T>) -> QueryAs<'a, T> {
-        {% for field in fields | filter(attribute="filterable", value="exact") %}
-            {% if field.base_rust_type == "bool" -%}
-            if self.{{field.rust_name}}.is_some() {
-            {% else %}
-            if !self.{{field.rust_name}}.is_empty() {
-                {% endif %}
-                event!(Level::DEBUG, {{field.rust_name}} = ?self.{{field.rust_name}});
-                query = query.bind(&self.{{field.rust_name}});
-            }
-        {% endfor %}
-        {% for field in fields | filter(attribute="filterable", value="range") %}
-            {% set_global has_filterable = true %}
-            if self.{{field.rust_name}}_lte.is_some() {
-                event!(Level::DEBUG, {{field.rust_name}}_lte = ?self.{{field.rust_name}}_lte);
-                query = query.bind(&self.{{field.rust_name}}_lte);
-            }
-
-            if self.{{field.rust_name}}_gte.is_some() {
-                event!(Level::DEBUG, {{field.rust_name}}_gte = ?self.{{field.rust_name}}_gte);
-                query = query.bind(&self.{{field.rust_name}}_gte);
-            }
-        {% endfor %}
-
-        query
-    }
-}

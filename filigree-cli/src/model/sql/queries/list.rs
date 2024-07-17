@@ -15,13 +15,16 @@ pub fn list(data: &SqlBuilder, populate_children: bool) -> Option<SqlQueryContex
     let org_binding = q.create_binding(bindings::ORGANIZATION);
     let mut select_sep = q.separated(", ");
 
-    data.context
+    let fields = data
+        .context
         .fields
         .iter()
         .filter(|f| !f.never_read && !f.omit_in_list)
-        .for_each(|f| {
-            select_sep.push(&f.sql_name);
-        });
+        .collect::<Vec<_>>();
+
+    for f in &fields {
+        select_sep.push(&f.sql_name);
+    }
 
     if populate_children {
         data.context
@@ -85,9 +88,7 @@ pub fn list(data: &SqlBuilder, populate_children: bool) -> Option<SqlQueryContex
             where_sep.push_binding_unseparated(bindings::ORGANIZATION);
         }
 
-        let has_filterable = data
-            .context
-            .fields
+        let has_filterable = fields
             .iter()
             .any(|f| !matches!(f.filterable, FilterableType::None));
         if has_filterable {
