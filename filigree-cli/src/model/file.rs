@@ -251,8 +251,7 @@ impl FileModelOptions {
                 name: "file_storage_key".to_string(),
                 typ: SqlType::Text,
                 nullable: false,
-                user_access: key_access,
-                owner_access: key_access,
+                access: key_access,
                 ..Default::default()
             },
             // The id of the bucket where the file is stored.
@@ -262,8 +261,7 @@ impl FileModelOptions {
                 name: "file_storage_bucket".to_string(),
                 typ: SqlType::Text,
                 nullable: false,
-                user_access: Access::Write,
-                owner_access: Access::Write,
+                access: Access::Write,
                 ..Default::default()
             },
         ];
@@ -273,8 +271,7 @@ impl FileModelOptions {
                 name: "file_original_name".to_string(),
                 typ: SqlType::Text,
                 nullable: true,
-                user_access: Access::Write,
-                owner_access: Access::Write,
+                access: Access::Write,
                 filterable: FilterableType::Exact,
                 ..Default::default()
             });
@@ -285,8 +282,7 @@ impl FileModelOptions {
                 name: "file_size".to_string(),
                 typ: SqlType::BigInt,
                 nullable: true,
-                user_access: Access::ReadWrite,
-                owner_access: Access::ReadWrite,
+                access: Access::ReadWrite,
                 ..Default::default()
             });
         }
@@ -296,8 +292,7 @@ impl FileModelOptions {
                 name: "file_hash".to_string(),
                 typ: SqlType::Bytes,
                 nullable: true,
-                user_access: Access::ReadWrite,
-                owner_access: Access::ReadWrite,
+                access: Access::ReadWrite,
                 filterable: FilterableType::Exact,
                 ..Default::default()
             });

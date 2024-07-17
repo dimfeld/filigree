@@ -32,6 +32,7 @@ pub struct SqlQueryContext {
 
 #[derive(Serialize, Deserialize)]
 pub struct SqlQueryTemplateContext {
+    pub name: String,
     pub bindings: Vec<String>,
     pub num_bindings: usize,
     pub field_params: HashMap<String, String>,
@@ -40,6 +41,7 @@ pub struct SqlQueryTemplateContext {
 impl From<SqlQueryContext> for SqlQueryTemplateContext {
     fn from(value: SqlQueryContext) -> Self {
         Self {
+            name: value.name,
             num_bindings: value.bindings.len(),
             bindings: value.bindings,
             field_params: value.field_params,
@@ -60,6 +62,12 @@ pub fn generate_query_bindings(args: &HashMap<String, tera::Value>) -> tera::Res
         .map(|b| b.to_string())
         .unwrap_or("payload".to_string());
 
+    let call_bind = args
+        .get("call_bind")
+        .map(|b| tera::from_value::<bool>(b.clone()))
+        .transpose()?
+        .unwrap_or(false);
+
     let output = query
         .bindings
         .iter()
@@ -69,15 +77,29 @@ pub fn generate_query_bindings(args: &HashMap<String, tera::Value>) -> tera::Res
                 .map(|b| tera::from_value::<String>(b.clone()))
                 .transpose()?
                 .or_else(|| query.field_params.get(name).map(|s| s.to_string()))
-                .ok_or_else(|| tera::Error::msg(format!("Missing {name} argument")))?;
+                .ok_or_else(|| {
+                    tera::Error::msg(format!("Missing {name} argument in query {}", query.name))
+                })?;
 
             let output = arg.replace("$payload", &payload_var);
+
+            let output = if call_bind {
+                format!(".bind({output})")
+            } else {
+                output
+            };
 
             Ok::<_, tera::Error>(output)
         })
         .collect::<tera::Result<Vec<String>>>()?;
 
-    Ok(tera::to_value(output)?)
+    let joined = if call_bind {
+        output.join("\n")
+    } else {
+        output.join(",\n")
+    };
+
+    Ok(tera::to_value(joined)?)
 }
 
 /// Build the various SQL queries that are needed by the model
@@ -90,7 +112,7 @@ impl<'a> SqlBuilder<'a> {
         [
             queries::delete::create_delete_query(self),
             queries::insert::insert(self),
-            queries::update::update_user(self),
+            queries::update::update(self),
         ]
         .into_iter()
         .chain(
@@ -103,13 +125,9 @@ impl<'a> SqlBuilder<'a> {
                 queries::delete::create_delete_all_children_query(self),
                 queries::delete::delete_removed_children(self),
                 queries::delete::delete_with_parent(self),
-                queries::update::update_owner(self),
-                queries::update::update_one_with_parent_owner(self),
-                queries::update::update_one_with_parent_user(self),
-                queries::upsert::upsert_children_user(self),
-                queries::upsert::upsert_children_owner(self),
-                queries::upsert::upsert_single_child_user(self),
-                queries::upsert::upsert_single_child_owner(self),
+                queries::update::update_one_with_parent(self),
+                queries::upsert::upsert_children(self),
+                queries::upsert::upsert_single_child(self),
             ]
             .into_iter()
             .flatten(),

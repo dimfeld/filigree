@@ -3,7 +3,7 @@ use std::fmt::Write;
 use super::{bindings, QueryBuilder, SqlBuilder, SqlQueryContext};
 use crate::model::field::ModelFieldTemplateContext;
 
-pub fn upsert_single_child_user(data: &SqlBuilder) -> Option<SqlQueryContext> {
+pub fn upsert_single_child(data: &SqlBuilder) -> Option<SqlQueryContext> {
     let Some(belongs_to) = data.context.belongs_to_field.as_ref() else {
         return None;
     };
@@ -12,17 +12,13 @@ pub fn upsert_single_child_user(data: &SqlBuilder) -> Option<SqlQueryContext> {
         .context
         .fields
         .iter()
-        .filter(|f| f.user_write)
+        .filter(|f| f.writable)
         .collect::<Vec<_>>();
-    let q = upsert(data, fields, belongs_to, true);
-    Some(q.finish("upsert_single_child_with_user_permissions"))
+    let q = upsert(data, &fields, belongs_to, true);
+    Some(q.finish_with_field_bindings("upsert_single_child", &fields))
 }
 
-pub fn upsert_single_child_owner(data: &SqlBuilder) -> Option<SqlQueryContext> {
-    if data.context.structs.owner_and_user_different_write_access {
-        return None;
-    }
-
+pub fn upsert_children(data: &SqlBuilder) -> Option<SqlQueryContext> {
     let Some(belongs_to) = data.context.belongs_to_field.as_ref() else {
         return None;
     };
@@ -31,49 +27,15 @@ pub fn upsert_single_child_owner(data: &SqlBuilder) -> Option<SqlQueryContext> {
         .context
         .fields
         .iter()
-        .filter(|f| f.owner_write)
+        .filter(|f| f.writable)
         .collect::<Vec<_>>();
-    let q = upsert(data, fields, belongs_to, true);
-    Some(q.finish("upsert_single_child_with_owner_permissions"))
-}
-
-pub fn upsert_children_user(data: &SqlBuilder) -> Option<SqlQueryContext> {
-    let Some(belongs_to) = data.context.belongs_to_field.as_ref() else {
-        return None;
-    };
-
-    let fields = data
-        .context
-        .fields
-        .iter()
-        .filter(|f| f.user_write)
-        .collect::<Vec<_>>();
-    let q = upsert(data, fields, belongs_to, true);
-    Some(q.finish("upsert_children_with_user_permissions"))
-}
-
-pub fn upsert_children_owner(data: &SqlBuilder) -> Option<SqlQueryContext> {
-    if data.context.structs.owner_and_user_different_write_access {
-        return None;
-    }
-
-    let Some(belongs_to) = data.context.belongs_to_field.as_ref() else {
-        return None;
-    };
-
-    let fields = data
-        .context
-        .fields
-        .iter()
-        .filter(|f| f.owner_write)
-        .collect::<Vec<_>>();
-    let q = upsert(data, fields, belongs_to, true);
-    Some(q.finish("upsert_children_with_owner_permissions"))
+    let q = upsert(data, &fields, belongs_to, false);
+    Some(q.finish_with_field_bindings("upsert_children", &fields))
 }
 
 fn upsert(
     data: &SqlBuilder,
-    fields: Vec<&ModelFieldTemplateContext>,
+    fields: &[&ModelFieldTemplateContext],
     belongs_to_field: &ModelFieldTemplateContext,
     single: bool,
 ) -> QueryBuilder {
@@ -92,7 +54,7 @@ fn upsert(
         q.push(", organization_id");
     }
 
-    for field in &fields {
+    for field in fields {
         q.push(", ");
         q.push(&field.sql_name);
     }
@@ -109,7 +71,7 @@ fn upsert(
             sep.push_binding(bindings::ORGANIZATION);
         }
 
-        for field in &fields {
+        for field in fields {
             sep.push_binding(&field.name);
         }
 
@@ -124,9 +86,9 @@ fn upsert(
         "id"
     };
 
-    write!(q, ") ON CONFLICT ({conflict_field}) DO UPDATE SET ").unwrap();
+    write!(q, " ON CONFLICT ({conflict_field}) DO UPDATE SET ").unwrap();
 
-    for field in &fields {
+    for field in fields {
         q.push(&field.sql_name);
         q.push(" = EXCLUDED. ");
         q.push(&field.sql_name);
@@ -154,7 +116,7 @@ fn upsert(
     {
         q.push("\nRETURNING ");
         let mut sep = q.separated(", ");
-        for field in &fields {
+        for field in fields {
             if !field.never_read {
                 sep.push(&field.sql_name);
             }

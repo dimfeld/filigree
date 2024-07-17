@@ -599,7 +599,7 @@ mod test {
                 serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
                 "field {{field.rust_name}}"
             );
-            {% if field.owner_write %}
+            {% if field.writable %}
             assert_eq!(
                 payload.{{field.rust_name}},
                 added.{{field.rust_name}},
@@ -806,7 +806,7 @@ mod test {
             serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
             "get result field {{field.rust_name}}"
         );
-        {% if field.owner_write %}
+        {% if field.writable %}
         assert_eq!(
             added.{{field.rust_name}},
             payload.{{field.rust_name}},
@@ -949,7 +949,7 @@ mod test {
             .await
             .unwrap();
 
-        {% for field in fields | filter (attribute="owner_write", value=true) -%}
+        {% for field in fields | filter (attribute="writable", value=true) -%}
         assert_eq!(
             updated["{{field.rust_name}}"],
             serde_json::to_value(&update_payload.{{field.rust_name}}).unwrap(),
@@ -1024,7 +1024,7 @@ mod test {
             .unwrap();
 
 
-        {% for field in fields | filter (attribute="owner_write", value=true) -%}
+        {% for field in fields | filter (attribute="writable", value=true) -%}
         assert_eq!(
             created_result["{{field.rust_name}}"],
             serde_json::to_value(&create_payload.{{field.rust_name}}).unwrap(),

@@ -5,7 +5,7 @@ INSERT INTO {{user_model.table}}
   organization_id,
   password_hash,
   {{ fields
-    | filter(attribute='owner_write', value=true)
+    | filter(attribute='writable', value=true)
     | map(attribute='sql_name')
     | join(sep=', ') }}
 )
@@ -15,11 +15,10 @@ VALUES
 (
   $1, $2, $3
 
-{% for field in fields | filter(attribute='owner_write', value=true) %}
+{% for field in fields | filter(attribute='writable', value=true) %}
   , ${{loop.index + 3}}
 {% endfor %}
 )
 RETURNING
-{{ fields | filter(attribute='never_read', value=false) | map(attribute='sql_full_name') |  join(sep=', ') }},
-'owner' AS "_permission!: filigree::auth::ObjectPermission"
+{{ fields | filter(attribute='never_read', value=false) | map(attribute='sql_full_name') |  join(sep=', ') }}
 

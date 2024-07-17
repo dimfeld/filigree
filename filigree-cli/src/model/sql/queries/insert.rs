@@ -16,7 +16,7 @@ pub fn insert(data: &SqlBuilder) -> SqlQueryContext {
         .context
         .fields
         .iter()
-        .filter(|f| f.owner_write)
+        .filter(|f| f.writable)
         .collect::<Vec<_>>();
 
     for f in &fields {

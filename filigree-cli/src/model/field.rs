@@ -33,10 +33,8 @@ pub struct ModelFieldTemplateContext {
     pub omit_in_list: bool,
     pub foreign_key_sql: Option<String>,
     pub extra_sql_modifiers: String,
-    pub user_read: bool,
-    pub user_write: bool,
-    pub owner_read: bool,
-    pub owner_write: bool,
+    pub readable: bool,
+    pub writable: bool,
     pub never_read: bool,
 
     // The fields below are filled in later, from a place with more context.
@@ -118,12 +116,7 @@ pub struct ModelField {
     /// Define how callers to the API can access this field. This is still gated on the user having
     /// the relevant read or write permission.
     #[serde(default)]
-    pub user_access: Access,
-
-    /// Define how owners on this object can access the field
-    /// This is always at least as permissive as [user_access].
-    #[serde(default)]
-    pub owner_access: Access,
+    pub access: Access,
 
     /// The default value of this field, as a SQL expression. This requires a migration to change.
     #[serde(default)]
@@ -233,22 +226,12 @@ impl ModelField {
         }
     }
 
-    pub fn user_read(&self) -> bool {
-        self.user_access.can_read() && !self.never_read
+    pub fn readable(&self) -> bool {
+        self.access.can_read() && !self.never_read
     }
 
-    pub fn user_write(&self) -> bool {
-        !self.fixed && self.user_access.can_write() && !self.never_read
-    }
-
-    pub fn owner_read(&self) -> bool {
-        (self.owner_access.can_read() || self.user_access.can_read()) && !self.never_read
-    }
-
-    pub fn owner_write(&self) -> bool {
-        !self.fixed
-            && !self.never_read
-            && (self.owner_access.can_write() || self.user_access.can_write())
+    pub fn writable(&self) -> bool {
+        !self.fixed && self.access.can_write() && !self.never_read
     }
 
     pub fn template_context(&self) -> ModelFieldTemplateContext {
@@ -281,10 +264,8 @@ impl ModelField {
             omit_in_list: self.omit_in_list,
             foreign_key_sql: self.references.as_ref().map(|r| r.to_string()),
             extra_sql_modifiers: self.extra_sql_modifiers.clone(),
-            user_read: self.user_read(),
-            user_write: self.user_write(),
-            owner_read: self.owner_read(),
-            owner_write: self.owner_write(),
+            readable: self.readable(),
+            writable: self.writable(),
             never_read: self.never_read,
             // This gets set later, where appropriate
             writable_non_parent: false,

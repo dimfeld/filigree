@@ -32,7 +32,7 @@ use super::{
 pub fn make_create_payload(i: usize) -> {{struct_base}}CreatePayload {
     {{struct_base}}CreatePayload {
         id: None,
-        {% for field in fields | filter(attribute="owner_write", value=true) -%}
+        {% for field in fields | filter(attribute="writable", value=true) -%}
         {{field.rust_name}}:
             {%- if field.nullable -%}(i > 1).then(|| {%endif%}
                 {{ self::payload_field_value(field=field) }}
@@ -63,14 +63,11 @@ pub fn make_create_payload(i: usize) -> {{struct_base}}CreatePayload {
 pub fn make_update_payload(i: usize) -> {{struct_base}}UpdatePayload {
     {{struct_base}}UpdatePayload {
         id: None,
-        {%- set uwc = fields | filter (attribute="user_write", value=true) | length -%}
-        {% for field in fields | filter (attribute="owner_write", value=true) -%}
-        {%- set uopt = uwc > 0 and not field.user_write -%}
-        {%- set nullable = field.nullable or uopt -%}
+        {% for field in fields | filter (attribute="writable", value=true) -%}
         {{field.rust_name}}:
-            {%- if nullable %} Some({%- endif -%}
+            {%- if field.nullable %} Some({%- endif -%}
             {{ self::payload_field_value(field=field) }}
-            {%- if nullable %}){% endif -%},
+            {%- if field.nullable %}){% endif -%},
         {%- endfor %}
 
         {% for field in update_payload_fields %}

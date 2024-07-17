@@ -9,7 +9,11 @@ pub fn select_one(data: &SqlBuilder, populate_children: bool) -> Option<SqlQuery
 
     let mut q = QueryBuilder::new();
     let id = q.create_binding(bindings::ID);
-    let organization = q.create_binding(bindings::ORGANIZATION);
+    let organization = if data.context.global {
+        String::new()
+    } else {
+        q.create_binding(bindings::ORGANIZATION)
+    };
 
     q.push("SELECT ");
 

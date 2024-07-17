@@ -65,7 +65,7 @@ pub async fn create_new_user_with_prehashed_password(
         user_id.as_uuid(),
         organization_id.as_uuid(),
         password_hash.map(|h| h.0),
-        {% for field in user_model.fields | filter(attribute="owner_write", value=true) %}
+        {% for field in user_model.fields | filter(attribute="writable", value=true) %}
             {%- if field.nullable -%}
                 payload.{{field.rust_name}}.as_ref(){% if field.is_custom_rust_type %} as _{% endif %},
             {%- else -%}

@@ -430,10 +430,7 @@ impl<'a> ModelGenerator<'a> {
         id_field.nullable = true;
 
         Ok(std::iter::once(Cow::Owned(id_field))
-            .chain(
-                self.all_fields()?
-                    .filter(|f| f.owner_access.can_write() && !f.never_read),
-            )
+            .chain(self.all_fields()?.filter(|f| f.writable() && !f.never_read))
             .chain(
                 self.write_payload_child_fields(for_update)?
                     .map(|f| Cow::Owned(f.field)),
@@ -643,7 +640,7 @@ impl<'a> ModelGenerator<'a> {
         if let Some(b) = &belongs_to_field {
             for f in fields.iter_mut() {
                 let is_belongs_to = f.name == b.sql_name;
-                f.writable_non_parent = !is_belongs_to && f.owner_write;
+                f.writable_non_parent = !is_belongs_to && f.writable;
             }
         }
 
@@ -777,8 +774,7 @@ impl<'a> ModelGenerator<'a> {
             filterable: FilterableType::Exact,
             sortable: SortableType::None,
             extra_sql_modifiers: "primary key".to_string(),
-            user_access: Access::Read,
-            owner_access: Access::Read,
+            access: Access::Read,
             omit_in_list: false,
             references: None,
             default_sql: String::new(),
@@ -810,8 +806,7 @@ impl<'a> ModelGenerator<'a> {
                 sortable: SortableType::None,
                 filterable: FilterableType::None,
                 extra_sql_modifiers: String::new(),
-                user_access: Access::Read,
-                owner_access: Access::Read,
+                access: Access::Read,
                 omit_in_list: false,
                 default_sql: String::new(),
                 default_rust: String::new(),
@@ -860,8 +855,7 @@ impl<'a> ModelGenerator<'a> {
                     filterable: FilterableType::Exact,
                     sortable: SortableType::None,
                     extra_sql_modifiers: String::new(),
-                    user_access: Access::Read,
-                    owner_access: Access::Read,
+                    access: Access::Read,
                     omit_in_list: false,
                     references: Some(ModelFieldReference {
                         table: Some(model.full_table()),
@@ -901,8 +895,7 @@ impl<'a> ModelGenerator<'a> {
                 filterable: FilterableType::Range,
                 sortable: SortableType::DefaultDescending,
                 extra_sql_modifiers: String::new(),
-                user_access: Access::Read,
-                owner_access: Access::Read,
+                access: Access::Read,
                 omit_in_list: false,
                 references: None,
                 default_sql: "now()".to_string(),
@@ -925,8 +918,7 @@ impl<'a> ModelGenerator<'a> {
                 filterable: FilterableType::Range,
                 sortable: SortableType::DefaultDescending,
                 extra_sql_modifiers: String::new(),
-                user_access: Access::Read,
-                owner_access: Access::Read,
+                access: Access::Read,
                 omit_in_list: false,
                 references: None,
                 default_sql: "now()".to_string(),
@@ -978,8 +970,7 @@ impl<'a> ModelGenerator<'a> {
                     filterable: FilterableType::Exact,
                     sortable: super::field::SortableType::None,
                     extra_sql_modifiers: String::new(),
-                    user_access: Access::ReadWrite,
-                    owner_access: Access::ReadWrite,
+                    access: Access::ReadWrite,
                     omit_in_list: false,
                     references: Some(ModelFieldReference {
                         table: Some(model.full_table()),
@@ -1070,8 +1061,7 @@ impl<'a> ModelGenerator<'a> {
             globally_unique: false,
             unique: false,
             extra_sql_modifiers: String::new(),
-            user_access: Access::ReadWrite,
-            owner_access: Access::ReadWrite,
+            access: Access::ReadWrite,
             omit_in_list: false,
             default_sql: String::new(),
             default_rust: String::new(),
@@ -1153,8 +1143,7 @@ impl<'a> ModelGenerator<'a> {
             globally_unique: false,
             unique: false,
             extra_sql_modifiers: String::new(),
-            user_access: Access::ReadWrite,
-            owner_access: Access::ReadWrite,
+            access: Access::ReadWrite,
             omit_in_list: false,
             default_sql: String::new(),
             default_rust: String::new(),
@@ -1251,8 +1240,7 @@ impl<'a> ModelGenerator<'a> {
             globally_unique: false,
             unique: false,
             extra_sql_modifiers: String::new(),
-            user_access: Access::ReadWrite,
-            owner_access: Access::ReadWrite,
+            access: Access::ReadWrite,
             omit_in_list: false,
             default_sql: String::new(),
             default_rust: String::new(),
