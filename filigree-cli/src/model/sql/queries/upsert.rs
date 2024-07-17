@@ -80,7 +80,7 @@ fn upsert(
         q.push("__insertion_point_insert_values")
     }
 
-    let conflict_field = if belongs_to_field.unique {
+    let conflict_field = if belongs_to_field.globally_unique {
         &belongs_to_field.sql_name
     } else {
         "id"
