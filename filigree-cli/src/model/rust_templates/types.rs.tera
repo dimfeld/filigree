@@ -14,7 +14,9 @@ use sqlx_transparent_json_decode::sqlx_json_decode;
 {% for struct in structs %}
 
 #[derive(Deserialize, Debug, Clone, schemars::JsonSchema, sqlx::FromRow)]
-{% if struct.name != struct_base and not struct.impl_serialize -%}
+{% if struct.impl_serialize -%}
+#[derive(Serialize)]
+{%- else -%}
 #[cfg_attr(test, derive(Serialize))]
 {%- endif %}
 pub struct {{ struct.name }} {
@@ -57,43 +59,8 @@ impl Default for {{struct.name}} {
             {% for field in struct.fields -%}
             {{field.rust_name}}: Self::default_{{field.rust_name}}(),
             {%- endfor %}
-            {% if struct.has_permission_field -%}
-            _permission: ObjectPermission::Owner,
-            {%- endif %}
         }
     }
 }
-
-{% if struct.impl_serialize %}
-impl Serialize for {{struct.name}} {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        {% if owner_and_user_different_access %}
-        if self._permission == ObjectPermission::Owner {
-        {% endif %}
-            {% set view_fields = struct.fields | filter(attribute="owner_read", value=true) %}
-            let mut state = serializer.serialize_struct("{{struct.name}}", {{ view_fields | length + 1 }})?;
-            {% for field in view_fields -%}
-            state.serialize_field("{{field.name}}", &self.{{field.rust_name}})?;
-            {%- endfor %}
-            state.serialize_field("_permission", &self._permission)?;
-            state.end()
-        {% if owner_and_user_different_access %}
-        } else {
-            {% set view_fields = struct.fields | filter(attribute="user_read", value=true) %}
-            let mut state = serializer.serialize_struct("{{struct.name}}", {{ view_fields | length + 1 }})?;
-            {% for field in view_fields -%}
-            state.serialize_field("{{field.name}}", &self.{{field.rust_name}})?;
-            {%- endfor %}
-            state.serialize_field("_permission", &self._permission)?;
-            state.end()
-        }
-        {% endif %}
-    }
-}
-{% endif %}
-
 {% endfor %}
 

@@ -18,7 +18,7 @@ use crate::{
 pub struct Renderer {
     tera: Tera,
     passthrough_files: HashMap<String, Cow<'static, str>>,
-    formatters: Formatters,
+    pub formatters: Formatters,
 }
 
 impl Renderer {
@@ -153,6 +153,7 @@ fn create_tera() -> (Tera, HashMap<String, Cow<'static, str>>) {
 
     tera.register_filter("to_sql", to_sql);
     tera.register_filter("sql_string", sql_string_filter);
+    tera.register_function("query_bindings", crate::model::sql::generate_query_bindings);
 
     (tera, passthrough_files)
 }
@@ -189,7 +190,7 @@ fn sql_string_filter(val: &Value, _args: &HashMap<String, Value>) -> tera::Resul
     }
 }
 
-fn sql_string(s: &str) -> String {
+pub fn sql_string(s: &str) -> String {
     let inside = if s.contains('\'') {
         Cow::Owned(s.replace('\'', "''"))
     } else {

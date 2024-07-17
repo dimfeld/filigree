@@ -17,8 +17,7 @@ fn simple_model_field(name: &str, typ: SqlType) -> ModelField {
         globally_unique: false,
         filterable: super::field::FilterableType::None,
         sortable: super::field::SortableType::None,
-        user_access: Access::Read,
-        owner_access: Access::ReadWrite,
+        access: Access::ReadWrite,
         omit_in_list: false,
         default_sql: String::new(),
         default_rust: String::new(),
@@ -91,8 +90,7 @@ impl Model {
                         ..simple_model_field("name", SqlType::Text)
                     },
                     ModelField {
-                        user_access: Access::None,
-                        owner_access: Access::None,
+                        access: Access::None,
                         nullable: true,
                         never_read: true,
                         ..simple_model_field("password_hash", SqlType::Text)
@@ -142,7 +140,6 @@ impl Model {
                     },
                     ModelField {
                         rust_type: Some("crate::models::user::UserId".to_string()),
-                        user_access: Access::None,
                         nullable: true,
                         references: config.auth.builtin().then(|| {
                             ModelFieldReference::new("User", "id", Some(ReferentialAction::SetNull))
@@ -154,14 +151,12 @@ impl Model {
                     },
                     ModelField {
                         rust_type: Some("crate::models::role::RoleId".to_string()),
-                        user_access: Access::None,
                         nullable: true,
                         references: None,
                         ..simple_model_field("default_role", auth_id_type)
                     },
                     ModelField {
-                        user_access: Access::None,
-                        owner_access: Access::None,
+                        access: Access::None,
                         default_sql: "true".into(),
                         ..simple_model_field("active", SqlType::Boolean)
                     },
@@ -201,7 +196,6 @@ impl Model {
                     },
                     ModelField {
                         nullable: true,
-                        user_access: Access::Read,
                         ..simple_model_field("description", SqlType::Text)
                     },
                 ]

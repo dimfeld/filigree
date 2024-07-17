@@ -397,7 +397,7 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
         &generators
             .iter()
             .sorted_by(|m1, m2| m1.model.name.cmp(&m2.model.name))
-            .map(|v| v.template_context().clone().into_json())
+            .map(|v| v.template_context().clone())
             .collect::<Vec<_>>(),
     );
 

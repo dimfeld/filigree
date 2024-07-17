@@ -208,20 +208,11 @@ async fn update_child_{{c.module}}(
     ).await?
     .unwrap_or(ObjectPermission::Read);
 
-    let is_owner = match object_perm {
-        ObjectPermission::Owner => true,
-        ObjectPermission::Write => false,
-        ObjectPermission::Read => {
-            return Err(Error::AuthError(AuthError::MissingPermission(
-                Cow::Borrowed(super::WRITE_PERMISSION),
-            )));
-        }
-    };
+    object_perm.must_be_writable(WRITE_PERMISSION)?;
 
     let result = crate::models::{{c.module}}::queries::update_one_with_parent(
         &state.db,
         &auth,
-        is_owner,
         &parent_id,
         &child_id,
         payload).await?;
@@ -331,7 +322,6 @@ async fn upsert_child_{{c.module}}(
     let result = crate::models::{{c.module}}::queries::upsert_with_parent(
         &state.db,
         &auth.organization_id,
-        object_perm == ObjectPermission::Owner,
         &parent_id,
         &payload).await?;
     {% endif %}
@@ -599,7 +589,7 @@ mod test {
                 serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
                 "field {{field.rust_name}}"
             );
-            {% if field.owner_write %}
+            {% if field.writable %}
             assert_eq!(
                 payload.{{field.rust_name}},
                 added.{{field.rust_name}},
@@ -607,7 +597,6 @@ mod test {
             );
             {% endif %}
             {%- endfor %}
-            assert_eq!(result["_permission"], "owner");
 
             {% for field in fields | filter (attribute="owner_read", value=false) -%}
             assert_eq!(
@@ -660,7 +649,6 @@ mod test {
                 "list result field {{field.rust_name}}"
             );
             {%- endfor %}
-            assert_eq!(result["_permission"], "write");
 
             {% for child in children %}
             {% if child.relationship.populate_on_list == "id" %}
@@ -806,7 +794,7 @@ mod test {
             serde_json::to_value(&added.{{field.rust_name}}).unwrap(),
             "get result field {{field.rust_name}}"
         );
-        {% if field.owner_write %}
+        {% if field.writable %}
         assert_eq!(
             added.{{field.rust_name}},
             payload.{{field.rust_name}},
@@ -814,7 +802,6 @@ mod test {
         );
         {% endif %}
         {%- endfor %}
-        assert_eq!(result["_permission"], "owner");
 
         {% for child in children %}
         {% if child.relationship.populate_on_get == "id" %}
@@ -887,7 +874,6 @@ mod test {
             "get result field {{field.rust_name}}"
         );
         {%- endfor %}
-        assert_eq!(result["_permission"], "write");
 
         {% for field in fields | filter (attribute="user_read", value=false) -%}
         assert_eq!(
@@ -949,14 +935,13 @@ mod test {
             .await
             .unwrap();
 
-        {% for field in fields | filter (attribute="owner_write", value=true) -%}
+        {% for field in fields | filter (attribute="writable", value=true) -%}
         assert_eq!(
             updated["{{field.rust_name}}"],
             serde_json::to_value(&update_payload.{{field.rust_name}}).unwrap(),
             "field {{field.rust_name}}"
         );
         {%- endfor %}
-        assert_eq!(updated["_permission"], "owner");
 
         // TODO Test that owner can not write fields which are not writable by anyone.
         // TODO Test that user can not update fields which are writable by owner but not user
@@ -982,7 +967,6 @@ mod test {
             "field {{field.rust_name}}"
         );
         {%- endfor %}
-        assert_eq!(non_updated["_permission"], "owner");
 
         let response = no_roles_user
             .client
@@ -1024,14 +1008,13 @@ mod test {
             .unwrap();
 
 
-        {% for field in fields | filter (attribute="owner_write", value=true) -%}
+        {% for field in fields | filter (attribute="writable", value=true) -%}
         assert_eq!(
             created_result["{{field.rust_name}}"],
             serde_json::to_value(&create_payload.{{field.rust_name}}).unwrap(),
             "field {{field.rust_name}} from create response"
         );
         {%- endfor %}
-        assert_eq!(created_result["_permission"], "owner");
 
         let created_id = created_result["id"].as_str().unwrap();
         let get_result = admin_user
@@ -1054,7 +1037,6 @@ mod test {
             "field {{field.rust_name}} from get response"
         );
         {%- endfor %}
-        assert_eq!(get_result["_permission"], "owner");
 
         let response = no_roles_user
             .client
