@@ -57,6 +57,7 @@ pub struct ReferenceFieldContext {
 
 #[derive(Serialize, Clone, Debug)]
 pub struct ChildContext {
+    pub model: String,
     pub relationship: HasModel,
     pub get_field_type: String,
     pub get_sql_field_name: String,
@@ -560,6 +561,7 @@ impl<'a> ModelGenerator<'a> {
                 ];
 
                 let result = ChildContext {
+                    model: has.model.clone(),
                     relationship: has.clone(),
                     full_get_sql_field_name: format!("{get_sql_field_name}{exc}: {get_field_type}"),
                     get_field_type,

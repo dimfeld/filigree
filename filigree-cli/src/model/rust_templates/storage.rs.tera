@@ -99,7 +99,7 @@ where
         ..Default::default()
     };
 
-    let result = super::queries::upsert_with_parent(
+    let result = {{struct_base}}::upsert_with_parent(
         tx,
         &auth.organization_id,
         &parent_id,
@@ -178,7 +178,7 @@ pub async fn upload(
         ..Default::default()
     };
 
-    let result = super::queries::upsert_with_parent(
+    let result = {{struct_base}}::upsert_with_parent(
         tx,
         &auth.organization_id,
         &parent_id,
@@ -211,7 +211,7 @@ pub async fn delete_by_id(
 ) -> Result<bool, error_stack::Report<Error>> {
 
     let storage_key = get_storage_key_by_id(state, auth, &mut *tx, id).await?;
-    let deleted = super::queries::delete_with_parent(&mut *tx, auth, &parent_id, &id).await?;
+    let deleted = {{struct_base}}::delete_with_parent(&mut *tx, auth, &parent_id, &id).await?;
 
     if deleted {
         delete_by_key(state, &storage_key).await?;
@@ -229,7 +229,7 @@ pub async fn delete_by_parent_id(
 ) -> Result<bool, error_stack::Report<Error>> {
 
     let storage_keys = get_storage_keys_by_parent_id(state, auth, &mut *tx, parent_id).await?;
-    let deleted = super::queries::delete_all_children_of_parent(&mut *tx, &auth.organization_id, &parent_id).await?;
+    let deleted = {{struct_base}}::delete_all_children_of_parent(&mut *tx, &auth.organization_id, &parent_id).await?;
 
     if deleted {
         for key in storage_keys {
@@ -263,7 +263,7 @@ pub async fn get_storage_key_by_id(
     tx: &mut PgConnection,
     id: {{id_type}}
 ) -> Result<String, error_stack::Report<Error>> {
-    let storage_key = super::queries::get(
+    let storage_key = {{struct_base}}::get(
         &mut *tx,
         auth,
         &id

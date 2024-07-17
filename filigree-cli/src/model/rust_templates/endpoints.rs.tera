@@ -21,9 +21,9 @@ async fn get(
     Path(id): Path<{{ id_type }}>,
     ) -> Result<impl IntoResponse, Error> {
     {% if can_populate_get %}
-    let object = queries::get_populated(&state.db, &auth, &id).await?;
+    let object = {{struct_base}}::get_populated(&state.db, &auth, &id).await?;
     {% else %}
-    let object = queries::get(&state.db, &auth, &id).await?;
+    let object = {{struct_base}}::get(&state.db, &auth, &id).await?;
     {% endif %}
     Ok(Json(object))
 }
@@ -34,9 +34,9 @@ async fn list(
     Query(qs): Query<queries::ListQueryFilters>,
     ) -> Result<impl IntoResponse, Error> {
     {% if can_populate_list %}
-    let results = queries::list_populated(&state.db, &auth, &qs).await?;
+    let results = {{struct_base}}::list_populated(&state.db, &auth, &qs).await?;
     {% else %}
-    let results = queries::list(&state.db, &auth, &qs).await?;
+    let results = {{struct_base}}::list(&state.db, &auth, &qs).await?;
     {% endif %}
     Ok(Json(results))
 }
@@ -47,7 +47,7 @@ async fn create(
     FormOrJson(payload): FormOrJson<{{ struct_base }}CreatePayload>,
     ) -> Result<impl IntoResponse, Error> {
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
-    let result = queries::create(&mut *tx, &auth, payload).await?;
+    let result = {{struct_base}}::create(&mut *tx, &auth, payload).await?;
     tx.commit().await.change_context(Error::Db)?;
 
     Ok((StatusCode::CREATED, Json(result)))
@@ -62,7 +62,7 @@ async fn update(
 
     let mut tx = state.db.begin().await.change_context(Error::Db)?;
 
-    let result = queries::update(&mut *tx, &auth, &id, payload).await?;
+    let result = {{struct_base}}::update(&mut *tx, &auth, &id, payload).await?;
 
     tx.commit().await.change_context(Error::Db)?;
 
@@ -89,7 +89,7 @@ async fn delete(
     ).await?;
     {%- endfor %}
 
-    let deleted = queries::delete(&mut *tx, &auth, &id).await?;
+    let deleted = {{struct_base}}::delete(&mut *tx, &auth, &id).await?;
 
     if !deleted {
         return Ok(StatusCode::NOT_FOUND);
@@ -119,7 +119,7 @@ async fn list_child_{{c.module}}(
 
     qs.{{c.parent_field}} = vec![parent_id];
 
-    let object = crate::models::{{c.module}}::queries::list(
+    let object = crate::models::{{c.module}}::{{c.model}}::list(
         &state.db,
         &auth,
         &qs
@@ -142,7 +142,7 @@ async fn get_child_{{c.module}}(
     auth: Authed,
     Path((parent_id, child_id)): Path<({{id_type}}, {{c.object_id}})>,
 ) -> Result<impl IntoResponse, Error> {
-    let object = crate::models::{{c.module}}::queries::get(&state.db, &auth, &child_id).await?;
+    let object = crate::models::{{c.module}}::{{c.model}}::get(&state.db, &auth, &child_id).await?;
     if object.{{c.parent_field}} != parent_id {
         return Err(Error::NotFound("Parent {{name}}"));
     }
@@ -179,7 +179,7 @@ async fn create_child_{{c.module}}(
     {% else %}
     payload.{{c.parent_field}} = parent_id;
 
-    let result = crate::models::{{c.module}}::queries::create(
+    let result = crate::models::{{c.module}}::{{c.model}}::create(
         &mut *tx,
         &auth,
         payload
@@ -201,7 +201,7 @@ async fn update_child_{{c.module}}(
     payload.id = Some(child_id);
     payload.{{c.parent_field}} = parent_id;
 
-    let object_perm = queries::lookup_object_permissions(
+    let object_perm = {{struct_base}}::lookup_object_permissions(
         &state.db,
         &auth,
         &parent_id,
@@ -210,7 +210,7 @@ async fn update_child_{{c.module}}(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
-    let result = crate::models::{{c.module}}::queries::update_one_with_parent(
+    let result = crate::models::{{c.module}}::{{c.model}}::update_one_with_parent(
         &state.db,
         &auth,
         &parent_id,
@@ -242,7 +242,7 @@ async fn delete_child_{{c.module}}(
         .await
         .change_context(Error::Db)?;
     {% else %}
-    let deleted = crate::models::{{c.module}}::queries::delete_with_parent(
+    let deleted = crate::models::{{c.module}}::{{c.model}}::delete_with_parent(
         &state.db,
         &auth,
         &parent_id,
@@ -271,7 +271,7 @@ async fn upsert_child_{{c.module}}(
     ) -> Result<impl IntoResponse, Error> {
     payload.{{c.parent_field}} = parent_id;
 
-    let object_perm = queries::lookup_object_permissions(
+    let object_perm = {{struct_base}}::lookup_object_permissions(
         &state.db,
         &auth,
         &parent_id,
@@ -319,7 +319,7 @@ async fn upsert_child_{{c.module}}(
 
 
     {% else %}
-    let result = crate::models::{{c.module}}::queries::upsert_with_parent(
+    let result = crate::models::{{c.module}}::{{c.model}}::upsert_with_parent(
         &state.db,
         &auth.organization_id,
         &parent_id,
@@ -333,7 +333,7 @@ async fn delete_child_{{c.module}}(
     auth: Authed,
     Path(parent_id): Path<{{id_type}}>,
     ) -> Result<impl IntoResponse, Error> {
-    let object_perm = queries::lookup_object_permissions(
+    let object_perm = {{struct_base}}::lookup_object_permissions(
         &state.db,
         &auth,
         &parent_id,
@@ -359,7 +359,7 @@ async fn delete_child_{{c.module}}(
         .await
         .change_context(Error::Db)?;
     {% else %}
-    let deleted = crate::models::{{c.module}}::queries::delete_all_children_of_parent(
+    let deleted = crate::models::{{c.module}}::{{c.model}}::delete_all_children_of_parent(
         &state.db,
         &auth.organization_id,
         &parent_id).await?;
@@ -508,7 +508,7 @@ mod test {
             let id = {{id_type}}::new();
             event!(Level::INFO, %id, "Creating test object {}", i);
             let payload = make_create_payload(i);
-            let result = super::queries::create_raw(
+            let result = {{struct_base}}::create_raw(
                 &mut *tx,
                 &id,
                 &organization_id,
