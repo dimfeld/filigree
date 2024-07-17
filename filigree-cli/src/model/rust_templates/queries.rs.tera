@@ -588,7 +588,7 @@ pub async fn lookup_object_permissions(
 }
 
 {% if belongs_to_field %}
-{% if belongs_to_field.unique %}
+{% if belongs_to_field.globally_unique %}
 /// Update or insert the child of the given parent. Since there can only be a single child per
 /// parent, this ignores the `id` field of the payload, and only looks at the parent ID.
 {% else %}
@@ -617,7 +617,7 @@ pub async fn upsert_with_parent(
     Self::check_missing_parent_error(result)
 }
 
-{% if not belongs_to_field.unique %}
+{% if not belongs_to_field.globally_unique %}
 /// Update a single child of the given parent. This does nothing if the child doesn't exist.
 #[instrument(skip(db))]
 pub async fn update_one_with_parent(
@@ -763,6 +763,76 @@ pub async fn delete_all_children_of_parent(
 }
 
 {% endif %}
+
+{% for c in children %}
+
+{% if c.relationship.many %}
+{% set fnname = c.snake_case_plural_name %}
+{% set ret_type = "Vec" %}
+{% else %}
+{% set fnname = c.snake_case_name %}
+{% set ret_type = "Option" %}
+{% endif %}
+
+pub async fn get_child_{{fnname}}_for_parent(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    parent_id: &{{id_type}})
+    -> Result<{{ret_type}}<{{c.model}}>, error_stack::Report<Error>> {
+    {% if auth_scope == "model" %}
+    auth.require_permission(super::READ_PERMISSION)?;
+    {% endif %}
+
+    let filters = crate::models::{{c.module}}::queries::ListQueryFilters {
+        per_page: Some({% if c.relationship.many %}131072{%else%}1{%endif%}),
+        {{c.parent_field}}: vec![parent_id.clone()],
+        ..Default::default()
+    };
+    let {% if not c.relationship.many %}mut{% endif %} result = crate::models::{{c.module}}::{{c.model}}::list(db, auth, &filters).await?;
+
+    {% if c.relationship.many %}
+        Ok(result)
+    {% else %}
+        Ok(result.pop())
+    {% endif %}
+}
+
+{% if c.relationship.many %}
+pub async fn create_child_{{c.snake_case_name}}(
+    db: &mut PgConnection,
+    auth: &AuthInfo,
+    payload: {{c.model}}CreatePayload
+    ) -> Result<{{c.model}}CreateResult, error_stack::Report<Error>> {
+
+    auth.require_permission(super::WRITE_PERMISSION)?;
+    let id = payload.id.clone().unwrap_or_else({{c.object_id}}::new);
+    crate::models::{{c.module}}::{{c.model}}::create_raw(db, &id, &auth.organization_id, payload).await
+}
+
+pub async fn update_child_{{c.snake_case_name}}(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    id: &{{c.object_id}},
+    payload: {{c.model}}UpdatePayload
+    ) -> Result<bool, error_stack::Report<Error>> {
+
+    auth.require_permission(super::WRITE_PERMISSION)?;
+    let parent_field = payload.{{c.parent_field}}.clone();
+    crate::models::{{c.module}}::{{c.model}}::update_one_with_parent(db, auth, &parent_field, id, payload).await
+}
+{% endif %}
+
+pub async fn upsert_child_{{c.snake_case_name}}(
+    db: impl PgExecutor<'_>,
+    auth: &AuthInfo,
+    payload: &{{c.model}}UpdatePayload
+    ) -> Result<{{c.model}}, error_stack::Report<Error>> {
+
+    auth.require_permission(super::WRITE_PERMISSION)?;
+    let parent_field = payload.{{c.parent_field}}.clone();
+    crate::models::{{c.module}}::{{c.model}}::upsert_with_parent(db, &auth.organization_id, &parent_field, payload).await
+}
+{% endfor %}
 
 }
 

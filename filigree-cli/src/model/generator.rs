@@ -68,6 +68,8 @@ pub struct ChildContext {
     pub struct_base: String,
     pub insertable: bool,
     pub module: String,
+    pub snake_case_name: String,
+    pub snake_case_plural_name: String,
     pub possible_child_field_names: Vec<String>,
     pub object_id: String,
     pub fields: Vec<ModelFieldTemplateContext>,
@@ -527,6 +529,10 @@ impl<'a> ModelGenerator<'a> {
                     child_model.qualified_struct_name()
                 ));
                 rust_imports.insert(format!(
+                    "{}CreateResult",
+                    child_model.qualified_struct_name()
+                ));
+                rust_imports.insert(format!(
                     "{}UpdatePayload",
                     child_model.qualified_struct_name()
                 ));
@@ -574,6 +580,8 @@ impl<'a> ModelGenerator<'a> {
                     struct_base: child_model.struct_name(),
                     insertable: has.update_with_parent,
                     module: child_model.module_name(),
+                    snake_case_name: child_model.name.to_case(Case::Snake),
+                    snake_case_plural_name: child_model.plural().to_case(Case::Snake),
                     possible_child_field_names,
                     object_id: child_model.object_id_type(),
                     fields: child_generator
