@@ -90,7 +90,7 @@ fn upsert(
 
     for field in fields {
         q.push(&field.sql_name);
-        q.push(" = EXCLUDED. ");
+        q.push(" = EXCLUDED.");
         q.push(&field.sql_name);
         q.push(",\n");
     }
