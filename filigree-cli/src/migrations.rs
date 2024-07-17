@@ -13,7 +13,8 @@ use sql_migration_sim::{
         AlterColumnOperation, AlterTableOperation, ColumnOption, ColumnOptionDef, Ident,
         ObjectName, Statement, TableConstraint,
     },
-    index_full_name, table_constraint_name, Column, Schema, SchemaObjectType, Table,
+    index_full_name, normalized_name, table_constraint_name, Column, Schema, SchemaObjectType,
+    Table,
 };
 
 use crate::{model::Model, Error};
@@ -170,7 +171,10 @@ pub fn resolve_migration(
                 Statement::CreateSchema { schema_name, .. } => {
                     schemas_to_create.contains(schema_name.to_string().as_str())
                 }
-                Statement::CreateTable { name, .. } => tables_to_create.contains(&name.to_string()),
+                Statement::CreateTable { name, .. } => {
+                    let name = normalized_name(name);
+                    tables_to_create.contains(&name.to_string())
+                }
                 Statement::CreateIndex {
                     name, table_name, ..
                 } => {
