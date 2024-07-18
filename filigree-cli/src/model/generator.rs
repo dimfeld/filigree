@@ -489,9 +489,11 @@ impl<'a> ModelGenerator<'a> {
                 .model_map
                 .get(&model_names.1, &self.model.name, "join")?;
 
+            rust_imports.insert(model1.qualified_object_id_type());
+            rust_imports.insert(model2.qualified_object_id_type());
+
             let model1_id_field_name = model1.foreign_key_id_field_name();
             let model2_id_field_name = model2.foreign_key_id_field_name();
-
             format!("PRIMARY KEY({model1_id_field_name}, {model2_id_field_name})")
         } else {
             String::new()
@@ -510,6 +512,16 @@ impl<'a> ModelGenerator<'a> {
             .map(|has| {
                 let child_model = self.model_map.get(&has.model, &self.model.name, "has")?;
                 let child_generator = generators.get(&has.model, &self.model.name, "has")?;
+
+                let through = has
+                    .through
+                    .as_ref()
+                    .map(|through| {
+                        let model = self.model_map.get(through, &self.model.name, "through")?;
+                        let generator = generators.get(through, &self.model.name, "through")?;
+                        Ok::<_, Error>((model, generator))
+                    })
+                    .transpose()?;
 
                 ts_imports.insert((
                     child_model.module_name(),
