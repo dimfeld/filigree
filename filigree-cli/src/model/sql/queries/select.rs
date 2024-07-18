@@ -65,11 +65,32 @@ pub fn select_one(data: &SqlBuilder, populate_children: bool) -> Option<SqlQuery
 
     write!(
         q,
-        " FROM {schema}.{table} tb WHERE tb.id = {id}",
+        " FROM {schema}.{table} tb ",
         schema = data.context.schema,
         table = data.context.table
     )
     .unwrap();
+
+    if populate_children {
+        let references = data
+            .context
+            .reference_populations
+            .iter()
+            .filter(|r| r.on_get);
+        for r in references {
+            let r_name = format!("ref_{}", r.name);
+            write!(
+                q,
+                "LEFT JOIN {table} {r_name}
+                ON tb.{id_field} = {r_name}.id AND tb.organization_id = {r_name}.organization_id",
+                table = r.table,
+                id_field = r.id_field
+            )
+            .unwrap();
+        }
+    }
+
+    write!(q, " WHERE tb.id = {id}").unwrap();
     if !data.context.global {
         write!(q, " AND tb.organization_id = {organization}").unwrap();
     }
