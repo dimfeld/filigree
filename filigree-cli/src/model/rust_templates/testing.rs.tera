@@ -1,6 +1,6 @@
 #![allow(unused_imports, unused_variables, dead_code)]
 use super::{
-    {{id_type}},
+    {% if not join %}{{id_type}},{% endif %}
     {{struct_base}}CreatePayload,
     {{struct_base}}UpdatePayload,
 };

@@ -163,6 +163,12 @@ impl Model {
     }
 
     pub fn qualified_object_id_type(&self) -> String {
+        if self.joins.is_some() {
+            // A hack for now, since this is only used to generate imports and the joining case is
+            // handled separately.
+            return String::new();
+        }
+
         format!(
             "crate::models::{}::{}",
             self.module_name(),
@@ -171,7 +177,37 @@ impl Model {
     }
 
     pub fn object_id_type(&self) -> String {
-        format!("{}Id", self.name.to_case(Case::Pascal))
+        if let Some(join) = &self.joins {
+            format!(
+                "({}Id, {}Id)",
+                join.0.to_case(Case::Pascal),
+                join.1.to_case(Case::Pascal)
+            )
+        } else {
+            format!("{}Id", self.name.to_case(Case::Pascal))
+        }
+    }
+
+    pub fn object_id_types(&self) -> Vec<String> {
+        if let Some(join) = &self.joins {
+            vec![
+                format!("{}Id", join.0.to_case(Case::Pascal)),
+                format!("{}Id", join.1.to_case(Case::Pascal)),
+            ]
+        } else {
+            vec![self.object_id_type()]
+        }
+    }
+
+    pub fn object_id_fields(&self) -> Vec<String> {
+        if let Some(join) = &self.joins {
+            vec![
+                format!("{}_id", join.0.to_case(Case::Snake)),
+                format!("{}_id", join.1.to_case(Case::Snake)),
+            ]
+        } else {
+            vec!["id".to_string()]
+        }
     }
 
     pub fn qualified_struct_name(&self) -> String {

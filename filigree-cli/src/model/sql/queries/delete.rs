@@ -7,12 +7,13 @@ pub fn create_delete_query(data: &SqlBuilder) -> SqlQueryContext {
     let mut q = QueryBuilder::new();
     write!(
         q,
-        "DELETE FROM {schema}.{table} WHERE \nid = ",
+        "DELETE FROM {schema}.{table} WHERE \n",
         schema = data.context.schema,
         table = data.context.table
     )
     .unwrap();
-    q.push_binding(bindings::ID);
+
+    data.push_id_where_clause(&mut q);
 
     if !data.context.global {
         q.push(" AND organization_id = ");
@@ -98,7 +99,8 @@ fn delete_removed_children_query(
         where_sep.push_unseparated(" = ");
         where_sep.push_binding_unseparated(bindings::PARENT_ID);
 
-        where_sep.push("id <> ALL (");
+        where_sep.push(data.other_id_field(&belongs_to_field.sql_name));
+        where_sep.push_unseparated(" <> ALL (");
         where_sep.push_binding_unseparated(bindings::IDS);
         where_sep.push_unseparated(")");
     }

@@ -61,7 +61,7 @@ pub struct ThroughContext {
     pub snake_case_name: String,
     pub table: String,
     pub schema: String,
-    pub from_id_field: String,
+    pub to_id_field: String,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -81,12 +81,15 @@ pub struct ChildContext {
     pub snake_case_plural_name: String,
     pub possible_child_field_names: Vec<String>,
     pub object_id: String,
+    pub id_fields: Vec<String>,
+    pub new_object_id: String,
     pub fields: Vec<ModelFieldTemplateContext>,
     pub table: String,
     pub schema: String,
     pub url_path: String,
     pub parent_field: String,
     pub through: Option<ThroughContext>,
+    pub join: Option<JoinContext>,
     pub file_upload: Option<serde_json::Value>,
 }
 
@@ -113,6 +116,11 @@ impl Deref for BelongsToFieldContext {
     fn deref(&self) -> &Self::Target {
         &self.field
     }
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct JoinContext {
+    pub model_ids: (String, String),
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -149,6 +157,8 @@ pub struct TemplateContext {
     pub full_default_sort_field: String,
     pub default_sort_field: String,
     pub id_type: String,
+    pub id_fields: Vec<String>,
+    pub new_object_id: String,
     pub id_prefix: String,
     pub predefined_object_id: bool,
     pub url_path: String,
@@ -162,6 +172,7 @@ pub struct TemplateContext {
     pub auth: serde_json::Value,
     pub auth_schema: String,
     pub id_is_string: bool,
+    pub join: Option<JoinContext>,
 
     #[serde(flatten)]
     pub structs: StructsContext,
@@ -404,7 +415,6 @@ impl<'a> ModelGenerator<'a> {
             .iter()
             .map(|q| (q.name.as_str(), SqlQueryTemplateContext::from(q.clone())))
             .collect::<HashMap<_, _>>();
-        eprintln!("{queries_context:#?}");
         ctx.insert("sql_queries", &queries_context);
 
         let api_files = ModelRustTemplates::iter()
@@ -465,6 +475,23 @@ impl<'a> ModelGenerator<'a> {
                 self.write_payload_child_fields(for_update)?
                     .map(|f| Cow::Owned(f.field)),
             ))
+    }
+
+    pub fn join_context(&self) -> Result<Option<JoinContext>, Error> {
+        self.model
+            .joins
+            .as_ref()
+            .map(|(model1, model2)| {
+                let model1 = self.model_map.get(model1, &self.model.name, "join")?;
+                let model2 = self.model_map.get(model2, &self.model.name, "join")?;
+                Ok::<_, Error>(JoinContext {
+                    model_ids: (
+                        model1.foreign_key_id_field_name(),
+                        model2.foreign_key_id_field_name(),
+                    ),
+                })
+            })
+            .transpose()
     }
 
     /// Initialize the template context. This should be called immediately after all the generators
@@ -552,7 +579,7 @@ impl<'a> ModelGenerator<'a> {
                             snake_case_name: through_model.name.to_case(Case::Snake),
                             table: through_model.table(),
                             schema: through_model.schema().to_string(),
-                            from_id_field: self.foreign_key_id_field_name(),
+                            to_id_field: child_model.foreign_key_id_field_name(),
                         };
 
                         Ok::<_, Error>(ctx)
@@ -614,6 +641,15 @@ impl<'a> ModelGenerator<'a> {
                     Self::child_model_field_name(&child_model, ReferenceFetchType::Data, true),
                 ];
 
+                let new_object_id = format!(
+                    "({})",
+                    child_model
+                        .object_id_types()
+                        .iter()
+                        .map(|t| format!("{t}::new()"))
+                        .join(", ")
+                );
+
                 let result = ChildContext {
                     model: has.model.clone(),
                     relationship: has.clone(),
@@ -632,6 +668,8 @@ impl<'a> ModelGenerator<'a> {
                     snake_case_plural_name: child_model.plural().to_case(Case::Snake),
                     possible_child_field_names,
                     object_id: child_model.object_id_type(),
+                    id_fields: child_model.object_id_fields(),
+                    new_object_id,
                     fields: child_generator
                         .all_fields()?
                         .map(|f| f.template_context())
@@ -641,6 +679,7 @@ impl<'a> ModelGenerator<'a> {
                     url_path,
                     parent_field: self.model.foreign_key_id_field_name(),
                     through,
+                    join: self.join_context()?,
                     file_upload: child_model
                         .file_for
                         .as_ref()
@@ -700,6 +739,7 @@ impl<'a> ModelGenerator<'a> {
 
         let rust_imports = rust_imports
             .into_iter()
+            .filter(|i| !i.is_empty())
             .map(|i| format!("use {i};"))
             .sorted()
             .join("\n");
@@ -741,6 +781,13 @@ impl<'a> ModelGenerator<'a> {
         };
 
         let id_type = self.object_id_type();
+        let new_object_id = format!(
+            "({})",
+            self.object_id_types()
+                .iter()
+                .map(|t| format!("{t}::new()"))
+                .join(", ")
+        );
         let context = TemplateContext {
             dir: base_dir,
             module_name: self.model.module_name(),
@@ -800,6 +847,9 @@ impl<'a> ModelGenerator<'a> {
                 .to_string(),
             id_is_string: self.model.is_auth_model && self.config.auth.string_ids(),
             id_type,
+            id_fields: self.object_id_fields(),
+            new_object_id,
+            join: self.join_context()?,
             structs: self.create_structs_context()?,
         };
 

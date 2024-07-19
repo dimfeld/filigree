@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { ObjectPermission } from '../model_types.js';
 {{ts_imports}}
 
-export type {{id_type}} = string;
+{% if not join %}export type {{id_type}} = string;{% endif %}
 
 {% for struct in structs %}
 export const {{struct.name}}Schema = z.object({

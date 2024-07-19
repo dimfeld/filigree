@@ -1,3 +1,4 @@
+pub mod joining;
 pub(self) mod permissions;
 pub mod population;
 mod queries;
@@ -7,6 +8,8 @@ mod query_builder;
 pub mod bindings {
     pub const ACTOR_IDS: &str = "actor_ids";
     pub const ID: &str = "id";
+    pub const JOIN_ID_0: &str = "join_id_0";
+    pub const JOIN_ID_1: &str = "join_id_1";
     pub const IDS: &str = "ids";
     pub const PARENT_ID: &str = "parent_id";
     pub const ORGANIZATION: &str = "organization_id";
@@ -77,6 +80,16 @@ pub fn generate_query_bindings(args: &HashMap<String, tera::Value>) -> tera::Res
                 .map(|b| tera::from_value::<String>(b.clone()))
                 .transpose()?
                 .or_else(|| query.field_params.get(name).map(|s| s.to_string()))
+                .or_else(|| {
+                    // Fixed cases for certain IDs
+                    if name == bindings::JOIN_ID_0 {
+                        Some("id.0.as_uuid()".to_string())
+                    } else if name == bindings::JOIN_ID_1 {
+                        Some("id.1.as_uuid()".to_string())
+                    } else {
+                        None
+                    }
+                })
                 .ok_or_else(|| {
                     tera::Error::msg(format!("Missing {name} argument in query {}", query.name))
                 })?;

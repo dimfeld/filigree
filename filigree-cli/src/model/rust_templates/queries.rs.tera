@@ -11,7 +11,7 @@ use tracing::{event, instrument, Level};
 
 use std::str::FromStr;
 
-use super::{{id_type}};
+{% if not join %}use super::{{id_type}};{% endif %}
 {% if model_name != "Organization" %}
 use crate::models::organization::OrganizationId;
 {% endif %}
@@ -350,10 +350,16 @@ where
 pub async fn create(db: &mut PgConnection, auth: &AuthInfo, payload: {{struct_base}}CreatePayload) -> Result<{{struct_base}}CreateResult, error_stack::Report<Error>> {
     auth.require_permission(super::CREATE_PERMISSION)?;
 
-    {% if allow_id_in_create %}
-    let id = payload.id.unwrap_or_else({{id_type}}::new);
+    {% if join %}
+    let id = (
+        {% for field in id_fields %}
+        payload.{{field}}.clone(),
+        {% endfor %}
+    );
+    {% elif allow_id_in_create %}
+    let id = payload.id.unwrap_or_else(|| {{new_object_id}});
     {% else %}
-    let id = {{id_type}}::new();
+    let id = {{new_object_id}};
     {% endif %}
     Self::create_raw(&mut *db, &id, &auth.organization_id, payload).await
 }
@@ -419,7 +425,9 @@ async fn create_payload_children(
         {% if c.relationship.many %}
             if !children.is_empty() {
                 for child in children.iter_mut() {
-                    child.id = Some({{c.object_id}}::new());
+                    {% if not c.join %}
+                    child.id = Some({{c.new_object_id}});
+                    {% endif %}
                     child.{{c.parent_field}} = parent_id.clone();
                 }
 
@@ -429,7 +437,9 @@ async fn create_payload_children(
             }
         {% else %}
             tracing::event!(Level::DEBUG, ?children, "Creating child {{c.module}}");
+            {% if not c.join %}
             children.id = Some({{c.object_id}}::new());
+            {% endif %}
             children.{{c.parent_field}} = parent_id.clone();
             let result = {{c.model}}::upsert_with_parent(&mut *db, organization_id, parent_id, &children).await?;
             Some(result)
@@ -604,7 +614,16 @@ pub async fn upsert_with_parent_{{b.model_snake_case_name}}(
     payload: &{{ struct_base }}UpdatePayload)
     -> Result<{{struct_base}}, error_stack::Report<Error>> {
 
-    let id = payload.id.clone().unwrap_or_else({{id_type}}::new);
+    {% if join %}
+    let id = (
+        {% for field in id_fields %}
+        payload.{{field}}.clone(),
+        {% endfor %}
+    );
+    {% else %}
+    let id = payload.id.clone().unwrap_or_else(|| {{new_object_id}});
+    {% endif %}
+
     {% set query = "upsert_single_child_of_" ~ b.model_snake_case_name %}
     let result = query_file_as!({{struct_base}}, "{{dir}}/{{query}}.sql",
         {{query_bindings(query=sql_queries[query],
@@ -687,7 +706,7 @@ pub async fn update_all_with_parent_{{b.model_snake_case_name}}(
             )}};
 
         for p in payload {
-            let id = p.id.unwrap_or_else(|| {{id_type}}::new());
+            let id = p.id.unwrap_or_else(|| {{new_object_id}});
             query = query
                 .bind(id)
                 .bind(organization_id)
@@ -813,7 +832,15 @@ pub async fn create_child_{{c.snake_case_name}}(
     ) -> Result<{{c.model}}CreateResult, error_stack::Report<Error>> {
 
     auth.require_permission(super::WRITE_PERMISSION)?;
-    let id = payload.id.clone().unwrap_or_else({{c.object_id}}::new);
+    {% if c.join %}
+    let id = (
+        {% for field in c.id_fields %}
+        payload.{{field}}.clone(),
+        {% endfor %}
+    );
+    {% else %}
+    let id = payload.id.clone().unwrap_or_else(|| {{c.new_object_id}});
+    {% endif %}
     crate::models::{{c.module}}::{{c.model}}::create_raw(db, &id, &auth.organization_id, payload).await
 }
 

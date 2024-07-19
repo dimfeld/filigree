@@ -505,7 +505,7 @@ mod test {
         let mut tx = db.begin().await.unwrap();
         let mut objects = Vec::with_capacity(count);
         for i in 0..count {
-            let id = {{id_type}}::new();
+            let id = {{new_object_id}};
             event!(Level::INFO, %id, "Creating test object {}", i);
             let payload = make_create_payload(i);
             let result = {{struct_base}}::create_raw(
@@ -1145,7 +1145,7 @@ mod test {
         let id_one = {{c.object_id}}::from_str(create_result_one["id"].as_str().unwrap()).unwrap();
 
         // Try to create a test object with a bad parent id
-        let bad_parent_id = {{id_type}}::new();
+        let bad_parent_id = {{new_object_id}};
         let payload_two = crate::models::{{c.module}}::testing::make_create_payload(1);
         let response = admin_user
             .client

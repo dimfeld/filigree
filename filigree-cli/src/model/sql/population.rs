@@ -32,17 +32,12 @@ impl<'a> SqlBuilder<'a> {
                     (
                         through.schema.as_str(),
                         through.table.as_str(),
-                        child.parent_field.as_str(),
+                        through.to_id_field.as_str(),
                     )
                 } else {
                     (child.schema.as_str(), child.table.as_str(), "id")
                 };
-                write!(
-                    output,
-                    "{child_table}.{id_field}",
-                    child_table = child.table
-                )
-                .unwrap();
+                write!(output, "ct.{id_field}").unwrap();
 
                 if child.relationship.many {
                     output.push_str("), ARRAY[]::uuid[])");
@@ -50,7 +45,7 @@ impl<'a> SqlBuilder<'a> {
 
                 write!(
                     output,
-                    " FROM {schema}.{table} WHERE {parent_field} = {parent_field_match}",
+                    " FROM {schema}.{table} ct WHERE ct.{parent_field} = {parent_field_match}",
                     parent_field = child.parent_field,
                     parent_field_match = parent_field_match
                 )
@@ -92,8 +87,8 @@ impl<'a> SqlBuilder<'a> {
                         table = child.table,
                         through_schema = through.schema,
                         through_table = through.table,
-                        from_id_field = through.from_id_field,
-                        to_id_field = child.parent_field,
+                        from_id_field = child.parent_field,
+                        to_id_field = through.to_id_field,
                         parent_field_match = parent_field_match,
                     )
                     .unwrap();

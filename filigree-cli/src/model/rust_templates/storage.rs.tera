@@ -47,7 +47,7 @@ where
     let storage = get_storage(state);
 
     {% if file_upload.many %}
-    let id = id.unwrap_or_else({{id_type}}::new);
+    let id = id.unwrap_or_else(|| {{new_object_id}});
     {% else %}
     // Get the actual ID first, since in the single-child case the ID won't change
     // if the object already exists.
@@ -59,7 +59,7 @@ where
         .await
         .change_context(Error::Db)?;
 
-    let id = existing_id.or(id).unwrap_or_else({{id_type}}::new);
+    let id = existing_id.or(id).unwrap_or_else(|| {{new_object_id}});
     {% endif %}
 
     let file_storage_key = key.unwrap_or_else(|| generate_object_key(auth, id, filename.as_deref().unwrap_or_default()));
@@ -145,7 +145,7 @@ pub async fn upload(
     {% endif %}
 
     {% if file_upload.many %}
-    let id = id.unwrap_or_else({{id_type}}::new);
+    let id = id.unwrap_or_else(|| {{new_object_id}});
     {% else %}
     // Get the actual ID first, since in the single-child case the ID won't change
     // if the object already exists.
@@ -157,7 +157,7 @@ pub async fn upload(
         .await
         .change_context(Error::Db)?;
 
-    let id = existing_id.or(id).unwrap_or_else({{id_type}}::new);
+    let id = existing_id.or(id).unwrap_or_else(|| {{id_type}}::new);
     {% endif %}
 
     let file_storage_key = key.unwrap_or_else(|| generate_object_key(auth, id, filename.as_deref().unwrap_or_default()));
