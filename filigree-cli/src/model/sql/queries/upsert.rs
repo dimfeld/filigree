@@ -3,11 +3,18 @@ use std::fmt::Write;
 use super::{bindings, QueryBuilder, SqlBuilder, SqlQueryContext};
 use crate::model::field::ModelFieldTemplateContext;
 
-pub fn upsert_single_child(data: &SqlBuilder) -> Option<SqlQueryContext> {
-    let Some(belongs_to) = data.context.belongs_to_field.as_ref() else {
-        return None;
-    };
+pub fn upsert_queries(data: &SqlBuilder) -> Vec<SqlQueryContext> {
+    data.context
+        .belongs_to_fields
+        .iter()
+        .flat_map(|b| [upsert_single_child(data, b), upsert_children(data, b)])
+        .collect()
+}
 
+fn upsert_single_child(
+    data: &SqlBuilder,
+    belongs_to: &ModelFieldTemplateContext,
+) -> SqlQueryContext {
     let fields = data
         .context
         .fields
@@ -15,14 +22,13 @@ pub fn upsert_single_child(data: &SqlBuilder) -> Option<SqlQueryContext> {
         .filter(|f| f.writable)
         .collect::<Vec<_>>();
     let q = upsert(data, &fields, belongs_to, true);
-    Some(q.finish_with_field_bindings("upsert_single_child", &fields))
+    q.finish_with_field_bindings(
+        format!("upsert_single_child_of_{}", belongs_to.snake_case_name),
+        &fields,
+    )
 }
 
-pub fn upsert_children(data: &SqlBuilder) -> Option<SqlQueryContext> {
-    let Some(belongs_to) = data.context.belongs_to_field.as_ref() else {
-        return None;
-    };
-
+fn upsert_children(data: &SqlBuilder, belongs_to: &ModelFieldTemplateContext) -> SqlQueryContext {
     let fields = data
         .context
         .fields
@@ -30,7 +36,10 @@ pub fn upsert_children(data: &SqlBuilder) -> Option<SqlQueryContext> {
         .filter(|f| f.writable)
         .collect::<Vec<_>>();
     let q = upsert(data, &fields, belongs_to, false);
-    Some(q.finish_with_field_bindings("upsert_children", &fields))
+    q.finish_with_field_bindings(
+        format!("upsert_children_of_{}", belongs_to.snake_case_name),
+        &fields,
+    )
 }
 
 fn upsert(

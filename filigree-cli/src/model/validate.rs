@@ -44,15 +44,7 @@ pub fn validate_model_configuration(config: &Config, models: &ModelMap) -> Resul
                         through_model.name.clone(),
                     ));
                 }
-            } else if let Some(belongs_to) = &child.belongs_to {
-                if belongs_to.model() != model.name {
-                    return Err(Error::BelongsToMismatch {
-                        parent: model.name.clone(),
-                        child: has.model.clone(),
-                        child_belongs_to: belongs_to.model().to_string(),
-                    });
-                }
-            } else {
+            } else if !child.belongs_to.iter().any(|b| b.model() == model.name) {
                 return Err(Error::MissingBelongsTo(
                     model.name.clone(),
                     has.model.clone(),

@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
 use super::{bindings, QueryBuilder, SqlBuilder, SqlQueryContext};
+use crate::model::generator::BelongsToFieldContext;
 
 pub fn create_delete_query(data: &SqlBuilder) -> SqlQueryContext {
     let mut q = QueryBuilder::new();
@@ -26,11 +27,24 @@ pub fn create_delete_query(data: &SqlBuilder) -> SqlQueryContext {
     q.finish("delete")
 }
 
-pub fn create_delete_all_children_query(data: &SqlBuilder) -> Option<SqlQueryContext> {
-    let Some(belongs_to_field) = data.context.belongs_to_field.as_ref() else {
-        return None;
-    };
+pub fn delete_children_queries(data: &SqlBuilder) -> Vec<SqlQueryContext> {
+    data.context
+        .belongs_to_fields
+        .iter()
+        .flat_map(|b| {
+            [
+                delete_all_children_query(data, b),
+                delete_removed_children_query(data, b),
+                delete_with_parent_query(data, b),
+            ]
+        })
+        .collect()
+}
 
+fn delete_all_children_query(
+    data: &SqlBuilder,
+    belongs_to_field: &BelongsToFieldContext,
+) -> SqlQueryContext {
     let mut q = QueryBuilder::new();
     write!(
         q,
@@ -53,14 +67,16 @@ pub fn create_delete_all_children_query(data: &SqlBuilder) -> Option<SqlQueryCon
         where_sep.push_binding_unseparated(bindings::PARENT_ID);
     }
 
-    Some(q.finish("delete_all_children"))
+    q.finish(format!(
+        "delete_all_children_of_{}",
+        belongs_to_field.snake_case_name
+    ))
 }
 
-pub fn delete_removed_children(data: &SqlBuilder) -> Option<SqlQueryContext> {
-    let Some(belongs_to_field) = data.context.belongs_to_field.as_ref() else {
-        return None;
-    };
-
+fn delete_removed_children_query(
+    data: &SqlBuilder,
+    belongs_to_field: &BelongsToFieldContext,
+) -> SqlQueryContext {
     let mut q = QueryBuilder::new();
     write!(
         q,
@@ -87,14 +103,16 @@ pub fn delete_removed_children(data: &SqlBuilder) -> Option<SqlQueryContext> {
         where_sep.push_unseparated(")");
     }
 
-    Some(q.finish("delete_removed_children"))
+    q.finish(format!(
+        "delete_removed_children_of_{}",
+        belongs_to_field.snake_case_name
+    ))
 }
 
-pub fn delete_with_parent(data: &SqlBuilder) -> Option<SqlQueryContext> {
-    let Some(belongs_to_field) = data.context.belongs_to_field.as_ref() else {
-        return None;
-    };
-
+fn delete_with_parent_query(
+    data: &SqlBuilder,
+    belongs_to_field: &BelongsToFieldContext,
+) -> SqlQueryContext {
     let mut q = QueryBuilder::new();
     write!(
         q,
@@ -120,5 +138,8 @@ pub fn delete_with_parent(data: &SqlBuilder) -> Option<SqlQueryContext> {
         where_sep.push_binding_unseparated(bindings::ID);
     }
 
-    Some(q.finish("delete_with_parent"))
+    q.finish(format!(
+        "delete_with_parent_{}",
+        belongs_to_field.snake_case_name
+    ))
 }

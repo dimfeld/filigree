@@ -41,6 +41,8 @@ pub struct StructsContext {
     pub structs: Vec<serde_json::Value>,
 }
 
+pub struct FieldFilters;
+
 impl<'a> ModelGenerator<'a> {
     pub(super) fn create_structs_context(&self) -> Result<StructsContext, Error> {
         let struct_base = self.model.struct_name();

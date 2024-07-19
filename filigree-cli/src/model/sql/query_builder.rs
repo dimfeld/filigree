@@ -58,7 +58,7 @@ impl QueryBuilder {
         write!(&mut self.query, "${}", index).unwrap();
     }
 
-    pub fn finish(self, name: &str) -> SqlQueryContext {
+    pub fn finish(self, name: impl ToString) -> SqlQueryContext {
         SqlQueryContext {
             bindings: self.bindings,
             query: self.query,
@@ -70,7 +70,7 @@ impl QueryBuilder {
     /// Return the query and bindings from the builder.
     pub fn finish_with_field_bindings(
         self,
-        name: &str,
+        name: impl ToString,
         fields: &[impl Borrow<ModelFieldTemplateContext>],
     ) -> SqlQueryContext {
         let field_params = fields

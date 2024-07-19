@@ -216,7 +216,7 @@ impl FileModelOptions {
                 Some(format!("{}{}", parent.id_prefix(), self_prefix))
             }),
             fields: self.file_model_fields(),
-            belongs_to: Some(super::BelongsTo::Simple(parent.name.clone())),
+            belongs_to: vec![super::BelongsTo::Simple(parent.name.clone())],
             // The object is only accessible via the parent model, so don't generate endpoints
             // here.
             standard_endpoints: Endpoints::All(false),

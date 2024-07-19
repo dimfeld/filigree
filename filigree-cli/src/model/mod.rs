@@ -12,6 +12,7 @@ use cargo_toml::Manifest;
 use convert_case::{Case, Casing};
 use error_stack::Report;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, OneOrMany};
 
 use self::{
     field::{Access, ModelField, ModelFieldReference, SqlType},
@@ -22,6 +23,7 @@ use crate::{
     Error,
 };
 
+#[serde_as]
 #[derive(Deserialize, Clone, Debug)]
 pub struct Model {
     /// The name of the model
@@ -109,7 +111,8 @@ pub struct Model {
     /// A parent model for this model, when the other model has a `has` relationship
     /// This adds a field to this model that references the ID of the parent model.
     #[serde(default)]
-    pub belongs_to: Option<BelongsTo>,
+    #[serde_as(as = "OneOrMany<_>")]
+    pub belongs_to: Vec<BelongsTo>,
 
     /// This model links to other instances of the listed models and can optionally manage them
     /// as sub-entities, updating in the same operation as the update to the parent.
@@ -258,7 +261,7 @@ impl Model {
             return true;
         }
 
-        if let Some(b) = &self.belongs_to {
+        for b in &self.belongs_to {
             if b.model() == other.name {
                 return true;
             }

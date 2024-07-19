@@ -1,4 +1,5 @@
 {% if file_upload %}
+{% set belongs_to_field = belongs_to_fields[0] %}
 //! Object storage functionality for {{model_name}}
 #![allow(unused_imports,  unused_variables, dead_code)]
 

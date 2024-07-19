@@ -122,12 +122,16 @@ impl<'a> SqlBuilder<'a> {
                 queries::list::list(self, true),
                 queries::select::select_one(self, false),
                 queries::select::select_one(self, true),
-                queries::delete::create_delete_all_children_query(self),
-                queries::delete::delete_removed_children(self),
-                queries::delete::delete_with_parent(self),
+            ]
+            .into_iter()
+            .flatten(),
+        )
+        .chain(
+            // Vec-returning queries
+            [
                 queries::update::update_one_with_parent(self),
-                queries::upsert::upsert_children(self),
-                queries::upsert::upsert_single_child(self),
+                queries::upsert::upsert_queries(self),
+                queries::delete::delete_children_queries(self),
             ]
             .into_iter()
             .flatten(),
