@@ -109,7 +109,9 @@ async fn delete(
 }
 
 {% for c in children %}
-
+{% if c.through %}
+// TODO updateendpoints for adding and removing the through model
+{% else %}
 async fn list_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
@@ -373,6 +375,7 @@ async fn delete_child_{{c.module}}(
 }
 {% endif %}
 
+{% endif %}{# if c.through #}
 {% endfor %}
 
 {% for e in custom_endpoints %}
@@ -420,6 +423,9 @@ pub fn create_routes() -> axum::Router<ServerState> {
         {% endif %}
 
     {% for c in children %}
+    {% if c.through %}
+    // TODO update endpoints for adding and removing the through model
+    {% else %}
     {% if endpoints.list %}
         .route("/{{url_path}}/:id/{{c.url_path}}",
             routing::get(list_child_{{c.module}})
@@ -472,6 +478,7 @@ pub fn create_routes() -> axum::Router<ServerState> {
         )
 
     {% endif %}
+    {% endif %}{# if c.through #}
     {% endfor %}
 
     {% for e in custom_endpoints %}

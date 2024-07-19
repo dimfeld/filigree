@@ -467,10 +467,19 @@ impl<'a> ModelGenerator<'a> {
     ) -> Result<impl Iterator<Item = Cow<ModelField>>, Error> {
         // The ID field is only used for child models or when `specify_id_in_create` is set,
         // but we just add it always, make it optional, and ignore it in the other cases.
-        let mut id_field = self.id_field();
-        id_field.nullable = true;
+        let id_fields = if self.joins.is_some() {
+            self.join_fields()?
+                .into_iter()
+                .map(|field| Cow::Owned(field.0))
+                .collect::<Vec<_>>()
+        } else {
+            let mut id_field = self.id_field();
+            id_field.nullable = true;
+            vec![Cow::Owned(id_field)]
+        };
 
-        Ok(std::iter::once(Cow::Owned(id_field))
+        Ok(id_fields
+            .into_iter()
             .chain(self.all_fields()?.filter(|f| f.writable() && !f.never_read))
             .chain(
                 self.write_payload_child_fields(for_update)?
@@ -1012,6 +1021,7 @@ impl<'a> ModelGenerator<'a> {
         Ok(id_fields.into_iter().chain(other_fields))
     }
 
+    /// Fields that reference a parent model. This includes the return result of `join_fields`.
     fn belongs_to_fields(
         &self,
     ) -> Result<impl Iterator<Item = (ModelField, BelongsToFieldContext)>, Error> {
@@ -1081,7 +1091,13 @@ impl<'a> ModelGenerator<'a> {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let join_fields = self
+        Ok(belongs_to
+            .into_iter()
+            .chain(self.join_fields()?.into_iter()))
+    }
+
+    fn join_fields(&self) -> Result<Vec<(ModelField, BelongsToFieldContext)>, Error> {
+        let joins = self
             .joins
             .as_ref()
             .map(|(model1, model2)| {
@@ -1137,7 +1153,7 @@ impl<'a> ModelGenerator<'a> {
             .transpose()?
             .unwrap_or_default();
 
-        Ok(belongs_to.into_iter().chain(join_fields.into_iter()))
+        Ok(joins)
     }
 
     pub fn child_model_field_name(

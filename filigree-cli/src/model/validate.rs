@@ -12,6 +12,10 @@ pub fn validate_model_configuration(config: &Config, models: &ModelMap) -> Resul
             }
         }
 
+        if model.joins.is_some() && !model.has.is_empty() {
+            return Err(Error::JoinedModelWithHas(model.name.clone()));
+        }
+
         for has in &model.has {
             let child = models.get(&has.model, &model.name, "has")?;
 
