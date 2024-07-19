@@ -1444,7 +1444,7 @@ impl<'a> ModelGenerator<'a> {
                     name: has.rust_child_field_name(&has_model),
                     rust_type: Some(rust_type),
                     zod_type: Some(zod_type),
-                    nullable: has.many,
+                    nullable: true,
                     ..base_field.clone()
                 };
 
