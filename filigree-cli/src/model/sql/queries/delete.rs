@@ -69,7 +69,7 @@ fn delete_all_children_query(
 
     q.finish(format!(
         "delete_all_children_of_{}",
-        belongs_to_field.snake_case_name
+        belongs_to_field.model_snake_case_name
     ))
 }
 
@@ -105,7 +105,7 @@ fn delete_removed_children_query(
 
     q.finish(format!(
         "delete_removed_children_of_{}",
-        belongs_to_field.snake_case_name
+        belongs_to_field.model_snake_case_name
     ))
 }
 
@@ -140,6 +140,6 @@ fn delete_with_parent_query(
 
     q.finish(format!(
         "delete_with_parent_{}",
-        belongs_to_field.snake_case_name
+        belongs_to_field.model_snake_case_name
     ))
 }

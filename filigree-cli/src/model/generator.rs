@@ -55,6 +55,15 @@ pub struct ReferenceFieldContext {
     pub table: String,
 }
 
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct ThroughContext {
+    pub name: String,
+    pub snake_case_name: String,
+    pub table: String,
+    pub schema: String,
+    pub from_id_field: String,
+}
+
 #[derive(Serialize, Clone, Debug)]
 pub struct ChildContext {
     pub model: String,
@@ -77,6 +86,7 @@ pub struct ChildContext {
     pub schema: String,
     pub url_path: String,
     pub parent_field: String,
+    pub through: Option<ThroughContext>,
     pub file_upload: Option<serde_json::Value>,
 }
 
@@ -93,8 +103,8 @@ pub struct BelongsToFieldContext {
     #[serde(flatten)]
     pub field: ModelFieldTemplateContext,
     pub module: String,
-    pub name: String,
-    pub snake_case_name: String,
+    pub model_name: String,
+    pub model_snake_case_name: String,
 }
 
 impl Deref for BelongsToFieldContext {
@@ -394,6 +404,7 @@ impl<'a> ModelGenerator<'a> {
             .iter()
             .map(|q| (q.name.as_str(), SqlQueryTemplateContext::from(q.clone())))
             .collect::<HashMap<_, _>>();
+        eprintln!("{queries_context:#?}");
         ctx.insert("sql_queries", &queries_context);
 
         let api_files = ModelRustTemplates::iter()
@@ -533,9 +544,18 @@ impl<'a> ModelGenerator<'a> {
                     .through
                     .as_ref()
                     .map(|through| {
-                        let model = self.model_map.get(through, &self.model.name, "through")?;
-                        let generator = generators.get(through, &self.model.name, "through")?;
-                        Ok::<_, Error>((model, generator))
+                        let through_model =
+                            self.model_map.get(through, &self.model.name, "through")?;
+
+                        let ctx = ThroughContext {
+                            name: through_model.name.clone(),
+                            snake_case_name: through_model.name.to_case(Case::Snake),
+                            table: through_model.table(),
+                            schema: through_model.schema().to_string(),
+                            from_id_field: self.foreign_key_id_field_name(),
+                        };
+
+                        Ok::<_, Error>(ctx)
                     })
                     .transpose()?;
 
@@ -620,6 +640,7 @@ impl<'a> ModelGenerator<'a> {
                     schema: child_model.schema().to_string(),
                     url_path,
                     parent_field: self.model.foreign_key_id_field_name(),
+                    through,
                     file_upload: child_model
                         .file_for
                         .as_ref()
@@ -987,8 +1008,8 @@ impl<'a> ModelGenerator<'a> {
                 let belongs_ctx = BelongsToFieldContext {
                     field: field_ctx,
                     module: model.module_name(),
-                    name: model.name.clone(),
-                    snake_case_name: model.name.to_case(Case::Snake),
+                    model_name: model.name.clone(),
+                    model_snake_case_name: model.name.to_case(Case::Snake),
                 };
 
                 Ok::<_, Error>((field, belongs_ctx))
@@ -1039,8 +1060,8 @@ impl<'a> ModelGenerator<'a> {
                     let belongs_ctx = BelongsToFieldContext {
                         field: field_ctx,
                         module: model.module_name(),
-                        name: model.name.clone(),
-                        snake_case_name: model.name.to_case(Case::Snake),
+                        model_name: model.name.clone(),
+                        model_snake_case_name: model.name.to_case(Case::Snake),
                     };
 
                     (field, belongs_ctx)

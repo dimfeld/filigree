@@ -35,7 +35,10 @@ pub fn update_one_with_parent_query(
     let q = update_query(data, &fields, Some(&belongs_to.sql_name));
 
     q.finish_with_field_bindings(
-        format!("update_one_with_parent_{}", belongs_to.snake_case_name),
+        format!(
+            "update_one_with_parent_{}",
+            belongs_to.model_snake_case_name
+        ),
         &fields,
     )
 }

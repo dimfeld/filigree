@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
 use super::{bindings, QueryBuilder, SqlBuilder, SqlQueryContext};
-use crate::model::field::ModelFieldTemplateContext;
+use crate::model::{field::ModelFieldTemplateContext, generator::BelongsToFieldContext};
 
 pub fn upsert_queries(data: &SqlBuilder) -> Vec<SqlQueryContext> {
     data.context
@@ -11,10 +11,7 @@ pub fn upsert_queries(data: &SqlBuilder) -> Vec<SqlQueryContext> {
         .collect()
 }
 
-fn upsert_single_child(
-    data: &SqlBuilder,
-    belongs_to: &ModelFieldTemplateContext,
-) -> SqlQueryContext {
+fn upsert_single_child(data: &SqlBuilder, belongs_to: &BelongsToFieldContext) -> SqlQueryContext {
     let fields = data
         .context
         .fields
@@ -23,12 +20,15 @@ fn upsert_single_child(
         .collect::<Vec<_>>();
     let q = upsert(data, &fields, belongs_to, true);
     q.finish_with_field_bindings(
-        format!("upsert_single_child_of_{}", belongs_to.snake_case_name),
+        format!(
+            "upsert_single_child_of_{}",
+            belongs_to.model_snake_case_name
+        ),
         &fields,
     )
 }
 
-fn upsert_children(data: &SqlBuilder, belongs_to: &ModelFieldTemplateContext) -> SqlQueryContext {
+fn upsert_children(data: &SqlBuilder, belongs_to: &BelongsToFieldContext) -> SqlQueryContext {
     let fields = data
         .context
         .fields
@@ -37,7 +37,7 @@ fn upsert_children(data: &SqlBuilder, belongs_to: &ModelFieldTemplateContext) ->
         .collect::<Vec<_>>();
     let q = upsert(data, &fields, belongs_to, false);
     q.finish_with_field_bindings(
-        format!("upsert_children_of_{}", belongs_to.snake_case_name),
+        format!("upsert_children_of_{}", belongs_to.model_snake_case_name),
         &fields,
     )
 }
@@ -45,7 +45,7 @@ fn upsert_children(data: &SqlBuilder, belongs_to: &ModelFieldTemplateContext) ->
 fn upsert(
     data: &SqlBuilder,
     fields: &[&ModelFieldTemplateContext],
-    belongs_to_field: &ModelFieldTemplateContext,
+    belongs_to_field: &BelongsToFieldContext,
     single: bool,
 ) -> QueryBuilder {
     let mut q = QueryBuilder::new();

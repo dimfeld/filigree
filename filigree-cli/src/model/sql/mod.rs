@@ -30,7 +30,7 @@ pub struct SqlQueryContext {
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SqlQueryTemplateContext {
     pub name: String,
     pub bindings: Vec<String>,
