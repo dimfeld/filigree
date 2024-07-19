@@ -157,6 +157,7 @@ pub struct TemplateContext {
     pub full_default_sort_field: String,
     pub default_sort_field: String,
     pub id_type: String,
+    pub id_ref_type: String,
     pub id_fields: Vec<String>,
     pub new_object_id: String,
     pub id_prefix: String,
@@ -780,13 +781,26 @@ impl<'a> ModelGenerator<'a> {
             &Endpoints::All(false)
         };
 
+        fn maybe_as_tuple(mut s: Vec<String>) -> String {
+            if s.len() == 1 {
+                s.pop().unwrap()
+            } else {
+                format!("({})", s.join(", "))
+            }
+        }
+
         let id_type = self.object_id_type();
-        let new_object_id = format!(
-            "({})",
+        let id_ref_type = maybe_as_tuple(
+            self.object_id_types()
+                .iter()
+                .map(|f| format!("&{}", f))
+                .collect(),
+        );
+        let new_object_id = maybe_as_tuple(
             self.object_id_types()
                 .iter()
                 .map(|t| format!("{t}::new()"))
-                .join(", ")
+                .collect(),
         );
         let context = TemplateContext {
             dir: base_dir,
@@ -847,6 +861,7 @@ impl<'a> ModelGenerator<'a> {
                 .to_string(),
             id_is_string: self.model.is_auth_model && self.config.auth.string_ids(),
             id_type,
+            id_ref_type,
             id_fields: self.object_id_fields(),
             new_object_id,
             join: self.join_context()?,

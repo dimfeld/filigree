@@ -6,34 +6,46 @@ pub fn insert(data: &SqlBuilder) -> SqlQueryContext {
     q.push(&data.context.schema);
     q.push(".");
     q.push(&data.context.table);
-    q.push(" (id ");
+    q.push(" ( ");
 
-    if !data.context.global {
-        q.push(", organization_id");
-    }
+    let id_fields = data.id_fields();
 
-    let fields = data
+    let data_fields = data
         .context
         .fields
         .iter()
         .filter(|f| f.writable)
         .collect::<Vec<_>>();
 
-    for f in &fields {
-        q.push(", ");
-        q.push(&f.sql_name);
+    {
+        let mut sep = q.separated(", ");
+        for field in &id_fields {
+            sep.push(&field.0);
+        }
+
+        if !data.context.global {
+            sep.push("organization_id");
+        }
+
+        for field in &data_fields {
+            sep.push(&field.sql_name);
+        }
     }
 
     q.push(") VALUES (");
 
     {
         let mut sep = q.separated(", ");
-        sep.push_binding(bindings::ID);
+
+        for (_, binding) in data.id_fields() {
+            sep.push_binding(binding);
+        }
+
         if !data.context.global {
             sep.push_binding(bindings::ORGANIZATION);
         }
 
-        for f in &fields {
+        for f in &data_fields {
             sep.push_binding(&f.sql_name);
         }
     }
@@ -50,5 +62,5 @@ pub fn insert(data: &SqlBuilder) -> SqlQueryContext {
         .join(",\n");
     q.push(&returning);
 
-    q.finish_with_field_bindings("insert", &fields)
+    q.finish_with_field_bindings("insert", &data_fields)
 }

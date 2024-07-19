@@ -49,7 +49,6 @@ fn update_query<'a>(
     parent_field: Option<&str>,
 ) -> QueryBuilder {
     let mut query = QueryBuilder::new();
-    let id = query.create_binding(bindings::ID);
     write!(
         query,
         "UPDATE {schema}.{table} SET ",
@@ -65,12 +64,12 @@ fn update_query<'a>(
         query.push(",\n");
     }
 
-    write!(
-        query,
+    query.push(
         "updated_at = NOW()
-        WHERE id = {id}"
-    )
-    .unwrap();
+        WHERE ",
+    );
+
+    data.push_id_where_clause(&mut query);
 
     if let Some(parent_field) = parent_field {
         query.push(" AND ");

@@ -1,5 +1,7 @@
 use std::fmt::Write;
 
+use itertools::Itertools;
+
 use super::{bindings, QueryBuilder, SqlBuilder, SqlQueryContext};
 use crate::model::{field::ModelFieldTemplateContext, generator::BelongsToFieldContext};
 
@@ -54,18 +56,26 @@ fn upsert(
 
     write!(
         q,
-        "INSERT INTO {schema}.{table} (id ",
+        "INSERT INTO {schema}.{table} (",
         schema = data.context.schema,
         table = data.context.table
     )
     .unwrap();
-    if !data.context.global {
-        q.push(", organization_id");
-    }
 
-    for field in fields {
-        q.push(", ");
-        q.push(&field.sql_name);
+    let id_fields = data.id_fields();
+    {
+        let mut sep = q.separated(", ");
+        for field in &id_fields {
+            sep.push(&field.0);
+        }
+
+        if !data.context.global {
+            sep.push("organization_id");
+        }
+
+        for field in fields {
+            sep.push(&field.sql_name);
+        }
     }
 
     q.push(") VALUES ");
@@ -74,7 +84,9 @@ fn upsert(
         q.push("(");
 
         let mut sep = q.separated(", ");
-        sep.push_binding(bindings::ID);
+        for (_, binding) in &id_fields {
+            sep.push_binding(binding);
+        }
 
         if !data.context.global {
             sep.push_binding(bindings::ORGANIZATION);
@@ -90,9 +102,9 @@ fn upsert(
     }
 
     let conflict_field = if belongs_to_field.globally_unique {
-        &belongs_to_field.sql_name
+        belongs_to_field.sql_name.clone()
     } else {
-        "id"
+        id_fields.iter().map(|f| f.0).join(", ")
     };
 
     write!(q, " ON CONFLICT ({conflict_field}) DO UPDATE SET ").unwrap();

@@ -105,8 +105,13 @@ impl<'a> SqlBuilder<'a> {
                 }
 
                 if !self.context.global {
-                    output.push_str(" AND organization_id = ");
+                    output.push_str(" AND t.organization_id = ");
                     output.push_str(org_binding);
+
+                    if child.through.is_some() {
+                        output.push_str(" AND tt.organization_id = ");
+                        output.push_str(org_binding);
+                    }
                 }
                 if !child.relationship.many {
                     output.push_str(" LIMIT 1");

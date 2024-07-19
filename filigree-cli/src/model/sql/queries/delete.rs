@@ -135,10 +135,10 @@ fn delete_with_parent_query(
         where_sep.push(&belongs_to_field.sql_name);
         where_sep.push_unseparated(" = ");
         where_sep.push_binding_unseparated(bindings::PARENT_ID);
-
-        where_sep.push("id = ");
-        where_sep.push_binding_unseparated(bindings::ID);
     }
+
+    q.push(" AND ");
+    data.push_id_where_clause(&mut q);
 
     q.finish(format!(
         "delete_with_parent_{}",

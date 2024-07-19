@@ -21,7 +21,7 @@ use crate::auth::AuthInfo;
 use crate::Error;
 {{rust_imports}}
 
-{% macro id_ref(id="id") -%}
+{% macro id_ref_type(id="id") -%}
 {{id}}
 {%- if id_is_string -%}
     .as_str()
@@ -224,7 +224,7 @@ fn check_missing_parent_error<T>(result: Result<T, sqlx::Error>) -> Result<T, er
 
 /// Get a {{model_name}} from the database
 #[instrument(skip(db))]
-pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> Result<{{ struct_base }}, error_stack::Report<Error>> {
+pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_ref_type}}) -> Result<{{ struct_base }}, error_stack::Report<Error>> {
     {% if auth_scope == "model" %}
     auth.require_permission(super::READ_PERMISSION)?;
     {% endif %}
@@ -232,7 +232,7 @@ pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> 
     let object = query_file_as!({{struct_base}}, "{{dir}}/select_one.sql",
         {{query_bindings(
             query=sql_queries.select_one,
-            id=self::id_ref(),
+            id=self::id_ref_type(),
             organization_id=self::db_org_id(),
             actor_ids="&auth.actor_ids()"
             )}}
@@ -248,7 +248,7 @@ pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> 
 {% if can_populate_get %}
 /// Get a populated {{model_name}} from the database
 #[instrument(skip(db))]
-pub async fn get_populated(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> Result<{{ struct_base }}PopulatedGetResult, error_stack::Report<Error>> {
+pub async fn get_populated(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_ref_type}}) -> Result<{{ struct_base }}PopulatedGetResult, error_stack::Report<Error>> {
     {% if auth_scope == "model" %}
     auth.require_permission(super::READ_PERMISSION)?;
     {% endif %}
@@ -257,7 +257,7 @@ pub async fn get_populated(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_t
     let object = query_file_as!({{struct_base}}PopulatedGetResult, "{{dir}}/select_one_populated.sql",
         {{query_bindings(
             query=sql_queries.select_one_populated,
-            id=self::id_ref(),
+            id=self::id_ref_type(),
             organization_id=self::db_org_id(),
             actor_ids="&auth.actor_ids()"
             )}}
@@ -369,7 +369,7 @@ pub async fn create(db: &mut PgConnection, auth: &AuthInfo, payload: {{struct_ba
 #[instrument(skip(db))]
 pub async fn create_raw(
     db: &mut PgConnection,
-    id: &{{id_type}},
+    id: {{id_ref_type}},
     organization_id: &OrganizationId,
     payload: {{struct_base}}CreatePayload
 ) -> Result<{{struct_base}}CreateResult, error_stack::Report<Error>> {
@@ -377,7 +377,7 @@ pub async fn create_raw(
     let result = query_file_as!({{struct_base}}, "{{dir}}/insert.sql",
         {{query_bindings(
             query=sql_queries.insert,
-            id=self::id_ref(),
+            id=self::id_ref_type(),
             organization_id=self::db_org_id(base="organization_id"),
             actor_ids="&auth.actor_ids()"
         )}}
@@ -414,7 +414,7 @@ pub async fn create_raw(
 
 async fn create_payload_children(
     db: &mut PgConnection,
-    parent_id: &{{id_type}},
+    parent_id: {{id_ref_type}},
     organization_id: &OrganizationId,
     payload: {{struct_base}}CreatePayload
 ) -> Result<{{struct_base}}CreatePayloadChildrenResult, error_stack::Report<Error>> {
@@ -467,7 +467,7 @@ async fn create_payload_children(
 pub async fn update(
     db: &mut PgConnection,
     auth: &AuthInfo,
-    id: &{{id_type}},
+    id: {{id_ref_type}},
     payload: {{ struct_base }}UpdatePayload)
 -> Result<bool, error_stack::Report<Error>> {
     {% if auth_scope == "model" %}
@@ -477,7 +477,7 @@ pub async fn update(
     let result = query_file_scalar!("{{dir}}/update.sql",
         {{query_bindings(
             query=sql_queries.update,
-            id=self::id_ref(),
+            id=self::id_ref_type(),
             organization_id=self::db_org_id(),
             actor_ids="&auth.actor_ids()"
         )}}
@@ -502,7 +502,7 @@ pub async fn update(
 async fn update_payload_children(
     db: &mut PgConnection,
     organization_id: &OrganizationId,
-    parent_id: &{{id_type}},
+    parent_id: {{id_ref_type}},
     payload: {{struct_base}}UpdatePayload
 ) -> Result<(), error_stack::Report<Error>> {
     {% for c in children | filter(attribute="write_payload_field_name") %}
@@ -528,14 +528,14 @@ async fn update_payload_children(
 {% endif %}
 
 #[instrument(skip(db))]
-pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> Result<bool, error_stack::Report<Error>> {
+pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: {{id_ref_type}}) -> Result<bool, error_stack::Report<Error>> {
     {% if auth_scope == "model" %}
     auth.require_permission(super::CREATE_PERMISSION)?;
     {% endif %}
 
     let result = query_file!("{{dir}}/delete.sql",
         {{query_bindings(query=sql_queries.delete,
-            id=self::id_ref(),
+            id=self::id_ref_type(),
             organization_id=self::db_org_id(),
             actor_ids="&actor_ids()")}}
         )
@@ -550,7 +550,7 @@ pub async fn lookup_object_permissions(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     #[allow(unused_variables)]
-    id: &{{id_type}},
+    id: {{id_ref_type}},
 ) -> Result<Option<ObjectPermission>, error_stack::Report<Error>> {
 
     {% if auth_scope == "model" %}
@@ -587,7 +587,7 @@ pub async fn lookup_object_permissions(
         {{self::db_org_id()}},
         &actor_ids,
         {% if auth_scope == "object" %}
-        {{self::id_ref()}},
+        {{self::id_ref_type()}},
         {% endif %}
         )
         .fetch_one(db)
@@ -627,8 +627,8 @@ pub async fn upsert_with_parent_{{b.model_snake_case_name}}(
     {% set query = "upsert_single_child_of_" ~ b.model_snake_case_name %}
     let result = query_file_as!({{struct_base}}, "{{dir}}/{{query}}.sql",
         {{query_bindings(query=sql_queries[query],
-            id=self::id_ref(),
-            parent_id=self::id_ref(id="parent_id"),
+            id=self::id_ref_type(),
+            parent_id=self::id_ref_type(id="parent_id"),
             organization_id=self::db_org_id(base="organization_id"),
             actor_ids="&auth.actor_ids()",
             )
@@ -646,7 +646,7 @@ pub async fn update_one_with_parent_{{b.model_snake_case_name}}(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     parent_id: &{{b.rust_type}},
-    id: &{{id_type}},
+    id: {{id_ref_type}},
     mut payload: {{ struct_base }}UpdatePayload
     ) -> Result<bool, error_stack::Report<Error>> {
 
@@ -656,9 +656,9 @@ pub async fn update_one_with_parent_{{b.model_snake_case_name}}(
     {% set query = "update_one_with_parent_" ~ b.model_snake_case_name %}
     let result = query_file!("{{dir}}/{{query}}.sql",
         {{query_bindings(query=sql_queries[query],
-            id=self::id_ref(),
+            id=self::id_ref_type(),
             organization_id=self::db_org_id(),
-            parent_id=self::id_ref(id="parent_id"),
+            parent_id=self::id_ref_type(id="parent_id"),
             actor_ids="&auth.actor_ids()")
         }}
         )
@@ -700,7 +700,7 @@ pub async fn update_all_with_parent_{{b.model_snake_case_name}}(
             {{query_bindings(
                 query=sql_queries[query],
                 organization_id="organization_id",
-                parent_id=self::id_ref(id="parent_id"),
+                parent_id=self::id_ref_type(id="parent_id"),
                 actor_ids="auth.actor_ids()",
                 call_bind = true
             )}};
@@ -727,13 +727,13 @@ pub async fn update_all_with_parent_{{b.model_snake_case_name}}(
         let results = Self::check_missing_parent_error(results)?;
 
         // Delete any of the children that were not sent in.
-        let ids = results.iter().map(|o| o.{{self::id_ref()}}.clone()).collect::<Vec<_>>();
+        let ids = results.iter().map(|o| o.{{self::id_ref_type()}}.clone()).collect::<Vec<_>>();
         {% set query = "delete_removed_children_of_" ~ b.model_snake_case_name %}
         query_file!("{{dir}}/{{query}}.sql",
             {{query_bindings(query=sql_queries[query],
                 ids="&ids",
                 organization_id=self::db_org_id(base="organization_id"),
-                parent_id=self::id_ref(id="parent_id")
+                parent_id=self::id_ref_type(id="parent_id")
                 ) }}
             )
             .execute(db)
@@ -751,15 +751,15 @@ pub async fn delete_with_parent_{{b.model_snake_case_name}}(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
     parent_id: &{{b.rust_type}},
-    child_id: &{{id_type}})
+    child_id: {{id_ref_type}})
     -> Result<bool, error_stack::Report<Error>> {
 
     {% set query = "delete_with_parent_" ~ b.model_snake_case_name %}
     let result = query_file!("{{dir}}/{{query}}.sql",
         {{query_bindings(query=sql_queries[query],
             organization_id=self::db_org_id(),
-            parent_id=self::id_ref(id="parent_id"),
-            id=self::id_ref(id="child_id"),
+            parent_id=self::id_ref_type(id="parent_id"),
+            id=self::id_ref_type(id="child_id"),
         )}}
         )
         .execute(db)
@@ -780,7 +780,7 @@ pub async fn delete_all_children_of_{{b.model_snake_case_name}}(
     let result = query_file!("{{dir}}/{{query}}.sql",
         {{query_bindings(query=sql_queries[query],
             organization_id=self::db_org_id(base="organization_id"),
-            parent_id=self::id_ref(id="parent_id")
+            parent_id=self::id_ref_type(id="parent_id")
         ) }}
         )
         .execute(db)
@@ -804,7 +804,7 @@ pub async fn delete_all_children_of_{{b.model_snake_case_name}}(
 pub async fn get_child_{{fnname}}_for_parent(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
-    parent_id: &{{id_type}})
+    parent_id: {{id_ref_type}})
     -> Result<{{ret_type}}<{{c.model}}>, error_stack::Report<Error>> {
     {% if auth_scope == "model" %}
     auth.require_permission(super::READ_PERMISSION)?;

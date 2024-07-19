@@ -210,7 +210,7 @@ async fn update_child_{{c.module}}(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
-    let result = crate::models::{{c.module}}::{{c.model}}::update_one_with_parent(
+    let result = crate::models::{{c.module}}::{{c.model}}::update_one_with_parent_{{module_name}}(
         &state.db,
         &auth,
         &parent_id,
@@ -242,7 +242,7 @@ async fn delete_child_{{c.module}}(
         .await
         .change_context(Error::Db)?;
     {% else %}
-    let deleted = crate::models::{{c.module}}::{{c.model}}::delete_with_parent(
+    let deleted = crate::models::{{c.module}}::{{c.model}}::delete_with_parent_{{module_name}}(
         &state.db,
         &auth,
         &parent_id,
@@ -319,7 +319,7 @@ async fn upsert_child_{{c.module}}(
 
 
     {% else %}
-    let result = crate::models::{{c.module}}::{{c.model}}::upsert_with_parent(
+    let result = crate::models::{{c.module}}::{{c.model}}::upsert_with_parent_{{module_name}}(
         &state.db,
         &auth.organization_id,
         &parent_id,
@@ -359,7 +359,7 @@ async fn delete_child_{{c.module}}(
         .await
         .change_context(Error::Db)?;
     {% else %}
-    let deleted = crate::models::{{c.module}}::{{c.model}}::delete_all_children_of_parent(
+    let deleted = crate::models::{{c.module}}::{{c.model}}::delete_all_children_of_{{module_name}}(
         &state.db,
         &auth.organization_id,
         &parent_id).await?;
