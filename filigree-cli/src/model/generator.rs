@@ -36,6 +36,7 @@ pub struct ChildField<'a> {
     pub field: ModelField,
     pub model: &'a Model,
     pub many: bool,
+    pub through: Option<&'a Model>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1430,6 +1431,12 @@ impl<'a> ModelGenerator<'a> {
                     return Ok(None);
                 }
 
+                let through_model = has
+                    .through
+                    .as_ref()
+                    .map(|through| self.model_map.get(through, &self.model.name, "through"))
+                    .transpose()?;
+
                 let (rust_type, zod_type) =
                     Self::write_payload_child_field_type(has_model, has, for_update);
 
@@ -1445,6 +1452,7 @@ impl<'a> ModelGenerator<'a> {
                     model: has_model,
                     many: has.many,
                     field: model_field,
+                    through: through_model,
                 };
 
                 Ok(Some(field))

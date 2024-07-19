@@ -422,12 +422,6 @@ async fn create_payload_children(
     {% for c in children | filter(attribute="write_payload_field_name") %}
         let {{c.write_payload_field_name}}_result = if let Some(mut children) = payload.{{c.write_payload_field_name}} {
 
-        {% if c.through %}
-        {% set model = c.through.model %}
-        {% else %}
-        {% set model = c.model %}
-        {% endif %}
-
         {% if c.relationship.many %}
             if !children.is_empty() {
                 for child in children.iter_mut() {
