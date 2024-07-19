@@ -451,9 +451,12 @@ impl<'a> ModelGenerator<'a> {
 
     /// All fields except fields generated when populating child models
     pub fn all_fields(&self) -> Result<impl Iterator<Item = Cow<ModelField>>, Error> {
+        // join_fields first since they are the IDs, when present
         let fields = self
-            .standard_fields()?
-            .map(|field| Cow::Owned(field))
+            .join_fields()?
+            .into_iter()
+            .map(|field| Cow::Owned(field.0))
+            .chain(self.standard_fields()?.map(|field| Cow::Owned(field)))
             .chain(self.fields.iter().map(|field| Cow::Borrowed(field)))
             .chain(self.belongs_to_fields()?.map(|field| Cow::Owned(field.0)));
 
@@ -736,7 +739,11 @@ impl<'a> ModelGenerator<'a> {
             rust_imports.insert(model.qualified_object_id_type());
         }
 
-        let belongs_to_fields = self.belongs_to_fields()?.map(|f| f.1).collect::<Vec<_>>();
+        let belongs_to_fields = self
+            .belongs_to_fields()?
+            .chain(self.join_fields()?)
+            .map(|f| f.1)
+            .collect::<Vec<_>>();
         for b in &belongs_to_fields {
             for f in fields.iter_mut() {
                 let is_belongs_to = f.name == b.sql_name;
@@ -1091,9 +1098,7 @@ impl<'a> ModelGenerator<'a> {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(belongs_to
-            .into_iter()
-            .chain(self.join_fields()?.into_iter()))
+        Ok(belongs_to.into_iter())
     }
 
     fn join_fields(&self) -> Result<Vec<(ModelField, BelongsToFieldContext)>, Error> {
