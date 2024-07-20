@@ -475,9 +475,7 @@ impl<'a> ModelGenerator<'a> {
             self.join_fields()?
                 .into_iter()
                 .map(|mut field| {
-                    if for_update {
-                        field.0.nullable = true;
-                    }
+                    field.0.nullable = true;
                     Cow::Owned(field.0)
                 })
                 .collect::<Vec<_>>()
@@ -1124,12 +1122,17 @@ impl<'a> ModelGenerator<'a> {
                     self_name: &str,
                     model: &Model,
                 ) -> (ModelField, BelongsToFieldContext) {
-                    let has_many = model
+                    let single_child = model
                         .has
                         .iter()
-                        .find(|has| has.model == self_name)
-                        .map(|h| h.many)
-                        .unwrap_or(true);
+                        .find(|has| {
+                            has.through
+                                .as_ref()
+                                .map(|t| t == self_name)
+                                .unwrap_or(false)
+                        })
+                        .map(|h| !h.many)
+                        .unwrap_or(false);
 
                     let field = ModelField {
                         name: model.foreign_key_id_field_name(),
@@ -1139,7 +1142,7 @@ impl<'a> ModelGenerator<'a> {
                         rust_type: Some(model.object_id_type()),
                         zod_type: Some("z.string()".to_string()),
                         nullable: false,
-                        globally_unique: !has_many,
+                        globally_unique: single_child,
                         unique: false,
                         indexed: true,
                         filterable: FilterableType::Exact,

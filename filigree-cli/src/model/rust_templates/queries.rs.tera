@@ -353,7 +353,7 @@ pub async fn create(db: &mut PgConnection, auth: &AuthInfo, payload: {{struct_ba
     {% if join %}
     let id = (
         {% for field in id_fields %}
-        payload.{{field}}.clone(),
+        payload.{{field}}.clone().ok_or(Error::MissingId("{{field}}"))?,
         {% endfor %}
     );
     {% elif allow_id_in_create %}
@@ -458,9 +458,9 @@ async fn create_payload_children(
         {% elif not c.relationship.many and c.through %}
             tracing::event!(Level::DEBUG, ?children, "Creating child {{c.module}}");
 
-            let child_struct = {{c.through.model}}CreatePayload {
-                {{c.parent_field}}: parent_id.clone(),
-                {{c.through.to_id_field}}: children,
+            let child_struct = {{c.through.model}}UpdatePayload {
+                {{c.parent_field}}: Some(parent_id.clone()),
+                {{c.through.to_id_field}}: Some(children),
             };
 
             let result = {{c.through.model}}::upsert_with_parent_{{module_name}}(&mut *db, organization_id, parent_id, &child_struct).await?;
@@ -537,7 +537,7 @@ async fn update_payload_children(
         children.{{c.parent_field}} = parent_id.clone();
         {% endif %}
 
-    {{c.model}}::update_all_with_parent_{{module_name}}(
+        {{c.model}}::update_all_with_parent_{{module_name}}(
             &mut *db,
             organization_id,
             parent_id,
@@ -639,7 +639,7 @@ pub async fn upsert_with_parent_{{b.model_snake_case_name}}(
     {% if join %}
     let id = (
         {% for field in id_fields %}
-        payload.{{field}}.clone(),
+        payload.{{field}}.clone().ok_or(Error::MissingId("{{field}}"))?,
         {% endfor %}
     );
     {% else %}

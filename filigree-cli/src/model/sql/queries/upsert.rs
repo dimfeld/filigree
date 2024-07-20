@@ -18,7 +18,25 @@ fn upsert_single_child(data: &SqlBuilder, belongs_to: &BelongsToFieldContext) ->
         .context
         .fields
         .iter()
-        .filter(|f| f.writable)
+        .filter(|f| {
+            if f.writable {
+                return true;
+            }
+
+            let join_match = data
+                .context
+                .join
+                .as_ref()
+                .map(|j| j.model_ids.0 == f.name || j.model_ids.1 == f.name)
+                .unwrap_or(false);
+            if belongs_to.globally_unique && join_match && belongs_to.name != f.name {
+                // If this is a unique join, allow updating the other side when doing
+                // an upsert.
+                return true;
+            }
+
+            false
+        })
         .collect::<Vec<_>>();
 
     let q = upsert(data, &fields, belongs_to, true);
@@ -64,6 +82,10 @@ fn upsert(
     .unwrap();
 
     let id_fields = data.id_fields();
+    let data_fields = fields
+        .iter()
+        .filter(|f| !id_fields.iter().any(|id_field| id_field.0 == f.name))
+        .collect::<Vec<_>>();
     {
         let mut sep = q.separated(", ");
         for field in &id_fields {
@@ -74,7 +96,7 @@ fn upsert(
             sep.push("organization_id");
         }
 
-        for field in fields {
+        for field in &data_fields {
             sep.push(&field.sql_name);
         }
     }
@@ -93,7 +115,7 @@ fn upsert(
             sep.push_binding(bindings::ORGANIZATION);
         }
 
-        for field in fields {
+        for field in &data_fields {
             sep.push_binding(&field.name);
         }
 
@@ -108,32 +130,36 @@ fn upsert(
         id_fields.iter().map(|f| f.0).join(", ")
     };
 
-    write!(q, " ON CONFLICT ({conflict_field}) DO UPDATE SET ").unwrap();
+    if fields.is_empty() {
+        write!(q, " ON CONFLICT ({conflict_field}) DO NOTHING").unwrap();
+    } else {
+        write!(q, " ON CONFLICT ({conflict_field}) DO UPDATE SET ").unwrap();
 
-    for field in fields {
-        q.push(&field.sql_name);
-        q.push(" = EXCLUDED.");
-        q.push(&field.sql_name);
-        q.push(",\n");
+        for field in fields {
+            q.push(&field.sql_name);
+            q.push(" = EXCLUDED.");
+            q.push(&field.sql_name);
+            q.push(",\n");
+        }
+
+        q.push("updated_at = now()");
+
+        q.push("\nWHERE ");
+        if !data.context.global {
+            write!(q, "{table}.organization_id = ", table = data.context.table).unwrap();
+            q.push_binding(bindings::ORGANIZATION);
+            q.push(" AND ");
+        }
+
+        write!(
+            q,
+            "{table}.{belongs_to} = ",
+            table = data.context.table,
+            belongs_to = belongs_to_field.sql_name
+        )
+        .unwrap();
+        q.push_binding(bindings::PARENT_ID);
     }
-
-    q.push("updated_at = now()");
-
-    q.push("\nWHERE ");
-    if !data.context.global {
-        write!(q, "{table}.organization_id = ", table = data.context.table).unwrap();
-        q.push_binding(bindings::ORGANIZATION);
-        q.push(" AND ");
-    }
-
-    write!(
-        q,
-        "{table}.{belongs_to} = ",
-        table = data.context.table,
-        belongs_to = belongs_to_field.sql_name
-    )
-    .unwrap();
-    q.push_binding(bindings::PARENT_ID);
 
     {
         q.push("\nRETURNING ");
