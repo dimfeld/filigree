@@ -15,6 +15,11 @@ pub fn update(data: &SqlBuilder) -> SqlQueryContext {
 }
 
 pub fn update_one_with_parent(data: &SqlBuilder) -> Vec<SqlQueryContext> {
+    if data.context.join.is_some() {
+        // For joining models, the parent is in the ID itself.
+        return Vec::new();
+    }
+
     data.context
         .belongs_to_fields
         .iter()

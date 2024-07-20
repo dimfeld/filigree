@@ -20,6 +20,7 @@ fn upsert_single_child(data: &SqlBuilder, belongs_to: &BelongsToFieldContext) ->
         .iter()
         .filter(|f| f.writable)
         .collect::<Vec<_>>();
+
     let q = upsert(data, &fields, belongs_to, true);
     q.finish_with_field_bindings(
         format!(

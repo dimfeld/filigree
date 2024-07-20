@@ -58,8 +58,9 @@ pub struct ReferenceFieldContext {
 
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct ThroughContext {
-    pub name: String,
+    pub model: String,
     pub snake_case_name: String,
+    pub module: String,
     pub table: String,
     pub schema: String,
     pub to_id_field: String,
@@ -158,7 +159,6 @@ pub struct TemplateContext {
     pub full_default_sort_field: String,
     pub default_sort_field: String,
     pub id_type: String,
-    pub id_ref_type: String,
     pub id_fields: Vec<String>,
     pub new_object_id: String,
     pub id_prefix: String,
@@ -474,7 +474,12 @@ impl<'a> ModelGenerator<'a> {
         let id_fields = if self.joins.is_some() {
             self.join_fields()?
                 .into_iter()
-                .map(|field| Cow::Owned(field.0))
+                .map(|mut field| {
+                    if for_update {
+                        field.0.nullable = true;
+                    }
+                    Cow::Owned(field.0)
+                })
                 .collect::<Vec<_>>()
         } else {
             let mut id_field = self.id_field();
@@ -588,9 +593,20 @@ impl<'a> ModelGenerator<'a> {
                         let through_model =
                             self.model_map.get(through, &self.model.name, "through")?;
 
+                        rust_imports.insert(through_model.qualified_struct_name());
+                        rust_imports.insert(format!(
+                            "{}CreatePayload",
+                            through_model.qualified_struct_name()
+                        ));
+                        rust_imports.insert(format!(
+                            "{}UpdatePayload",
+                            through_model.qualified_struct_name()
+                        ));
+
                         let ctx = ThroughContext {
-                            name: through_model.name.clone(),
+                            model: through_model.name.clone(),
                             snake_case_name: through_model.name.to_case(Case::Snake),
+                            module: through_model.module_name(),
                             table: through_model.table(),
                             schema: through_model.schema().to_string(),
                             to_id_field: child_model.foreign_key_id_field_name(),
@@ -798,22 +814,17 @@ impl<'a> ModelGenerator<'a> {
             &Endpoints::All(false)
         };
 
-        fn maybe_as_tuple(mut s: Vec<String>) -> String {
+        fn maybe_as_tuple(tuple_prefix: &str, mut s: Vec<String>) -> String {
             if s.len() == 1 {
                 s.pop().unwrap()
             } else {
-                format!("({})", s.join(", "))
+                format!("{tuple_prefix}({})", s.join(", "))
             }
         }
 
         let id_type = self.object_id_type();
-        let id_ref_type = maybe_as_tuple(
-            self.object_id_types()
-                .iter()
-                .map(|f| format!("&{}", f))
-                .collect(),
-        );
         let new_object_id = maybe_as_tuple(
+            "",
             self.object_id_types()
                 .iter()
                 .map(|t| format!("{t}::new()"))
@@ -878,7 +889,6 @@ impl<'a> ModelGenerator<'a> {
                 .to_string(),
             id_is_string: self.model.is_auth_model && self.config.auth.string_ids(),
             id_type,
-            id_ref_type,
             id_fields: self.object_id_fields(),
             new_object_id,
             join: self.join_context()?,
@@ -1110,7 +1120,17 @@ impl<'a> ModelGenerator<'a> {
                 let model1 = self.model_map.get(model1, &self.model.name, "join")?;
                 let model2 = self.model_map.get(model2, &self.model.name, "join")?;
 
-                fn join_id_field(model: &Model) -> (ModelField, BelongsToFieldContext) {
+                fn join_id_field(
+                    self_name: &str,
+                    model: &Model,
+                ) -> (ModelField, BelongsToFieldContext) {
+                    let has_many = model
+                        .has
+                        .iter()
+                        .find(|has| has.model == self_name)
+                        .map(|h| h.many)
+                        .unwrap_or(true);
+
                     let field = ModelField {
                         name: model.foreign_key_id_field_name(),
                         typ: SqlType::Uuid,
@@ -1119,7 +1139,7 @@ impl<'a> ModelGenerator<'a> {
                         rust_type: Some(model.object_id_type()),
                         zod_type: Some("z.string()".to_string()),
                         nullable: false,
-                        globally_unique: false,
+                        globally_unique: !has_many,
                         unique: false,
                         indexed: true,
                         filterable: FilterableType::Exact,
@@ -1154,7 +1174,10 @@ impl<'a> ModelGenerator<'a> {
                     (field, belongs_ctx)
                 }
 
-                Ok::<_, Error>(vec![join_id_field(model1), join_id_field(model2)])
+                Ok::<_, Error>(vec![
+                    join_id_field(&self.model.name, model1),
+                    join_id_field(&self.model.name, model2),
+                ])
             })
             .transpose()?
             .unwrap_or_default();

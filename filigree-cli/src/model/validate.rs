@@ -12,8 +12,28 @@ pub fn validate_model_configuration(config: &Config, models: &ModelMap) -> Resul
             }
         }
 
-        if model.joins.is_some() && !model.has.is_empty() {
-            return Err(Error::JoinedModelWithHas(model.name.clone()));
+        if model.joins.is_some() {
+            if !model.has.is_empty() {
+                return Err(Error::JoinedModelWithHas(model.name.clone()));
+            }
+
+            if !model.fields.is_empty() {
+                return Err(Error::JoinedModelWithFields(model.name.clone()));
+            }
+
+            /*
+            // Joining models fields must all be nullable or have a default, since this makes
+            // the creation easier down the line.
+            for field in &model.fields {
+                if !field.nullable && field.default_sql.is_empty() && field.default_rust.is_empty()
+                {
+                    return Err(Error::JoinedModelWithNullableField(
+                        model.name.clone(),
+                        field.name.clone(),
+                    ));
+                }
+            }
+            */
         }
 
         for has in &model.has {
