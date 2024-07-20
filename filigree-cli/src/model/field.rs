@@ -40,9 +40,18 @@ pub struct ModelFieldTemplateContext {
     // The fields below are filled in later, from a place with more context.
     /// If this field is writable and is not a "parent ID" field
     pub writable_non_parent: bool,
+
+    /// Override the binding name to be used with this field in a query.
+    pub override_binding_name: Option<String>,
 }
 
 impl ModelFieldTemplateContext {
+    /// Return the binding name to be used with this field in a query.
+    /// Normally this is the same as the field name but it can be overridden.
+    pub fn param_binding_name(&self) -> &str {
+        self.override_binding_name.as_deref().unwrap_or(&self.name)
+    }
+
     /// Rust syntax that can be submitted as a query binding for this field. The returned text
     /// contains the string `$payload` which can be replaced with the appropriate variable name.
     pub fn param_binding(&self) -> String {
@@ -267,8 +276,9 @@ impl ModelField {
             readable: self.readable(),
             writable: self.writable(),
             never_read: self.never_read,
-            // This gets set later, where appropriate
+            // These get set later, where appropriate
             writable_non_parent: false,
+            override_binding_name: None,
         }
     }
 }

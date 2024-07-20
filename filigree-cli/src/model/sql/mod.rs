@@ -1,4 +1,4 @@
-pub mod joining;
+pub mod ids;
 pub(self) mod permissions;
 pub mod population;
 mod queries;
@@ -61,12 +61,12 @@ pub fn generate_query_bindings(args: &HashMap<String, tera::Value>) -> tera::Res
         .ok_or_else(|| tera::Error::msg("Missing query argument"))?;
 
     let payload_var = args
-        .get("payload_var")
+        .get("_payload_var")
         .map(|b| b.to_string())
         .unwrap_or("payload".to_string());
 
     let call_bind = args
-        .get("call_bind")
+        .get("_call_bind")
         .map(|b| tera::from_value::<bool>(b.clone()))
         .transpose()?
         .unwrap_or(false);

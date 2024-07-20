@@ -57,6 +57,7 @@ fn upsert_children(data: &SqlBuilder, belongs_to: &BelongsToFieldContext) -> Sql
         .filter(|f| f.writable)
         .collect::<Vec<_>>();
     let q = upsert(data, &fields, belongs_to, false);
+
     q.finish_with_field_bindings(
         format!("upsert_children_of_{}", belongs_to.model_snake_case_name),
         &fields,

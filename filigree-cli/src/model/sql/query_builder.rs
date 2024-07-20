@@ -75,7 +75,12 @@ impl QueryBuilder {
     ) -> SqlQueryContext {
         let field_params = fields
             .iter()
-            .map(|f| (f.borrow().name.clone(), f.borrow().param_binding()))
+            .map(|f| {
+                (
+                    f.borrow().param_binding_name().to_string(),
+                    f.borrow().param_binding(),
+                )
+            })
             .collect::<HashMap<_, _>>();
 
         SqlQueryContext {

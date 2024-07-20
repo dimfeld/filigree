@@ -333,7 +333,7 @@ where
             actor_ids="auth.actor_ids()",
             limit="per_page",
             offset="offset",
-            call_bind = true
+            _call_bind = true
             )}};
 
     query = filters.bind_to_query(query);
@@ -622,6 +622,21 @@ pub async fn lookup_object_permissions(
 }
 
 {% for b in belongs_to_fields %}
+
+{% if join %}
+{% if id_fields[0] == b.name %}
+{% set this_join_field = id_fields[0] %}
+{% set other_join_field = id_fields[1] %}
+{% else %}
+{% set this_join_field = id_fields[1] %}
+{% set other_join_field = id_fields[0] %}
+{% endif %}
+{% else %}
+{# This is weird but makes it easier to use below #}
+{% set this_join_field = "id" %}
+{% set other_join_field = "id" %}
+{% endif %}
+
 {% if b.globally_unique %}
 /// Update or insert the child of the parent {{b.name}}. Since there can only be a single child per
 /// parent, this ignores the `id` field of the payload, and only looks at the parent ID.
@@ -720,19 +735,29 @@ pub async fn update_all_with_parent_{{b.model_snake_case_name}}(
 
         let mut query = sqlx::query_as::<_, {{struct_base}}>(q.as_str());
 
-        query = query
-            {{query_bindings(
-                query=sql_queries[query],
-                organization_id="organization_id",
-                parent_id=self::id_ref_type(id="parent_id"),
-                actor_ids="auth.actor_ids()",
-                call_bind = true
-            )}};
-
         for p in payload {
+            {% if join %}
+            {% for field in id_fields -%}
+
+            {%- if field == this_join_field -%}
+            let {{field}} = parent_id;
+            {% else -%}
+            let {{field}} = p.{{field}}.as_ref().ok_or(Error::MissingId("{{field}}"))?;
+            {%- endif -%}
+
+            {%- endfor %}
+
+            {% else %}
             let id = p.id.unwrap_or_else(|| {{new_object_id}});
+            {% endif %}
             query = query
+                {% if join %}
+                {% for field in id_fields %}
+                .bind({{field}}.as_uuid())
+                {% endfor %}
+                {% else %}
                 .bind(id)
+                {% endif %}
                 .bind(organization_id)
                 {% for field in fields | filter(attribute="writable", value=true) %}
                 .bind(
@@ -751,7 +776,7 @@ pub async fn update_all_with_parent_{{b.model_snake_case_name}}(
         let results = Self::check_missing_parent_error(results)?;
 
         // Delete any of the children that were not sent in.
-        let ids = results.iter().map(|o| o.{{self::id_ref_type()}}.clone()).collect::<Vec<_>>();
+        let ids = results.iter().map(|o| o.{{self::id_ref_type(id=other_join_field)}}.clone()).collect::<Vec<_>>();
         {% set query = "delete_removed_children_of_" ~ b.model_snake_case_name %}
         query_file!("{{dir}}/{{query}}.sql",
             {{query_bindings(query=sql_queries[query],
