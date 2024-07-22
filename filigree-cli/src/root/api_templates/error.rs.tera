@@ -146,7 +146,7 @@ impl HttpError for Error {
             Error::AuthSubsystem => ErrorKind::AuthSubsystem.as_str(),
             Error::Login => FilErrorKind::Unauthenticated.as_str(),
             Error::MissingPermission(_) => FilErrorKind::Unauthenticated.as_str(),
-            Error::MissingId(_) => ErrorKind::BadRequest.as_str(),
+            Error::MissingId(_) => ErrorKind::MissingId.as_str(),
             Error::InvalidHostHeader => FilErrorKind::InvalidHostHeader.as_str(),
             Error::Storage => FilErrorKind::Storage.as_str(),
             // These aren't ever returned, we just need some value to fill out the match

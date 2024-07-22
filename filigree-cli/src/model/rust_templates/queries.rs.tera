@@ -441,14 +441,18 @@ async fn create_payload_children(
             children.id = Some({{c.object_id}}::new());
             {% endif %}
             children.{{c.parent_field}} = parent_id.clone();
-            let result = {{c.model}}::upsert_with_parent_{{module_name}}(&mut *db, organization_id, parent_id, &children).await?;
+            let result = {{c.model}}::upsert_with_parent_{{module_name}}(
+                    &mut *db, 
+                    organization_id,
+                    parent_id,
+                    &children).await?;
             Some(result)
         {% elif c.relationship.many and c.through %}
             let child_structs = children.into_iter()
                 .map(|child_id| {
                     {{c.through.model}}CreatePayload {
-                        {{c.parent_field}}: parent_id.clone(),
-                        {{c.through.to_id_field}}: child_id,
+                        {{c.parent_field}}: Some(parent_id.clone()),
+                        {{c.through.to_id_field}}: Some(child_id),
                     }
                 })
                 .collect::<Vec<_>>();
@@ -529,19 +533,60 @@ async fn update_payload_children(
 ) -> Result<(), error_stack::Report<Error>> {
     {% for c in children | filter(attribute="write_payload_field_name") %}
     if let Some(mut children) = payload.{{c.write_payload_field_name}} {
-        {% if c.relationship.many %}
-        for child in children.iter_mut() {
-            child.{{c.parent_field}} = parent_id.clone();
-        }
-        {% else %}
-        children.{{c.parent_field}} = parent_id.clone();
-        {% endif %}
+        {% if c.through %}
+            {% if c.relationship.many %}
+            let children = children.into_iter()
+                .map(|child_id| {
+                    {{c.through.model}}UpdatePayload {
+                        {{c.parent_field}}: Some(parent_id.clone()),
+                        {{c.through.to_id_field}}: Some(child_id),
+                    }
+                }).collect::<Vec<_>>();
 
-        {{c.model}}::update_all_with_parent_{{module_name}}(
-            &mut *db,
-            organization_id,
-            parent_id,
-            &children).await?;
+            {{c.through.model}}::update_all_with_parent_{{module_name}}(
+                &mut *db,
+                organization_id,
+                parent_id,
+                &children).await?;
+            {% else %}
+
+            if let Some(child_id) = children {
+                let child = {{c.through.model}}UpdatePayload {
+                    {{c.parent_field}}: Some(parent_id.clone()),
+                    {{c.through.to_id_field}}: Some(child_id),
+                };
+
+                {{c.through.model}}::upsert_with_parent_{{module_name}}(
+                    &mut *db,
+                    organization_id,
+                    parent_id,
+                    &child).await?;
+            } else {
+                // Remove the link since the child ID was cleared
+                {{c.through.model}}::delete_all_children_of_{{module_name}}(
+                    &mut *db,
+                    organization_id,
+                    parent_id
+                ).await?;
+            }
+            {% endif %}
+
+
+        {% else %}
+            {% if c.relationship.many %}
+            for child in children.iter_mut() {
+                child.{{c.parent_field}} = parent_id.clone();
+            }
+            {% else %}
+            children.{{c.parent_field}} = parent_id.clone();
+            {% endif %}
+
+            {{c.model}}::update_all_with_parent_{{module_name}}(
+                &mut *db,
+                organization_id,
+                parent_id,
+                &children).await?;
+        {% endif %}
     }
     {% endfor %}
 
@@ -729,7 +774,7 @@ pub async fn update_all_with_parent_{{b.model_snake_case_name}}(
         let bindings = ValuesBuilder{
             first_parameter: {{sql_queries[query].num_bindings + 1}},
             num_values: payload.len(),
-            num_columns: 2 + {{ fields | filter(attribute="writable", value=true) | length }},
+            num_columns: {{ id_fields | length }} {% if not global %}+ 1 {% endif %} + {{ fields | filter(attribute="writable", value=true) | length }},
         };
         let q = q.replace("__insertion_point_insert_values", &bindings.to_string());
 
