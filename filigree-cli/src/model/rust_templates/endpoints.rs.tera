@@ -660,14 +660,15 @@ mod test {
             {% for child in children %}
             {% if child.relationship.populate_on_list == "id" %}
                 {% if child.write_payload_field_name %}
-                    {% if child.relationship.many %}
+                    {% if child.relationship.many and not child.through %}
                     let ids = added.{{child.write_payload_field_name}}
                         .iter()
                         .map(|o| o.id).collect::<Vec<_>>();
-                    {% else %}
-                    let ids = added.{{child.write_payload_field_name}};
-                    {% endif %}
                     let ids = serde_json::to_value(&ids).unwrap();
+                    {% else %}
+                    let ids = &added.{{child.write_payload_field_name}};
+                    let ids = serde_json::to_value(ids).unwrap();
+                    {% endif %}
                 {%- elif child.relationship.many %}
                 let ids = serde_json::json!([]);
                 {% else %}
@@ -813,15 +814,16 @@ mod test {
         {% for child in children %}
         {% if child.relationship.populate_on_get == "id" %}
             {% if child.write_payload_field_name %}
-                {% if child.relationship.many %}
+                {% if child.relationship.many and not child.through %}
                 let ids = added.{{child.write_payload_field_name}}
                     .iter()
                     .map(|o| o.id)
                     .collect::<Vec<_>>();
-                {% else %}
-                let ids = added.{{child.write_payload_field_name}};
-                {% endif %}
                 let ids = serde_json::to_value(&ids).unwrap();
+                {% else %}
+                let ids = &added.{{child.write_payload_field_name}};
+                let ids = serde_json::to_value(ids).unwrap();
+                {% endif %}
             {%- elif child.relationship.many %}
             let ids = serde_json::json!([]);
             {% else %}

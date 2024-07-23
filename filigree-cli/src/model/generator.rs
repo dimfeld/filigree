@@ -66,6 +66,19 @@ pub struct ThroughContext {
     pub to_id_field: String,
 }
 
+impl ThroughContext {
+    pub fn new(through_model: &Model, child_model: &Model) -> ThroughContext {
+        ThroughContext {
+            model: through_model.name.clone(),
+            snake_case_name: through_model.name.to_case(Case::Snake),
+            module: through_model.module_name(),
+            table: through_model.table(),
+            schema: through_model.schema().to_string(),
+            to_id_field: child_model.foreign_key_id_field_name(),
+        }
+    }
+}
+
 #[derive(Serialize, Clone, Debug)]
 pub struct ChildContext {
     pub model: String,
@@ -100,6 +113,7 @@ pub struct ChildWritePayloadField {
     #[serde(flatten)]
     pub field: ModelFieldTemplateContext,
     pub many: bool,
+    pub through: Option<ThroughContext>,
     pub module: String,
 }
 
@@ -601,14 +615,7 @@ impl<'a> ModelGenerator<'a> {
                             through_model.qualified_struct_name()
                         ));
 
-                        let ctx = ThroughContext {
-                            model: through_model.name.clone(),
-                            snake_case_name: through_model.name.to_case(Case::Snake),
-                            module: through_model.module_name(),
-                            table: through_model.table(),
-                            schema: through_model.schema().to_string(),
-                            to_id_field: child_model.foreign_key_id_field_name(),
-                        };
+                        let ctx = ThroughContext::new(through_model, child_model);
 
                         Ok::<_, Error>(ctx)
                     })
@@ -789,18 +796,30 @@ impl<'a> ModelGenerator<'a> {
 
         let create_payload_fields = self
             .write_payload_child_fields(false)?
-            .map(|f| ChildWritePayloadField {
-                field: f.field.template_context(),
-                many: f.many,
-                module: f.model.module_name(),
+            .map(|f| {
+                let through = f
+                    .through
+                    .map(|through| ThroughContext::new(through, f.model));
+                ChildWritePayloadField {
+                    field: f.field.template_context(),
+                    many: f.many,
+                    module: f.model.module_name(),
+                    through,
+                }
             })
             .collect::<Vec<_>>();
         let update_payload_fields = self
             .write_payload_child_fields(false)?
-            .map(|f| ChildWritePayloadField {
-                field: f.field.template_context(),
-                many: f.many,
-                module: f.model.module_name(),
+            .map(|f| {
+                let through = f
+                    .through
+                    .map(|through| ThroughContext::new(through, f.model));
+                ChildWritePayloadField {
+                    field: f.field.template_context(),
+                    many: f.many,
+                    module: f.model.module_name(),
+                    through,
+                }
             })
             .collect::<Vec<_>>();
 

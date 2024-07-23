@@ -31,7 +31,9 @@ use super::{
 /// don't all look identical.
 pub fn make_create_payload(i: usize) -> {{struct_base}}CreatePayload {
     {{struct_base}}CreatePayload {
-        id: None,
+        {% for field in id_fields %}
+        {{field}}: None,
+        {% endfor %}
         {% for field in fields | filter(attribute="writable", value=true) -%}
         {{field.rust_name}}:
             {%- if field.nullable -%}(i > 1).then(|| {%endif%}
@@ -39,8 +41,11 @@ pub fn make_create_payload(i: usize) -> {{struct_base}}CreatePayload {
             {%- if field.nullable -%}){%endif%},
         {%- endfor %}
 
-        {% for field in create_payload_fields %}
-        {% if field.many %}
+        {% for field in create_payload_fields -%}
+        {% if field.through %}
+        // Testing with through models not implemented yet
+        {{field.rust_name}}: None,
+        {% elif field.many %}
         {{field.rust_name}}: match i {
             0 => None,
             1 => Some(vec![crate::models::{{field.module}}::testing::make_create_payload(i)]),
@@ -62,7 +67,9 @@ pub fn make_create_payload(i: usize) -> {{struct_base}}CreatePayload {
 /// don't all look identical.
 pub fn make_update_payload(i: usize) -> {{struct_base}}UpdatePayload {
     {{struct_base}}UpdatePayload {
-        id: None,
+        {% for field in id_fields %}
+        {{field}}: None,
+        {% endfor %}
         {% for field in fields | filter (attribute="writable", value=true) -%}
         {{field.rust_name}}:
             {%- if field.nullable %} Some({%- endif -%}
@@ -70,8 +77,11 @@ pub fn make_update_payload(i: usize) -> {{struct_base}}UpdatePayload {
             {%- if field.nullable %}){% endif -%},
         {%- endfor %}
 
-        {% for field in update_payload_fields %}
-        {% if field.many %}
+        {% for field in update_payload_fields -%}
+        {% if field.through %}
+        // Testing with through models not implemented yet
+        {{field.rust_name}}: None,
+        {% elif field.many %}
         {{field.rust_name}}: match i {
             0 => None,
             1 => Some(vec![crate::models::{{field.module}}::testing::make_update_payload(i)]),

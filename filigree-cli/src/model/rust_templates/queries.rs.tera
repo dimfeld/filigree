@@ -778,7 +778,9 @@ pub async fn update_all_with_parent_{{b.model_snake_case_name}}(
         };
         let q = q.replace("__insertion_point_insert_values", &bindings.to_string());
 
-        let mut query = sqlx::query_as::<_, {{struct_base}}>(q.as_str());
+        let mut query = sqlx::query_as::<_, {{struct_base}}>(q.as_str())
+          .bind(organization_id)
+          .bind(parent_id);
 
         for p in payload {
             {% if join %}
@@ -798,7 +800,7 @@ pub async fn update_all_with_parent_{{b.model_snake_case_name}}(
             query = query
                 {% if join %}
                 {% for field in id_fields %}
-                .bind({{field}}.as_uuid())
+                .bind({{field}})
                 {% endfor %}
                 {% else %}
                 .bind(id)
@@ -808,6 +810,8 @@ pub async fn update_all_with_parent_{{b.model_snake_case_name}}(
                 .bind(
                 {%- if field.nullable -%}
                     p.{{field.rust_name}}.as_ref(),
+                {%- elif field.is_object_id -%}
+                    p.{{field.rust_name}}.as_uuid(),
                 {%- else -%}
                     &p.{{field.rust_name}},
                 {%- endif -%}

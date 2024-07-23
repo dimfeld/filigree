@@ -21,6 +21,7 @@ pub struct ModelFieldTemplateContext {
     pub base_rust_type: String,
     pub rust_type: String,
     pub is_custom_rust_type: bool,
+    pub is_object_id: bool,
     pub client_type: String,
     pub default_sql: String,
     pub default_rust: String,
@@ -244,12 +245,19 @@ impl ModelField {
     }
 
     pub fn template_context(&self) -> ModelFieldTemplateContext {
+        let is_object_id = self.name == "id"
+            || self
+                .references
+                .as_ref()
+                .map(|r| r.field == "id")
+                .unwrap_or(false);
         ModelFieldTemplateContext {
             name: self.name.clone(),
             label: self
                 .label
                 .clone()
                 .unwrap_or_else(|| self.name.to_case(Case::Title)),
+            is_object_id,
             description: self.description.clone().unwrap_or_default(),
             base_type: self.typ,
             sql_name: self.sql_field_name(),
