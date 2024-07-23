@@ -676,13 +676,13 @@ impl<'a> ModelGenerator<'a> {
                     Self::child_model_field_name(&child_model, ReferenceFetchType::Data, true),
                 ];
 
-                let new_object_id = format!(
-                    "({})",
+                let new_object_id = maybe_as_tuple(
+                    "",
                     child_model
                         .object_id_types()
                         .iter()
                         .map(|t| format!("{t}::new()"))
-                        .join(", ")
+                        .collect(),
                 );
 
                 let result = ChildContext {

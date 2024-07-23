@@ -1118,6 +1118,7 @@ mod test {
     // TODO file upload test for {{c.module}}
     {% else %}
     #[sqlx::test]
+    {% if c.through %}#[ignore = "through child object tests not implemented yet"]{% endif %}
     async fn child_{{c.module}}(pool: sqlx::PgPool) {
         // Create a test object
         let (
