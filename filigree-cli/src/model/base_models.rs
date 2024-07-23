@@ -1,6 +1,6 @@
 use super::{Access, Model};
 use crate::{
-    config::Config,
+    config::{AuthProvider, Config},
     model::{field::ReferentialAction, ModelField, ModelFieldReference, PerEndpoint, SqlType},
 };
 
@@ -34,6 +34,27 @@ impl Model {
     /// Return models for the user, org, etc.
     pub fn create_default_models(config: &Config) -> Vec<Model> {
         let extend_config = config.extend.models.as_ref();
+
+        let add_external_auth_fields = matches!(config.auth.provider, AuthProvider::Custom);
+
+        let external_auth_fields = if add_external_auth_fields {
+            vec![
+                ModelField {
+                    nullable: true,
+                    access: Access::None,
+                    ..simple_model_field("external_auth_provider", SqlType::Text)
+                },
+                ModelField {
+                    nullable: true,
+                    access: Access::None,
+                    indexed: true,
+                    ..simple_model_field("external_auth_id", SqlType::Text)
+                },
+            ]
+        } else {
+            vec![]
+        };
+
         let extra_user_fields = extend_config
             .and_then(|c| c.user.as_ref())
             .map(|m| m.fields.clone())
@@ -46,12 +67,6 @@ impl Model {
             .and_then(|c| c.organization.as_ref())
             .map(|m| m.fields.clone())
             .unwrap_or_default();
-
-        let auth_id_type = if config.auth.string_ids() {
-            SqlType::Text
-        } else {
-            SqlType::Uuid
-        };
 
         vec![
             Model {
@@ -106,6 +121,7 @@ impl Model {
                     },
                 ]
                 .into_iter()
+                .chain(external_auth_fields.clone().into_iter())
                 .chain(extra_user_fields.into_iter())
                 .collect(),
             },
@@ -147,13 +163,13 @@ impl Model {
                                     crate::model::field::Deferrable::InitiallyImmediate,
                                 )
                         }),
-                        ..simple_model_field("owner", auth_id_type)
+                        ..simple_model_field("owner", SqlType::Uuid)
                     },
                     ModelField {
                         rust_type: Some("crate::models::role::RoleId".to_string()),
                         nullable: true,
                         references: None,
-                        ..simple_model_field("default_role", auth_id_type)
+                        ..simple_model_field("default_role", SqlType::Uuid)
                     },
                     ModelField {
                         access: Access::None,
@@ -162,6 +178,7 @@ impl Model {
                     },
                 ]
                 .into_iter()
+                .chain(external_auth_fields.clone().into_iter())
                 .chain(extra_organization_fields.into_iter())
                 .collect(),
             },
@@ -200,6 +217,7 @@ impl Model {
                     },
                 ]
                 .into_iter()
+                .chain(external_auth_fields.into_iter())
                 .chain(extra_role_fields.into_iter())
                 .collect(),
             },

@@ -72,8 +72,6 @@ indoc = "2.0.4"
 default = ["tracing", "tracing_export", "storage", "storage_aws", "local_auth"]
 # Endpoints and functions to manage users, org, and roles locally
 local_auth = ["dep:argon2", "dep:oauth2"]
-# Use strings for object IDs instead of UUIDs. This only works right now if the `local_auth` feature is disabled.
-string_user_ids = []
 opentelemetry = ["tracing", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
 tracing = ["dep:log", "dep:tracing-subscriber", "dep:tracing-error", "dep:tracing-log", "opentelemetry"]
 tracing_export = ["tracing", "opentelemetry", "dep:tonic", "dep:opentelemetry-otlp"]

@@ -22,8 +22,7 @@ use super::{
 /// to do this is through the [Extension] middleware, such as by adding
 /// `.layer(Extension(FallbackAnonymousUser(user_id))` around the routes that you
 /// want.
-#[derive(Debug, Clone)]
-#[cfg_attr(not(feature = "string_user_ids"), derive(Copy))]
+#[derive(Debug, Clone, Copy)]
 pub struct FallbackAnonymousUser(pub UserId);
 
 /// Functionality to fetch authorization info from the database given session cookies and Bearer tokens

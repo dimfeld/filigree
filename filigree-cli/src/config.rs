@@ -151,11 +151,6 @@ pub struct AuthConfig {
     #[serde(default)]
     pub provider: AuthProvider,
 
-    /// When using the "custom" AuthProvider, set this to true to make the User and Organization
-    /// IDs strings instead of UUIDs.
-    #[serde(default)]
-    string_ids: bool,
-
     /// Don't generate the default User, Organization, and Role models or other tables around them.
     /// This is ignored when using the built-in auth provider.
     #[serde(default)]
@@ -166,7 +161,6 @@ impl AuthConfig {
     pub fn template_context(&self) -> serde_json::Value {
         json!({
             "provider": &self.provider,
-            "string_ids": self.string_ids(),
             "id_sql_type": self.id_type().to_sql_type(SqlDialect::Postgresql),
             // This comes up a lot so we add a special flag for it.
             "builtin": matches!(self.provider, AuthProvider::BuiltIn),
@@ -182,16 +176,8 @@ impl AuthConfig {
         !self.suppress_default_models || matches!(self.provider, AuthProvider::BuiltIn)
     }
 
-    pub fn string_ids(&self) -> bool {
-        self.string_ids || !matches!(self.provider, AuthProvider::BuiltIn)
-    }
-
     pub fn id_type(&self) -> SqlType {
-        if self.string_ids() {
-            SqlType::Text
-        } else {
-            SqlType::Uuid
-        }
+        SqlType::Uuid
     }
 }
 

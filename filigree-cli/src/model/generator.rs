@@ -187,7 +187,6 @@ pub struct TemplateContext {
     pub file_upload: Option<serde_json::Value>,
     pub auth: serde_json::Value,
     pub auth_schema: String,
-    pub id_is_string: bool,
     pub join: Option<JoinContext>,
 
     #[serde(flatten)]
@@ -227,14 +226,6 @@ impl<'a> ModelGenerator<'a> {
             context: None,
             context_value: None,
         })
-    }
-
-    fn auth_id_type(&self) -> SqlType {
-        if self.config.auth.string_ids() {
-            SqlType::Text
-        } else {
-            SqlType::Uuid
-        }
     }
 
     pub fn template_context_tera(&self) -> &tera::Context {
@@ -904,7 +895,6 @@ impl<'a> ModelGenerator<'a> {
                 .auth_schema()
                 .unwrap_or("public")
                 .to_string(),
-            id_is_string: self.model.is_auth_model && self.config.auth.string_ids(),
             id_type,
             id_fields: self.object_id_fields(),
             new_object_id,
@@ -916,17 +906,11 @@ impl<'a> ModelGenerator<'a> {
     }
 
     fn id_field(&self) -> ModelField {
-        let typ = if self.model.is_auth_model {
-            self.auth_id_type()
-        } else {
-            SqlType::Uuid
-        };
-
         ModelField {
             name: "id".to_string(),
             label: None,
             description: None,
-            typ,
+            typ: SqlType::Uuid,
             rust_type: Some(self.object_id_type()),
             zod_type: Some("z.string()".to_string()),
             nullable: false,
@@ -956,7 +940,7 @@ impl<'a> ModelGenerator<'a> {
 
             Some(ModelField {
                 name: "organization_id".to_string(),
-                typ: self.auth_id_type(),
+                typ: SqlType::Uuid,
                 label: None,
                 description: None,
                 rust_type: Some("crate::models::organization::OrganizationId".to_string()),
