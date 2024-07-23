@@ -1,4 +1,5 @@
 {% if file_upload %}
+{% set belongs_to_field = belongs_to_fields[0] %}
 //! Object storage functionality for {{model_name}}
 #![allow(unused_imports,  unused_variables, dead_code)]
 
@@ -46,7 +47,7 @@ where
     let storage = get_storage(state);
 
     {% if file_upload.many %}
-    let id = id.unwrap_or_else({{id_type}}::new);
+    let id = id.unwrap_or_else(|| {{new_object_id}});
     {% else %}
     // Get the actual ID first, since in the single-child case the ID won't change
     // if the object already exists.
@@ -58,7 +59,7 @@ where
         .await
         .change_context(Error::Db)?;
 
-    let id = existing_id.or(id).unwrap_or_else({{id_type}}::new);
+    let id = existing_id.or(id).unwrap_or_else(|| {{new_object_id}});
     {% endif %}
 
     let file_storage_key = key.unwrap_or_else(|| generate_object_key(auth, id, filename.as_deref().unwrap_or_default()));
@@ -99,7 +100,7 @@ where
         ..Default::default()
     };
 
-    let result = {{struct_base}}::upsert_with_parent(
+    let result = {{struct_base}}::upsert_with_parent_{{belongs_to_field.model_snake_case_name}}(
         tx,
         &auth.organization_id,
         &parent_id,
@@ -144,7 +145,7 @@ pub async fn upload(
     {% endif %}
 
     {% if file_upload.many %}
-    let id = id.unwrap_or_else({{id_type}}::new);
+    let id = id.unwrap_or_else(|| {{new_object_id}});
     {% else %}
     // Get the actual ID first, since in the single-child case the ID won't change
     // if the object already exists.
@@ -156,7 +157,7 @@ pub async fn upload(
         .await
         .change_context(Error::Db)?;
 
-    let id = existing_id.or(id).unwrap_or_else({{id_type}}::new);
+    let id = existing_id.or(id).unwrap_or_else(|| {{id_type}}::new);
     {% endif %}
 
     let file_storage_key = key.unwrap_or_else(|| generate_object_key(auth, id, filename.as_deref().unwrap_or_default()));
@@ -178,7 +179,7 @@ pub async fn upload(
         ..Default::default()
     };
 
-    let result = {{struct_base}}::upsert_with_parent(
+    let result = {{struct_base}}::upsert_with_parent_{{belongs_to_field.model_snake_case_name}}(
         tx,
         &auth.organization_id,
         &parent_id,
@@ -211,7 +212,7 @@ pub async fn delete_by_id(
 ) -> Result<bool, error_stack::Report<Error>> {
 
     let storage_key = get_storage_key_by_id(state, auth, &mut *tx, id).await?;
-    let deleted = {{struct_base}}::delete_with_parent(&mut *tx, auth, &parent_id, &id).await?;
+    let deleted = {{struct_base}}::delete_with_parent_{{belongs_to_field.model_snake_case_name}}(&mut *tx, auth, &parent_id, &id).await?;
 
     if deleted {
         delete_by_key(state, &storage_key).await?;
@@ -229,7 +230,7 @@ pub async fn delete_by_parent_id(
 ) -> Result<bool, error_stack::Report<Error>> {
 
     let storage_keys = get_storage_keys_by_parent_id(state, auth, &mut *tx, parent_id).await?;
-    let deleted = {{struct_base}}::delete_all_children_of_parent(&mut *tx, &auth.organization_id, &parent_id).await?;
+    let deleted = {{struct_base}}::delete_all_children_of_{{belongs_to_field.model_snake_case_name}}(&mut *tx, &auth.organization_id, &parent_id).await?;
 
     if deleted {
         for key in storage_keys {

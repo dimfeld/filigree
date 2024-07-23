@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use convert_case::{Case, Casing};
 use error_stack::{Report, ResultExt};
 use rust_embed::RustEmbed;
 use tera::{Tera, Value};
@@ -153,6 +154,7 @@ fn create_tera() -> (Tera, HashMap<String, Cow<'static, str>>) {
 
     tera.register_filter("to_sql", to_sql);
     tera.register_filter("sql_string", sql_string_filter);
+    tera.register_filter("snake_case", snake_case_filter);
     tera.register_function("query_bindings", crate::model::sql::generate_query_bindings);
 
     (tera, passthrough_files)
@@ -186,6 +188,13 @@ fn sql_string_filter(val: &Value, _args: &HashMap<String, Value>) -> tera::Resul
             Ok(a.into())
         }
         Value::Null => Ok(Value::String("null".to_string())),
+        _ => Err(tera::Error::msg(format!("Value {val} is not a string"))),
+    }
+}
+
+fn snake_case_filter(val: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
+    match val {
+        Value::String(s) => Ok(Value::String(s.to_case(Case::Snake))),
         _ => Err(tera::Error::msg(format!("Value {val} is not a string"))),
     }
 }

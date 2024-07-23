@@ -11,7 +11,7 @@ use tracing::{event, instrument, Level};
 
 use std::str::FromStr;
 
-use super::{{id_type}};
+{% if not join %}use super::{{id_type}};{% endif %}
 {% if model_name != "Organization" %}
 use crate::models::organization::OrganizationId;
 {% endif %}
@@ -21,7 +21,7 @@ use crate::auth::AuthInfo;
 use crate::Error;
 {{rust_imports}}
 
-{% macro id_ref(id="id") -%}
+{% macro id_ref_type(id="id") -%}
 {{id}}
 {%- if id_is_string -%}
     .as_str()
@@ -196,9 +196,9 @@ type QueryAs<'q, T> = sqlx::query::QueryAs<'q, sqlx::Postgres, T, <sqlx::Postgre
 struct {{struct_base}}CreatePayloadChildrenResult {
     {%- for c in children | filter(attribute="write_payload_field_name") -%}
     {%- if c.relationship.many %}
-    {{c.write_payload_field_name}}: Vec<{{c.struct_base}}>,
+    {{c.write_payload_field_name}}: Vec<{{c.struct_base}}{% if c.through %}Id{% endif %}>,
     {% else %}
-    {{c.write_payload_field_name}}: Option<{{c.struct_base}}>,
+    {{c.write_payload_field_name}}: Option<{{c.struct_base}}{% if c.through %}Id{% endif %}>,
     {%- endif -%}
     {%- endfor -%}
 }
@@ -207,14 +207,16 @@ struct {{struct_base}}CreatePayloadChildrenResult {
 
 impl {{struct_base}} {
 
-{% if belongs_to_field %}
+{% if belongs_to_fields %}
 fn check_missing_parent_error<T>(result: Result<T, sqlx::Error>) -> Result<T, error_stack::Report<Error>> {
     match result {
+        {% for b in belongs_to_fields %}
         Err(sqlx::Error::Database(e))
-            if e.constraint() == Some("{{table}}_{{belongs_to_field.sql_name}}_fkey") =>
+            if e.constraint() == Some("{{table}}_{{b.sql_name}}_fkey") =>
         {
-            Err(e).change_context(Error::NotFound("Parent {{parent_model_name}}"))
+            Err(e).change_context(Error::NotFound("Parent {{b.name}}"))
         }
+        {% endfor %}
         _ => result.change_context(Error::Db)
     }
 }
@@ -230,7 +232,7 @@ pub async fn get(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) -> 
     let object = query_file_as!({{struct_base}}, "{{dir}}/select_one.sql",
         {{query_bindings(
             query=sql_queries.select_one,
-            id=self::id_ref(),
+            id=self::id_ref_type(),
             organization_id=self::db_org_id(),
             actor_ids="&auth.actor_ids()"
             )}}
@@ -255,7 +257,7 @@ pub async fn get_populated(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_t
     let object = query_file_as!({{struct_base}}PopulatedGetResult, "{{dir}}/select_one_populated.sql",
         {{query_bindings(
             query=sql_queries.select_one_populated,
-            id=self::id_ref(),
+            id=self::id_ref_type(),
             organization_id=self::db_org_id(),
             actor_ids="&auth.actor_ids()"
             )}}
@@ -331,7 +333,7 @@ where
             actor_ids="auth.actor_ids()",
             limit="per_page",
             offset="offset",
-            call_bind = true
+            _call_bind = true
             )}};
 
     query = filters.bind_to_query(query);
@@ -348,10 +350,16 @@ where
 pub async fn create(db: &mut PgConnection, auth: &AuthInfo, payload: {{struct_base}}CreatePayload) -> Result<{{struct_base}}CreateResult, error_stack::Report<Error>> {
     auth.require_permission(super::CREATE_PERMISSION)?;
 
-    {% if allow_id_in_create %}
-    let id = payload.id.unwrap_or_else({{id_type}}::new);
+    {% if join %}
+    let id = (
+        {% for field in id_fields %}
+        payload.{{field}}.clone().ok_or(Error::MissingId("{{field}}"))?,
+        {% endfor %}
+    );
+    {% elif allow_id_in_create %}
+    let id = payload.id.unwrap_or_else(|| {{new_object_id}});
     {% else %}
-    let id = {{id_type}}::new();
+    let id = {{new_object_id}};
     {% endif %}
     Self::create_raw(&mut *db, &id, &auth.organization_id, payload).await
 }
@@ -369,14 +377,14 @@ pub async fn create_raw(
     let result = query_file_as!({{struct_base}}, "{{dir}}/insert.sql",
         {{query_bindings(
             query=sql_queries.insert,
-            id=self::id_ref(),
+            id=self::id_ref_type(),
             organization_id=self::db_org_id(base="organization_id"),
             actor_ids="&auth.actor_ids()"
         )}}
 
         )
         .fetch_one(&mut *db)
-    {% if belongs_to_field %}
+    {% if belongs_to_fields %}
         .await;
 
     let result = Self::check_missing_parent_error(result)?;
@@ -414,23 +422,53 @@ async fn create_payload_children(
     {% for c in children | filter(attribute="write_payload_field_name") %}
         let {{c.write_payload_field_name}}_result = if let Some(mut children) = payload.{{c.write_payload_field_name}} {
 
-        {% if c.relationship.many %}
+        {% if c.relationship.many and not c.through %}
             if !children.is_empty() {
                 for child in children.iter_mut() {
-                    child.id = Some({{c.object_id}}::new());
+                    {% if not c.join %}
+                    child.id = Some({{c.new_object_id}});
+                    {% endif %}
                     child.{{c.parent_field}} = parent_id.clone();
                 }
 
-                {{c.model}}::update_all_with_parent(&mut *db, organization_id, parent_id, &children).await?
+                {{c.model}}::update_all_with_parent_{{module_name}}(&mut *db, organization_id, parent_id, &children).await?
             } else {
                 vec![]
             }
-        {% else %}
+        {% elif not c.relationship.many and not c.through %}
             tracing::event!(Level::DEBUG, ?children, "Creating child {{c.module}}");
+            {% if not c.join %}
             children.id = Some({{c.object_id}}::new());
+            {% endif %}
             children.{{c.parent_field}} = parent_id.clone();
-            let result = {{c.model}}::upsert_with_parent(&mut *db, organization_id, parent_id, &children).await?;
+            let result = {{c.model}}::upsert_with_parent_{{module_name}}(
+                    &mut *db, 
+                    organization_id,
+                    parent_id,
+                    &children).await?;
             Some(result)
+        {% elif c.relationship.many and c.through %}
+            let child_structs = children.into_iter()
+                .map(|child_id| {
+                    {{c.through.model}}CreatePayload {
+                        {{c.parent_field}}: Some(parent_id.clone()),
+                        {{c.through.to_id_field}}: Some(child_id),
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let result = {{c.through.model}}::update_all_with_parent_{{module_name}}(&mut *db, organization_id, parent_id, &child_structs).await?;
+            result.into_iter().map(|result| result.{{c.through.to_id_field}}).collect()
+        {% elif not c.relationship.many and c.through %}
+            tracing::event!(Level::DEBUG, ?children, "Creating child {{c.module}}");
+
+            let child_struct = {{c.through.model}}UpdatePayload {
+                {{c.parent_field}}: Some(parent_id.clone()),
+                {{c.through.to_id_field}}: Some(children),
+            };
+
+            let result = {{c.through.model}}::upsert_with_parent_{{module_name}}(&mut *db, organization_id, parent_id, &child_struct).await?;
+            Some(result.{{c.through.to_id_field}})
         {% endif %}
         } else {
             {% if c.relationship.many %}
@@ -465,7 +503,7 @@ pub async fn update(
     let result = query_file_scalar!("{{dir}}/update.sql",
         {{query_bindings(
             query=sql_queries.update,
-            id=self::id_ref(),
+            id=self::id_ref_type(),
             organization_id=self::db_org_id(),
             actor_ids="&auth.actor_ids()"
         )}}
@@ -495,19 +533,60 @@ async fn update_payload_children(
 ) -> Result<(), error_stack::Report<Error>> {
     {% for c in children | filter(attribute="write_payload_field_name") %}
     if let Some(mut children) = payload.{{c.write_payload_field_name}} {
-        {% if c.relationship.many %}
-        for child in children.iter_mut() {
-            child.{{c.parent_field}} = parent_id.clone();
-        }
-        {% else %}
-        children.{{c.parent_field}} = parent_id.clone();
-        {% endif %}
+        {% if c.through %}
+            {% if c.relationship.many %}
+            let children = children.into_iter()
+                .map(|child_id| {
+                    {{c.through.model}}UpdatePayload {
+                        {{c.parent_field}}: Some(parent_id.clone()),
+                        {{c.through.to_id_field}}: Some(child_id),
+                    }
+                }).collect::<Vec<_>>();
 
-    {{c.model}}::update_all_with_parent(
-            &mut *db,
-            organization_id,
-            parent_id,
-            &children).await?;
+            {{c.through.model}}::update_all_with_parent_{{module_name}}(
+                &mut *db,
+                organization_id,
+                parent_id,
+                &children).await?;
+            {% else %}
+
+            if let Some(child_id) = children {
+                let child = {{c.through.model}}UpdatePayload {
+                    {{c.parent_field}}: Some(parent_id.clone()),
+                    {{c.through.to_id_field}}: Some(child_id),
+                };
+
+                {{c.through.model}}::upsert_with_parent_{{module_name}}(
+                    &mut *db,
+                    organization_id,
+                    parent_id,
+                    &child).await?;
+            } else {
+                // Remove the link since the child ID was cleared
+                {{c.through.model}}::delete_all_children_of_{{module_name}}(
+                    &mut *db,
+                    organization_id,
+                    parent_id
+                ).await?;
+            }
+            {% endif %}
+
+
+        {% else %}
+            {% if c.relationship.many %}
+            for child in children.iter_mut() {
+                child.{{c.parent_field}} = parent_id.clone();
+            }
+            {% else %}
+            children.{{c.parent_field}} = parent_id.clone();
+            {% endif %}
+
+            {{c.model}}::update_all_with_parent_{{module_name}}(
+                &mut *db,
+                organization_id,
+                parent_id,
+                &children).await?;
+        {% endif %}
     }
     {% endfor %}
 
@@ -523,7 +602,7 @@ pub async fn delete(db: impl PgExecutor<'_>, auth: &AuthInfo, id: &{{id_type}}) 
 
     let result = query_file!("{{dir}}/delete.sql",
         {{query_bindings(query=sql_queries.delete,
-            id=self::id_ref(),
+            id=self::id_ref_type(),
             organization_id=self::db_org_id(),
             actor_ids="&actor_ids()")}}
         )
@@ -575,7 +654,7 @@ pub async fn lookup_object_permissions(
         {{self::db_org_id()}},
         &actor_ids,
         {% if auth_scope == "object" %}
-        {{self::id_ref()}},
+        {{self::id_ref_type()}},
         {% endif %}
         )
         .fetch_one(db)
@@ -587,26 +666,51 @@ pub async fn lookup_object_permissions(
     {% endif %}
 }
 
-{% if belongs_to_field %}
-{% if belongs_to_field.globally_unique %}
-/// Update or insert the child of the given parent. Since there can only be a single child per
+{% for b in belongs_to_fields %}
+
+{% if join %}
+{% if id_fields[0] == b.name %}
+{% set this_join_field = id_fields[0] %}
+{% set other_join_field = id_fields[1] %}
+{% else %}
+{% set this_join_field = id_fields[1] %}
+{% set other_join_field = id_fields[0] %}
+{% endif %}
+{% else %}
+{# This is weird but makes it easier to use below #}
+{% set this_join_field = "id" %}
+{% set other_join_field = "id" %}
+{% endif %}
+
+{% if b.globally_unique %}
+/// Update or insert the child of the parent {{b.name}}. Since there can only be a single child per
 /// parent, this ignores the `id` field of the payload, and only looks at the parent ID.
 {% else %}
-/// Update or insert a child of the given parent.
+/// Update or insert a child of the parent {{b.name}}.
 {% endif %}
 #[instrument(skip(db))]
-pub async fn upsert_with_parent(
+pub async fn upsert_with_parent_{{b.model_snake_case_name}}(
     db: impl PgExecutor<'_>,
     organization_id: &OrganizationId,
-    parent_id: &{{belongs_to_field.rust_type}},
+    parent_id: &{{b.rust_type}},
     payload: &{{ struct_base }}UpdatePayload)
     -> Result<{{struct_base}}, error_stack::Report<Error>> {
 
-    let id = payload.id.clone().unwrap_or_else({{id_type}}::new);
-    let result = query_file_as!({{struct_base}}, "{{dir}}/upsert_single_child.sql",
-        {{query_bindings(query=sql_queries.upsert_single_child,
-            id=self::id_ref(),
-            parent_id=self::id_ref(id="parent_id"),
+    {% if join %}
+    let id = (
+        {% for field in id_fields %}
+        payload.{{field}}.clone().ok_or(Error::MissingId("{{field}}"))?,
+        {% endfor %}
+    );
+    {% else %}
+    let id = payload.id.clone().unwrap_or_else(|| {{new_object_id}});
+    {% endif %}
+
+    {% set query = "upsert_single_child_of_" ~ b.model_snake_case_name %}
+    let result = query_file_as!({{struct_base}}, "{{dir}}/{{query}}.sql",
+        {{query_bindings(query=sql_queries[query],
+            id=self::id_ref_type(),
+            parent_id=self::id_ref_type(id="parent_id"),
             organization_id=self::db_org_id(base="organization_id"),
             actor_ids="&auth.actor_ids()",
             )
@@ -617,25 +721,27 @@ pub async fn upsert_with_parent(
     Self::check_missing_parent_error(result)
 }
 
-{% if not belongs_to_field.globally_unique %}
+{% if not b.globally_unique %}
+{% if not join %}
 /// Update a single child of the given parent. This does nothing if the child doesn't exist.
 #[instrument(skip(db))]
-pub async fn update_one_with_parent(
+pub async fn update_one_with_parent_{{b.model_snake_case_name}}(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
-    parent_id: &{{belongs_to_field.rust_type}},
+    parent_id: &{{b.rust_type}},
     id: &{{id_type}},
     mut payload: {{ struct_base }}UpdatePayload
     ) -> Result<bool, error_stack::Report<Error>> {
 
-    payload.{{belongs_to_field.name}} = parent_id.clone();
+    payload.{{b.name}} = parent_id.clone();
 
     let actor_ids = auth.actor_ids();
-    let result = query_file!("{{dir}}/update_one_with_parent.sql",
-        {{query_bindings(query=sql_queries.update_one_with_parent,
-            id=self::id_ref(),
+    {% set query = "update_one_with_parent_" ~ b.model_snake_case_name %}
+    let result = query_file!("{{dir}}/{{query}}.sql",
+        {{query_bindings(query=sql_queries[query],
+            id=self::id_ref_type(),
             organization_id=self::db_org_id(),
-            parent_id=self::id_ref(id="parent_id"),
+            parent_id=self::id_ref_type(id="parent_id"),
             actor_ids="&auth.actor_ids()")
         }}
         )
@@ -645,51 +751,67 @@ pub async fn update_one_with_parent(
 
     Ok(result.rows_affected() > 0)
 }
+{% endif %}
 
 /// Update the children of the given parent.
 /// Insert new values that are not yet in the database and
 /// delete existing values that are not in the payload.
 #[instrument(skip(db))]
-pub async fn update_all_with_parent(
+pub async fn update_all_with_parent_{{b.model_snake_case_name}}(
     db: &mut PgConnection,
     organization_id: &OrganizationId,
-    parent_id: &{{belongs_to_field.rust_type}},
+    parent_id: &{{b.rust_type}},
     payload: &[{{ struct_base }}UpdatePayload])
     -> Result<Vec<{{struct_base}}>, error_stack::Report<Error>> {
 
     if payload.is_empty() {
-        Self::delete_all_children_of_parent(db, organization_id, parent_id).await?;
+        Self::delete_all_children_of_{{b.model_snake_case_name}}(db, organization_id, parent_id).await?;
         Ok(Vec::new())
     } else {
         // First, we upsert the existing children.
-        let q = include_str!("upsert_children.sql");
+        {% set query = "upsert_children_of_" ~ b.model_snake_case_name %}
+        let q = include_str!("{{query}}.sql");
         let bindings = ValuesBuilder{
-            first_parameter: {{sql_queries.upsert_children.num_bindings + 1}},
+            first_parameter: {{sql_queries[query].num_bindings + 1}},
             num_values: payload.len(),
-            num_columns: 2 + {{ fields | filter(attribute="writable", value=true) | length }},
+            num_columns: {{ id_fields | length }} {% if not global %}+ 1 {% endif %} + {{ fields | filter(attribute="writable", value=true) | length }},
         };
         let q = q.replace("__insertion_point_insert_values", &bindings.to_string());
 
-        let mut query = sqlx::query_as::<_, {{struct_base}}>(q.as_str());
-
-        query = query
-            {{query_bindings(
-                query=sql_queries.upsert_children,
-                organization_id="organization_id",
-                parent_id=self::id_ref(id="parent_id"),
-                actor_ids="auth.actor_ids()",
-                call_bind = true
-            )}};
+        let mut query = sqlx::query_as::<_, {{struct_base}}>(q.as_str())
+          .bind(organization_id)
+          .bind(parent_id);
 
         for p in payload {
-            let id = p.id.unwrap_or_else(|| {{id_type}}::new());
+            {% if join %}
+            {% for field in id_fields -%}
+
+            {%- if field == this_join_field -%}
+            let {{field}} = parent_id;
+            {% else -%}
+            let {{field}} = p.{{field}}.as_ref().ok_or(Error::MissingId("{{field}}"))?;
+            {%- endif -%}
+
+            {%- endfor %}
+
+            {% else %}
+            let id = p.id.unwrap_or_else(|| {{new_object_id}});
+            {% endif %}
             query = query
+                {% if join %}
+                {% for field in id_fields %}
+                .bind({{field}})
+                {% endfor %}
+                {% else %}
                 .bind(id)
+                {% endif %}
                 .bind(organization_id)
                 {% for field in fields | filter(attribute="writable", value=true) %}
                 .bind(
                 {%- if field.nullable -%}
                     p.{{field.rust_name}}.as_ref(),
+                {%- elif field.is_object_id -%}
+                    p.{{field.rust_name}}.as_uuid(),
                 {%- else -%}
                     &p.{{field.rust_name}},
                 {%- endif -%}
@@ -703,12 +825,13 @@ pub async fn update_all_with_parent(
         let results = Self::check_missing_parent_error(results)?;
 
         // Delete any of the children that were not sent in.
-        let ids = results.iter().map(|o| o.{{self::id_ref()}}.clone()).collect::<Vec<_>>();
-        query_file!("{{dir}}/delete_removed_children.sql",
-            {{query_bindings(query=sql_queries.delete_removed_children,
+        let ids = results.iter().map(|o| o.{{self::id_ref_type(id=other_join_field)}}.clone()).collect::<Vec<_>>();
+        {% set query = "delete_removed_children_of_" ~ b.model_snake_case_name %}
+        query_file!("{{dir}}/{{query}}.sql",
+            {{query_bindings(query=sql_queries[query],
                 ids="&ids",
                 organization_id=self::db_org_id(base="organization_id"),
-                parent_id=self::id_ref(id="parent_id")
+                parent_id=self::id_ref_type(id="parent_id")
                 ) }}
             )
             .execute(db)
@@ -722,18 +845,19 @@ pub async fn update_all_with_parent(
 
 /// Delete a child object, making sure that its parent ID matches.
 #[instrument(skip(db))]
-pub async fn delete_with_parent(
+pub async fn delete_with_parent_{{b.model_snake_case_name}}(
     db: impl PgExecutor<'_>,
     auth: &AuthInfo,
-    parent_id: &{{belongs_to_field.rust_type}},
-    child_id: &{{id_type}})
+    parent_id: &{{b.rust_type}},
+    id: &{{id_type}})
     -> Result<bool, error_stack::Report<Error>> {
 
-    let result = query_file!("{{dir}}/delete_with_parent.sql",
-        {{query_bindings(query=sql_queries.delete_with_parent,
+    {% set query = "delete_with_parent_" ~ b.model_snake_case_name %}
+    let result = query_file!("{{dir}}/{{query}}.sql",
+        {{query_bindings(query=sql_queries[query],
             organization_id=self::db_org_id(),
-            parent_id=self::id_ref(id="parent_id"),
-            id=self::id_ref(id="child_id"),
+            parent_id=self::id_ref_type(id="parent_id"),
+            id=self::id_ref_type(),
         )}}
         )
         .execute(db)
@@ -744,16 +868,17 @@ pub async fn delete_with_parent(
 
 /// Delete all children of the given parent. This function does not do permissions checks.
 #[instrument(skip(db))]
-pub async fn delete_all_children_of_parent(
+pub async fn delete_all_children_of_{{b.model_snake_case_name}}(
     db: impl PgExecutor<'_>,
     organization_id: &OrganizationId,
-    parent_id: &{{belongs_to_field.rust_type}})
+    parent_id: &{{b.rust_type}})
     -> Result<bool, error_stack::Report<Error>> {
 
-    let result = query_file!("{{dir}}/delete_all_children.sql",
-        {{query_bindings(query=sql_queries.delete_all_children,
+    {% set query = "delete_all_children_of_" ~ b.model_snake_case_name %}
+    let result = query_file!("{{dir}}/{{query}}.sql",
+        {{query_bindings(query=sql_queries[query],
             organization_id=self::db_org_id(base="organization_id"),
-            parent_id=self::id_ref(id="parent_id")
+            parent_id=self::id_ref_type(id="parent_id")
         ) }}
         )
         .execute(db)
@@ -762,10 +887,10 @@ pub async fn delete_all_children_of_parent(
     Ok(result.rows_affected() > 0)
 }
 
-{% endif %}
+{% endfor %}
 
 {% for c in children %}
-
+{% if not c.through %}
 {% if c.relationship.many %}
 {% set fnname = c.snake_case_plural_name %}
 {% set ret_type = "Vec" %}
@@ -805,7 +930,15 @@ pub async fn create_child_{{c.snake_case_name}}(
     ) -> Result<{{c.model}}CreateResult, error_stack::Report<Error>> {
 
     auth.require_permission(super::WRITE_PERMISSION)?;
-    let id = payload.id.clone().unwrap_or_else({{c.object_id}}::new);
+    {% if c.join %}
+    let id = (
+        {% for field in c.id_fields %}
+        payload.{{field}}.clone(),
+        {% endfor %}
+    );
+    {% else %}
+    let id = payload.id.clone().unwrap_or_else(|| {{c.new_object_id}});
+    {% endif %}
     crate::models::{{c.module}}::{{c.model}}::create_raw(db, &id, &auth.organization_id, payload).await
 }
 
@@ -818,7 +951,7 @@ pub async fn update_child_{{c.snake_case_name}}(
 
     auth.require_permission(super::WRITE_PERMISSION)?;
     let parent_field = payload.{{c.parent_field}}.clone();
-    crate::models::{{c.module}}::{{c.model}}::update_one_with_parent(db, auth, &parent_field, id, payload).await
+    crate::models::{{c.module}}::{{c.model}}::update_one_with_parent_{{module_name}}(db, auth, &parent_field, id, payload).await
 }
 {% endif %}
 
@@ -830,8 +963,9 @@ pub async fn upsert_child_{{c.snake_case_name}}(
 
     auth.require_permission(super::WRITE_PERMISSION)?;
     let parent_field = payload.{{c.parent_field}}.clone();
-    crate::models::{{c.module}}::{{c.model}}::upsert_with_parent(db, &auth.organization_id, &parent_field, payload).await
+    crate::models::{{c.module}}::{{c.model}}::upsert_with_parent_{{module_name}}(db, &auth.organization_id, &parent_field, payload).await
 }
+{% endif %}
 {% endfor %}
 
 }

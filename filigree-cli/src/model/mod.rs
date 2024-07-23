@@ -12,6 +12,7 @@ use cargo_toml::Manifest;
 use convert_case::{Case, Casing};
 use error_stack::Report;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, OneOrMany};
 
 use self::{
     field::{Access, ModelField, ModelFieldReference, SqlType},
@@ -22,6 +23,7 @@ use crate::{
     Error,
 };
 
+#[serde_as]
 #[derive(Deserialize, Clone, Debug)]
 pub struct Model {
     /// The name of the model
@@ -109,7 +111,8 @@ pub struct Model {
     /// A parent model for this model, when the other model has a `has` relationship
     /// This adds a field to this model that references the ID of the parent model.
     #[serde(default)]
-    pub belongs_to: Option<BelongsTo>,
+    #[serde_as(as = "OneOrMany<_>")]
+    pub belongs_to: Vec<BelongsTo>,
 
     /// This model links to other instances of the listed models and can optionally manage them
     /// as sub-entities, updating in the same operation as the update to the parent.
@@ -160,6 +163,12 @@ impl Model {
     }
 
     pub fn qualified_object_id_type(&self) -> String {
+        if self.joins.is_some() {
+            // A hack for now, since this is only used to generate imports and the joining case is
+            // handled separately.
+            return String::new();
+        }
+
         format!(
             "crate::models::{}::{}",
             self.module_name(),
@@ -168,7 +177,37 @@ impl Model {
     }
 
     pub fn object_id_type(&self) -> String {
-        format!("{}Id", self.name.to_case(Case::Pascal))
+        if let Some(join) = &self.joins {
+            format!(
+                "({}Id, {}Id)",
+                join.0.to_case(Case::Pascal),
+                join.1.to_case(Case::Pascal)
+            )
+        } else {
+            format!("{}Id", self.name.to_case(Case::Pascal))
+        }
+    }
+
+    pub fn object_id_types(&self) -> Vec<String> {
+        if let Some(join) = &self.joins {
+            vec![
+                format!("{}Id", join.0.to_case(Case::Pascal)),
+                format!("{}Id", join.1.to_case(Case::Pascal)),
+            ]
+        } else {
+            vec![self.object_id_type()]
+        }
+    }
+
+    pub fn object_id_fields(&self) -> Vec<String> {
+        if let Some(join) = &self.joins {
+            vec![
+                format!("{}_id", join.0.to_case(Case::Snake)),
+                format!("{}_id", join.1.to_case(Case::Snake)),
+            ]
+        } else {
+            vec!["id".to_string()]
+        }
     }
 
     pub fn qualified_struct_name(&self) -> String {
@@ -258,7 +297,7 @@ impl Model {
             return true;
         }
 
-        if let Some(b) = &self.belongs_to {
+        for b in &self.belongs_to {
             if b.model() == other.name {
                 return true;
             }

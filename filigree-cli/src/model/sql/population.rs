@@ -28,7 +28,16 @@ impl<'a> SqlBuilder<'a> {
                     output.push_str("COALESCE(ARRAY_AGG(");
                 }
 
-                write!(output, "{child_table}.id", child_table = child.table).unwrap();
+                let (schema, table, id_field) = if let Some(through) = &child.through {
+                    (
+                        through.schema.as_str(),
+                        through.table.as_str(),
+                        through.to_id_field.as_str(),
+                    )
+                } else {
+                    (child.schema.as_str(), child.table.as_str(), "id")
+                };
+                write!(output, "ct.{id_field}").unwrap();
 
                 if child.relationship.many {
                     output.push_str("), ARRAY[]::uuid[])");
@@ -36,9 +45,7 @@ impl<'a> SqlBuilder<'a> {
 
                 write!(
                     output,
-                    " FROM {schema}.{table} WHERE {parent_field} = {parent_field_match}",
-                    schema = child.schema,
-                    table = child.table,
+                    " FROM {schema}.{table} ct WHERE ct.{parent_field} = {parent_field_match}",
                     parent_field = child.parent_field,
                     parent_field_match = parent_field_match
                 )
@@ -63,26 +70,48 @@ impl<'a> SqlBuilder<'a> {
                     output.push_str("COALESCE(ARRAY_AGG(");
                 }
 
-                let fields = Self::jsonb_build_object_contents(&child.fields, "");
+                let fields = Self::jsonb_build_object_contents(&child.fields, "t");
                 write!(output, "JSONB_BUILD_OBJECT({fields})").unwrap();
 
                 if child.relationship.many {
                     output.push_str("), ARRAY[]::jsonb[])");
                 }
 
-                write!(
-                    output,
-                    " FROM {schema}.{table} WHERE {parent_field} = {parent_field_match}",
-                    schema = child.schema,
-                    table = child.table,
-                    parent_field = child.parent_field,
-                    parent_field_match = parent_field_match
-                )
-                .unwrap();
+                if let Some(through) = &child.through {
+                    write!(
+                        output,
+                        r##"FROM {through_schema}.{through_table} tt
+                        JOIN {schema}.{table} t ON tt.{to_id_field} = t.id
+                        WHERE tt.{from_id_field} = {parent_field_match}"##,
+                        schema = child.schema,
+                        table = child.table,
+                        through_schema = through.schema,
+                        through_table = through.table,
+                        from_id_field = child.parent_field,
+                        to_id_field = through.to_id_field,
+                        parent_field_match = parent_field_match,
+                    )
+                    .unwrap();
+                } else {
+                    write!(
+                        output,
+                        " FROM {schema}.{table} t WHERE {parent_field} = {parent_field_match}",
+                        schema = child.schema,
+                        table = child.table,
+                        parent_field = child.parent_field,
+                        parent_field_match = parent_field_match
+                    )
+                    .unwrap();
+                }
 
                 if !self.context.global {
-                    output.push_str(" AND organization_id = ");
+                    output.push_str(" AND t.organization_id = ");
                     output.push_str(org_binding);
+
+                    if child.through.is_some() {
+                        output.push_str(" AND tt.organization_id = ");
+                        output.push_str(org_binding);
+                    }
                 }
                 if !child.relationship.many {
                     output.push_str(" LIMIT 1");

@@ -8,7 +8,13 @@ pub fn select_one(data: &SqlBuilder, populate_children: bool) -> Option<SqlQuery
     }
 
     let mut q = QueryBuilder::new();
-    let id = q.create_binding(bindings::ID);
+    let id = if data.context.join.is_none() {
+        q.create_binding(bindings::ID)
+    } else {
+        // We don't currently support joining tables with children models.
+        String::new()
+    };
+
     let organization = if data.context.global {
         String::new()
     } else {
@@ -90,7 +96,8 @@ pub fn select_one(data: &SqlBuilder, populate_children: bool) -> Option<SqlQuery
         }
     }
 
-    write!(q, " WHERE tb.id = {id}").unwrap();
+    q.push(" WHERE ");
+    data.push_id_where_clause(&mut q);
     if !data.context.global {
         write!(q, " AND tb.organization_id = {organization}").unwrap();
     }

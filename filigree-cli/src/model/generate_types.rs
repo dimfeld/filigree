@@ -109,11 +109,13 @@ impl<'a> ModelGenerator<'a> {
                     self.write_payload_child_fields(false)?.map(|f| {
                         let mut field = f.field;
                         field.nullable = !f.many;
+                        let fetch_type = if f.through.is_some() {
+                            super::ReferenceFetchType::Id
+                        } else {
+                            super::ReferenceFetchType::Data
+                        };
                         field.rust_type = Some(Self::child_model_field_type(
-                            &f.model,
-                            super::ReferenceFetchType::Data,
-                            f.many,
-                            "",
+                            &f.model, fetch_type, f.many, "",
                         ));
                         Cow::Owned(field)
                     }),
@@ -246,7 +248,10 @@ impl<'a> ModelGenerator<'a> {
                 if rust_type.starts_with("Option<Option<") {
                     serde_attrs.push("default".into());
                     serde_attrs.push("skip_serializing_if = \"Option::is_none\"".into());
-                    serde_attrs.push("with = \"::serde_with::rust::double_option\"".into());
+                    serde_attrs.push(
+                        "deserialize_with = \"::serde_with::rust::double_option::deserialize\""
+                            .into(),
+                    );
                 }
 
                 let serde_attr = if serde_attrs.is_empty() {

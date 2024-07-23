@@ -78,6 +78,10 @@ pub enum Error {
         "Model {0} uses {1} as a through model to {2}, but {1}'s join setting does not reference {3}"
     )]
     BadJoin(String, String, String, String),
+    #[error("Model {0} is a joining model and has children, which is not currently supported")]
+    JoinedModelWithHas(String),
+    #[error("Model {0} is a joining model, but has fields, which is not currently supported")]
+    JoinedModelWithFields(String),
     #[error("Model {0}'s files configuration referenced nonexistent bucket {1}")]
     InvalidStorageBucket(String, String),
     #[error("Model {0} field {1} reference {2}")]

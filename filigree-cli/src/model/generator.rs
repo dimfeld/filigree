@@ -36,6 +36,7 @@ pub struct ChildField<'a> {
     pub field: ModelField,
     pub model: &'a Model,
     pub many: bool,
+    pub through: Option<&'a Model>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -55,6 +56,29 @@ pub struct ReferenceFieldContext {
     pub table: String,
 }
 
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct ThroughContext {
+    pub model: String,
+    pub snake_case_name: String,
+    pub module: String,
+    pub table: String,
+    pub schema: String,
+    pub to_id_field: String,
+}
+
+impl ThroughContext {
+    pub fn new(through_model: &Model, child_model: &Model) -> ThroughContext {
+        ThroughContext {
+            model: through_model.name.clone(),
+            snake_case_name: through_model.name.to_case(Case::Snake),
+            module: through_model.module_name(),
+            table: through_model.table(),
+            schema: through_model.schema().to_string(),
+            to_id_field: child_model.foreign_key_id_field_name(),
+        }
+    }
+}
+
 #[derive(Serialize, Clone, Debug)]
 pub struct ChildContext {
     pub model: String,
@@ -72,11 +96,15 @@ pub struct ChildContext {
     pub snake_case_plural_name: String,
     pub possible_child_field_names: Vec<String>,
     pub object_id: String,
+    pub id_fields: Vec<String>,
+    pub new_object_id: String,
     pub fields: Vec<ModelFieldTemplateContext>,
     pub table: String,
     pub schema: String,
     pub url_path: String,
     pub parent_field: String,
+    pub through: Option<ThroughContext>,
+    pub join: Option<JoinContext>,
     pub file_upload: Option<serde_json::Value>,
 }
 
@@ -85,7 +113,30 @@ pub struct ChildWritePayloadField {
     #[serde(flatten)]
     pub field: ModelFieldTemplateContext,
     pub many: bool,
+    pub through: Option<ThroughContext>,
     pub module: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct BelongsToFieldContext {
+    #[serde(flatten)]
+    pub field: ModelFieldTemplateContext,
+    pub module: String,
+    pub model_name: String,
+    pub model_snake_case_name: String,
+}
+
+impl Deref for BelongsToFieldContext {
+    type Target = ModelFieldTemplateContext;
+
+    fn deref(&self) -> &Self::Target {
+        &self.field
+    }
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct JoinContext {
+    pub model_ids: (String, String),
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -106,7 +157,7 @@ pub struct TemplateContext {
     pub rust_imports: String,
     pub ts_imports: String,
     pub allow_id_in_create: bool,
-    pub belongs_to_field: Option<ModelFieldTemplateContext>,
+    pub belongs_to_fields: Vec<BelongsToFieldContext>,
     pub can_populate_get: bool,
     pub can_populate_list: bool,
     pub children: Vec<ChildContext>,
@@ -122,6 +173,8 @@ pub struct TemplateContext {
     pub full_default_sort_field: String,
     pub default_sort_field: String,
     pub id_type: String,
+    pub id_fields: Vec<String>,
+    pub new_object_id: String,
     pub id_prefix: String,
     pub predefined_object_id: bool,
     pub url_path: String,
@@ -130,12 +183,12 @@ pub struct TemplateContext {
     pub custom_endpoints: Vec<serde_json::Value>,
     pub auth_scope: ModelAuthScope,
     pub auth_check_in_query: bool,
-    pub parent_model_name: Option<String>,
     pub file_for: Option<String>,
     pub file_upload: Option<serde_json::Value>,
     pub auth: serde_json::Value,
     pub auth_schema: String,
     pub id_is_string: bool,
+    pub join: Option<JoinContext>,
 
     #[serde(flatten)]
     pub structs: StructsContext,
@@ -413,11 +466,14 @@ impl<'a> ModelGenerator<'a> {
 
     /// All fields except fields generated when populating child models
     pub fn all_fields(&self) -> Result<impl Iterator<Item = Cow<ModelField>>, Error> {
+        // join_fields first since they are the IDs, when present
         let fields = self
-            .standard_fields()?
-            .map(|field| Cow::Owned(field))
+            .join_fields()?
+            .into_iter()
+            .map(|field| Cow::Owned(field.0))
+            .chain(self.standard_fields()?.map(|field| Cow::Owned(field)))
             .chain(self.fields.iter().map(|field| Cow::Borrowed(field)))
-            .chain(self.belongs_to_field()?.map(|field| Cow::Owned(field)));
+            .chain(self.belongs_to_fields()?.map(|field| Cow::Owned(field.0)));
 
         Ok(fields)
     }
@@ -429,15 +485,44 @@ impl<'a> ModelGenerator<'a> {
     ) -> Result<impl Iterator<Item = Cow<ModelField>>, Error> {
         // The ID field is only used for child models or when `specify_id_in_create` is set,
         // but we just add it always, make it optional, and ignore it in the other cases.
-        let mut id_field = self.id_field();
-        id_field.nullable = true;
+        let id_fields = if self.joins.is_some() {
+            self.join_fields()?
+                .into_iter()
+                .map(|mut field| {
+                    field.0.nullable = true;
+                    Cow::Owned(field.0)
+                })
+                .collect::<Vec<_>>()
+        } else {
+            let mut id_field = self.id_field();
+            id_field.nullable = true;
+            vec![Cow::Owned(id_field)]
+        };
 
-        Ok(std::iter::once(Cow::Owned(id_field))
+        Ok(id_fields
+            .into_iter()
             .chain(self.all_fields()?.filter(|f| f.writable() && !f.never_read))
             .chain(
                 self.write_payload_child_fields(for_update)?
                     .map(|f| Cow::Owned(f.field)),
             ))
+    }
+
+    pub fn join_context(&self) -> Result<Option<JoinContext>, Error> {
+        self.model
+            .joins
+            .as_ref()
+            .map(|(model1, model2)| {
+                let model1 = self.model_map.get(model1, &self.model.name, "join")?;
+                let model2 = self.model_map.get(model2, &self.model.name, "join")?;
+                Ok::<_, Error>(JoinContext {
+                    model_ids: (
+                        model1.foreign_key_id_field_name(),
+                        model2.foreign_key_id_field_name(),
+                    ),
+                })
+            })
+            .transpose()
     }
 
     /// Initialize the template context. This should be called immediately after all the generators
@@ -517,9 +602,22 @@ impl<'a> ModelGenerator<'a> {
                     .through
                     .as_ref()
                     .map(|through| {
-                        let model = self.model_map.get(through, &self.model.name, "through")?;
-                        let generator = generators.get(through, &self.model.name, "through")?;
-                        Ok::<_, Error>((model, generator))
+                        let through_model =
+                            self.model_map.get(through, &self.model.name, "through")?;
+
+                        rust_imports.insert(through_model.qualified_struct_name());
+                        rust_imports.insert(format!(
+                            "{}CreatePayload",
+                            through_model.qualified_struct_name()
+                        ));
+                        rust_imports.insert(format!(
+                            "{}UpdatePayload",
+                            through_model.qualified_struct_name()
+                        ));
+
+                        let ctx = ThroughContext::new(through_model, child_model);
+
+                        Ok::<_, Error>(ctx)
                     })
                     .transpose()?;
 
@@ -578,6 +676,15 @@ impl<'a> ModelGenerator<'a> {
                     Self::child_model_field_name(&child_model, ReferenceFetchType::Data, true),
                 ];
 
+                let new_object_id = maybe_as_tuple(
+                    "",
+                    child_model
+                        .object_id_types()
+                        .iter()
+                        .map(|t| format!("{t}::new()"))
+                        .collect(),
+                );
+
                 let result = ChildContext {
                     model: has.model.clone(),
                     relationship: has.clone(),
@@ -596,6 +703,8 @@ impl<'a> ModelGenerator<'a> {
                     snake_case_plural_name: child_model.plural().to_case(Case::Snake),
                     possible_child_field_names,
                     object_id: child_model.object_id_type(),
+                    id_fields: child_model.object_id_fields(),
+                    new_object_id,
                     fields: child_generator
                         .all_fields()?
                         .map(|f| f.template_context())
@@ -604,6 +713,8 @@ impl<'a> ModelGenerator<'a> {
                     schema: child_model.schema().to_string(),
                     url_path,
                     parent_field: self.model.foreign_key_id_field_name(),
+                    through,
+                    join: self.join_context()?,
                     file_upload: child_model
                         .file_for
                         .as_ref()
@@ -642,7 +753,7 @@ impl<'a> ModelGenerator<'a> {
             })
             .collect::<Result<Vec<_>, Error>>()?;
 
-        if let Some(b) = &self.belongs_to {
+        for b in &self.belongs_to {
             let model = self
                 .model_map
                 .get(b.model(), &self.model.name, "belongs_to")?;
@@ -650,24 +761,24 @@ impl<'a> ModelGenerator<'a> {
             rust_imports.insert(model.qualified_object_id_type());
         }
 
-        let parent_model_name = self.belongs_to.as_ref().map(|b| b.model());
-        let belongs_to_field = self
-            .belongs_to_field()?
-            .next()
-            .map(|f| f.template_context());
-
-        let can_populate_get = self.virtual_fields(ReadOperation::Get)?.next().is_some();
-        let can_populate_list = self.virtual_fields(ReadOperation::List)?.next().is_some();
-
-        if let Some(b) = &belongs_to_field {
+        let belongs_to_fields = self
+            .belongs_to_fields()?
+            .chain(self.join_fields()?)
+            .map(|f| f.1)
+            .collect::<Vec<_>>();
+        for b in &belongs_to_fields {
             for f in fields.iter_mut() {
                 let is_belongs_to = f.name == b.sql_name;
                 f.writable_non_parent = !is_belongs_to && f.writable;
             }
         }
 
+        let can_populate_get = self.virtual_fields(ReadOperation::Get)?.next().is_some();
+        let can_populate_list = self.virtual_fields(ReadOperation::List)?.next().is_some();
+
         let rust_imports = rust_imports
             .into_iter()
+            .filter(|i| !i.is_empty())
             .map(|i| format!("use {i};"))
             .sorted()
             .join("\n");
@@ -685,22 +796,34 @@ impl<'a> ModelGenerator<'a> {
 
         let create_payload_fields = self
             .write_payload_child_fields(false)?
-            .map(|f| ChildWritePayloadField {
-                field: f.field.template_context(),
-                many: f.many,
-                module: f.model.module_name(),
+            .map(|f| {
+                let through = f
+                    .through
+                    .map(|through| ThroughContext::new(through, f.model));
+                ChildWritePayloadField {
+                    field: f.field.template_context(),
+                    many: f.many,
+                    module: f.model.module_name(),
+                    through,
+                }
             })
             .collect::<Vec<_>>();
         let update_payload_fields = self
             .write_payload_child_fields(false)?
-            .map(|f| ChildWritePayloadField {
-                field: f.field.template_context(),
-                many: f.many,
-                module: f.model.module_name(),
+            .map(|f| {
+                let through = f
+                    .through
+                    .map(|through| ThroughContext::new(through, f.model));
+                ChildWritePayloadField {
+                    field: f.field.template_context(),
+                    many: f.many,
+                    module: f.model.module_name(),
+                    through,
+                }
             })
             .collect::<Vec<_>>();
 
-        let endpoints = if belongs_to_field.is_none() {
+        let endpoints = if belongs_to_fields.is_empty() {
             &self.standard_endpoints
         } else {
             // Right now we don't generate any endpoints for child models. They can only be
@@ -708,7 +831,22 @@ impl<'a> ModelGenerator<'a> {
             &Endpoints::All(false)
         };
 
+        fn maybe_as_tuple(tuple_prefix: &str, mut s: Vec<String>) -> String {
+            if s.len() == 1 {
+                s.pop().unwrap()
+            } else {
+                format!("{tuple_prefix}({})", s.join(", "))
+            }
+        }
+
         let id_type = self.object_id_type();
+        let new_object_id = maybe_as_tuple(
+            "",
+            self.object_id_types()
+                .iter()
+                .map(|t| format!("{t}::new()"))
+                .collect(),
+        );
         let context = TemplateContext {
             dir: base_dir,
             module_name: self.model.module_name(),
@@ -726,7 +864,7 @@ impl<'a> ModelGenerator<'a> {
             rust_imports,
             ts_imports,
             allow_id_in_create: self.allow_id_in_create,
-            belongs_to_field,
+            belongs_to_fields,
             can_populate_get,
             can_populate_list,
             children,
@@ -757,7 +895,6 @@ impl<'a> ModelGenerator<'a> {
                 .auth_scope
                 .unwrap_or(self.config.default_auth_scope)
                 .check_in_query(),
-            parent_model_name: parent_model_name.map(|s| s.to_string()),
             file_for: self.file_for.as_ref().map(|f| f.0.clone()),
             file_upload: self.file_for.as_ref().map(|f| f.1.template_context()),
             auth: self.config.auth.template_context(),
@@ -769,6 +906,9 @@ impl<'a> ModelGenerator<'a> {
                 .to_string(),
             id_is_string: self.model.is_auth_model && self.config.auth.string_ids(),
             id_type,
+            id_fields: self.object_id_fields(),
+            new_object_id,
+            join: self.join_context()?,
             structs: self.create_structs_context()?,
         };
 
@@ -854,51 +994,11 @@ impl<'a> ModelGenerator<'a> {
             })
         };
 
-        let id_fields = if let Some(model_names) = self.joins.as_ref() {
-            let model1 = self
-                .model_map
-                .get(&model_names.0, &self.model.name, "join")?;
-            let model2 = self
-                .model_map
-                .get(&model_names.1, &self.model.name, "join")?;
-
-            fn join_id_field(model: &Model) -> ModelField {
-                ModelField {
-                    name: model.foreign_key_id_field_name(),
-                    typ: SqlType::Uuid,
-                    label: None,
-                    description: None,
-                    rust_type: Some(model.object_id_type()),
-                    zod_type: Some("z.string()".to_string()),
-                    nullable: false,
-                    globally_unique: false,
-                    unique: false,
-                    indexed: true,
-                    filterable: FilterableType::Exact,
-                    sortable: SortableType::None,
-                    extra_sql_modifiers: String::new(),
-                    access: Access::Read,
-                    omit_in_list: false,
-                    references: Some(ModelFieldReference {
-                        table: Some(model.full_table()),
-                        model: None,
-                        field: "id".to_string(),
-                        on_delete: Some(ReferentialAction::Cascade),
-                        on_update: None,
-                        deferrable: Some(crate::model::field::Deferrable::InitiallyImmediate),
-                        populate: None,
-                    }),
-                    default_sql: String::new(),
-                    default_rust: String::new(),
-                    never_read: false,
-                    fixed: true,
-                    previous_name: None,
-                }
-            }
-
-            [Some(join_id_field(model1)), Some(join_id_field(model2))]
+        let id_fields = if self.joins.is_none() {
+            Some(self.id_field())
         } else {
-            [Some(self.id_field()), None]
+            // For joining tables, the ID fields as created as `belongs_to` fields instead.
+            None
         };
 
         let other_fields = [
@@ -950,15 +1050,19 @@ impl<'a> ModelGenerator<'a> {
                 previous_name: None,
             }),
         ]
-        .into_iter();
+        .into_iter()
+        .flatten();
 
-        Ok(id_fields.into_iter().chain(other_fields).flatten())
+        Ok(id_fields.into_iter().chain(other_fields))
     }
 
-    fn belongs_to_field(&self) -> Result<impl Iterator<Item = ModelField>, Error> {
+    /// Fields that reference a parent model. This includes the return result of `join_fields`.
+    fn belongs_to_fields(
+        &self,
+    ) -> Result<impl Iterator<Item = (ModelField, BelongsToFieldContext)>, Error> {
         let belongs_to = self
             .belongs_to
-            .as_ref()
+            .iter()
             .map(|belongs_to| {
                 let model =
                     self.model_map
@@ -978,7 +1082,7 @@ impl<'a> ModelGenerator<'a> {
                         .map(|(parent_model, f)| parent_model == &model.name && !f.many)
                         .unwrap_or(false));
 
-                Ok::<_, Error>(ModelField {
+                let field = ModelField {
                     name: model.foreign_key_id_field_name(),
                     typ: SqlType::Uuid,
                     label: None,
@@ -1008,11 +1112,99 @@ impl<'a> ModelGenerator<'a> {
                     never_read: false,
                     fixed: false,
                     previous_name: None,
-                })
-            })
-            .transpose()?;
+                };
 
-        Ok([belongs_to].into_iter().flatten())
+                let field_ctx = field.template_context();
+                let belongs_ctx = BelongsToFieldContext {
+                    field: field_ctx,
+                    module: model.module_name(),
+                    model_name: model.name.clone(),
+                    model_snake_case_name: model.name.to_case(Case::Snake),
+                };
+
+                Ok::<_, Error>((field, belongs_ctx))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(belongs_to.into_iter())
+    }
+
+    fn join_fields(&self) -> Result<Vec<(ModelField, BelongsToFieldContext)>, Error> {
+        let joins = self
+            .joins
+            .as_ref()
+            .map(|(model1, model2)| {
+                let model1 = self.model_map.get(model1, &self.model.name, "join")?;
+                let model2 = self.model_map.get(model2, &self.model.name, "join")?;
+
+                fn join_id_field(
+                    self_name: &str,
+                    model: &Model,
+                ) -> (ModelField, BelongsToFieldContext) {
+                    let single_child = model
+                        .has
+                        .iter()
+                        .find(|has| {
+                            has.through
+                                .as_ref()
+                                .map(|t| t == self_name)
+                                .unwrap_or(false)
+                        })
+                        .map(|h| !h.many)
+                        .unwrap_or(false);
+
+                    let field = ModelField {
+                        name: model.foreign_key_id_field_name(),
+                        typ: SqlType::Uuid,
+                        label: None,
+                        description: None,
+                        rust_type: Some(model.object_id_type()),
+                        zod_type: Some("z.string()".to_string()),
+                        nullable: false,
+                        globally_unique: single_child,
+                        unique: false,
+                        indexed: true,
+                        filterable: FilterableType::Exact,
+                        sortable: SortableType::None,
+                        extra_sql_modifiers: String::new(),
+                        access: Access::Read,
+                        omit_in_list: false,
+                        references: Some(ModelFieldReference {
+                            table: Some(model.full_table()),
+                            model: None,
+                            field: "id".to_string(),
+                            on_delete: Some(ReferentialAction::Cascade),
+                            on_update: None,
+                            deferrable: Some(crate::model::field::Deferrable::InitiallyImmediate),
+                            populate: None,
+                        }),
+                        default_sql: String::new(),
+                        default_rust: String::new(),
+                        never_read: false,
+                        fixed: true,
+                        previous_name: None,
+                    };
+
+                    let field_ctx = field.template_context();
+                    let belongs_ctx = BelongsToFieldContext {
+                        field: field_ctx,
+                        module: model.module_name(),
+                        model_name: model.name.clone(),
+                        model_snake_case_name: model.name.to_case(Case::Snake),
+                    };
+
+                    (field, belongs_ctx)
+                }
+
+                Ok::<_, Error>(vec![
+                    join_id_field(&self.model.name, model1),
+                    join_id_field(&self.model.name, model2),
+                ])
+            })
+            .transpose()?
+            .unwrap_or_default();
+
+        Ok(joins)
     }
 
     pub fn child_model_field_name(
@@ -1284,6 +1476,12 @@ impl<'a> ModelGenerator<'a> {
                     return Ok(None);
                 }
 
+                let through_model = has
+                    .through
+                    .as_ref()
+                    .map(|through| self.model_map.get(through, &self.model.name, "through"))
+                    .transpose()?;
+
                 let (rust_type, zod_type) =
                     Self::write_payload_child_field_type(has_model, has, for_update);
 
@@ -1291,7 +1489,7 @@ impl<'a> ModelGenerator<'a> {
                     name: has.rust_child_field_name(&has_model),
                     rust_type: Some(rust_type),
                     zod_type: Some(zod_type),
-                    nullable: has.many,
+                    nullable: true,
                     ..base_field.clone()
                 };
 
@@ -1299,6 +1497,7 @@ impl<'a> ModelGenerator<'a> {
                     model: has_model,
                     many: has.many,
                     field: model_field,
+                    through: through_model,
                 };
 
                 Ok(Some(field))

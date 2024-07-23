@@ -109,7 +109,9 @@ async fn delete(
 }
 
 {% for c in children %}
-
+{% if c.through %}
+// TODO updateendpoints for adding and removing the through model
+{% else %}
 async fn list_child_{{c.module}}(
     State(state): State<ServerState>,
     auth: Authed,
@@ -210,7 +212,7 @@ async fn update_child_{{c.module}}(
 
     object_perm.must_be_writable(WRITE_PERMISSION)?;
 
-    let result = crate::models::{{c.module}}::{{c.model}}::update_one_with_parent(
+    let result = crate::models::{{c.module}}::{{c.model}}::update_one_with_parent_{{module_name}}(
         &state.db,
         &auth,
         &parent_id,
@@ -242,7 +244,7 @@ async fn delete_child_{{c.module}}(
         .await
         .change_context(Error::Db)?;
     {% else %}
-    let deleted = crate::models::{{c.module}}::{{c.model}}::delete_with_parent(
+    let deleted = crate::models::{{c.module}}::{{c.model}}::delete_with_parent_{{module_name}}(
         &state.db,
         &auth,
         &parent_id,
@@ -319,7 +321,7 @@ async fn upsert_child_{{c.module}}(
 
 
     {% else %}
-    let result = crate::models::{{c.module}}::{{c.model}}::upsert_with_parent(
+    let result = crate::models::{{c.module}}::{{c.model}}::upsert_with_parent_{{module_name}}(
         &state.db,
         &auth.organization_id,
         &parent_id,
@@ -359,7 +361,7 @@ async fn delete_child_{{c.module}}(
         .await
         .change_context(Error::Db)?;
     {% else %}
-    let deleted = crate::models::{{c.module}}::{{c.model}}::delete_all_children_of_parent(
+    let deleted = crate::models::{{c.module}}::{{c.model}}::delete_all_children_of_{{module_name}}(
         &state.db,
         &auth.organization_id,
         &parent_id).await?;
@@ -373,6 +375,7 @@ async fn delete_child_{{c.module}}(
 }
 {% endif %}
 
+{% endif %}{# if c.through #}
 {% endfor %}
 
 {% for e in custom_endpoints %}
@@ -420,6 +423,9 @@ pub fn create_routes() -> axum::Router<ServerState> {
         {% endif %}
 
     {% for c in children %}
+    {% if c.through %}
+    // TODO update endpoints for adding and removing the through model
+    {% else %}
     {% if endpoints.list %}
         .route("/{{url_path}}/:id/{{c.url_path}}",
             routing::get(list_child_{{c.module}})
@@ -472,6 +478,7 @@ pub fn create_routes() -> axum::Router<ServerState> {
         )
 
     {% endif %}
+    {% endif %}{# if c.through #}
     {% endfor %}
 
     {% for e in custom_endpoints %}
@@ -505,7 +512,7 @@ mod test {
         let mut tx = db.begin().await.unwrap();
         let mut objects = Vec::with_capacity(count);
         for i in 0..count {
-            let id = {{id_type}}::new();
+            let id = {{new_object_id}};
             event!(Level::INFO, %id, "Creating test object {}", i);
             let payload = make_create_payload(i);
             let result = {{struct_base}}::create_raw(
@@ -653,14 +660,15 @@ mod test {
             {% for child in children %}
             {% if child.relationship.populate_on_list == "id" %}
                 {% if child.write_payload_field_name %}
-                    {% if child.relationship.many %}
+                    {% if child.relationship.many and not child.through %}
                     let ids = added.{{child.write_payload_field_name}}
                         .iter()
                         .map(|o| o.id).collect::<Vec<_>>();
-                    {% else %}
-                    let ids = added.{{child.write_payload_field_name}};
-                    {% endif %}
                     let ids = serde_json::to_value(&ids).unwrap();
+                    {% else %}
+                    let ids = &added.{{child.write_payload_field_name}};
+                    let ids = serde_json::to_value(ids).unwrap();
+                    {% endif %}
                 {%- elif child.relationship.many %}
                 let ids = serde_json::json!([]);
                 {% else %}
@@ -806,15 +814,16 @@ mod test {
         {% for child in children %}
         {% if child.relationship.populate_on_get == "id" %}
             {% if child.write_payload_field_name %}
-                {% if child.relationship.many %}
+                {% if child.relationship.many and not child.through %}
                 let ids = added.{{child.write_payload_field_name}}
                     .iter()
                     .map(|o| o.id)
                     .collect::<Vec<_>>();
-                {% else %}
-                let ids = added.{{child.write_payload_field_name}};
-                {% endif %}
                 let ids = serde_json::to_value(&ids).unwrap();
+                {% else %}
+                let ids = &added.{{child.write_payload_field_name}};
+                let ids = serde_json::to_value(ids).unwrap();
+                {% endif %}
             {%- elif child.relationship.many %}
             let ids = serde_json::json!([]);
             {% else %}
@@ -1109,6 +1118,7 @@ mod test {
     // TODO file upload test for {{c.module}}
     {% else %}
     #[sqlx::test]
+    {% if c.through %}#[ignore = "through child object tests not implemented yet"]{% endif %}
     async fn child_{{c.module}}(pool: sqlx::PgPool) {
         // Create a test object
         let (
@@ -1145,7 +1155,7 @@ mod test {
         let id_one = {{c.object_id}}::from_str(create_result_one["id"].as_str().unwrap()).unwrap();
 
         // Try to create a test object with a bad parent id
-        let bad_parent_id = {{id_type}}::new();
+        let bad_parent_id = {{new_object_id}};
         let payload_two = crate::models::{{c.module}}::testing::make_create_payload(1);
         let response = admin_user
             .client

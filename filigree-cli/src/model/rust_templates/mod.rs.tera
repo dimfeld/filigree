@@ -19,7 +19,7 @@ pub const CREATE_PERMISSION: &str = "{{owner_permission}}";
 
 {% if predefined_object_id  %}
 pub type {{id_type}} = filigree::auth::{{id_type}};
-{% else %}
+{% elif not join %}
 filigree::make_object_id!({{id_type}}, {{id_prefix}});
 {% endif %}
 

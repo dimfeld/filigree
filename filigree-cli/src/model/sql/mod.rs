@@ -1,3 +1,4 @@
+pub mod ids;
 pub(self) mod permissions;
 pub mod population;
 mod queries;
@@ -7,6 +8,8 @@ mod query_builder;
 pub mod bindings {
     pub const ACTOR_IDS: &str = "actor_ids";
     pub const ID: &str = "id";
+    pub const JOIN_ID_0: &str = "join_id_0";
+    pub const JOIN_ID_1: &str = "join_id_1";
     pub const IDS: &str = "ids";
     pub const PARENT_ID: &str = "parent_id";
     pub const ORGANIZATION: &str = "organization_id";
@@ -30,7 +33,7 @@ pub struct SqlQueryContext {
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SqlQueryTemplateContext {
     pub name: String,
     pub bindings: Vec<String>,
@@ -58,12 +61,12 @@ pub fn generate_query_bindings(args: &HashMap<String, tera::Value>) -> tera::Res
         .ok_or_else(|| tera::Error::msg("Missing query argument"))?;
 
     let payload_var = args
-        .get("payload_var")
+        .get("_payload_var")
         .map(|b| b.to_string())
         .unwrap_or("payload".to_string());
 
     let call_bind = args
-        .get("call_bind")
+        .get("_call_bind")
         .map(|b| tera::from_value::<bool>(b.clone()))
         .transpose()?
         .unwrap_or(false);
@@ -77,6 +80,16 @@ pub fn generate_query_bindings(args: &HashMap<String, tera::Value>) -> tera::Res
                 .map(|b| tera::from_value::<String>(b.clone()))
                 .transpose()?
                 .or_else(|| query.field_params.get(name).map(|s| s.to_string()))
+                .or_else(|| {
+                    // Fixed cases for certain IDs
+                    if name == bindings::JOIN_ID_0 {
+                        Some("id.0.as_uuid()".to_string())
+                    } else if name == bindings::JOIN_ID_1 {
+                        Some("id.1.as_uuid()".to_string())
+                    } else {
+                        None
+                    }
+                })
                 .ok_or_else(|| {
                     tera::Error::msg(format!("Missing {name} argument in query {}", query.name))
                 })?;
@@ -122,12 +135,16 @@ impl<'a> SqlBuilder<'a> {
                 queries::list::list(self, true),
                 queries::select::select_one(self, false),
                 queries::select::select_one(self, true),
-                queries::delete::create_delete_all_children_query(self),
-                queries::delete::delete_removed_children(self),
-                queries::delete::delete_with_parent(self),
+            ]
+            .into_iter()
+            .flatten(),
+        )
+        .chain(
+            // Vec-returning queries
+            [
                 queries::update::update_one_with_parent(self),
-                queries::upsert::upsert_children(self),
-                queries::upsert::upsert_single_child(self),
+                queries::upsert::upsert_queries(self),
+                queries::delete::delete_children_queries(self),
             ]
             .into_iter()
             .flatten(),

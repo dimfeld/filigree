@@ -12,6 +12,30 @@ pub fn validate_model_configuration(config: &Config, models: &ModelMap) -> Resul
             }
         }
 
+        if model.joins.is_some() {
+            if !model.has.is_empty() {
+                return Err(Error::JoinedModelWithHas(model.name.clone()));
+            }
+
+            if !model.fields.is_empty() {
+                return Err(Error::JoinedModelWithFields(model.name.clone()));
+            }
+
+            /*
+            // Joining models fields must all be nullable or have a default, since this makes
+            // the creation easier down the line.
+            for field in &model.fields {
+                if !field.nullable && field.default_sql.is_empty() && field.default_rust.is_empty()
+                {
+                    return Err(Error::JoinedModelWithNullableField(
+                        model.name.clone(),
+                        field.name.clone(),
+                    ));
+                }
+            }
+            */
+        }
+
         for has in &model.has {
             let child = models.get(&has.model, &model.name, "has")?;
 
@@ -44,15 +68,7 @@ pub fn validate_model_configuration(config: &Config, models: &ModelMap) -> Resul
                         through_model.name.clone(),
                     ));
                 }
-            } else if let Some(belongs_to) = &child.belongs_to {
-                if belongs_to.model() != model.name {
-                    return Err(Error::BelongsToMismatch {
-                        parent: model.name.clone(),
-                        child: has.model.clone(),
-                        child_belongs_to: belongs_to.model().to_string(),
-                    });
-                }
-            } else {
+            } else if !child.belongs_to.iter().any(|b| b.model() == model.name) {
                 return Err(Error::MissingBelongsTo(
                     model.name.clone(),
                     has.model.clone(),

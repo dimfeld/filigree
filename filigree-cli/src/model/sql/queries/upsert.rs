@@ -1,28 +1,55 @@
 use std::fmt::Write;
 
+use itertools::Itertools;
+
 use super::{bindings, QueryBuilder, SqlBuilder, SqlQueryContext};
-use crate::model::field::ModelFieldTemplateContext;
+use crate::model::{field::ModelFieldTemplateContext, generator::BelongsToFieldContext};
 
-pub fn upsert_single_child(data: &SqlBuilder) -> Option<SqlQueryContext> {
-    let Some(belongs_to) = data.context.belongs_to_field.as_ref() else {
-        return None;
-    };
+pub fn upsert_queries(data: &SqlBuilder) -> Vec<SqlQueryContext> {
+    data.context
+        .belongs_to_fields
+        .iter()
+        .flat_map(|b| [upsert_single_child(data, b), upsert_children(data, b)])
+        .collect()
+}
 
+fn upsert_single_child(data: &SqlBuilder, belongs_to: &BelongsToFieldContext) -> SqlQueryContext {
     let fields = data
         .context
         .fields
         .iter()
-        .filter(|f| f.writable)
+        .filter(|f| {
+            if f.writable {
+                return true;
+            }
+
+            let join_match = data
+                .context
+                .join
+                .as_ref()
+                .map(|j| j.model_ids.0 == f.name || j.model_ids.1 == f.name)
+                .unwrap_or(false);
+            if belongs_to.globally_unique && join_match && belongs_to.name != f.name {
+                // If this is a unique join, allow updating the other side when doing
+                // an upsert.
+                return true;
+            }
+
+            false
+        })
         .collect::<Vec<_>>();
+
     let q = upsert(data, &fields, belongs_to, true);
-    Some(q.finish_with_field_bindings("upsert_single_child", &fields))
+    q.finish_with_field_bindings(
+        format!(
+            "upsert_single_child_of_{}",
+            belongs_to.model_snake_case_name
+        ),
+        &fields,
+    )
 }
 
-pub fn upsert_children(data: &SqlBuilder) -> Option<SqlQueryContext> {
-    let Some(belongs_to) = data.context.belongs_to_field.as_ref() else {
-        return None;
-    };
-
+fn upsert_children(data: &SqlBuilder, belongs_to: &BelongsToFieldContext) -> SqlQueryContext {
     let fields = data
         .context
         .fields
@@ -30,13 +57,17 @@ pub fn upsert_children(data: &SqlBuilder) -> Option<SqlQueryContext> {
         .filter(|f| f.writable)
         .collect::<Vec<_>>();
     let q = upsert(data, &fields, belongs_to, false);
-    Some(q.finish_with_field_bindings("upsert_children", &fields))
+
+    q.finish_with_field_bindings(
+        format!("upsert_children_of_{}", belongs_to.model_snake_case_name),
+        &fields,
+    )
 }
 
 fn upsert(
     data: &SqlBuilder,
     fields: &[&ModelFieldTemplateContext],
-    belongs_to_field: &ModelFieldTemplateContext,
+    belongs_to_field: &BelongsToFieldContext,
     single: bool,
 ) -> QueryBuilder {
     let mut q = QueryBuilder::new();
@@ -45,18 +76,30 @@ fn upsert(
 
     write!(
         q,
-        "INSERT INTO {schema}.{table} (id ",
+        "INSERT INTO {schema}.{table} (",
         schema = data.context.schema,
         table = data.context.table
     )
     .unwrap();
-    if !data.context.global {
-        q.push(", organization_id");
-    }
 
-    for field in fields {
-        q.push(", ");
-        q.push(&field.sql_name);
+    let id_fields = data.id_fields();
+    let data_fields = fields
+        .iter()
+        .filter(|f| !id_fields.iter().any(|id_field| id_field.0 == f.name))
+        .collect::<Vec<_>>();
+    {
+        let mut sep = q.separated(", ");
+        for field in &id_fields {
+            sep.push(&field.0);
+        }
+
+        if !data.context.global {
+            sep.push("organization_id");
+        }
+
+        for field in &data_fields {
+            sep.push(&field.sql_name);
+        }
     }
 
     q.push(") VALUES ");
@@ -65,13 +108,15 @@ fn upsert(
         q.push("(");
 
         let mut sep = q.separated(", ");
-        sep.push_binding(bindings::ID);
+        for (_, binding) in &id_fields {
+            sep.push_binding(binding);
+        }
 
         if !data.context.global {
             sep.push_binding(bindings::ORGANIZATION);
         }
 
-        for field in fields {
+        for field in &data_fields {
             sep.push_binding(&field.name);
         }
 
@@ -81,37 +126,41 @@ fn upsert(
     }
 
     let conflict_field = if belongs_to_field.globally_unique {
-        &belongs_to_field.sql_name
+        belongs_to_field.sql_name.clone()
     } else {
-        "id"
+        id_fields.iter().map(|f| f.0).join(", ")
     };
 
-    write!(q, " ON CONFLICT ({conflict_field}) DO UPDATE SET ").unwrap();
+    if fields.is_empty() {
+        write!(q, " ON CONFLICT ({conflict_field}) DO NOTHING").unwrap();
+    } else {
+        write!(q, " ON CONFLICT ({conflict_field}) DO UPDATE SET ").unwrap();
 
-    for field in fields {
-        q.push(&field.sql_name);
-        q.push(" = EXCLUDED.");
-        q.push(&field.sql_name);
-        q.push(",\n");
+        for field in fields {
+            q.push(&field.sql_name);
+            q.push(" = EXCLUDED.");
+            q.push(&field.sql_name);
+            q.push(",\n");
+        }
+
+        q.push("updated_at = now()");
+
+        q.push("\nWHERE ");
+        if !data.context.global {
+            write!(q, "{table}.organization_id = ", table = data.context.table).unwrap();
+            q.push_binding(bindings::ORGANIZATION);
+            q.push(" AND ");
+        }
+
+        write!(
+            q,
+            "{table}.{belongs_to} = ",
+            table = data.context.table,
+            belongs_to = belongs_to_field.sql_name
+        )
+        .unwrap();
+        q.push_binding(bindings::PARENT_ID);
     }
-
-    q.push("updated_at = now()");
-
-    q.push("\nWHERE ");
-    if !data.context.global {
-        write!(q, "{table}.organization_id = ", table = data.context.table).unwrap();
-        q.push_binding(bindings::ORGANIZATION);
-        q.push(" AND ");
-    }
-
-    write!(
-        q,
-        "{table}.{belongs_to} = ",
-        table = data.context.table,
-        belongs_to = belongs_to_field.sql_name
-    )
-    .unwrap();
-    q.push_binding(bindings::PARENT_ID);
 
     {
         q.push("\nRETURNING ");

@@ -48,6 +48,8 @@ pub enum Error {
     /// implement IntoResponse on Report
     #[error("{0}")]
     WrapReport(Report<Error>),
+    #[error("Missing ID field {0}")]
+    MissingId(&'static str),
     #[error("Missing Permission {0}")]
     MissingPermission(&'static str),
     #[error(transparent)]
@@ -144,6 +146,7 @@ impl HttpError for Error {
             Error::AuthSubsystem => ErrorKind::AuthSubsystem.as_str(),
             Error::Login => FilErrorKind::Unauthenticated.as_str(),
             Error::MissingPermission(_) => FilErrorKind::Unauthenticated.as_str(),
+            Error::MissingId(_) => ErrorKind::MissingId.as_str(),
             Error::InvalidHostHeader => FilErrorKind::InvalidHostHeader.as_str(),
             Error::Storage => FilErrorKind::Storage.as_str(),
             // These aren't ever returned, we just need some value to fill out the match
@@ -186,6 +189,7 @@ impl HttpError for Error {
             Error::Filter => StatusCode::BAD_REQUEST,
             Error::AuthSubsystem => StatusCode::INTERNAL_SERVER_ERROR,
             Error::MissingPermission(_) => StatusCode::FORBIDDEN,
+            Error::MissingId(_) => StatusCode::BAD_REQUEST,
             Error::Login => StatusCode::UNAUTHORIZED,
             Error::InvalidHostHeader => StatusCode::BAD_REQUEST,
             Error::Storage => StatusCode::INTERNAL_SERVER_ERROR,
@@ -214,6 +218,7 @@ pub enum ErrorKind {
     Filter,
     AuthSubsystem,
     Login,
+    MissingId,
 }
 
 impl ErrorKind {
@@ -223,6 +228,7 @@ impl ErrorKind {
             ErrorKind::ScheduledTask => "scheduled_task",
             ErrorKind::Filter => "invalid_filter",
             ErrorKind::AuthSubsystem => "auth",
+            ErrorKind::MissingId => "missing_id",
             ErrorKind::Login => "auth",
         }
     }
