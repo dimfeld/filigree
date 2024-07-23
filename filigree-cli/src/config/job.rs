@@ -13,7 +13,7 @@ use serde_json::json;
 use crate::Error;
 
 pub fn add_deps(api_dir: &Path, manifest: &mut Manifest) -> Result<(), Report<Error>> {
-    crate::add_deps::add_dep(api_dir, manifest, "effectum", "0.6.0", &[])?;
+    crate::add_deps::add_dep(api_dir, manifest, "effectum", "0.7.0", &[])?;
     crate::add_deps::add_dep(api_dir, manifest, "time", "0.3.34", &[])?;
     Ok(())
 }

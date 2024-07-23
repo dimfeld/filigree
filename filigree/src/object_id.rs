@@ -258,15 +258,15 @@ impl<PREFIX: ObjectIdPrefix> sqlx::postgres::PgHasArrayType for ObjectId<PREFIX>
 impl<'q, PREFIX: ObjectIdPrefix> sqlx::Encode<'q, sqlx::Postgres> for ObjectId<PREFIX> {
     fn encode_by_ref(
         &self,
-        buf: &mut <sqlx::Postgres as sqlx::database::HasArguments<'q>>::ArgumentBuffer,
-    ) -> sqlx::encode::IsNull {
+        buf: &mut <sqlx::Postgres as sqlx::Database>::ArgumentBuffer<'q>,
+    ) -> Result<sqlx::encode::IsNull, Box<dyn std::error::Error + Send + Sync>> {
         <sqlx::types::Uuid as sqlx::Encode<'_, sqlx::Postgres>>::encode_by_ref(&self.0, buf)
     }
 }
 
 impl<'r, PREFIX: ObjectIdPrefix> sqlx::Decode<'r, sqlx::Postgres> for ObjectId<PREFIX> {
     fn decode(
-        value: <sqlx::Postgres as sqlx::database::HasValueRef<'r>>::ValueRef,
+        value: <sqlx::Postgres as sqlx::Database>::ValueRef<'r>,
     ) -> Result<Self, sqlx::error::BoxDynError> {
         let u = <sqlx::types::Uuid as sqlx::Decode<'r, sqlx::Postgres>>::decode(value)?;
         Ok(Self(u, PhantomData))

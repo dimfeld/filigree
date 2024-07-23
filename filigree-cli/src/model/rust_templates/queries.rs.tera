@@ -170,7 +170,7 @@ impl ListQueryFilters {
     }
 }
 
-type QueryAs<'q, T> = sqlx::query::QueryAs<'q, sqlx::Postgres, T, <sqlx::Postgres as sqlx::database::HasArguments<'q>>::Arguments>;
+type QueryAs<'q, T> = sqlx::query::QueryAs<'q, sqlx::Postgres, T, <sqlx::Postgres as sqlx::Database>::Arguments<'q>>;
 
 {% if create_payload_fields %}
 
