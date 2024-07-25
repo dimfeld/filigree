@@ -40,7 +40,7 @@ impl Formatters {
                 &self.web_base_dir,
                 self.config.js.clone().or(Some(vec![
                     "prettier".to_string(),
-                    "--stdin-path=stdin.ts".to_string(),
+                    "--stdin-filepath=stdin.ts".to_string(),
                 ])),
             )
         } else {
