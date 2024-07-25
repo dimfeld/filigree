@@ -166,11 +166,7 @@ pub fn write(config: FullConfig, args: Command) -> Result<(), Report<Error>> {
             format!("Unable to create Web directory {}", web_dir.display())
         })?;
 
-    let formatter = Formatters {
-        config: config.formatter.clone(),
-        api_base_dir: api_dir.clone(),
-        web_base_dir: web_dir.clone(),
-    };
+    let formatter = Formatters::new(config.formatter.clone(), api_dir.clone(), web_dir.clone());
 
     let api_merge_tracker = MergeTracker::new(
         state_dir.join("api"),
