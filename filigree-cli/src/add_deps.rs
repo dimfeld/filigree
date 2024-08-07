@@ -112,7 +112,7 @@ pub fn add_fixed_deps(
         cwd,
         manifest,
         "filigree",
-        "0.4.0",
+        env!("FILIGREE_VERSION"),
         &filigree_features,
         false,
     )?;

@@ -1,6 +1,6 @@
 [package]
 name = "filigree-cli"
-version = "0.4.1"
+version = "0.4.0"
 edition = "2021"
 resolver = "2"
 license = "MIT OR Apache-2.0"
@@ -46,3 +46,6 @@ tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 url = { version = "2.5.0", features = ["serde"] }
 which = "6.0.1"
+
+[build-dependencies]
+cargo_toml = "0.17.2"
